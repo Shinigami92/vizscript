@@ -1,9 +1,18 @@
 <template>
   <div class="code">
-    <h1>Code</h1>
+    <code>
+      <pre>{{ current.sourceText }}</pre>
+    </code>
   </div>
 </template>
 
-<script>
-export default {};
+<script lang="ts">
+import Vue from 'vue';
+import { fileName, sourceText } from './greeter-example';
+
+export default Vue.extend({
+  data: () => ({
+    current: { fileName, sourceText }
+  })
+});
 </script>
