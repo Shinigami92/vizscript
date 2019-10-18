@@ -1,12 +1,29 @@
 {
   "name": "vizscript",
-  "version": "0.1.0",
+  "version": "1.0.0-alpha.1",
+  "description": "Visual Scripting",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "format": "prettier --write 'src/**/*.{ts,vue}'"
   },
+  "keywords": [
+    "visual",
+    "script"
+  ],
+  "author": {
+    "name": "Christopher Quadflieg",
+    "email": "chrissi92@hotmail.de",
+    "url": "https://github.com/Shinigami92"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Shinigami92/vizscript.git"
+  },
+  "bugs": "https://github.com/Shinigami92/vizscript/issues",
+  "license": "MIT",
   "dependencies": {
     "core-js": "~3.3.2",
     "register-service-worker": "~1.6.2",
