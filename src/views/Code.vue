@@ -1,8 +1,6 @@
 <template>
   <div class="code">
-    <code>
-      <pre>{{ current.sourceText }}</pre>
-    </code>
+    <pre v-highlightjs="current.sourceText"><code class="typescript"></code></pre>
   </div>
 </template>
 

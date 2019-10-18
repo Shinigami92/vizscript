@@ -1,8 +1,6 @@
 <template>
   <div class="ast">
-    <code>
-      <pre>{{ current.ast }}</pre>
-    </code>
+    <pre v-highlightjs="current.ast"><code class="json"></code></pre>
   </div>
 </template>
 
