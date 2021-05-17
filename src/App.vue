@@ -16,3 +16,10 @@ export default defineComponent({
   components: { AppDrawer, AppBar, AppMainContent }
 });
 </script>
+
+<style lang="scss">
+pre[class*='language-'] {
+  background: transparent;
+  margin: 0;
+}
+</style>

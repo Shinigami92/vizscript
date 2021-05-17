@@ -1,5 +1,5 @@
 <template lang="pug">
-prism(language='typescript', class='!my-0') {{ current.sourceText }}
+prism(language='typescript') {{ current.sourceText }}
 </template>
 
 <script lang="ts">
