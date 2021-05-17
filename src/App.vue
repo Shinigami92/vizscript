@@ -7,8 +7,8 @@
 </template>
 
 <script lang="ts">
-import AppDrawer from '@/components/AppDrawer.vue';
 import AppBar from '@/components/AppBar.vue';
+import AppDrawer from '@/components/AppDrawer.vue';
 import AppMainContent from '@/components/AppMainContent.vue';
 import { defineComponent } from 'vue';
 
