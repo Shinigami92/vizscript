@@ -1,14 +1,18 @@
 <template>
   <div class="code">
-    <pre v-highlightjs="current.sourceText"><code class="typescript"></code></pre>
+    <prism language="typescript">{{ current.sourceText }}</prism>
   </div>
 </template>
 
 <script lang="ts">
-import Vue from 'vue';
+import { defineComponent } from 'vue';
+import Prism from 'vue-prism-component';
 import { fileName, sourceText } from './greeter-example';
 
-export default Vue.extend({
+export default defineComponent({
+  components: {
+    Prism
+  },
   data: () => ({
     current: { fileName, sourceText }
   })

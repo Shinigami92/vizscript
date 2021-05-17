@@ -1,15 +1,19 @@
 <template>
   <div class="ast">
-    <pre v-highlightjs="current.ast"><code class="json"></code></pre>
+    <prism language="json">{{ current.ast }}</prism>
   </div>
 </template>
 
 <script lang="ts">
 import ts from 'typescript';
-import Vue from 'vue';
+import Prism from 'vue-prism-component';
+import { defineComponent } from 'vue';
 import { fileName, sourceText } from './greeter-example';
 
-export default Vue.extend({
+export default defineComponent({
+  components: {
+    Prism
+  },
   data: () => ({
     current: {
       fileName,

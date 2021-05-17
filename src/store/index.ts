@@ -1,11 +1,13 @@
-import Vue from 'vue';
-import Vuex from 'vuex';
+import { createStore, Store } from 'vuex';
 
-Vue.use(Vuex);
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface RootState {}
 
-export default new Vuex.Store({
+const store: Store<RootState> = createStore({
   state: {},
   mutations: {},
   actions: {},
   modules: {}
 });
+
+export default store;

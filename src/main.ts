@@ -1,18 +1,10 @@
-import Vue from 'vue';
-// @ts-ignore
-import VueHighlightJS from 'vue-highlightjs';
-import 'highlight.js/styles/atom-one-dark.css';
+import 'prismjs';
+import 'prismjs/components/prism-json';
+import 'prismjs/components/prism-typescript';
+import 'prismjs/themes/prism-okaidia.css';
+import { createApp } from 'vue';
 import App from './App.vue';
-import './registerServiceWorker';
 import router from './router';
 import store from './store';
 
-Vue.config.productionTip = false;
-
-Vue.use(VueHighlightJS);
-
-new Vue({
-  router,
-  store,
-  render: (h) => h(App)
-}).$mount('#app');
+createApp(App).use(router).use(store).mount('#app');

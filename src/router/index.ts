@@ -1,12 +1,9 @@
 import Ast from '@/views/Ast.vue';
 import Code from '@/views/Code.vue';
 import Viz from '@/views/Viz.vue';
-import Vue from 'vue';
-import VueRouter from 'vue-router';
+import { createRouter, createWebHistory, Router, RouteRecordRaw } from 'vue-router';
 
-Vue.use(VueRouter);
-
-const routes = [
+const routes: RouteRecordRaw[] = [
   {
     path: '/code',
     name: 'code',
@@ -23,14 +20,13 @@ const routes = [
     component: Ast
   },
   {
-    path: '*',
+    path: '/:pathMatch(.*)*',
     redirect: 'code'
   }
 ];
 
-const router = new VueRouter({
-  mode: 'history',
-  base: process.env.BASE_URL,
+const router: Router = createRouter({
+  history: createWebHistory(),
   routes
 });
 

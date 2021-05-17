@@ -9,11 +9,7 @@
       <div id="main-toolbar">
         <div class="tabs"></div>
         <div class="actions">
-          <a
-            v-for="{ location, d } of mainToolbarActions"
-            :key="location"
-            @click="navigateTo(location)"
-          >
+          <a v-for="{ location, d } of mainToolbarActions" :key="location" @click="navigateTo(location)">
             <div class="icon">
               <svg width="24" height="24" viewBox="0 0 24 24">
                 <path fill="#fff" :d="d" />
@@ -30,10 +26,10 @@
 </template>
 
 <script lang="ts">
-import Vue from 'vue';
-import { RawLocation } from 'vue-router';
+import { defineComponent } from 'vue';
+import { RouteLocationRaw } from 'vue-router';
 
-export default Vue.extend({
+export default defineComponent({
   data: () => ({
     mainToolbarActions: [
       {
@@ -53,7 +49,7 @@ export default Vue.extend({
     ]
   }),
   methods: {
-    navigateTo(location: RawLocation): void {
+    navigateTo(location: RouteLocationRaw): void {
       this.$router.push(location);
     }
   }
