@@ -1,24 +1,25 @@
-<template>
-  <div class="ast">
-    <prism language="json">{{ current.ast }}</prism>
-  </div>
+<template lang="pug">
+.ast
+  prism(language='json') {{ current.ast }}
 </template>
 
 <script lang="ts">
-import ts from 'typescript';
+import { createSourceFile, ScriptTarget } from 'typescript';
+import { defineComponent, Ref, ref } from 'vue';
 import Prism from 'vue-prism-component';
-import { defineComponent } from 'vue';
 import { fileName, sourceText } from './greeter-example';
 
 export default defineComponent({
   components: {
     Prism
   },
-  data: () => ({
-    current: {
+  setup() {
+    const current: Ref<{ fileName: string; ast: string }> = ref({
       fileName,
-      ast: JSON.stringify(ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.ESNext, false), null, 2)
-    }
-  })
+      ast: JSON.stringify(createSourceFile(fileName, sourceText, ScriptTarget.ESNext, false), null, 2)
+    });
+
+    return { current };
+  }
 });
 </script>

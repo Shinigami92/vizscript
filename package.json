@@ -35,8 +35,10 @@
     "vuex": "~4.0.0"
   },
   "devDependencies": {
+    "@prettier/plugin-pug": "~1.15.2",
     "@types/node": "~15.3.0",
     "@types/prismjs": "~1.16.5",
+    "@types/vfile-message": "~2.0.0",
     "@typescript-eslint/eslint-plugin": "~4.23.0",
     "@typescript-eslint/parser": "~4.23.0",
     "@vitejs/plugin-vue": "~1.2.2",
@@ -46,6 +48,8 @@
     "eslint": "~7.26.0",
     "eslint-config-prettier": "~8.3.0",
     "eslint-define-config": "~1.0.8",
+    "eslint-import-resolver-typescript": "~2.4.0",
+    "eslint-plugin-import": "~2.23.2",
     "eslint-plugin-prettier": "~3.4.0",
     "eslint-plugin-vue": "~7.9.0",
     "prettier": "~2.3.0",

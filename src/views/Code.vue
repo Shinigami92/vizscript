@@ -1,11 +1,10 @@
-<template>
-  <div class="code">
-    <prism language="typescript">{{ current.sourceText }}</prism>
-  </div>
+<template lang="pug">
+.code
+  prism(language='typescript') {{ current.sourceText }}
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue';
+import { defineComponent, ref, Ref } from 'vue';
 import Prism from 'vue-prism-component';
 import { fileName, sourceText } from './greeter-example';
 
@@ -13,8 +12,10 @@ export default defineComponent({
   components: {
     Prism
   },
-  data: () => ({
-    current: { fileName, sourceText }
-  })
+  setup() {
+    const current: Ref<{ fileName: string; sourceText: string }> = ref({ fileName, sourceText });
+
+    return { current };
+  }
 });
 </script>

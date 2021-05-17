@@ -1,7 +1,6 @@
-<template>
-  <div class="viz">
-    <h1>Viz</h1>
-  </div>
+<template lang="pug">
+.viz
+  h1 Viz
 </template>
 
 <script lang="ts">
