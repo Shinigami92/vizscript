@@ -1,5 +1,6 @@
 <template lang="pug">
-.text-3xl.text-primary-400 Viz
+main.flex-grow.overflow-y-auto.bg-background-700
+  router-view
 </template>
 
 <script lang="ts">

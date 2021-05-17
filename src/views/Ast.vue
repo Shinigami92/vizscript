@@ -1,6 +1,5 @@
 <template lang="pug">
-.ast
-  prism(language='json') {{ current.ast }}
+prism(language='json', class='!my-0') {{ current.ast }}
 </template>
 
 <script lang="ts">

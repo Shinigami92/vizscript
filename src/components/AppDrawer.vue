@@ -1,5 +1,9 @@
 <template lang="pug">
-.text-3xl.text-primary-400 Viz
+aside.grid(class='grid-cols-[56px,1fr]')
+  .bg-background-400
+  .bg-background-500
+    span.text-primary-50 Explorer
+    div
 </template>
 
 <script lang="ts">
