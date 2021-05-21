@@ -21,7 +21,7 @@ import {
   VizComponentModel
 } from '@/shared/VizComponentModel';
 import type { VizEventConnectionModel } from '@/shared/VizEventConnectionModel';
-import { defineComponent, Ref, ref } from 'vue';
+import { computed, defineComponent, Ref, ref } from 'vue';
 export default defineComponent({
   components: { VizEventStart, VizFunction, VizSet, VizEventConnection },
   setup() {
@@ -31,8 +31,8 @@ export default defineComponent({
       ref<VizComponentModel>({ type: 'set', x: 610, y: 48 })
     ];
     const eventConnection1: Ref<VizEventConnectionModel> = ref({
-      start: calculateOutputEventEmitterPosition(vizComponents[0]!.value),
-      end: calculateInputEventReceiverPosition(vizComponents[1]!.value)
+      start: computed(() => calculateOutputEventEmitterPosition(vizComponents[0]!.value)),
+      end: computed(() => calculateInputEventReceiverPosition(vizComponents[1]!.value))
     });
     return { vizComponents, eventConnection1 };
   }
