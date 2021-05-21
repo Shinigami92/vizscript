@@ -1,4 +1,3 @@
-export interface VizEventStartModel {
-  x: number;
-  y: number;
-}
+import { Positionable } from './Positionable';
+
+export interface VizEventStartModel extends Positionable {}

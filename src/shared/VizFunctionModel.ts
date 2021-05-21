@@ -1,5 +1,5 @@
-export interface VizFunctionModel {
+import { Positionable } from './Positionable';
+
+export interface VizFunctionModel extends Positionable {
   title: string;
-  x: number;
-  y: number;
 }
