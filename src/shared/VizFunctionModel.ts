@@ -2,6 +2,7 @@ import { isPositionable, Positionable } from './Positionable';
 import { isRecordObject } from './utilities/common';
 
 export interface VizFunctionModel extends Positionable {
+  type: 'function';
   title: string;
 }
 
