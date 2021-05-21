@@ -26,7 +26,7 @@ const routes: RouteRecordRaw[] = [
 ];
 
 const router: Router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.PROD ? '/vizscript/' : undefined),
   routes
 });
 
