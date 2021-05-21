@@ -6,12 +6,12 @@
   @mouseup='onMouseup'
 )
   .header
-    icon(:size='32') mdi-math-integral
-    .title {{ modelValue.title }}
+    .title SET
   .body
     .inputs
       icon(:size='48') mdi-arrow-right-bold-outline
-      span person
+      span value
+      span target
     .outputs
       icon(:size='48') mdi-arrow-right-bold-outline
       span result
@@ -19,17 +19,14 @@
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
-import type { VizFunctionModel } from '@/shared/VizFunctionModel';
+import type { VizSetModel } from '@/shared/VizSetModel';
 import { computed, defineComponent, PropType, Ref, ref, WritableComputedRef } from 'vue';
 export default defineComponent({
   name: 'VizFunction',
   components: { Icon },
-  props: { modelValue: { type: Object as PropType<VizFunctionModel>, required: true } },
+  props: { modelValue: { type: Object as PropType<VizSetModel>, required: true } },
   emits: {
-    'update:modelValue': (modelValue: VizFunctionModel) => {
-      if (typeof modelValue.title !== 'string') {
-        return false;
-      }
+    'update:modelValue': (modelValue: VizSetModel) => {
       if (typeof modelValue.x !== 'number') {
         return false;
       }
@@ -40,7 +37,7 @@ export default defineComponent({
     }
   },
   setup(props, { emit }) {
-    const internalValue: WritableComputedRef<VizFunctionModel> = computed({
+    const internalValue: WritableComputedRef<VizSetModel> = computed({
       get: () => props.modelValue,
       set: (value) => emit('update:modelValue', value)
     });
@@ -73,14 +70,10 @@ export default defineComponent({
   @apply absolute max-w-64 grid grid-rows-[48px,1fr] rounded shadow text-primary-50 bg-background-400;
 
   .header {
-    @apply flex items-center rounded-t bg-blue-300;
-
-    .icon {
-      @apply mx-2 text-primary-50;
-    }
+    @apply flex items-center justify-center rounded-t bg-green-300;
 
     .title {
-      @apply text-xl ml-2 mr-4 text-primary-50;
+      @apply text-xl text-primary-50;
     }
   }
 
