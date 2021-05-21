@@ -14,39 +14,18 @@
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
+import { usePositionable, UsePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isVizEventStartModel, VizEventStartModel } from '@/shared/VizEventStartModel';
-import { computed, defineComponent, PropType, Ref, ref, WritableComputedRef } from 'vue';
+import { defineComponent, PropType } from 'vue';
 export default defineComponent({
   name: 'VizEventStart',
   components: { Icon },
   props: { modelValue: { type: Object as PropType<VizEventStartModel>, required: true } },
   emits: { 'update:modelValue': isVizEventStartModel as EmitType<VizEventStartModel> },
   setup(props, { emit }) {
-    const internalValue: WritableComputedRef<VizEventStartModel> = computed({
-      get: () => props.modelValue,
-      set: (value) => emit('update:modelValue', value)
-    });
-    const dx: Ref<number> = ref(0);
-    const dy: Ref<number> = ref(0);
-    let startPos: { x: number; y: number } | null = null;
-    const onMousedown: (payload: MouseEvent) => void = (payload) => {
-      startPos = { x: payload.clientX, y: payload.clientY };
-    };
-    const onMousemove: (payload: MouseEvent) => void = (payload) => {
-      if (startPos) {
-        dx.value = payload.clientX - startPos.x;
-        dy.value = payload.clientY - startPos.y;
-      }
-    };
-    const onMouseup: (payload: MouseEvent) => void = () => {
-      internalValue.value.x = internalValue.value.x + dx.value;
-      internalValue.value.y = internalValue.value.y + dy.value;
-      dx.value = 0;
-      dy.value = 0;
-      startPos = null;
-    };
-    return { dx, dy, onMousedown, onMousemove, onMouseup };
+    const positionable: UsePositionable<VizEventStartModel> = usePositionable(props, emit);
+    return { ...positionable };
   }
 });
 </script>
