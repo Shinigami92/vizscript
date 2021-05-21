@@ -1,13 +1,13 @@
 <template lang="pug">
 .shape(
-  :style='{ left: `${x + dx}px`, top: `${y + dy}px` }',
+  :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
   @mousedown='onMousedown',
   @mousemove='onMousemove',
   @mouseup='onMouseup'
 )
   .header
     icon(:size='32') mdi-math-integral
-    .title {{ title }}
+    .title {{ modelValue.title }}
   .body
     icon(:size='48') mdi-arrow-right-bold-outline
     icon(:size='48') mdi-arrow-right-bold-outline
@@ -15,25 +15,31 @@
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
-import { computed, defineComponent, Ref, ref, WritableComputedRef } from 'vue';
+import type { VizFunctionModel } from '@/shared/VizFunction';
+import { computed, defineComponent, PropType, Ref, ref, WritableComputedRef } from 'vue';
 export default defineComponent({
   name: 'VizFunction',
   components: { Icon },
-  props: {
-    title: {
-      type: String,
-      default: ''
-    },
-    x: { type: Number, default: 0 },
-    y: { type: Number, default: 0 }
-  },
+  props: { modelValue: { type: Object as PropType<VizFunctionModel>, required: true } },
   emits: {
-    'update:x': (x: number) => typeof x === 'number',
-    'update:y': (y: number) => typeof y === 'number'
+    'update:modelValue': (modelValue: VizFunctionModel) => {
+      if (typeof modelValue.title !== 'string') {
+        return false;
+      }
+      if (typeof modelValue.x !== 'number') {
+        return false;
+      }
+      if (typeof modelValue.y !== 'number') {
+        return false;
+      }
+      return true;
+    }
   },
   setup(props, { emit }) {
-    const x: WritableComputedRef<number> = computed({ get: () => props.x, set: (value) => emit('update:x', value) });
-    const y: WritableComputedRef<number> = computed({ get: () => props.y, set: (value) => emit('update:y', value) });
+    const internalValue: WritableComputedRef<VizFunctionModel> = computed({
+      get: () => props.modelValue,
+      set: (value) => emit('update:modelValue', value)
+    });
     const dx: Ref<number> = ref(0);
     const dy: Ref<number> = ref(0);
     let startPos: { x: number; y: number } | null = null;
@@ -47,8 +53,8 @@ export default defineComponent({
       }
     };
     const onMouseup: (payload: MouseEvent) => void = () => {
-      x.value = x.value + dx.value;
-      y.value = y.value + dy.value;
+      internalValue.value.x = internalValue.value.x + dx.value;
+      internalValue.value.y = internalValue.value.y + dy.value;
       dx.value = 0;
       dy.value = 0;
       startPos = null;
