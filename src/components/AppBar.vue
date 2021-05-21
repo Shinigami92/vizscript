@@ -1,14 +1,16 @@
 <template lang="pug">
 header.flex.justify-end.items-center.bg-background-400
-  span.mdi.mdi-math-integral.text-4xl.text-primary-400(@click='navigateTo("code")')
-  span.mdi.mdi-code-braces.text-4xl.text-primary-400(@click='navigateTo("viz")')
-  span.mdi.mdi-pine-tree.text-4xl.text-primary-400(@click='navigateTo("ast")')
+  icon.text-primary-400(:size='32', @click='navigateTo("code")') mdi-code-braces
+  icon.text-primary-400(:size='32', @click='navigateTo("viz")') mdi-math-integral
+  icon.text-primary-400(:size='32', @click='navigateTo("ast")') mdi-pine-tree
 </template>
 
 <script lang="ts">
+import Icon from '@/components/Icon.vue';
 import { defineComponent } from 'vue';
 import { RouteLocationRaw, Router, useRouter } from 'vue-router';
 export default defineComponent({
+  components: { Icon },
   setup() {
     const router: Router = useRouter();
     const navigateTo: (location: RouteLocationRaw) => void = (location) => router.push(location);
