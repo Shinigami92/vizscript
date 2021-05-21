@@ -16,7 +16,10 @@ export default defineConfig({
         700: '#070a0d'
         // 800: '#27272a',
         // 900: '#18181b'
-      }
+      },
+      red: colors.red,
+      blue: colors.blue,
+      green: colors.green
     }
   }
 });

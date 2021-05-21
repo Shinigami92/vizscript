@@ -8,13 +8,10 @@ header.flex.justify-end.items-center.bg-background-400
 <script lang="ts">
 import { defineComponent } from 'vue';
 import { RouteLocationRaw, Router, useRouter } from 'vue-router';
-
 export default defineComponent({
   setup() {
     const router: Router = useRouter();
-
     const navigateTo: (location: RouteLocationRaw) => void = (location) => router.push(location);
-
     return { navigateTo };
   }
 });

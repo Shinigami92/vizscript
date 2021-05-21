@@ -4,12 +4,14 @@ import { defineConfig } from 'vite';
 import WindiCSS from 'vite-plugin-windicss';
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  base: '/vizscript/',
-  plugins: [vue(), WindiCSS()],
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, './src')
+export default defineConfig(({ mode }) => {
+  return {
+    base: mode === 'production' ? '/vizscript/' : undefined,
+    plugins: [vue(), WindiCSS()],
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, './src')
+      }
     }
-  }
+  };
 });

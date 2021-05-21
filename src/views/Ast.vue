@@ -7,7 +7,6 @@ import { createSourceFile, ScriptTarget } from 'typescript';
 import { defineComponent, Ref, ref } from 'vue';
 import Prism from 'vue-prism-component';
 import { fileName, sourceText } from './greeter-example';
-
 export default defineComponent({
   components: {
     Prism
@@ -17,7 +16,6 @@ export default defineComponent({
       fileName,
       ast: JSON.stringify(createSourceFile(fileName, sourceText, ScriptTarget.ESNext, false), null, 2)
     });
-
     return { current };
   }
 });
