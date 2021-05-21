@@ -1,5 +1,5 @@
 <template lang="pug">
-main.flex-grow.overflow-y-auto.bg-background-700
+main.flex.flex-col.h-full.overflow-hidden.bg-background-700
   router-view
 </template>
 

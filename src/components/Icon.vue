@@ -1,5 +1,5 @@
 <template lang="pug">
-span.mdi(:class='iconName', :style='style')
+span.icon.mdi(:class='iconName', :style='style')
 </template>
 
 <script lang="ts">
