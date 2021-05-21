@@ -14,23 +14,14 @@
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
-import type { VizEventStartModel } from '@/shared/VizEventStartModel';
+import type { EmitType } from '@/shared/utilities/vue';
+import { isVizEventStartModel, VizEventStartModel } from '@/shared/VizEventStartModel';
 import { computed, defineComponent, PropType, Ref, ref, WritableComputedRef } from 'vue';
 export default defineComponent({
   name: 'VizEventStart',
   components: { Icon },
   props: { modelValue: { type: Object as PropType<VizEventStartModel>, required: true } },
-  emits: {
-    'update:modelValue': (modelValue: VizEventStartModel) => {
-      if (typeof modelValue.x !== 'number') {
-        return false;
-      }
-      if (typeof modelValue.y !== 'number') {
-        return false;
-      }
-      return true;
-    }
-  },
+  emits: { 'update:modelValue': isVizEventStartModel as EmitType<VizEventStartModel> },
   setup(props, { emit }) {
     const internalValue: WritableComputedRef<VizEventStartModel> = computed({
       get: () => props.modelValue,

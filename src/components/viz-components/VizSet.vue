@@ -21,23 +21,14 @@
 import Icon from '@/components/Icon.vue';
 import VizInputSlot from '@/components/viz-components/slots/VizInputSlot.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
-import type { VizSetModel } from '@/shared/VizSetModel';
+import type { EmitType } from '@/shared/utilities/vue';
+import { isVizSetModel, VizSetModel } from '@/shared/VizSetModel';
 import { computed, defineComponent, PropType, Ref, ref, WritableComputedRef } from 'vue';
 export default defineComponent({
   name: 'VizSet',
   components: { Icon, VizInputSlot, VizOutputSlot },
   props: { modelValue: { type: Object as PropType<VizSetModel>, required: true } },
-  emits: {
-    'update:modelValue': (modelValue: VizSetModel) => {
-      if (typeof modelValue.x !== 'number') {
-        return false;
-      }
-      if (typeof modelValue.y !== 'number') {
-        return false;
-      }
-      return true;
-    }
-  },
+  emits: { 'update:modelValue': isVizSetModel as EmitType<VizSetModel> },
   setup(props, { emit }) {
     const internalValue: WritableComputedRef<VizSetModel> = computed({
       get: () => props.modelValue,
