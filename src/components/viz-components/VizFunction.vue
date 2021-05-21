@@ -1,5 +1,5 @@
 <template lang="pug">
-.shape(
+.viz-function.shape(
   :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
   @mousedown='onMousedown',
   @mousemove='onMousemove',
@@ -11,19 +11,21 @@
   .body
     .inputs
       icon(:size='48') mdi-arrow-right-bold-outline
-      span person
+      viz-input-slot(title='person')
     .outputs
       icon(:size='48') mdi-arrow-right-bold-outline
-      span result
+      viz-output-slot(title='result')
 </template>
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
+import VizInputSlot from '@/components/viz-components/slots/VizInputSlot.vue';
+import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import type { VizFunctionModel } from '@/shared/VizFunctionModel';
 import { computed, defineComponent, PropType, Ref, ref, WritableComputedRef } from 'vue';
 export default defineComponent({
   name: 'VizFunction',
-  components: { Icon },
+  components: { Icon, VizInputSlot, VizOutputSlot },
   props: { modelValue: { type: Object as PropType<VizFunctionModel>, required: true } },
   emits: {
     'update:modelValue': (modelValue: VizFunctionModel) => {
@@ -69,7 +71,7 @@ export default defineComponent({
 </script>
 
 <style lang="postcss" scoped>
-.shape {
+.viz-function.shape {
   @apply absolute max-w-64 grid grid-rows-[48px,1fr] rounded shadow text-primary-50 bg-background-400;
 
   .header {

@@ -1,5 +1,5 @@
 <template lang="pug">
-.shape(
+.viz-set.shape(
   :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
   @mousedown='onMousedown',
   @mousemove='onMousemove',
@@ -10,20 +10,22 @@
   .body
     .inputs
       icon(:size='48') mdi-arrow-right-bold-outline
-      span value
-      span target
+      viz-input-slot(title='value')
+      viz-input-slot(title='target')
     .outputs
       icon(:size='48') mdi-arrow-right-bold-outline
-      span result
+      viz-output-slot(title='result')
 </template>
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
+import VizInputSlot from '@/components/viz-components/slots/VizInputSlot.vue';
+import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import type { VizSetModel } from '@/shared/VizSetModel';
 import { computed, defineComponent, PropType, Ref, ref, WritableComputedRef } from 'vue';
 export default defineComponent({
-  name: 'VizFunction',
-  components: { Icon },
+  name: 'VizSet',
+  components: { Icon, VizInputSlot, VizOutputSlot },
   props: { modelValue: { type: Object as PropType<VizSetModel>, required: true } },
   emits: {
     'update:modelValue': (modelValue: VizSetModel) => {
@@ -66,7 +68,7 @@ export default defineComponent({
 </script>
 
 <style lang="postcss" scoped>
-.shape {
+.viz-set.shape {
   @apply absolute max-w-64 grid grid-rows-[48px,1fr] rounded shadow text-primary-50 bg-background-400;
 
   .header {

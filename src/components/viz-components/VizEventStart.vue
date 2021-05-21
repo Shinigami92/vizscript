@@ -1,5 +1,5 @@
 <template lang="pug">
-.shape
+.viz-event-start.shape
   .header
     icon(:size='32') mdi-arrow-right-bold-hexagon-outline
     .title Event Start
@@ -18,7 +18,7 @@ export default defineComponent({
 </script>
 
 <style lang="postcss" scoped>
-.shape {
+.viz-event-start.shape {
   @apply max-w-64 grid grid-rows-[48px,64px] rounded shadow text-primary-50 bg-background-400;
 
   .header {
