@@ -47,15 +47,15 @@
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
 import type { EmitType } from '@/shared/utilities/vue';
-import { isEventConnection, VizEventConnection } from '@/shared/viz-components/connections/VizEventConnection';
+import { isSlotConnection, VizSlotConnection } from '@/shared/viz-components/connections/VizSlotConnection';
 import { computed, ComputedRef, defineComponent, PropType, Ref, ref, WritableComputedRef } from 'vue';
 export default defineComponent({
-  name: 'VizEventConnection',
+  name: 'VizSlotConnection',
   components: { Icon },
-  props: { modelValue: { type: Object as PropType<VizEventConnection>, required: true } },
-  emits: { 'update:modelValue': isEventConnection as EmitType<VizEventConnection> },
+  props: { modelValue: { type: Object as PropType<VizSlotConnection>, required: true } },
+  emits: { 'update:modelValue': isSlotConnection as EmitType<VizSlotConnection> },
   setup(props, { emit }) {
-    const internalValue: WritableComputedRef<VizEventConnection> = computed({
+    const internalValue: WritableComputedRef<VizSlotConnection> = computed({
       get: () => props.modelValue,
       set: (value) => emit('update:modelValue', value)
     });

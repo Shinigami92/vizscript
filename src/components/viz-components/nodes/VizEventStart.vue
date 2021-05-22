@@ -16,15 +16,15 @@
 import Icon from '@/components/Icon.vue';
 import { usePositionable, UsePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
-import { isVizEventStartModel, VizEventStartModel } from '@/shared/VizEventStartModel';
+import { isEventStartNode, VizEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
 import { defineComponent, PropType } from 'vue';
 export default defineComponent({
   name: 'VizEventStart',
   components: { Icon },
-  props: { modelValue: { type: Object as PropType<VizEventStartModel>, required: true } },
-  emits: { 'update:modelValue': isVizEventStartModel as EmitType<VizEventStartModel> },
+  props: { modelValue: { type: Object as PropType<VizEventStartNode>, required: true } },
+  emits: { 'update:modelValue': isEventStartNode as EmitType<VizEventStartNode> },
   setup(props, { emit }) {
-    const positionable: UsePositionable<VizEventStartModel> = usePositionable(props, emit);
+    const positionable: UsePositionable<VizEventStartNode> = usePositionable(props, emit);
     return { ...positionable };
   }
 });

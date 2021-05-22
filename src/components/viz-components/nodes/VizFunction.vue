@@ -23,15 +23,15 @@ import VizInputSlot from '@/components/viz-components/slots/VizInputSlot.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { usePositionable, UsePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
-import { isVizFunctionModel, VizFunctionModel } from '@/shared/VizFunctionModel';
+import { isFunctionNode, VizFunctionNode } from '@/shared/viz-components/nodes/VizFunctionNode';
 import { defineComponent, PropType } from 'vue';
 export default defineComponent({
   name: 'VizFunction',
   components: { Icon, VizInputSlot, VizOutputSlot },
-  props: { modelValue: { type: Object as PropType<VizFunctionModel>, required: true } },
-  emits: { 'update:modelValue': isVizFunctionModel as EmitType<VizFunctionModel> },
+  props: { modelValue: { type: Object as PropType<VizFunctionNode>, required: true } },
+  emits: { 'update:modelValue': isFunctionNode as EmitType<VizFunctionNode> },
   setup(props, { emit }) {
-    const positionable: UsePositionable<VizFunctionModel> = usePositionable(props, emit);
+    const positionable: UsePositionable<VizFunctionNode> = usePositionable(props, emit);
     return { ...positionable };
   }
 });

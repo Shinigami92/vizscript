@@ -15,15 +15,15 @@ import Icon from '@/components/Icon.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { usePositionable, UsePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
-import { isVizVariableGetModel, VizVariableGetModel } from '@/shared/VizVariableGetModel';
+import { isVariableGetNode, VizVariableGetNode } from '@/shared/viz-components/nodes/VizVariableGetNode';
 import { defineComponent, PropType } from 'vue';
 export default defineComponent({
   name: 'VizVariableGet',
   components: { Icon, VizOutputSlot },
-  props: { modelValue: { type: Object as PropType<VizVariableGetModel>, required: true } },
-  emits: { 'update:modelValue': isVizVariableGetModel as EmitType<VizVariableGetModel> },
+  props: { modelValue: { type: Object as PropType<VizVariableGetNode>, required: true } },
+  emits: { 'update:modelValue': isVariableGetNode as EmitType<VizVariableGetNode> },
   setup(props, { emit }) {
-    const positionable: UsePositionable<VizVariableGetModel> = usePositionable(props, emit);
+    const positionable: UsePositionable<VizVariableGetNode> = usePositionable(props, emit);
     return { ...positionable };
   }
 });

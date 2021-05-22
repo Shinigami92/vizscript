@@ -1,4 +1,4 @@
-import { isRecordObject } from './utilities/common';
+import { isRecordObject } from '../utilities/common';
 
 export interface Positionable {
   x: number;
