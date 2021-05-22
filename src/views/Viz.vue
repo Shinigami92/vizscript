@@ -9,10 +9,12 @@
     viz-set(v-else-if='vizNode.value.type === "set"', v-model='vizNode.value')
   template(v-for='vizConnection in vizConnections')
     viz-event-connection(v-if='vizConnection.value.type === "event"', v-model='vizConnection.value')
+    viz-slot-connection(v-else-if='vizConnection.value.type === "slot"', v-model='vizConnection.value')
 </template>
 
 <script lang="ts">
 import VizEventConnection from '@/components/viz-components/connections/VizEventConnection.vue';
+import VizSlotConnection from '@/components/viz-components/connections/VizSlotConnection.vue';
 import VizEventStart from '@/components/viz-components/nodes/VizEventStart.vue';
 import VizFunction from '@/components/viz-components/nodes/VizFunction.vue';
 import VizSet from '@/components/viz-components/nodes/VizSet.vue';
@@ -56,10 +58,18 @@ const DB_MOCK_CONNECTIONS: VizConnectionModel[] = [
     type: 'event',
     startNodeId: '1',
     endNodeId: '3'
+  },
+  {
+    id: '6',
+    type: 'slot',
+    startNodeId: '2',
+    startSlot: 1,
+    endNodeId: '3',
+    endSlot: 1
   }
 ];
 export default defineComponent({
-  components: { VizEventStart, VizVariableGet, VizFunction, VizSet, VizEventConnection },
+  components: { VizEventStart, VizVariableGet, VizFunction, VizSet, VizEventConnection, VizSlotConnection },
   setup() {
     const vizNodes: Array<Ref<VizNode>> = DB_MOCK_NODES.map(convertNode);
     const vizConnections: Array<Ref<VizConnection>> = DB_MOCK_CONNECTIONS.map((connection) =>

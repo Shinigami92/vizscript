@@ -1,4 +1,4 @@
-import type { Positionable } from '@/shared/Positionable';
+import type { Positionable } from '@/shared/viz-components/Positionable';
 import { computed, ref, Ref, WritableComputedRef } from 'vue';
 
 export interface UsePositionable<T extends Positionable> {

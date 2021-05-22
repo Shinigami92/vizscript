@@ -59,7 +59,7 @@ export default defineComponent({
       get: () => props.modelValue,
       set: (value) => emit('update:modelValue', value)
     });
-    console.log(internalValue);
+    console.debug('Unused const', internalValue);
     const connection: Ref<HTMLDivElement | undefined> = ref();
     const left: ComputedRef<number> = computed(() => Math.min(props.modelValue.start.x, props.modelValue.end.x));
     const top: ComputedRef<number> = computed(() => Math.min(props.modelValue.start.y, props.modelValue.end.y));
