@@ -1,16 +1,16 @@
 import { isPositionable, Positionable } from './Positionable';
 import { isRecordObject } from './utilities/common';
 
-export interface VizFunctionModel extends Positionable {
-  type: 'function';
-  title: string;
+export interface VizVariableGetModel extends Positionable {
+  type: 'variable-get';
+  name: string;
 }
 
-export function isVizFunctionModel(modelValue: unknown): modelValue is VizFunctionModel {
+export function isVizVariableGetModel(modelValue: unknown): modelValue is VizVariableGetModel {
   if (!isRecordObject(modelValue)) {
     return false;
   }
-  if (typeof modelValue.title !== 'string') {
+  if (typeof modelValue.name !== 'string') {
     return false;
   }
   if (!isPositionable(modelValue)) {
