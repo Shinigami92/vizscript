@@ -1,5 +1,5 @@
 <template lang="pug">
-.viz-event-connection.shape(ref='connection', :style='{ left: `${left}px`, top: `${top}px` }')
+.viz-connection.viz-event-connection.shape(ref='connection', :style='{ left: `${left}px`, top: `${top}px` }')
   template(v-if='xFlip')
     template(v-if='yFlip')
       svg(:width='width', :height='height + 4')
@@ -77,12 +77,12 @@ export default defineComponent({
 </script>
 
 <style lang="postcss" scoped>
-.viz-event-connection.shape {
-  @apply absolute text-primary-50;
+.viz-connection {
+  @apply absolute;
   pointer-events: none;
+}
 
-  svg {
-    /* pointer-events: none; */
-  }
+.viz-event-connection.shape {
+  @apply text-primary-50;
 }
 </style>
