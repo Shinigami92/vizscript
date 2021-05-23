@@ -48,6 +48,19 @@ export function calculateInputEventReceiverPosition(vizNode: VizNode): Positiona
 export function calculateOutputEventEmitterPosition(vizNode: VizNode): Positionable {
   switch (vizNode.type) {
     case 'event-start':
+      if (vizNode.vizNodeDivRef) {
+        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
+        const eventEmitterIcon: HTMLSpanElement | null = vizNodeDiv.querySelector('.body .icon');
+        if (!eventEmitterIcon) {
+          throw Error(`[calculateOutputEventEmitterPosition] Emitter Icon wasn't found ${vizNode}`);
+        }
+        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
+        const emitterIconRect: DOMRect = eventEmitterIcon.getBoundingClientRect();
+        return {
+          x: vizNode.x + (emitterIconRect.left - nodeRect.left) + emitterIconRect.width / 2,
+          y: vizNode.y + (emitterIconRect.top - nodeRect.top) + emitterIconRect.height / 2
+        };
+      }
       return { x: vizNode.x + 174, y: vizNode.y + 82 };
     case 'function':
       return { x: vizNode.x + 160, y: vizNode.y + 82 };

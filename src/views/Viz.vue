@@ -52,6 +52,13 @@ const DB_MOCK_NODES: VizNodeModel[] = [
     type: 'set',
     x: 610,
     y: 48
+  },
+  {
+    id: '9',
+    type: 'variable-get',
+    name: 'textContent',
+    x: 360,
+    y: 260
   }
 ];
 const DB_MOCK_CONNECTIONS: VizConnectionModel[] = [
@@ -82,6 +89,14 @@ const DB_MOCK_CONNECTIONS: VizConnectionModel[] = [
     startSlot: 1,
     endNodeId: '4',
     endSlot: 1
+  },
+  {
+    id: '10',
+    type: 'slot',
+    startNodeId: '9',
+    startSlot: 1,
+    endNodeId: '4',
+    endSlot: 2
   }
 ];
 export default defineComponent({

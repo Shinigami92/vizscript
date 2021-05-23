@@ -16,8 +16,8 @@ export function convertSlotConnection(
   return ref({
     model,
     ...model,
-    start: computed(() => calculateOutputSlotPosition(startNode!.value)),
-    end: computed(() => calculateInputSlotPosition(endNode!.value))
+    start: computed(() => calculateOutputSlotPosition(startNode!.value, model.startSlot)),
+    end: computed(() => calculateInputSlotPosition(endNode!.value, model.endSlot))
   });
 }
 
@@ -34,7 +34,7 @@ export function isSlotConnection(modelValue: unknown): modelValue is VizSlotConn
   return true;
 }
 
-export function calculateOutputSlotPosition(vizNode: VizNode): Positionable {
+export function calculateOutputSlotPosition(vizNode: VizNode, slot: number = 1): Positionable {
   switch (vizNode.type) {
     case 'variable-get':
       return { x: vizNode.x + 103, y: vizNode.y + 14 };
@@ -45,12 +45,19 @@ export function calculateOutputSlotPosition(vizNode: VizNode): Positionable {
   }
 }
 
-export function calculateInputSlotPosition(vizNode: VizNode): Positionable {
+export function calculateInputSlotPosition(vizNode: VizNode, slot: number = 1): Positionable {
   switch (vizNode.type) {
     case 'function':
       return { x: vizNode.x + 17, y: vizNode.y + 134 };
     case 'set':
-      return { x: vizNode.x + 17, y: vizNode.y + 134 };
+      switch (slot) {
+        case 1:
+          return { x: vizNode.x + 17, y: vizNode.y + 134 };
+        case 2:
+          return { x: vizNode.x + 17, y: vizNode.y + 168 };
+        default:
+          throw Error(`[calculateInputSlotPosition] Unsupported slot ${slot}`);
+      }
     default:
       throw Error(`[calculateInputSlotPosition] Unsupported node type ${vizNode.type}`);
   }
