@@ -1,5 +1,6 @@
 <template lang="pug">
 .viz-node.viz-function.shape(
+  ref='node',
   :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
   @mousedown='onMousedown'
 )
@@ -14,7 +15,7 @@ import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { usePositionable, UsePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isVariableGetNode, VizVariableGetNode } from '@/shared/viz-components/nodes/VizVariableGetNode';
-import { defineComponent, PropType } from 'vue';
+import { defineComponent, onMounted, PropType, ref, Ref } from 'vue';
 export default defineComponent({
   name: 'VizVariableGet',
   components: { Icon, VizOutputSlot },
@@ -22,7 +23,9 @@ export default defineComponent({
   emits: { 'update:modelValue': isVariableGetNode as EmitType<VizVariableGetNode> },
   setup(props, { emit }) {
     const positionable: UsePositionable<VizVariableGetNode> = usePositionable(props, emit);
-    return { ...positionable };
+    const node: Ref<HTMLDivElement | undefined> = ref();
+    onMounted(() => emit('update:modelValue', { ...props.modelValue, vizNodeDivRef: node.value }));
+    return { ...positionable, node };
   }
 });
 </script>

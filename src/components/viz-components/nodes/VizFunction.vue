@@ -1,5 +1,6 @@
 <template lang="pug">
 .viz-node.viz-function.shape(
+  ref='node',
   :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
   @mousedown='onMousedown'
 )
@@ -24,7 +25,7 @@ import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { usePositionable, UsePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isFunctionNode, VizFunctionNode } from '@/shared/viz-components/nodes/VizFunctionNode';
-import { computed, ComputedRef, defineComponent, PropType } from 'vue';
+import { computed, ComputedRef, defineComponent, onMounted, PropType, ref, Ref } from 'vue';
 export default defineComponent({
   name: 'VizFunction',
   components: { Icon, VizEventReceiverSlot, VizEventEmitterSlot, VizInputSlot, VizOutputSlot },
@@ -34,7 +35,9 @@ export default defineComponent({
     const positionable: UsePositionable<VizFunctionNode> = usePositionable(props, emit);
     const eventReceiverConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventReceiverConnected);
     const eventEmitterConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventEmitterConnected);
-    return { ...positionable, eventReceiverConnected, eventEmitterConnected };
+    const node: Ref<HTMLDivElement | undefined> = ref();
+    onMounted(() => emit('update:modelValue', { ...props.modelValue, vizNodeDivRef: node.value }));
+    return { ...positionable, node, eventReceiverConnected, eventEmitterConnected };
   }
 });
 </script>
