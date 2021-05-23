@@ -1,5 +1,5 @@
 <template lang="pug">
-.relative.overflow-hidden.h-full
+.viz-canvas
   //- TODO: Try `component(:is)`
   //- https://v3.vuejs.org/guide/component-basics.html#dynamic-components
   template(v-for='vizNode in vizNodes')
@@ -126,3 +126,20 @@ export default defineComponent({
   }
 });
 </script>
+
+<style lang="postcss" scoped>
+.viz-canvas {
+  @apply relative overflow-hidden h-full;
+
+  /* Grid https://stackoverflow.com/a/25709375/6897682 */
+  background: linear-gradient(-90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(-90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+    linear-gradient(transparent 3px, transparent 3px, transparent 382px, transparent 382px),
+    linear-gradient(-90deg, rgba(255, 255, 255, 0.4) 1px, transparent 1px),
+    linear-gradient(-90deg, transparent 3px, transparent 3px, transparent 382px, transparent 382px),
+    linear-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px), transparent;
+  background-size: 48px 48px, 48px 48px, 384px 384px, 384px 384px, 384px 384px, 384px 384px, 384px 384px, 384px 384px;
+}
+</style>
