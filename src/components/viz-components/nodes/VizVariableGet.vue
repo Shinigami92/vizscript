@@ -6,7 +6,7 @@
 )
   .body
     .outputs
-      viz-output-slot(:title='modelValue.name')
+      viz-output-slot(:title='modelValue.outputSlot.name', :connected='modelValue.outputSlot.connected')
 </template>
 
 <script lang="ts">

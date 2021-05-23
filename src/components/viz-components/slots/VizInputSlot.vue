@@ -1,6 +1,7 @@
 <template lang="pug">
 .viz-input-slot.shape
-  icon mdi-circle-outline
+  icon(v-if='connected') mdi-circle
+  icon(v-else) mdi-circle-outline
   .title {{ title }}
 </template>
 
@@ -11,7 +12,8 @@ export default defineComponent({
   name: 'VizInputSlot',
   components: { Icon },
   props: {
-    title: { type: String, required: true }
+    title: { type: String, required: true },
+    connected: { type: Boolean, required: true }
   }
 });
 </script>

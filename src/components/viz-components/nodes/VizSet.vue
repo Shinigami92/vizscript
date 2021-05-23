@@ -9,11 +9,11 @@
   .body
     .inputs
       viz-event-receiver-slot(:connected='eventReceiverConnected')
-      viz-input-slot(title='value')
-      viz-input-slot(title='target')
+      viz-input-slot(:title='modelValue.valueSlot.name', :connected='modelValue.valueSlot.connected')
+      viz-input-slot(:title='modelValue.targetSlot.name', :connected='modelValue.targetSlot.connected')
     .outputs
       viz-event-emitter-slot(:connected='eventEmitterConnected')
-      viz-output-slot(title='result')
+      viz-output-slot(:title='modelValue.resultSlot.name', :connected='modelValue.resultSlot.connected')
 </template>
 
 <script lang="ts">

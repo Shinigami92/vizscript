@@ -10,10 +10,15 @@
   .body
     .inputs
       viz-event-receiver-slot(:connected='eventReceiverConnected')
-      viz-input-slot(title='person')
+      viz-input-slot(
+        v-for='slot in modelValue.inputSlots',
+        :key='slot.name',
+        :title='slot.name',
+        :connected='slot.connected'
+      )
     .outputs
       viz-event-emitter-slot(:connected='eventEmitterConnected')
-      viz-output-slot(title='result')
+      viz-output-slot(:title='modelValue.returnSlot.name', :connected='modelValue.returnSlot.connected')
 </template>
 
 <script lang="ts">
