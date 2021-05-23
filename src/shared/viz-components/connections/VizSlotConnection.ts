@@ -38,8 +38,10 @@ export function calculateOutputSlotPosition(vizNode: VizNode): Positionable {
   switch (vizNode.type) {
     case 'variable-get':
       return { x: vizNode.x + 103, y: vizNode.y + 14 };
+    case 'function':
+      return { x: vizNode.x + 163, y: vizNode.y + 134 };
     default:
-      throw Error('Unsupported');
+      throw Error(`[calculateOutputSlotPosition] Unsupported node type ${vizNode.type}`);
   }
 }
 
@@ -47,7 +49,9 @@ export function calculateInputSlotPosition(vizNode: VizNode): Positionable {
   switch (vizNode.type) {
     case 'function':
       return { x: vizNode.x + 17, y: vizNode.y + 134 };
+    case 'set':
+      return { x: vizNode.x + 17, y: vizNode.y + 134 };
     default:
-      throw Error('Unsupported');
+      throw Error(`[calculateInputSlotPosition] Unsupported node type ${vizNode.type}`);
   }
 }

@@ -68,6 +68,20 @@ const DB_MOCK_CONNECTIONS: VizConnectionModel[] = [
     startSlot: 1,
     endNodeId: '3',
     endSlot: 1
+  },
+  {
+    id: '7',
+    type: 'event',
+    startNodeId: '3',
+    endNodeId: '4'
+  },
+  {
+    id: '8',
+    type: 'slot',
+    startNodeId: '3',
+    startSlot: 1,
+    endNodeId: '4',
+    endSlot: 1
   }
 ];
 export default defineComponent({

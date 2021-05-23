@@ -38,8 +38,10 @@ export function calculateInputEventReceiverPosition(vizNode: VizNode): Positiona
   switch (vizNode.type) {
     case 'function':
       return { x: vizNode.x + 14, y: vizNode.y + 82 };
+    case 'set':
+      return { x: vizNode.x + 14, y: vizNode.y + 82 };
     default:
-      throw Error('Unsupported');
+      throw Error(`[calculateInputEventReceiverPosition] Unsupported node type ${vizNode.type}`);
   }
 }
 
@@ -47,7 +49,9 @@ export function calculateOutputEventEmitterPosition(vizNode: VizNode): Positiona
   switch (vizNode.type) {
     case 'event-start':
       return { x: vizNode.x + 174, y: vizNode.y + 82 };
+    case 'function':
+      return { x: vizNode.x + 160, y: vizNode.y + 82 };
     default:
-      throw Error('Unsupported');
+      throw Error(`[calculateOutputEventEmitterPosition] Unsupported node type ${vizNode.type}`);
   }
 }
