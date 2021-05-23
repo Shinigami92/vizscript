@@ -1,5 +1,8 @@
 <template lang="pug">
-.viz-set.shape(:style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }', @mousedown='onMousedown')
+.viz-node.viz-set.shape(
+  :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
+  @mousedown='onMousedown'
+)
   .header
     .title SET
   .body
@@ -37,11 +40,20 @@ export default defineComponent({
 </script>
 
 <style lang="postcss" scoped>
+.viz-node {
+  @apply absolute rounded shadow z-10;
+}
+
 .viz-set.shape {
-  @apply absolute max-w-64 grid grid-rows-[48px,1fr] rounded shadow text-primary-50 bg-background-400;
+  @apply max-w-64;
+  @apply grid grid-rows-[48px,1fr];
+  @apply text-primary-50;
 
   .header {
-    @apply flex items-center justify-center rounded-t bg-green-300;
+    @apply flex items-center justify-center;
+    @apply rounded-t;
+    @apply bg-green-300 bg-opacity-85;
+    @apply backdrop-filter backdrop-blur-1;
 
     .title {
       @apply text-xl text-primary-50;
@@ -49,7 +61,11 @@ export default defineComponent({
   }
 
   .body {
-    @apply grid grid-cols-[1fr,1fr] justify-between rounded-b bg-background-400;
+    @apply grid grid-cols-[1fr,1fr];
+    @apply justify-between;
+    @apply rounded-b;
+    @apply bg-background-400 bg-opacity-85;
+    @apply backdrop-filter backdrop-blur-1;
 
     .inputs {
       @apply flex flex-col items-start;

@@ -1,5 +1,5 @@
 <template lang="pug">
-.viz-function.shape(
+.viz-node.viz-function.shape(
   :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
   @mousedown='onMousedown'
 )
@@ -40,23 +40,36 @@ export default defineComponent({
 </script>
 
 <style lang="postcss" scoped>
+.viz-node {
+  @apply absolute rounded shadow z-10;
+}
+
 .viz-function.shape {
-  @apply absolute max-w-64 grid grid-rows-[48px,1fr] rounded shadow text-primary-50 bg-background-400;
+  @apply max-w-64;
+  @apply grid grid-rows-[48px,1fr];
+  @apply text-primary-50;
 
   .header {
-    @apply flex items-center rounded-t bg-blue-300;
+    @apply flex items-center;
+    @apply rounded-t;
+    @apply bg-blue-300 bg-opacity-85;
+    @apply backdrop-filter backdrop-blur-1;
 
     .icon {
-      @apply mx-2 text-primary-50;
+      @apply mx-2;
     }
 
     .title {
-      @apply text-xl ml-2 mr-4 text-primary-50;
+      @apply text-xl ml-2 mr-4;
     }
   }
 
   .body {
-    @apply grid grid-cols-[1fr,1fr] justify-between rounded-b bg-background-400;
+    @apply grid grid-cols-[1fr,1fr];
+    @apply justify-between;
+    @apply rounded-b;
+    @apply bg-background-400 bg-opacity-85;
+    @apply backdrop-filter backdrop-blur-1;
 
     .inputs {
       @apply flex flex-col items-start;

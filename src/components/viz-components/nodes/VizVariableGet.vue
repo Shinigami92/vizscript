@@ -1,5 +1,5 @@
 <template lang="pug">
-.viz-function.shape(
+.viz-node.viz-function.shape(
   :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
   @mousedown='onMousedown'
 )
@@ -28,11 +28,17 @@ export default defineComponent({
 </script>
 
 <style lang="postcss" scoped>
+.viz-node {
+  @apply absolute rounded shadow z-10;
+}
+
 .viz-function.shape {
-  @apply absolute min-w-32 rounded shadow text-primary-50 bg-background-400;
+  @apply min-w-32 text-primary-50;
 
   .body {
     @apply rounded;
+    @apply bg-background-400 bg-opacity-85;
+    @apply backdrop-filter backdrop-blur-1;
 
     .outputs {
       @apply ml-4 flex flex-col items-end;
