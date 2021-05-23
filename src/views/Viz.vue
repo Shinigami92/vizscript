@@ -43,7 +43,9 @@ const DB_MOCK_NODES: VizNodeModel[] = [
     type: 'function',
     title: 'greeter',
     x: 360,
-    y: 64
+    y: 64,
+    parameters: [{ name: 'person', type: 'string' }],
+    return: { type: 'string' }
   },
   {
     id: '4',
@@ -75,6 +77,37 @@ export default defineComponent({
     const vizConnections: Array<Ref<VizConnection>> = DB_MOCK_CONNECTIONS.map((connection) =>
       convertConnection(connection, vizNodes)
     );
+    vizNodes.forEach((node) => {
+      const foundEmitter: boolean = vizConnections.some(
+        (connection) => connection.value.model?.startNodeId === node.value.model?.id
+      );
+      if (foundEmitter) {
+        switch (node.value.type) {
+          case 'event-start':
+            node.value.connected = true;
+            break;
+          case 'function':
+            node.value.eventEmitterConnected = true;
+            break;
+          case 'set':
+            node.value.eventEmitterConnected = true;
+            break;
+        }
+      }
+      const foundReveiver: boolean = vizConnections.some(
+        (connection) => connection.value.model?.endNodeId === node.value.model?.id
+      );
+      if (foundReveiver) {
+        switch (node.value.type) {
+          case 'function':
+            node.value.eventReceiverConnected = true;
+            break;
+          case 'set':
+            node.value.eventReceiverConnected = true;
+            break;
+        }
+      }
+    });
     return { vizNodes, vizConnections };
   }
 });

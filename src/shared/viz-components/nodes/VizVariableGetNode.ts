@@ -9,7 +9,7 @@ export interface VizVariableGetNode extends AbstractVizNode<'variable-get'> {
 }
 
 export function convertVariableGetNode(model: VizVariableGetNodeModel): Ref<VizVariableGetNode> {
-  return ref({ model, ...model });
+  return ref<VizVariableGetNode>({ model, ...model });
 }
 
 export function isVariableGetNode(modelValue: unknown): modelValue is VizVariableGetNode {

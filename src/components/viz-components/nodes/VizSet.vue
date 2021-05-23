@@ -4,11 +4,13 @@
     .title SET
   .body
     .inputs
-      icon(:size='48') mdi-arrow-right-bold-outline
+      icon(v-if='eventReceiverConnected', :size='48') mdi-arrow-right-bold
+      icon(v-else, :size='48') mdi-arrow-right-bold-outline
       viz-input-slot(title='value')
       viz-input-slot(title='target')
     .outputs
-      icon(:size='48') mdi-arrow-right-bold-outline
+      icon(v-if='eventEmitterConnected', :size='48') mdi-arrow-right-bold
+      icon(v-else, :size='48') mdi-arrow-right-bold-outline
       viz-output-slot(title='result')
 </template>
 
@@ -19,7 +21,7 @@ import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { UsePositionable, usePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isSetNode, VizSetNode } from '@/shared/viz-components/nodes/VizSetNode';
-import { defineComponent, PropType } from 'vue';
+import { computed, ComputedRef, defineComponent, PropType } from 'vue';
 export default defineComponent({
   name: 'VizSet',
   components: { Icon, VizInputSlot, VizOutputSlot },
@@ -27,7 +29,9 @@ export default defineComponent({
   emits: { 'update:modelValue': isSetNode as EmitType<VizSetNode> },
   setup(props, { emit }) {
     const positionable: UsePositionable<VizSetNode> = usePositionable(props, emit);
-    return { ...positionable };
+    const eventReceiverConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventReceiverConnected);
+    const eventEmitterConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventEmitterConnected);
+    return { ...positionable, eventReceiverConnected, eventEmitterConnected };
   }
 });
 </script>

@@ -6,10 +6,12 @@ import { AbstractVizNode } from './AbstractVizNode';
 
 export interface VizFunctionNode extends AbstractVizNode<'function'> {
   title: string;
+  eventReceiverConnected: boolean;
+  eventEmitterConnected: boolean;
 }
 
 export function convertFunctionNode(model: VizFunctionNodeModel): Ref<VizFunctionNode> {
-  return ref({ model, ...model });
+  return ref<VizFunctionNode>({ model, ...model, eventReceiverConnected: false, eventEmitterConnected: false });
 }
 
 export function isFunctionNode(modelValue: unknown): modelValue is VizFunctionNode {

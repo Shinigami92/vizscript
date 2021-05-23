@@ -7,7 +7,8 @@
     icon(:size='32') mdi-arrow-right-bold-hexagon-outline
     .title Event Start
   .body
-    icon(:size='48') mdi-arrow-right-bold-outline
+    icon(v-if='connected', :size='48') mdi-arrow-right-bold
+    icon(v-else, :size='48') mdi-arrow-right-bold-outline
 </template>
 
 <script lang="ts">
@@ -15,7 +16,7 @@ import Icon from '@/components/Icon.vue';
 import { usePositionable, UsePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isEventStartNode, VizEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
-import { defineComponent, PropType } from 'vue';
+import { computed, defineComponent, PropType, Ref } from 'vue';
 export default defineComponent({
   name: 'VizEventStart',
   components: { Icon },
@@ -23,7 +24,8 @@ export default defineComponent({
   emits: { 'update:modelValue': isEventStartNode as EmitType<VizEventStartNode> },
   setup(props, { emit }) {
     const positionable: UsePositionable<VizEventStartNode> = usePositionable(props, emit);
-    return { ...positionable };
+    const connected: Ref<boolean> = computed(() => props.modelValue.connected);
+    return { ...positionable, connected };
   }
 });
 </script>
