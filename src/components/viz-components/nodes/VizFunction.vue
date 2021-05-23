@@ -1,9 +1,7 @@
 <template lang="pug">
 .viz-function.shape(
   :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
-  @mousedown='onMousedown',
-  @mousemove='onMousemove',
-  @mouseup='onMouseup'
+  @mousedown='onMousedown'
 )
   .header
     icon(:size='32') mdi-math-integral

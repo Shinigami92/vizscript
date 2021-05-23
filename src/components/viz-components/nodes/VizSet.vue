@@ -1,10 +1,5 @@
 <template lang="pug">
-.viz-set.shape(
-  :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
-  @mousedown='onMousedown',
-  @mousemove='onMousemove',
-  @mouseup='onMouseup'
-)
+.viz-set.shape(:style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }', @mousedown='onMousedown')
   .header
     .title SET
   .body

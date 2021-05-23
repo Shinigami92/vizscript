@@ -1,9 +1,7 @@
 <template lang="pug">
 .viz-event-start.shape(
   :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
-  @mousedown='onMousedown',
-  @mousemove='onMousemove',
-  @mouseup='onMouseup'
+  @mousedown='onMousedown'
 )
   .header
     icon(:size='32') mdi-arrow-right-bold-hexagon-outline
