@@ -78,8 +78,7 @@ export default defineComponent({
 
 <style lang="postcss" scoped>
 .viz-connection {
-  @apply absolute;
-  pointer-events: none;
+  @apply absolute pointer-events-none;
 }
 
 .viz-event-connection.shape {
