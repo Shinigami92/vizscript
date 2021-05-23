@@ -4,18 +4,18 @@
     .title SET
   .body
     .inputs
-      icon(v-if='eventReceiverConnected', :size='48') mdi-arrow-right-bold
-      icon(v-else, :size='48') mdi-arrow-right-bold-outline
+      viz-event-receiver-slot(:connected='eventReceiverConnected')
       viz-input-slot(title='value')
       viz-input-slot(title='target')
     .outputs
-      icon(v-if='eventEmitterConnected', :size='48') mdi-arrow-right-bold
-      icon(v-else, :size='48') mdi-arrow-right-bold-outline
+      viz-event-emitter-slot(:connected='eventEmitterConnected')
       viz-output-slot(title='result')
 </template>
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
+import VizEventEmitterSlot from '@/components/viz-components/slots/VizEventEmitterSlot.vue';
+import VizEventReceiverSlot from '@/components/viz-components/slots/VizEventReceiverSlot.vue';
 import VizInputSlot from '@/components/viz-components/slots/VizInputSlot.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { UsePositionable, usePositionable } from '@/composables/usePositionable';
@@ -24,7 +24,7 @@ import { isSetNode, VizSetNode } from '@/shared/viz-components/nodes/VizSetNode'
 import { computed, ComputedRef, defineComponent, PropType } from 'vue';
 export default defineComponent({
   name: 'VizSet',
-  components: { Icon, VizInputSlot, VizOutputSlot },
+  components: { Icon, VizEventReceiverSlot, VizEventEmitterSlot, VizInputSlot, VizOutputSlot },
   props: { modelValue: { type: Object as PropType<VizSetNode>, required: true } },
   emits: { 'update:modelValue': isSetNode as EmitType<VizSetNode> },
   setup(props, { emit }) {

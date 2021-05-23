@@ -8,17 +8,17 @@
     .title {{ modelValue.title }}
   .body
     .inputs
-      icon(v-if='eventReceiverConnected', :size='48') mdi-arrow-right-bold
-      icon(v-else, :size='48') mdi-arrow-right-bold-outline
+      viz-event-receiver-slot(:connected='eventReceiverConnected')
       viz-input-slot(title='person')
     .outputs
-      icon(v-if='eventEmitterConnected', :size='48') mdi-arrow-right-bold
-      icon(v-else, :size='48') mdi-arrow-right-bold-outline
+      viz-event-emitter-slot(:connected='eventEmitterConnected')
       viz-output-slot(title='result')
 </template>
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
+import VizEventEmitterSlot from '@/components/viz-components/slots/VizEventEmitterSlot.vue';
+import VizEventReceiverSlot from '@/components/viz-components/slots/VizEventReceiverSlot.vue';
 import VizInputSlot from '@/components/viz-components/slots/VizInputSlot.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { usePositionable, UsePositionable } from '@/composables/usePositionable';
@@ -27,7 +27,7 @@ import { isFunctionNode, VizFunctionNode } from '@/shared/viz-components/nodes/V
 import { computed, ComputedRef, defineComponent, PropType } from 'vue';
 export default defineComponent({
   name: 'VizFunction',
-  components: { Icon, VizInputSlot, VizOutputSlot },
+  components: { Icon, VizEventReceiverSlot, VizEventEmitterSlot, VizInputSlot, VizOutputSlot },
   props: { modelValue: { type: Object as PropType<VizFunctionNode>, required: true } },
   emits: { 'update:modelValue': isFunctionNode as EmitType<VizFunctionNode> },
   setup(props, { emit }) {

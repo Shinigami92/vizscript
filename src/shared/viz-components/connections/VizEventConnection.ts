@@ -37,7 +37,7 @@ export function isEventConnection(modelValue: unknown): modelValue is VizEventCo
 export function calculateInputEventReceiverPosition(vizNode: VizNode): Positionable {
   switch (vizNode.type) {
     case 'function':
-      return { x: vizNode.x + 12, y: vizNode.y + 82 };
+      return { x: vizNode.x + 14, y: vizNode.y + 82 };
     default:
       throw Error('Unsupported');
   }
@@ -46,7 +46,7 @@ export function calculateInputEventReceiverPosition(vizNode: VizNode): Positiona
 export function calculateOutputEventEmitterPosition(vizNode: VizNode): Positionable {
   switch (vizNode.type) {
     case 'event-start':
-      return { x: vizNode.x + 176, y: vizNode.y + 82 };
+      return { x: vizNode.x + 174, y: vizNode.y + 82 };
     default:
       throw Error('Unsupported');
   }

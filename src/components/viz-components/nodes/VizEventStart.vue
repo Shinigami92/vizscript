@@ -7,19 +7,19 @@
     icon(:size='32') mdi-arrow-right-bold-hexagon-outline
     .title Event Start
   .body
-    icon(v-if='connected', :size='48') mdi-arrow-right-bold
-    icon(v-else, :size='48') mdi-arrow-right-bold-outline
+    viz-event-emitter-slot(:connected='connected')
 </template>
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
+import VizEventEmitterSlot from '@/components/viz-components/slots/VizEventEmitterSlot.vue';
 import { usePositionable, UsePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isEventStartNode, VizEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
 import { computed, defineComponent, PropType, Ref } from 'vue';
 export default defineComponent({
   name: 'VizEventStart',
-  components: { Icon },
+  components: { Icon, VizEventEmitterSlot },
   props: { modelValue: { type: Object as PropType<VizEventStartNode>, required: true } },
   emits: { 'update:modelValue': isEventStartNode as EmitType<VizEventStartNode> },
   setup(props, { emit }) {
