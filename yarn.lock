@@ -492,10 +492,10 @@
   resolved "https://registry.yarnpkg.com/@vue/shared/-/shared-3.0.11.tgz#20d22dd0da7d358bb21c17f9bde8628152642c77"
   integrity sha512-b+zB8A2so8eCE0JsxjL24J7vdGl8rzPQ09hZNhystm+KqSbKcAej1A+Hbva1rCMmTTqA+hFnUSDc5kouEo0JzA==
 
-"@windicss/plugin-utils@0.16.0-beta.23":
-  version "0.16.0-beta.23"
-  resolved "https://registry.yarnpkg.com/@windicss/plugin-utils/-/plugin-utils-0.16.0-beta.23.tgz#1a8b0de71dce61739b2aaed1af01aaf5ef576817"
-  integrity sha512-dVAK6WS8X37a4wDCN9Kid3sQ+fTyQq29rIL4uKv773x9hzpgK4i2Lj99ItXg3o2+Y3aX81W1CUjJl9dKqUp8gA==
+"@windicss/plugin-utils@0.16.0":
+  version "0.16.0"
+  resolved "https://registry.yarnpkg.com/@windicss/plugin-utils/-/plugin-utils-0.16.0.tgz#660586b95ed3394b07f9970b2be77f681ea1ecd4"
+  integrity sha512-Gu6iHqFnqfxE0J8Oa74+2W5L2052ptqEHBtPaOuXOFgIMTJAT2KoXb6v+/Z0ldHsxVC1q+MSsom877SJ0cL2iA==
   dependencies:
     "@antfu/utils" "^0.1.6"
     debug "^4.3.2"
@@ -3647,12 +3647,12 @@ vfile@^4.0.0, vfile@^4.0.1:
     unist-util-stringify-position "^2.0.0"
     vfile-message "^2.0.0"
 
-vite-plugin-windicss@~0.16.0-beta.23:
-  version "0.16.0-beta.23"
-  resolved "https://registry.yarnpkg.com/vite-plugin-windicss/-/vite-plugin-windicss-0.16.0-beta.23.tgz#0bf23900cf78a224f52ac4aa8975a014849d4d12"
-  integrity sha512-L8wPJQcgFbSZK8b20Uis+XaZAbd7MUCt13fUiFMuY4+kUTS0oiIi7MdQbpWiwwWcaK5j/AIasXdlGQG4Som0WQ==
+vite-plugin-windicss@~0.16.0:
+  version "0.16.0"
+  resolved "https://registry.yarnpkg.com/vite-plugin-windicss/-/vite-plugin-windicss-0.16.0.tgz#d3ef9da930cc33aec162b9b760f4d42835eb353c"
+  integrity sha512-XaYnPNKsq2yZ5Ph39ZmPvtsTheyVsGSXibTOq/kWCKcXyLxIinTL6xQvLsagjF8QzHpHPF4NbsFvvGtO81gxgA==
   dependencies:
-    "@windicss/plugin-utils" "0.16.0-beta.23"
+    "@windicss/plugin-utils" "0.16.0"
     chalk "^4.1.1"
     debug "^4.3.2"
     windicss "^3.0.9"
@@ -3772,13 +3772,14 @@ vscode-pug-languageservice@^0.25.4:
     pug-parser "^6.0.0"
     vscode-languageserver "^7.1.0-next.4"
 
-vscode-typescript-languageservice@^0.25.4:
-  version "0.25.4"
-  resolved "https://registry.yarnpkg.com/vscode-typescript-languageservice/-/vscode-typescript-languageservice-0.25.4.tgz#fce08a7adc18ac339b678ad939129b644f541e0d"
-  integrity sha512-nS/nVhoUmRozfz6ZwM93qNXSRapjIGjVFydGSlD5DSml6/a9kql/xh8WfXmM7b9J3trJGgAsK+a31qWyFVMqig==
+vscode-typescript-languageservice@^0.25.12:
+  version "0.25.12"
+  resolved "https://registry.yarnpkg.com/vscode-typescript-languageservice/-/vscode-typescript-languageservice-0.25.12.tgz#ac1a65bc6c1fcc686222e04c7a996458dac7720b"
+  integrity sha512-e7zSRVESV+BI6K2qrUVBFEFJx+HN0KN2EE1ZK9R/8qjk3FZmYbcPork8jHBMfEJ8ZPDMv6FahnAfWWxes5SZ/w==
   dependencies:
     "@volar/shared" "^0.25.4"
     typescript-vscode-sh-plugin "^0.6.14"
+    upath "^2.0.1"
     vscode-languageserver "^7.1.0-next.4"
     vscode-languageserver-textdocument "^1.0.1"
 
@@ -3792,10 +3793,10 @@ vscode-uri@^3.0.2:
   resolved "https://registry.yarnpkg.com/vscode-uri/-/vscode-uri-3.0.2.tgz#ecfd1d066cb8ef4c3a208decdbab9a8c23d055d0"
   integrity sha512-jkjy6pjU1fxUvI51P+gCsxg1u2n8LSt0W6KrCNQceaziKzff74GoWmjVG46KieVzybO1sttPQmYfrwSHey7GUA==
 
-vscode-vue-languageservice@0.25.6:
-  version "0.25.6"
-  resolved "https://registry.yarnpkg.com/vscode-vue-languageservice/-/vscode-vue-languageservice-0.25.6.tgz#acca46be01b2c9426d617feebe87669e373dae32"
-  integrity sha512-996YtwBLKnKS74iqxevr5zwkMJobVhSsUPAjHEl/TRMPPNsw902HgAk45Q4i7E5OjiMOi4VnMSioMItUm4SCHQ==
+vscode-vue-languageservice@0.25.12:
+  version "0.25.12"
+  resolved "https://registry.yarnpkg.com/vscode-vue-languageservice/-/vscode-vue-languageservice-0.25.12.tgz#b19524fd169d94192e156e7c007667e72febc68f"
+  integrity sha512-qk1svwVtDmMLUfUA/cbKA2y+i9qJKECpCchZJ3GCWKRDP5hgyVj+fxy4MK56UBJmSRed9eHto+VvmyVF694Gdw==
   dependencies:
     "@starptech/prettyhtml" "^0.10.0"
     "@volar/code-gen" "^0.25.4"
@@ -3817,7 +3818,7 @@ vscode-vue-languageservice@0.25.6:
     vscode-languageserver "^7.1.0-next.4"
     vscode-languageserver-textdocument "^1.0.1"
     vscode-pug-languageservice "^0.25.4"
-    vscode-typescript-languageservice "^0.25.4"
+    vscode-typescript-languageservice "^0.25.12"
 
 vue-eslint-parser@^7.0.0, vue-eslint-parser@^7.6.0:
   version "7.6.0"
@@ -3843,12 +3844,12 @@ vue-router@~4.0.8:
   dependencies:
     "@vue/devtools-api" "^6.0.0-beta.10"
 
-vue-tsc@~0.1.4:
-  version "0.1.4"
-  resolved "https://registry.yarnpkg.com/vue-tsc/-/vue-tsc-0.1.4.tgz#c26a6e9f286c36bc870cff9b5e802262ac2c9c98"
-  integrity sha512-BwExl/GTDS77wfOqYY29/8/fO4HMSwYeiRxeE5KcpCLqc1i4KUEVMjskB1Lzjvo1K1osux04p8D8c+ltqgta2Q==
+vue-tsc@~0.1.6:
+  version "0.1.6"
+  resolved "https://registry.yarnpkg.com/vue-tsc/-/vue-tsc-0.1.6.tgz#7e1bd4e6cc5085d51706f00062331765d3ad640c"
+  integrity sha512-G30mBWh8Xis71P4GurI4Z0JSAKeJGBWOwFp452EEIxDfDmNVlsS0rIaR5KN/dUUPE+MFWItzQthC291dW2PQ7w==
   dependencies:
-    vscode-vue-languageservice "0.25.6"
+    vscode-vue-languageservice "0.25.12"
 
 vue@~3.0.5:
   version "3.0.11"
@@ -3896,10 +3897,10 @@ widest-line@^2.0.0:
   dependencies:
     string-width "^2.1.1"
 
-windicss@^3.0.9, windicss@~3.0.9:
-  version "3.0.9"
-  resolved "https://registry.yarnpkg.com/windicss/-/windicss-3.0.9.tgz#bc71e6fac60f779f9f3c4b4680565156623911d3"
-  integrity sha512-pv/SnYPfqYwz25672irDzNZpcEK/QlN9Dlhe2KUQXDjqd46wl/zLAi51BNB0pdfDZDbNjyvI1XgDXHk1oFF51A==
+windicss@^3.0.9, windicss@~3.0.10:
+  version "3.0.10"
+  resolved "https://registry.yarnpkg.com/windicss/-/windicss-3.0.10.tgz#918a59f29aede2ee484cdfef39a56d0b6aeb55a6"
+  integrity sha512-ihcGCdgjKloqRr9l072J+eWOddgdUdoEXl89W1wdnaDScz2AT6S6H9znoKf5y3g4Zu1JRTYTqCdYultRxezYpw==
 
 with@^7.0.0:
   version "7.0.2"
