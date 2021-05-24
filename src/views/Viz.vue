@@ -31,7 +31,7 @@ import { convertNode, VizNode } from '@/shared/viz-components/nodes/VizNode';
 import { defineComponent, onMounted, ref, Ref } from 'vue';
 const DB_MOCK_NODES: VizNodeModel[] = [
   { id: '1', type: 'event-start', x: 10, y: 48 },
-  { id: '2', type: 'variable-get', name: 'user', x: 30, y: 192 },
+  { id: '2', type: 'variable-get', name: 'user', x: 30, y: 192, dataType: 'string' },
   {
     id: '3',
     type: 'function',
@@ -42,7 +42,7 @@ const DB_MOCK_NODES: VizNodeModel[] = [
     return: { type: 'string' }
   },
   { id: '4', type: 'set', x: 610, y: 48 },
-  { id: '9', type: 'variable-get', name: 'textContent', x: 360, y: 260 },
+  { id: '9', type: 'variable-get', name: 'textContent', x: 360, y: 260, dataType: 'string' },
   {
     id: '11',
     type: 'caller-function',
@@ -53,7 +53,7 @@ const DB_MOCK_NODES: VizNodeModel[] = [
     parameters: [{ name: 'msg', type: 'any', required: false }],
     return: { type: 'void' }
   },
-  { id: '12', type: 'build-in-get', name: 'console', x: 670, y: 290 }
+  { id: '12', type: 'build-in-get', name: 'console', x: 670, y: 290, dataType: { name: 'Console' } }
 ];
 const DB_MOCK_CONNECTIONS: VizConnectionModel[] = [
   { id: '5', type: 'event', startNodeId: '1', endNodeId: '3' },
@@ -180,6 +180,11 @@ export default defineComponent({
                   endNode.value.valueSlot.connected = true;
                 } else if (slotConnectionModel.endSlot === 2) {
                   endNode.value.targetSlot.connected = true;
+                  endNode.value.targetSlot.connectedToNode = {
+                    node: vizNodes.find((vizNode) => slotConnectionModel.startNodeId === vizNode.value.model?.id)
+                      ?.value,
+                    slot: slotConnectionModel.startSlot
+                  };
                 }
                 break;
               default:

@@ -23,7 +23,9 @@ export function convertSlotConnection(
     model,
     ...model,
     start: computed(() => calculateOutputSlotPosition(startNode.value, model.startSlot)),
-    end: computed(() => calculateInputSlotPosition(endNode.value, model.endSlot))
+    startNode: startNode.value,
+    end: computed(() => calculateInputSlotPosition(endNode.value, model.endSlot)),
+    endNode: endNode.value
   });
 }
 
