@@ -1,4 +1,4 @@
-import { VizBuildInGetNodeModel } from '@/shared/models/nodes/VizBuildInGetNodeModel';
+import { VizBuildInGetNodeModel } from '@/shared/models/nodes/VizBuildInGetNode';
 import { isRecordObject } from '@/shared/utilities/common';
 import { isPositionable } from '@/shared/viz-components/Positionable';
 import { ref, Ref } from 'vue';
