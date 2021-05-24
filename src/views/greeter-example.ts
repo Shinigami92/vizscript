@@ -9,5 +9,7 @@ export const sourceText: string = `function greeter(person: string): string {
 
 const user: string = "Jane User";
 
-document.body.textContent = greeter(user);
+const textContent: string = greeter(user);
+
+console.log(greeter(user));
 `;
