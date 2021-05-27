@@ -1,9 +1,9 @@
-import { VizBuildInGetNodeModel } from './VizBuildInGetNode';
-import { VizCallerFunctionNodeModel } from './VizCallerFunctionNodeModel';
-import { VizEventStartNodeModel } from './VizEventStartNodeModel';
-import { VizFunctionNodeModel } from './VizFunctionNodeModel';
-import { VizSetNodeModel } from './VizSetNodeModel';
-import { VizVariableGetNodeModel } from './VizVariableGetNodeModel';
+import type { VizBuildInGetNodeModel } from './VizBuildInGetNode';
+import type { VizCallerFunctionNodeModel } from './VizCallerFunctionNodeModel';
+import type { VizEventStartNodeModel } from './VizEventStartNodeModel';
+import type { VizFunctionNodeModel } from './VizFunctionNodeModel';
+import type { VizSetNodeModel } from './VizSetNodeModel';
+import type { VizVariableGetNodeModel } from './VizVariableGetNodeModel';
 
 export type VizNodeModel =
   | VizCallerFunctionNodeModel
@@ -12,3 +12,5 @@ export type VizNodeModel =
   | VizSetNodeModel
   | VizBuildInGetNodeModel
   | VizVariableGetNodeModel;
+
+export type VizNodeType = VizNodeModel['type'];

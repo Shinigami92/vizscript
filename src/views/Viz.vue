@@ -32,6 +32,7 @@ export default defineComponent({
     VizSlotConnection
   },
   setup() {
+    store.initializeMock();
     const vizNodeMap: Record<string, Ref<VizNode>> = Object.fromEntries(
       Object.entries(store.vizNodeMap()).map(([id, node]) => [id, convertNode(node)])
     );

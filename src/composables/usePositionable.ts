@@ -1,17 +1,19 @@
+import type { VizNode } from '@/shared/viz-components/nodes/VizNode';
 import type { Positionable } from '@/shared/viz-components/Positionable';
+import { updateNodePosition } from '@/store';
 import { computed, ref, Ref, WritableComputedRef } from 'vue';
 
-export interface UsePositionable<T extends Positionable> {
+export interface UsePositionable<T extends VizNode> {
   dx: Ref<number>;
   dy: Ref<number>;
   onMousedown: (payload: MouseEvent) => void;
 }
 
-export function usePositionable<T extends Positionable>(
+export function usePositionable<T extends VizNode>(
   props: { modelValue: T },
   emit: (event: 'update:modelValue', value: T) => void
 ): UsePositionable<T> {
-  const internalValue: WritableComputedRef<Positionable> = computed({
+  const internalValue: WritableComputedRef<T> = computed({
     get: () => props.modelValue,
     set: (value) => emit('update:modelValue', value)
   });
@@ -49,6 +51,11 @@ export function usePositionable<T extends Positionable>(
     dy.value = 0;
     startPos = null;
     // initialPos = null;
+
+    const nodeId: string | undefined = internalValue.value.model?.id;
+    if (nodeId) {
+      updateNodePosition(nodeId, internalValue.value);
+    }
   };
 
   return { dx, dy, onMousedown };
