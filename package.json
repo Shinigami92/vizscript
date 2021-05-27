@@ -32,8 +32,7 @@
     "typescript": "~4.3.2",
     "vue": "~3.0.5",
     "vue-prism-component": "~2.0.0",
-    "vue-router": "~4.0.8",
-    "vuex": "~4.0.1"
+    "vue-router": "~4.0.8"
   },
   "devDependencies": {
     "@prettier/plugin-pug": "~1.15.2",

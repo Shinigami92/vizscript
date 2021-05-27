@@ -2,13 +2,13 @@
 .viz-canvas
   //- TODO: Try `component(:is)`
   //- https://v3.vuejs.org/guide/component-basics.html#dynamic-components
-  template(v-for='vizNode in vizNodes')
-    viz-event-start(v-if='vizNode.value.type === "event-start"', v-model='vizNode.value')
-    viz-caller-function(v-else-if='vizNode.value.type === "caller-function"', v-model='vizNode.value')
-    viz-function(v-else-if='vizNode.value.type === "function"', v-model='vizNode.value')
-    viz-set(v-else-if='vizNode.value.type === "set"', v-model='vizNode.value')
-    viz-build-in-get(v-else-if='vizNode.value.type === "build-in-get"', v-model='vizNode.value')
-    viz-variable-get(v-else-if='vizNode.value.type === "variable-get"', v-model='vizNode.value')
+  template(v-for='vizNode in vizNodeMap')
+    viz-event-start(v-if='vizNode?.value.type === "event-start"', v-model='vizNode.value')
+    viz-caller-function(v-else-if='vizNode?.value.type === "caller-function"', v-model='vizNode.value')
+    viz-function(v-else-if='vizNode?.value.type === "function"', v-model='vizNode.value')
+    viz-set(v-else-if='vizNode?.value.type === "set"', v-model='vizNode.value')
+    viz-build-in-get(v-else-if='vizNode?.value.type === "build-in-get"', v-model='vizNode.value')
+    viz-variable-get(v-else-if='vizNode?.value.type === "variable-get"', v-model='vizNode.value')
   template(v-for='vizConnection in vizConnections')
     viz-event-connection(v-if='vizConnection.value.type === "event"', v-model='vizConnection.value')
     viz-slot-connection(v-else-if='vizConnection.value.type === "slot"', v-model='vizConnection.value')
@@ -23,48 +23,11 @@ import VizEventStart from '@/components/viz-components/nodes/VizEventStart.vue';
 import VizFunction from '@/components/viz-components/nodes/VizFunction.vue';
 import VizSet from '@/components/viz-components/nodes/VizSet.vue';
 import VizVariableGet from '@/components/viz-components/nodes/VizVariableGet.vue';
-import { VizConnectionModel } from '@/shared/models/connections/VizConnectionModel';
-import { VizSlotConnectionModel } from '@/shared/models/connections/VizSlotConnectionModel';
-import { VizNodeModel } from '@/shared/models/nodes/VizNodeModel';
+import type { VizSlotConnectionModel } from '@/shared/models/connections/VizSlotConnectionModel';
 import { convertConnection, VizConnection } from '@/shared/viz-components/connections/VizConnection';
 import { convertNode, VizNode } from '@/shared/viz-components/nodes/VizNode';
+import * as store from '@/store';
 import { defineComponent, onMounted, ref, Ref } from 'vue';
-const DB_MOCK_NODES: VizNodeModel[] = [
-  { id: '1', type: 'event-start', x: 10, y: 48 },
-  { id: '2', type: 'variable-get', name: 'user', x: 30, y: 192, dataType: 'string' },
-  {
-    id: '3',
-    type: 'function',
-    title: 'greeter',
-    x: 360,
-    y: 64,
-    parameters: [{ name: 'person', type: 'string' }],
-    return: { type: 'string' }
-  },
-  { id: '4', type: 'set', x: 610, y: 48 },
-  { id: '9', type: 'variable-get', name: 'textContent', x: 360, y: 260, dataType: 'string' },
-  {
-    id: '11',
-    type: 'caller-function',
-    title: 'log',
-    x: 870,
-    y: 60,
-    caller: { type: { name: 'Console' } },
-    parameters: [{ name: 'msg', type: 'any', required: false }],
-    return: { type: 'void' }
-  },
-  { id: '12', type: 'build-in-get', name: 'console', x: 670, y: 290, dataType: { name: 'Console' } }
-];
-const DB_MOCK_CONNECTIONS: VizConnectionModel[] = [
-  { id: '5', type: 'event', startNodeId: '1', endNodeId: '3' },
-  { id: '6', type: 'slot', startNodeId: '2', startSlot: 1, endNodeId: '3', endSlot: 1 },
-  { id: '7', type: 'event', startNodeId: '3', endNodeId: '4' },
-  { id: '8', type: 'slot', startNodeId: '3', startSlot: 1, endNodeId: '4', endSlot: 1 },
-  { id: '10', type: 'slot', startNodeId: '9', startSlot: 1, endNodeId: '4', endSlot: 2 },
-  { id: '13', type: 'slot', startNodeId: '12', startSlot: 1, endNodeId: '11', endSlot: 1 },
-  { id: '14', type: 'event', startNodeId: '4', endNodeId: '11' },
-  { id: '15', type: 'slot', startNodeId: '4', startSlot: 1, endNodeId: '11', endSlot: 2 }
-];
 export default defineComponent({
   components: {
     VizEventStart,
@@ -77,14 +40,22 @@ export default defineComponent({
     VizSlotConnection
   },
   setup() {
-    const vizNodes: Array<Ref<VizNode>> = DB_MOCK_NODES.map(convertNode);
+    const vizNodeMap: Record<string, Ref<VizNode>> = Object.fromEntries(
+      Object.entries(store.vizNodeMap()).map(([id, node]) => [id, convertNode(node)])
+    );
     const vizConnections: Ref<Array<Ref<VizConnection>>> = ref([]);
     onMounted(() => {
-      vizConnections.value.push(...DB_MOCK_CONNECTIONS.map((connection) => convertConnection(connection, vizNodes)));
-      vizNodes.forEach((node) => {
+      vizConnections.value.push(
+        ...store
+          .findAllConnections()
+          .map((connection) =>
+            convertConnection(connection, [vizNodeMap[connection.startNodeId]!, vizNodeMap[connection.endNodeId]!])
+          )
+      );
+      Object.entries(vizNodeMap).forEach(([nodeId, node]) => {
         const foundEventEmitter: boolean = vizConnections.value
           .filter((connection) => connection.value.type === 'event')
-          .some((connection) => connection.value.model?.startNodeId === node.value.model?.id);
+          .some((connection) => connection.value.model?.startNodeId === nodeId);
         if (foundEventEmitter) {
           switch (node.value.type) {
             case 'event-start':
@@ -102,7 +73,7 @@ export default defineComponent({
         }
         const foundEventReveiver: boolean = vizConnections.value
           .filter((connection) => connection.value.type === 'event')
-          .some((connection) => connection.value.model?.endNodeId === node.value.model?.id);
+          .some((connection) => connection.value.model?.endNodeId === nodeId);
         if (foundEventReveiver) {
           switch (node.value.type) {
             case 'caller-function':
@@ -120,7 +91,7 @@ export default defineComponent({
         }
         const outputSlotConnections: Array<Ref<VizConnection>> = vizConnections.value
           .filter((connection) => connection.value.type === 'slot')
-          .filter((connection) => connection.value.model?.startNodeId === node.value.model?.id);
+          .filter((connection) => connection.value.model?.startNodeId === nodeId);
         for (const slotConnection of outputSlotConnections) {
           const slotConnectionModel: VizSlotConnectionModel | undefined = slotConnection.value.model as
             | VizSlotConnectionModel
@@ -128,9 +99,7 @@ export default defineComponent({
           if (!slotConnectionModel) {
             throw Error('slotConnectionModel not found');
           }
-          const startNode: Ref<VizNode> | undefined = vizNodes.find(
-            (vizNode) => slotConnectionModel.startNodeId === vizNode.value.model?.id
-          );
+          const startNode: Ref<VizNode> | undefined = vizNodeMap[slotConnectionModel.startNodeId];
           if (startNode) {
             switch (startNode.value.type) {
               case 'function':
@@ -152,7 +121,7 @@ export default defineComponent({
         }
         const inputSlotConnections: Array<Ref<VizConnection>> = vizConnections.value
           .filter((connection) => connection.value.type === 'slot')
-          .filter((connection) => connection.value.model?.endNodeId === node.value.model?.id);
+          .filter((connection) => connection.value.model?.endNodeId === nodeId);
         for (const slotConnection of inputSlotConnections) {
           const slotConnectionModel: VizSlotConnectionModel | undefined = slotConnection.value.model as
             | VizSlotConnectionModel
@@ -160,9 +129,7 @@ export default defineComponent({
           if (!slotConnectionModel) {
             throw Error('slotConnectionModel not found');
           }
-          const endNode: Ref<VizNode> | undefined = vizNodes.find(
-            (vizNode) => slotConnectionModel.endNodeId === vizNode.value.model?.id
-          );
+          const endNode: Ref<VizNode> | undefined = vizNodeMap[slotConnectionModel.endNodeId];
           if (endNode) {
             switch (endNode.value.type) {
               case 'caller-function':
@@ -181,8 +148,7 @@ export default defineComponent({
                 } else if (slotConnectionModel.endSlot === 2) {
                   endNode.value.targetSlot.connected = true;
                   endNode.value.targetSlot.connectedToNode = {
-                    node: vizNodes.find((vizNode) => slotConnectionModel.startNodeId === vizNode.value.model?.id)
-                      ?.value,
+                    node: vizNodeMap[slotConnectionModel.startNodeId]?.value,
                     slot: slotConnectionModel.startSlot
                   };
                 }
@@ -194,7 +160,7 @@ export default defineComponent({
         }
       });
     });
-    return { vizNodes, vizConnections };
+    return { vizNodeMap, vizConnections };
   }
 });
 </script>
