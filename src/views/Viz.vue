@@ -1,17 +1,9 @@
 <template lang="pug">
 .viz-canvas
-  //- TODO: Try `component(:is)`
-  //- https://v3.vuejs.org/guide/component-basics.html#dynamic-components
   template(v-for='vizNode in vizNodeMap')
-    viz-event-start(v-if='vizNode?.value.type === "event-start"', v-model='vizNode.value')
-    viz-caller-function(v-else-if='vizNode?.value.type === "caller-function"', v-model='vizNode.value')
-    viz-function(v-else-if='vizNode?.value.type === "function"', v-model='vizNode.value')
-    viz-set(v-else-if='vizNode?.value.type === "set"', v-model='vizNode.value')
-    viz-build-in-get(v-else-if='vizNode?.value.type === "build-in-get"', v-model='vizNode.value')
-    viz-variable-get(v-else-if='vizNode?.value.type === "variable-get"', v-model='vizNode.value')
+    component(v-if='vizNode', :is='`viz-${vizNode.value.type}`', v-model='vizNode.value')
   template(v-for='vizConnection in vizConnections')
-    viz-event-connection(v-if='vizConnection.value.type === "event"', v-model='vizConnection.value')
-    viz-slot-connection(v-else-if='vizConnection.value.type === "slot"', v-model='vizConnection.value')
+    component(v-if='vizConnection', :is='`viz-${vizConnection.value.type}-connection`', v-model='vizConnection.value')
 </template>
 
 <script lang="ts">
