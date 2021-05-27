@@ -29,19 +29,19 @@
   "dependencies": {
     "@mdi/font": "~5.9.55",
     "prismjs": "~1.23.0",
-    "typescript": "~4.2.4",
+    "typescript": "~4.3.2",
     "vue": "~3.0.5",
     "vue-prism-component": "~2.0.0",
     "vue-router": "~4.0.8",
-    "vuex": "~4.0.0"
+    "vuex": "~4.0.1"
   },
   "devDependencies": {
     "@prettier/plugin-pug": "~1.15.2",
-    "@types/node": "~15.6.0",
+    "@types/node": "~15.6.1",
     "@types/prismjs": "~1.16.5",
     "@types/vfile-message": "~2.0.0",
-    "@typescript-eslint/eslint-plugin": "~4.24.0",
-    "@typescript-eslint/parser": "~4.24.0",
+    "@typescript-eslint/eslint-plugin": "~4.25.0",
+    "@typescript-eslint/parser": "~4.25.0",
     "@vitejs/plugin-vue": "~1.2.2",
     "@vue/compiler-sfc": "~3.0.11",
     "@vue/eslint-config-prettier": "~6.0.0",
@@ -56,9 +56,9 @@
     "prettier": "~2.3.0",
     "prettier-plugin-organize-imports": "~2.1.0",
     "sass": "~1.34.0",
-    "vite": "~2.3.3",
-    "vite-plugin-windicss": "~0.16.0",
+    "vite": "~2.3.4",
+    "vite-plugin-windicss": "~0.16.5",
     "vue-tsc": "~0.1.6",
-    "windicss": "~3.0.10"
+    "windicss": "~3.0.12"
   }
 }

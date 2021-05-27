@@ -10,6 +10,7 @@
     "esModuleInterop": true,
     "lib": ["ESNext", "DOM"],
     "importHelpers": true,
+    "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
