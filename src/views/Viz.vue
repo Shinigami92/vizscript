@@ -1,9 +1,19 @@
 <template lang="pug">
 .viz-canvas
   template(v-for='vizNode in vizNodeMap')
-    component(v-if='vizNode', :is='`viz-${vizNode.value.type}`', v-model='vizNode.value')
+    component(
+      v-if='vizNode',
+      :is='`viz-${vizNode.value.type}`',
+      :key='vizNode.value.model?.id',
+      v-model='vizNode.value'
+    )
   template(v-for='vizConnection in vizConnections')
-    component(v-if='vizConnection', :is='`viz-${vizConnection.value.type}-connection`', v-model='vizConnection.value')
+    component(
+      v-if='vizConnection',
+      :is='`viz-${vizConnection.value.type}-connection`',
+      :key='vizConnection.value.model?.id',
+      v-model='vizConnection.value'
+    )
 </template>
 
 <script lang="ts">
