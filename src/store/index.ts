@@ -46,6 +46,10 @@ export function vizNodeMap(): Record<string, VizNodeModel> {
   return state.value.currentViz.nodes;
 }
 
+export function findNodeById(id: string): VizNodeModel | undefined {
+  return state.value.currentViz.nodes[id];
+}
+
 export function createNode<Type extends VizNodeType, Node extends AbstractVizNodeModel<Type>>(
   type: Type,
   node: Omit<Node, 'id' | 'type'>
@@ -97,6 +101,10 @@ export function createSlotConnection({
     endSlot
   };
   return state.value.currentViz.connections[id] as VizSlotConnectionModel;
+}
+
+export function findConnectionById(id: string): VizConnectionModel | undefined {
+  return state.value.currentViz.connections[id];
 }
 
 // --- Mock Data ---
