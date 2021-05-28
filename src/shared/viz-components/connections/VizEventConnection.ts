@@ -47,7 +47,7 @@ export function calculateInputEventReceiverPosition(vizNode: VizNode): Positiona
         const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
         const eventReceiverIcon: HTMLSpanElement | null = vizNodeDiv.querySelector('.body .inputs .icon');
         if (!eventReceiverIcon) {
-          throw Error(`[calculateInputEventReceiverPosition] Emitter Icon wasn't found ${vizNode}`);
+          throw Error(`[calculateInputEventReceiverPosition] Emitter Icon wasn't found ${JSON.stringify(vizNode)}`);
         }
         const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
         const emitterIconRect: DOMRect = eventReceiverIcon.getBoundingClientRect();
@@ -62,7 +62,7 @@ export function calculateInputEventReceiverPosition(vizNode: VizNode): Positiona
         const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
         const eventReceiverIcon: HTMLSpanElement | null = vizNodeDiv.querySelector('.body .inputs .icon');
         if (!eventReceiverIcon) {
-          throw Error(`[calculateInputEventReceiverPosition] Emitter Icon wasn't found ${vizNode}`);
+          throw Error(`[calculateInputEventReceiverPosition] Emitter Icon wasn't found ${JSON.stringify(vizNode)}`);
         }
         const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
         const emitterIconRect: DOMRect = eventReceiverIcon.getBoundingClientRect();
@@ -77,7 +77,7 @@ export function calculateInputEventReceiverPosition(vizNode: VizNode): Positiona
         const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
         const eventReceiverIcon: HTMLSpanElement | null = vizNodeDiv.querySelector('.body .inputs .icon');
         if (!eventReceiverIcon) {
-          throw Error(`[calculateInputEventReceiverPosition] Emitter Icon wasn't found ${vizNode}`);
+          throw Error(`[calculateInputEventReceiverPosition] Emitter Icon wasn't found ${JSON.stringify(vizNode)}`);
         }
         const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
         const emitterIconRect: DOMRect = eventReceiverIcon.getBoundingClientRect();
@@ -99,7 +99,7 @@ export function calculateOutputEventEmitterPosition(vizNode: VizNode): Positiona
         const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
         const eventEmitterIcon: HTMLSpanElement | null = vizNodeDiv.querySelector('.body .icon');
         if (!eventEmitterIcon) {
-          throw Error(`[calculateOutputEventEmitterPosition] Emitter Icon wasn't found ${vizNode}`);
+          throw Error(`[calculateOutputEventEmitterPosition] Emitter Icon wasn't found ${JSON.stringify(vizNode)}`);
         }
         const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
         const emitterIconRect: DOMRect = eventEmitterIcon.getBoundingClientRect();
@@ -114,7 +114,7 @@ export function calculateOutputEventEmitterPosition(vizNode: VizNode): Positiona
         const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
         const eventEmitterIcon: HTMLSpanElement | null = vizNodeDiv.querySelector('.body .outputs .icon');
         if (!eventEmitterIcon) {
-          throw Error(`[calculateOutputEventEmitterPosition] Emitter Icon wasn't found ${vizNode}`);
+          throw Error(`[calculateOutputEventEmitterPosition] Emitter Icon wasn't found ${JSON.stringify(vizNode)}`);
         }
         const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
         const emitterIconRect: DOMRect = eventEmitterIcon.getBoundingClientRect();
@@ -129,7 +129,7 @@ export function calculateOutputEventEmitterPosition(vizNode: VizNode): Positiona
         const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
         const eventEmitterIcon: HTMLSpanElement | null = vizNodeDiv.querySelector('.body .outputs .icon');
         if (!eventEmitterIcon) {
-          throw Error(`[calculateOutputEventEmitterPosition] Emitter Icon wasn't found ${vizNode}`);
+          throw Error(`[calculateOutputEventEmitterPosition] Emitter Icon wasn't found ${JSON.stringify(vizNode)}`);
         }
         const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
         const emitterIconRect: DOMRect = eventEmitterIcon.getBoundingClientRect();

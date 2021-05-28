@@ -1,43 +1,36 @@
 <template lang="pug">
-.viz-node.viz-event-start.shape(
-  ref='node',
-  :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
-  @mousedown='onMousedown'
-)
-  .header
-    icon(:size='32') mdi-arrow-right-bold-hexagon-outline
-    .title Event Start
-  .body
-    viz-event-emitter-slot(:connected='connected')
+viz-node.viz-event-start.shape(v-model='internalModelValue')
+  template(v-slot:header)
+    .header
+      icon(:size='32') mdi-arrow-right-bold-hexagon-outline
+      .title Event Start
+  template(v-slot:default)
+    .body
+      viz-event-emitter-slot(:connected='connected')
 </template>
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
+import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizEventEmitterSlot from '@/components/viz-components/slots/VizEventEmitterSlot.vue';
-import { usePositionable, UsePositionable } from '@/composables/usePositionable';
+import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isEventStartNode, VizEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
-import { computed, defineComponent, onMounted, PropType, ref, Ref } from 'vue';
+import { computed, defineComponent, PropType, Ref, WritableComputedRef } from 'vue';
 export default defineComponent({
   name: 'VizEventStart',
-  components: { Icon, VizEventEmitterSlot },
+  components: { Icon, VizNode, VizEventEmitterSlot },
   props: { modelValue: { type: Object as PropType<VizEventStartNode>, required: true } },
   emits: { 'update:modelValue': isEventStartNode as EmitType<VizEventStartNode> },
   setup(props, { emit }) {
-    const positionable: UsePositionable<VizEventStartNode> = usePositionable(props, emit);
+    const internalModelValue: WritableComputedRef<VizEventStartNode> = useVModelValue(props, emit);
     const connected: Ref<boolean> = computed(() => props.modelValue.connected);
-    const node: Ref<HTMLDivElement | undefined> = ref();
-    onMounted(() => emit('update:modelValue', { ...props.modelValue, vizNodeDivRef: node.value }));
-    return { ...positionable, node, connected };
+    return { internalModelValue, connected };
   }
 });
 </script>
 
 <style lang="postcss" scoped>
-.viz-node {
-  @apply absolute rounded shadow z-10;
-}
-
 .viz-event-start.shape {
   @apply w-48;
   @apply grid grid-rows-[48px,1fr];

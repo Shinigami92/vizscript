@@ -1,52 +1,44 @@
 <template lang="pug">
-.viz-node.viz-set.shape(
-  ref='node',
-  :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
-  @mousedown='onMousedown'
-)
-  .header
-    .title SET
-  .body
-    .inputs
-      viz-event-receiver-slot(:connected='eventReceiverConnected')
-      viz-input-slot(:title='modelValue.valueSlot.name', :connected='modelValue.valueSlot.connected')
-      viz-input-slot(:title='modelValue.targetSlot.name', :connected='modelValue.targetSlot.connected')
-    .outputs
-      viz-event-emitter-slot(:connected='eventEmitterConnected')
-      viz-output-slot(:title='modelValue.resultSlot.name', :connected='modelValue.resultSlot.connected')
+viz-node.viz-set.shape(v-model='internalModelValue')
+  template(v-slot:header)
+    .header
+      .title SET
+  template(v-slot:default)
+    .body
+      .inputs
+        viz-event-receiver-slot(:connected='eventReceiverConnected')
+        viz-input-slot(:title='modelValue.valueSlot.name', :connected='modelValue.valueSlot.connected')
+        viz-input-slot(:title='modelValue.targetSlot.name', :connected='modelValue.targetSlot.connected')
+      .outputs
+        viz-event-emitter-slot(:connected='eventEmitterConnected')
+        viz-output-slot(:title='modelValue.resultSlot.name', :connected='modelValue.resultSlot.connected')
 </template>
 
 <script lang="ts">
-import Icon from '@/components/Icon.vue';
+import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizEventEmitterSlot from '@/components/viz-components/slots/VizEventEmitterSlot.vue';
 import VizEventReceiverSlot from '@/components/viz-components/slots/VizEventReceiverSlot.vue';
 import VizInputSlot from '@/components/viz-components/slots/VizInputSlot.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
-import { UsePositionable, usePositionable } from '@/composables/usePositionable';
+import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isSetNode, VizSetNode } from '@/shared/viz-components/nodes/VizSetNode';
-import { computed, ComputedRef, defineComponent, onMounted, PropType, ref, Ref } from 'vue';
+import { computed, ComputedRef, defineComponent, PropType, WritableComputedRef } from 'vue';
 export default defineComponent({
   name: 'VizSet',
-  components: { Icon, VizEventReceiverSlot, VizEventEmitterSlot, VizInputSlot, VizOutputSlot },
+  components: { VizNode, VizEventReceiverSlot, VizEventEmitterSlot, VizInputSlot, VizOutputSlot },
   props: { modelValue: { type: Object as PropType<VizSetNode>, required: true } },
   emits: { 'update:modelValue': isSetNode as EmitType<VizSetNode> },
   setup(props, { emit }) {
-    const positionable: UsePositionable<VizSetNode> = usePositionable(props, emit);
+    const internalModelValue: WritableComputedRef<VizSetNode> = useVModelValue(props, emit);
     const eventReceiverConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventReceiverConnected);
     const eventEmitterConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventEmitterConnected);
-    const node: Ref<HTMLDivElement | undefined> = ref();
-    onMounted(() => emit('update:modelValue', { ...props.modelValue, vizNodeDivRef: node.value }));
-    return { ...positionable, node, eventReceiverConnected, eventEmitterConnected };
+    return { internalModelValue, eventReceiverConnected, eventEmitterConnected };
   }
 });
 </script>
 
 <style lang="postcss" scoped>
-.viz-node {
-  @apply absolute rounded shadow z-10;
-}
-
 .viz-set.shape {
   @apply max-w-64;
   @apply grid grid-rows-[48px,1fr];
