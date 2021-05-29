@@ -1,4 +1,5 @@
 import type { VizConnectionModel } from '@/shared/models/connections/VizConnectionModel';
+import type { VizCurrentConnectionModel } from '@/shared/models/connections/VizCurrentConnectionModel';
 import type { VizEventConnectionModel } from '@/shared/models/connections/VizEventConnectionModel';
 import type { VizSlotConnectionModel } from '@/shared/models/connections/VizSlotConnectionModel';
 import type { AbstractVizNodeModel } from '@/shared/models/nodes/AbstractVizNodeModel';
@@ -11,13 +12,14 @@ import type { VizSetNodeModel } from '@/shared/models/nodes/VizSetNodeModel';
 import type { VizVariableGetNodeModel } from '@/shared/models/nodes/VizVariableGetNodeModel';
 import type { PositionModel } from '@/shared/models/PositionModel';
 import { v4 as uuidv4 } from 'uuid';
-import { Ref, ref } from 'vue';
+import { computed, ComputedRef, Ref, ref } from 'vue';
 
 export interface RootState {
   currentViz: {
     eventStartNode: string | null;
     nodes: Record<string, VizNodeModel>;
     connections: Record<string, VizConnectionModel>;
+    currentConnection: VizCurrentConnectionModel | null;
   };
 }
 
@@ -25,7 +27,8 @@ const state: Ref<RootState> = ref<RootState>({
   currentViz: {
     eventStartNode: null,
     nodes: {},
-    connections: {}
+    connections: {},
+    currentConnection: null
   }
 });
 
@@ -103,9 +106,17 @@ export function createSlotConnection({
   return state.value.currentViz.connections[id] as VizSlotConnectionModel;
 }
 
+export function startConnection(connection: VizCurrentConnectionModel): void {
+  state.value.currentViz.currentConnection = connection;
+}
+
 export function findConnectionById(id: string): VizConnectionModel | undefined {
   return state.value.currentViz.connections[id];
 }
+
+export const currentConnection: ComputedRef<VizCurrentConnectionModel | null> = computed(
+  () => state.value.currentViz.currentConnection
+);
 
 // --- Mock Data ---
 let mockInitialized: boolean = false;

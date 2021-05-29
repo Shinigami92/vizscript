@@ -1,9 +1,14 @@
 <template lang="pug">
 viz-node.viz-function.shape(v-model='internalModelValue')
   template(v-slot:default)
-    .body
+    .body(v-if='internalModelValue.model')
       .outputs
-        viz-output-slot(:title='modelValue.outputSlot.name', :connected='modelValue.outputSlot.connected')
+        viz-output-slot(
+          :node-id='internalModelValue.model?.id',
+          :slot-number='0',
+          :title='modelValue.outputSlot.name',
+          :connected='modelValue.outputSlot.connected'
+        )
 </template>
 
 <script lang="ts">

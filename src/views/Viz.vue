@@ -14,9 +14,15 @@
       :key='vizConnection.value.model?.id',
       v-model='vizConnection.value'
     )
+  viz-current-connection(
+    v-if='currentConnection',
+    :current-connection='currentConnection',
+    :mouse-position='relativeMousePosition'
+  )
 </template>
 
 <script lang="ts">
+import VizCurrentConnection from '@/components/viz-components/connections/VizCurrentConnection.vue';
 import VizEventConnection from '@/components/viz-components/connections/VizEventConnection.vue';
 import VizSlotConnection from '@/components/viz-components/connections/VizSlotConnection.vue';
 import VizBuildInGet from '@/components/viz-components/nodes/VizBuildInGet.vue';
@@ -26,10 +32,13 @@ import VizFunction from '@/components/viz-components/nodes/VizFunction.vue';
 import VizSet from '@/components/viz-components/nodes/VizSet.vue';
 import VizVariableGet from '@/components/viz-components/nodes/VizVariableGet.vue';
 import type { VizConnectionModel } from '@/shared/models/connections/VizConnectionModel';
+import type { VizCurrentConnectionModel } from '@/shared/models/connections/VizCurrentConnectionModel';
+import type { RefPositionModel } from '@/shared/models/PositionModel';
 import { convertConnection, VizConnection } from '@/shared/viz-components/connections/VizConnection';
 import { convertNode, VizNode } from '@/shared/viz-components/nodes/VizNode';
 import * as store from '@/store';
-import { defineComponent, onMounted, ref, Ref, watch } from 'vue';
+import { useMouse } from '@vueuse/core';
+import { computed, ComputedRef, defineComponent, onMounted, ref, Ref, watch } from 'vue';
 export default defineComponent({
   components: {
     VizEventStart,
@@ -39,15 +48,22 @@ export default defineComponent({
     VizBuildInGet,
     VizVariableGet,
     VizEventConnection,
-    VizSlotConnection
+    VizSlotConnection,
+    VizCurrentConnection
   },
   setup() {
+    const mousePosition: RefPositionModel = useMouse();
+    const relativeMousePosition: ComputedRef<RefPositionModel> = computed<RefPositionModel>(() => ({
+      x: ref(mousePosition.x.value - 320),
+      y: ref(mousePosition.y.value - 56)
+    }));
     store.initializeMock();
     const vizNodeMap: Record<string, Ref<VizNode>> = Object.fromEntries(
       Object.entries(store.vizNodeMap()).map(([id, node]) => [id, convertNode(node)])
     );
     const vizConnections: Ref<Array<Ref<VizConnection>>> = ref([]);
     const latestVizConnectionId: Ref<string | undefined> = ref();
+    const currentConnection: ComputedRef<VizCurrentConnectionModel | null> = store.currentConnection;
     watch(
       latestVizConnectionId,
       (id) => {
@@ -135,14 +151,16 @@ export default defineComponent({
           }
         }
       },
-      { flush: 'sync' }
+      {
+        flush: 'sync'
+      }
     );
     onMounted(() =>
       store
         .findAllConnections()
-        .forEach((connection) => setTimeout(() => (latestVizConnectionId.value = connection.id), Math.random() * 4000))
+        .forEach((connection) => setTimeout(() => (latestVizConnectionId.value = connection.id), Math.random() * 2000))
     );
-    return { vizNodeMap, vizConnections };
+    return { vizNodeMap, vizConnections, currentConnection, relativeMousePosition };
   }
 });
 </script>

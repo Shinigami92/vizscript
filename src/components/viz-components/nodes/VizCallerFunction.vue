@@ -5,7 +5,7 @@ viz-node.viz-caller-function.shape(v-model='internalModelValue')
       icon(:size='32') mdi-math-integral
       .title {{ modelValue.title }}
   template(v-slot:default)
-    .body
+    .body(v-if='internalModelValue.model')
       .inputs
         viz-event-receiver-slot(:connected='eventReceiverConnected')
         viz-input-slot(:title='modelValue.callerSlot.name', :connected='modelValue.callerSlot.connected')
@@ -16,8 +16,13 @@ viz-node.viz-caller-function.shape(v-model='internalModelValue')
           :connected='slot.connected'
         )
       .outputs
-        viz-event-emitter-slot(:connected='eventEmitterConnected')
-        viz-output-slot(:title='modelValue.returnSlot.name', :connected='modelValue.returnSlot.connected')
+        viz-event-emitter-slot(:node-id='internalModelValue.model?.id', :connected='eventEmitterConnected')
+        viz-output-slot(
+          :node-id='internalModelValue.model?.id',
+          :slot-number='0',
+          :title='modelValue.returnSlot.name',
+          :connected='modelValue.returnSlot.connected'
+        )
 </template>
 
 <script lang="ts">
