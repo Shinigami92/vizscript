@@ -30,6 +30,6 @@ export default defineComponent({
 
 <style lang="postcss" scoped>
 .viz-node {
-  @apply absolute rounded shadow z-10;
+  @apply absolute rounded shadow select-none z-10;
 }
 </style>
