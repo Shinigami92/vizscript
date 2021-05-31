@@ -2,7 +2,7 @@
 .viz-node(
   ref='node',
   :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
-  @mousedown='onMousedown'
+  @pointerdown='onPointerdown'
 )
   slot(name='header')
   slot

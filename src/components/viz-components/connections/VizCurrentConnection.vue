@@ -54,7 +54,7 @@ export default defineComponent({
   components: { Icon },
   props: {
     currentConnection: { type: Object as PropType<VizCurrentConnectionModel>, required: true },
-    mousePosition: { type: Object as PropType<RefPositionModel>, required: true }
+    pointerPosition: { type: Object as PropType<RefPositionModel>, required: true }
   },
   setup(props) {
     const startPosition: Ref<PositionModel> = computed(() => ({
@@ -62,15 +62,15 @@ export default defineComponent({
       y: props.currentConnection.startPosition.y - 56
     }));
     const connection: Ref<HTMLDivElement | undefined> = ref();
-    const left: ComputedRef<number> = computed(() => Math.min(startPosition.value.x, props.mousePosition.x.value));
-    const top: ComputedRef<number> = computed(() => Math.min(startPosition.value.y, props.mousePosition.y.value));
-    const xFlip: ComputedRef<boolean> = computed(() => props.mousePosition.x.value - left.value > 0);
-    const yFlip: ComputedRef<boolean> = computed(() => props.mousePosition.y.value - top.value > 0);
+    const left: ComputedRef<number> = computed(() => Math.min(startPosition.value.x, props.pointerPosition.x.value));
+    const top: ComputedRef<number> = computed(() => Math.min(startPosition.value.y, props.pointerPosition.y.value));
+    const xFlip: ComputedRef<boolean> = computed(() => props.pointerPosition.x.value - left.value > 0);
+    const yFlip: ComputedRef<boolean> = computed(() => props.pointerPosition.y.value - top.value > 0);
     const width: ComputedRef<number> = computed(() =>
-      xFlip.value ? props.mousePosition.x.value - left.value : startPosition.value.x - left.value
+      xFlip.value ? props.pointerPosition.x.value - left.value : startPosition.value.x - left.value
     );
     const height: ComputedRef<number> = computed(() =>
-      yFlip.value ? props.mousePosition.y.value - top.value : startPosition.value.y - top.value
+      yFlip.value ? props.pointerPosition.y.value - top.value : startPosition.value.y - top.value
     );
     const strokeColor: ComputedRef<string> = computed(() => {
       return 'white';

@@ -6,7 +6,7 @@ import { computed, ref, Ref, WritableComputedRef } from 'vue';
 export interface UsePositionable<T extends VizNode> {
   dx: Ref<number>;
   dy: Ref<number>;
-  onMousedown: (payload: MouseEvent) => void;
+  onPointerdown: (payload: PointerEvent) => void;
 }
 
 export function usePositionable<T extends VizNode>(
@@ -23,7 +23,7 @@ export function usePositionable<T extends VizNode>(
 
   // let initialPos: Positionable | null = null;
   let startPos: Positionable | null = null;
-  const onMousemove: (event: MouseEvent) => void = (payload) => {
+  const onPointermove: (event: PointerEvent) => void = (payload) => {
     if (startPos) {
       dx.value = payload.clientX - startPos.x;
       dy.value = payload.clientY - startPos.y;
@@ -35,16 +35,16 @@ export function usePositionable<T extends VizNode>(
     }
   };
 
-  const onMousedown: (payload: MouseEvent) => void = (payload) => {
+  const onPointerdown: (payload: PointerEvent) => void = (payload) => {
     // initialPos = { x: payload.clientX, y: payload.clientY };
     startPos = { x: payload.clientX, y: payload.clientY };
-    window.addEventListener('mousemove', onMousemove);
-    window.addEventListener('mouseup', onMouseup);
+    window.addEventListener('pointermove', onPointermove);
+    window.addEventListener('pointerup', onPointerup);
   };
 
-  const onMouseup: (payload: MouseEvent) => void = () => {
-    window.removeEventListener('mousemove', onMousemove);
-    window.removeEventListener('mouseup', onMouseup);
+  const onPointerup: (payload: PointerEvent) => void = () => {
+    window.removeEventListener('pointermove', onPointermove);
+    window.removeEventListener('pointerup', onPointerup);
     internalValue.value.x += dx.value;
     internalValue.value.y += dy.value;
     dx.value = 0;
@@ -58,5 +58,5 @@ export function usePositionable<T extends VizNode>(
     }
   };
 
-  return { dx, dy, onMousedown };
+  return { dx, dy, onPointerdown };
 }

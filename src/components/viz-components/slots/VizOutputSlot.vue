@@ -1,8 +1,8 @@
 <template lang="pug">
 .viz-output-slot.shape
   .title {{ title }}
-  icon(v-if='connected', @mousedown='startConnection') mdi-circle
-  icon(v-else, @mousedown='startConnection') mdi-circle-outline
+  icon(v-if='connected', @pointerdown='startConnection') mdi-circle
+  icon(v-else, @pointerdown='startConnection') mdi-circle-outline
 </template>
 
 <script lang="ts">
@@ -19,7 +19,7 @@ export default defineComponent({
     connected: { type: Boolean, required: true }
   },
   setup(props) {
-    const startConnection: (payload: MouseEvent) => void = (payload) => {
+    const startConnection: (payload: PointerEvent) => void = (payload) => {
       store.startConnection({
         type: 'slot',
         startNodeId: props.nodeId,

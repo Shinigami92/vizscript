@@ -17,7 +17,7 @@
   viz-current-connection(
     v-if='currentConnection',
     :current-connection='currentConnection',
-    :mouse-position='relativeMousePosition'
+    :pointer-position='relativePointerPosition'
   )
 </template>
 
@@ -52,10 +52,10 @@ export default defineComponent({
     VizCurrentConnection
   },
   setup() {
-    const mousePosition: RefPositionModel = useMouse();
-    const relativeMousePosition: ComputedRef<RefPositionModel> = computed<RefPositionModel>(() => ({
-      x: ref(mousePosition.x.value - 320),
-      y: ref(mousePosition.y.value - 56)
+    const pointerPosition: RefPositionModel = useMouse();
+    const relativePointerPosition: ComputedRef<RefPositionModel> = computed<RefPositionModel>(() => ({
+      x: ref(pointerPosition.x.value - 320),
+      y: ref(pointerPosition.y.value - 56)
     }));
     store.initializeMock();
     const vizNodeMap: Record<string, Ref<VizNode>> = Object.fromEntries(
@@ -160,7 +160,7 @@ export default defineComponent({
         .findAllConnections()
         .forEach((connection) => setTimeout(() => (latestVizConnectionId.value = connection.id), Math.random() * 2000))
     );
-    return { vizNodeMap, vizConnections, currentConnection, relativeMousePosition };
+    return { vizNodeMap, vizConnections, currentConnection, relativePointerPosition };
   }
 });
 </script>

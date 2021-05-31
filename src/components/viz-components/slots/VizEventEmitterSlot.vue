@@ -1,6 +1,6 @@
 <template lang="pug">
-icon(v-if='connected', :size='48', @mousedown='startConnection') mdi-arrow-right-bold
-icon(v-else, :size='48', @mousedown='startConnection') mdi-arrow-right-bold-outline
+icon(v-if='connected', :size='48', @pointerdown='startConnection') mdi-arrow-right-bold
+icon(v-else, :size='48', @pointerdown='startConnection') mdi-arrow-right-bold-outline
 </template>
 
 <script lang="ts">
@@ -15,7 +15,7 @@ export default defineComponent({
     connected: { type: Boolean, required: true }
   },
   setup(props) {
-    const startConnection: (payload: MouseEvent) => void = (payload) => {
+    const startConnection: (payload: PointerEvent) => void = (payload) => {
       store.startConnection({
         type: 'event',
         startNodeId: props.nodeId,
