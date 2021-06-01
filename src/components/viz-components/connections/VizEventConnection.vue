@@ -1,47 +1,12 @@
 <template lang="pug">
-.viz-connection.viz-event-connection.shape(ref='connection', :style='{ left: `${left}px`, top: `${top}px` }')
-  template(v-if='xFlip')
-    template(v-if='yFlip')
-      svg(:width='width', :height='height + 4')
-        path(
-          :d='`M 0 2 C ${40} 2, ${width - 40} ${height + 2}, ${width} ${height + 2}`',
-          stroke='white',
-          stroke-width='4',
-          fill='transparent'
-        )
-      icon.absolute(:style='{ left: `${-8}px`, top: `${-8 - 2}px` }') mdi-circle
-      icon.absolute(:style='{ left: `${width + -8}px`, top: `${height + -8 - 2}px` }') mdi-circle
-    template(v-else)
-      svg(:width='width', :height='height + 4')
-        path(
-          :d='`M 0 ${height + 2} C ${40}  ${height + 2}, ${width - 40} 2, ${width} 2`',
-          stroke='white',
-          stroke-width='4',
-          fill='transparent'
-        )
-      icon.absolute(:style='{ left: `${-8}px`, top: `${height + -8 - 2}px` }') mdi-circle
-      icon.absolute(:style='{ left: `${width + -8}px`, top: `${-8 - 2}px` }') mdi-circle
-  template(v-else)
-    template(v-if='yFlip')
-      svg(:width='width', :height='height + 4')
-        path(
-          :d='`M ${width} 2 C ${width - 40} 2, ${40} ${height + 2}, 0 ${height + 2}`',
-          stroke='white',
-          stroke-width='4',
-          fill='transparent'
-        )
-      icon.absolute(:style='{ left: `${width + -8}px`, top: `${-8 - 2}px` }') mdi-circle
-      icon.absolute(:style='{ left: `${-8}px`, top: `${height + -8 - 2}px` }') mdi-circle
-    template(v-else)
-      svg(:width='width', :height='height + 4')
-        path(
-          :d='`M ${width} ${height + 2} C ${width - 40}  ${height + 2}, ${40} 2, 0 2`',
-          stroke='white',
-          stroke-width='4',
-          fill='transparent'
-        )
-      icon.absolute(:style='{ left: `${width + -8}px`, top: `${height + -8 - 2}px` }') mdi-circle
-      icon.absolute(:style='{ left: `${-8}px`, top: `${-8 - 2}px` }') mdi-circle
+.viz-connection.viz-event-connection.shape(
+  ref='connection',
+  :style='{ left: `${left - padding}px`, top: `${top - padding}px` }'
+)
+  svg(:width='width + padding * 2', :height='height + 4 + padding * 2')
+    path(:d='d', stroke='white', stroke-width='4', fill='transparent')
+  icon.absolute(:style='{ left: `${iconX1}px`, top: `${iconY1}px` }') mdi-circle
+  icon.absolute(:style='{ left: `${iconX2}px`, top: `${iconY2}px` }') mdi-circle
 </template>
 
 <script lang="ts">
@@ -71,7 +36,55 @@ export default defineComponent({
     const height: ComputedRef<number> = computed(() =>
       yFlip.value ? props.modelValue.end.y - top.value : props.modelValue.start.y - top.value
     );
-    return { connection, left, top, width, height, xFlip, yFlip };
+    const padding: number = 30;
+    const strength: number = 60;
+    const d: ComputedRef<string> = computed(() => {
+      if (xFlip.value)
+        if (yFlip.value)
+          return `M ${padding} ${padding + 2} C ${padding + strength} ${padding + 2}, ${
+            width.value + padding - strength
+          } ${height.value + padding + 2}, ${width.value + padding} ${height.value + padding + 2}`;
+        else
+          return `M ${padding} ${height.value + padding + 2} C ${strength + padding}  ${height.value + padding + 2}, ${
+            width.value + padding - strength
+          } ${padding + 2}, ${width.value + padding} ${padding + 2}`;
+      else if (yFlip.value)
+        return `M ${width.value + padding} ${padding + 2} C ${width.value + padding - strength} ${padding + 2}, ${
+          strength + padding
+        } ${height.value + padding + 2}, ${padding} ${height.value + padding + 2}`;
+      return `M ${width.value + padding} ${height.value + padding + 2} C ${width.value + padding - strength} ${
+        height.value + padding + 2
+      }, ${strength + padding} ${padding + 2}, ${padding} ${padding + 2}`;
+    });
+    const iconX1: ComputedRef<number> = computed(() => {
+      if (xFlip.value)
+        if (yFlip.value) return padding - 8;
+        else return padding - 8;
+      else if (yFlip.value) return width.value + padding + -8;
+      return width.value + padding + -8;
+    });
+    const iconY1: ComputedRef<number> = computed(() => {
+      if (xFlip.value)
+        if (yFlip.value) return padding - 8 - 2;
+        else return height.value + padding + -8 - 2;
+      else if (yFlip.value) return padding - 8 - 2;
+      return height.value + padding + -8 - 2;
+    });
+    const iconX2: ComputedRef<number> = computed(() => {
+      if (xFlip.value)
+        if (yFlip.value) return width.value + padding + -8;
+        else return width.value + padding + -8;
+      else if (yFlip.value) return padding - 8;
+      return padding - 8;
+    });
+    const iconY2: ComputedRef<number> = computed(() => {
+      if (xFlip.value)
+        if (yFlip.value) return height.value + padding + -8 - 2;
+        else return padding - 8 - 2;
+      else if (yFlip.value) return height.value + padding + -8 - 2;
+      return padding - 8 - 2;
+    });
+    return { connection, left, top, width, height, d, iconX1, iconY1, iconX2, iconY2, padding };
   }
 });
 </script>
