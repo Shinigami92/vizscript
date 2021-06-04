@@ -3928,10 +3928,10 @@ widest-line@^2.0.0:
   dependencies:
     string-width "^2.1.1"
 
-windicss@^3.0.12, windicss@~3.0.12:
-  version "3.0.12"
-  resolved "https://registry.yarnpkg.com/windicss/-/windicss-3.0.12.tgz#4354aaa48faaac6fd02f3119a62587da2c46b018"
-  integrity sha512-pDxtFLN0xmL7bnGtnEfu9z7B5279UM2EP8wWlPH+FYb5gjHyONxRtyWtR5QIn1FRx6h1UXpm+I19GgTx5Y4TyA==
+windicss@^3.0.12, windicss@~3.1.0:
+  version "3.1.0"
+  resolved "https://registry.yarnpkg.com/windicss/-/windicss-3.1.0.tgz#bd679d51b7cabeba09077085706b48dbc1515730"
+  integrity sha512-z49xITq4X1ltHIZyL4NwFTR2LXPJ0rbOOrhDXfLX+OfG4Au7+GAzqvNlzUfAaIbA8HSpnI04alQHUWH24KfNYA==
 
 with@^7.0.0:
   version "7.0.2"
