@@ -1,14 +1,14 @@
 <template lang="pug">
-viz-node.viz-build-in-get.shape(v-model='internalModelValue')
+viz-node.viz-build-in-get.shape(v-model="internalModelValue")
   template(v-slot:default)
-    .body(v-if='internalModelValue.model')
+    .body(v-if="internalModelValue.model")
       icon.mx-2 mdi-cards-diamond
       .outputs
         viz-output-slot(
-          :node-id='internalModelValue.model?.id',
-          :slot-number='0',
-          :title='modelValue.outputSlot.name',
-          :connected='modelValue.outputSlot.connected'
+          :node-id="internalModelValue.model?.id",
+          :slot-number="0",
+          :title="modelValue.outputSlot.name",
+          :connected="modelValue.outputSlot.connected"
         )
 </template>
 

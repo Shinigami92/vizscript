@@ -1,8 +1,8 @@
 <template lang="pug">
 .viz-output-slot.shape
   .title {{ title }}
-  icon(v-if='connected', @pointerdown='startConnection') mdi-circle
-  icon(v-else, @pointerdown='startConnection') mdi-circle-outline
+  icon(v-if="connected", @pointerdown="startConnection") mdi-circle
+  icon(v-else, @pointerdown="startConnection") mdi-circle-outline
 </template>
 
 <script lang="ts">

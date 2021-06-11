@@ -1,8 +1,8 @@
 <template lang="pug">
 header.flex.justify-end.items-center.bg-background-400
-  icon.text-primary-400(:size='32', @click='navigateTo("code")') mdi-code-braces
-  icon.text-primary-400(:size='32', @click='navigateTo("viz")') mdi-math-integral
-  icon.text-primary-400(:size='32', @click='navigateTo("ast")') mdi-pine-tree
+  icon.text-primary-400(:size="32", @click="navigateTo('code')") mdi-code-braces
+  icon.text-primary-400(:size="32", @click="navigateTo('viz')") mdi-math-integral
+  icon.text-primary-400(:size="32", @click="navigateTo('ast')") mdi-pine-tree
 </template>
 
 <script lang="ts">

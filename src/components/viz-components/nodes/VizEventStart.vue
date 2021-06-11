@@ -1,12 +1,12 @@
 <template lang="pug">
-viz-node.viz-event-start.shape(v-model='internalModelValue')
+viz-node.viz-event-start.shape(v-model="internalModelValue")
   template(v-slot:header)
     .header
-      icon(:size='32') mdi-arrow-right-bold-hexagon-outline
+      icon(:size="32") mdi-arrow-right-bold-hexagon-outline
       .title Event Start
   template(v-slot:default)
-    .body(v-if='internalModelValue.model')
-      viz-event-emitter-slot(:node-id='internalModelValue.model?.id', :connected='connected')
+    .body(v-if="internalModelValue.model")
+      viz-event-emitter-slot(:node-id="internalModelValue.model?.id", :connected="connected")
 </template>
 
 <script lang="ts">

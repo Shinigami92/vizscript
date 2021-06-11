@@ -1,7 +1,7 @@
 <template lang="pug">
-.h-screen.grid(class='grid-cols-[320px,1fr]')
+.h-screen.grid(class="grid-cols-[320px,1fr]")
   AppDrawer
-  .grid.max-h-screen(class='grid-rows-[56px,1fr]')
+  .grid.max-h-screen(class="grid-rows-[56px,1fr]")
     AppBar
     AppMainContent
 </template>

@@ -1,6 +1,6 @@
 <template lang="pug">
 .viz-input-slot.shape
-  icon(v-if='connected') mdi-circle
+  icon(v-if="connected") mdi-circle
   icon(v-else) mdi-circle-outline
   .title {{ title }}
 </template>

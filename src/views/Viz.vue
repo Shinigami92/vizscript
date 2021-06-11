@@ -1,23 +1,23 @@
 <template lang="pug">
 .viz-canvas
-  template(v-for='vizNode in vizNodeMap')
+  template(v-for="vizNode in vizNodeMap")
     component(
-      v-if='vizNode',
-      :is='`viz-${vizNode.value.type}`',
-      :key='vizNode.value.model?.id',
-      v-model='vizNode.value'
+      v-if="vizNode",
+      :is="`viz-${vizNode.value.type}`",
+      :key="vizNode.value.model?.id",
+      v-model="vizNode.value"
     )
-  template(v-for='vizConnection in vizConnections')
+  template(v-for="vizConnection in vizConnections")
     component(
-      v-if='vizConnection',
-      :is='`viz-${vizConnection.value.type}-connection`',
-      :key='vizConnection.value.model?.id',
-      v-model='vizConnection.value'
+      v-if="vizConnection",
+      :is="`viz-${vizConnection.value.type}-connection`",
+      :key="vizConnection.value.model?.id",
+      v-model="vizConnection.value"
     )
   viz-current-connection(
-    v-if='currentConnection',
-    :current-connection='currentConnection',
-    :pointer-position='relativePointerPosition'
+    v-if="currentConnection",
+    :current-connection="currentConnection",
+    :pointer-position="relativePointerPosition"
   )
 </template>
 

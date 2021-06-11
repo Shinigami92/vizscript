@@ -1,13 +1,13 @@
 <template lang="pug">
-viz-node.viz-function.shape(v-model='internalModelValue')
+viz-node.viz-function.shape(v-model="internalModelValue")
   template(v-slot:default)
-    .body(v-if='internalModelValue.model')
+    .body(v-if="internalModelValue.model")
       .outputs
         viz-output-slot(
-          :node-id='internalModelValue.model?.id',
-          :slot-number='0',
-          :title='modelValue.outputSlot.name',
-          :connected='modelValue.outputSlot.connected'
+          :node-id="internalModelValue.model?.id",
+          :slot-number="0",
+          :title="modelValue.outputSlot.name",
+          :connected="modelValue.outputSlot.connected"
         )
 </template>
 

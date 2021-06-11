@@ -1,26 +1,26 @@
 <template lang="pug">
-viz-node.viz-function.shape(v-model='internalModelValue')
+viz-node.viz-function.shape(v-model="internalModelValue")
   template(v-slot:header)
     .header
-      icon(:size='32') mdi-math-integral
+      icon(:size="32") mdi-math-integral
       .title {{ modelValue.title }}
   template(v-slot:default)
-    .body(v-if='internalModelValue.model')
+    .body(v-if="internalModelValue.model")
       .inputs
-        viz-event-receiver-slot(:connected='eventReceiverConnected')
+        viz-event-receiver-slot(:connected="eventReceiverConnected")
         viz-input-slot(
-          v-for='slot in modelValue.inputSlots',
-          :key='slot.name',
-          :title='slot.name',
-          :connected='slot.connected'
+          v-for="slot in modelValue.inputSlots",
+          :key="slot.name",
+          :title="slot.name",
+          :connected="slot.connected"
         )
       .outputs
-        viz-event-emitter-slot(:node-id='internalModelValue.model?.id', :connected='eventEmitterConnected')
+        viz-event-emitter-slot(:node-id="internalModelValue.model?.id", :connected="eventEmitterConnected")
         viz-output-slot(
-          :node-id='internalModelValue.model?.id',
-          :slot-number='0',
-          :title='modelValue.returnSlot.name',
-          :connected='modelValue.returnSlot.connected'
+          :node-id="internalModelValue.model?.id",
+          :slot-number="0",
+          :title="modelValue.returnSlot.name",
+          :connected="modelValue.returnSlot.connected"
         )
 </template>
 

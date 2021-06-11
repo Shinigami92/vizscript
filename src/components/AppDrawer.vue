@@ -1,8 +1,8 @@
 <template lang="pug">
-aside.grid(class='grid-cols-[56px,1fr]')
+aside.grid(class="grid-cols-[56px,1fr]")
   .bg-background-400.flex.items-end
-    a(href='https://github.com/Shinigami92/vizscript', target='_blank')
-      icon.mx-1(:size='48') github
+    a(href="https://github.com/Shinigami92/vizscript", target="_blank")
+      icon.mx-1(:size="48") github
   .bg-background-500
     span.text-primary-50 Explorer
     div

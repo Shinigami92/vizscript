@@ -1,6 +1,6 @@
 <template lang="pug">
-icon(v-if='connected', :size='48') mdi-arrow-right-bold
-icon(v-else, :size='48') mdi-arrow-right-bold-outline
+icon(v-if="connected", :size="48") mdi-arrow-right-bold
+icon(v-else, :size="48") mdi-arrow-right-bold-outline
 </template>
 
 <script lang="ts">

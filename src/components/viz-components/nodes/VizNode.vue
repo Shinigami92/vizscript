@@ -1,10 +1,10 @@
 <template lang="pug">
 .viz-node(
-  ref='node',
-  :style='{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }',
-  @pointerdown='onPointerdown'
+  ref="node",
+  :style="{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }",
+  @pointerdown="onPointerdown"
 )
-  slot(name='header')
+  slot(name="header")
   slot
 </template>
 
