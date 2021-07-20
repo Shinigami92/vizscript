@@ -29,6 +29,7 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isSetNode, VizSetNode } from '@/shared/viz-components/nodes/VizSetNode';
 import { computed, ComputedRef, defineComponent, PropType, WritableComputedRef } from 'vue';
+
 export default defineComponent({
   name: 'VizSet',
   components: { VizNode, VizEventReceiverSlot, VizEventEmitterSlot, VizInputSlot, VizOutputSlot },
@@ -36,8 +37,10 @@ export default defineComponent({
   emits: { 'update:modelValue': isSetNode as EmitType<VizSetNode> },
   setup(props, { emit }) {
     const internalModelValue: WritableComputedRef<VizSetNode> = useVModelValue(props, emit);
+
     const eventReceiverConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventReceiverConnected);
     const eventEmitterConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventEmitterConnected);
+
     return { internalModelValue, eventReceiverConnected, eventEmitterConnected };
   }
 });

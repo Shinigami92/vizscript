@@ -14,6 +14,7 @@ import { usePositionable, UsePositionable } from '@/composables/usePositionable'
 import type { EmitType } from '@/shared/utilities/vue';
 import { isNode, VizNode } from '@/shared/viz-components/nodes/VizNode';
 import { defineComponent, onMounted, PropType, ref, Ref } from 'vue';
+
 export default defineComponent({
   name: 'VizNode',
   components: { Icon },
@@ -22,7 +23,9 @@ export default defineComponent({
   setup(props, { emit }) {
     const positionable: UsePositionable<VizNode> = usePositionable(props, emit);
     const node: Ref<HTMLDivElement | undefined> = ref();
+
     onMounted(() => emit('update:modelValue', { ...props.modelValue, vizNodeDivRef: node.value }));
+
     return { ...positionable, node };
   }
 });

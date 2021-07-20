@@ -14,6 +14,7 @@ import Icon from '@/components/Icon.vue';
 import { VizCurrentConnectionModel } from '@/shared/models/connections/VizCurrentConnectionModel';
 import { PositionModel, RefPositionModel } from '@/shared/models/PositionModel';
 import { computed, ComputedRef, defineComponent, PropType, Ref, ref } from 'vue';
+
 export default defineComponent({
   name: 'VizCurrentConnection',
   components: { Icon },
@@ -26,22 +27,29 @@ export default defineComponent({
       x: props.currentConnection.startPosition.x - 320,
       y: props.currentConnection.startPosition.y - 56
     }));
+
     const connection: Ref<HTMLDivElement | undefined> = ref();
+
     const left: ComputedRef<number> = computed(() => Math.min(startPosition.value.x, props.pointerPosition.x.value));
     const top: ComputedRef<number> = computed(() => Math.min(startPosition.value.y, props.pointerPosition.y.value));
+
     const xFlip: ComputedRef<boolean> = computed(() => props.pointerPosition.x.value - left.value > 0);
     const yFlip: ComputedRef<boolean> = computed(() => props.pointerPosition.y.value - top.value > 0);
+
     const width: ComputedRef<number> = computed(() =>
       xFlip.value ? props.pointerPosition.x.value - left.value : startPosition.value.x - left.value
     );
     const height: ComputedRef<number> = computed(() =>
       yFlip.value ? props.pointerPosition.y.value - top.value : startPosition.value.y - top.value
     );
+
     const strokeColor: ComputedRef<string> = computed(() => {
       return 'white';
     });
+
     const padding: number = 30;
     const strength: number = 60;
+
     const d: ComputedRef<string> = computed(() => {
       if (xFlip.value)
         if (yFlip.value)
@@ -60,6 +68,7 @@ export default defineComponent({
         height.value + padding + 2
       }, ${strength + padding} ${padding + 2}, ${padding} ${padding + 2}`;
     });
+
     const iconX1: ComputedRef<number> = computed(() => {
       if (xFlip.value)
         if (yFlip.value) return padding - 8;
@@ -67,6 +76,7 @@ export default defineComponent({
       else if (yFlip.value) return width.value + padding + -8;
       return width.value + padding + -8;
     });
+
     const iconY1: ComputedRef<number> = computed(() => {
       if (xFlip.value)
         if (yFlip.value) return padding - 8 - 2;
@@ -74,6 +84,7 @@ export default defineComponent({
       else if (yFlip.value) return padding - 8 - 2;
       return height.value + padding + -8 - 2;
     });
+
     const iconX2: ComputedRef<number> = computed(() => {
       if (xFlip.value)
         if (yFlip.value) return width.value + padding + -8;
@@ -81,6 +92,7 @@ export default defineComponent({
       else if (yFlip.value) return padding - 8;
       return padding - 8;
     });
+
     const iconY2: ComputedRef<number> = computed(() => {
       if (xFlip.value)
         if (yFlip.value) return height.value + padding + -8 - 2;
@@ -88,6 +100,7 @@ export default defineComponent({
       else if (yFlip.value) return height.value + padding + -8 - 2;
       return padding - 8 - 2;
     });
+
     return { connection, left, top, width, height, strokeColor, d, iconX1, iconY1, iconX2, iconY2, padding };
   }
 });

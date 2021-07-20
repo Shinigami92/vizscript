@@ -17,6 +17,7 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isEventStartNode, VizEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
 import { computed, defineComponent, PropType, Ref, WritableComputedRef } from 'vue';
+
 export default defineComponent({
   name: 'VizEventStart',
   components: { Icon, VizNode, VizEventEmitterSlot },
@@ -24,7 +25,9 @@ export default defineComponent({
   emits: { 'update:modelValue': isEventStartNode as EmitType<VizEventStartNode> },
   setup(props, { emit }) {
     const internalModelValue: WritableComputedRef<VizEventStartNode> = useVModelValue(props, emit);
+
     const connected: Ref<boolean> = computed(() => props.modelValue.connected);
+
     return { internalModelValue, connected };
   }
 });

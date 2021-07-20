@@ -7,6 +7,7 @@ icon(v-else, :size="48", @pointerdown="startConnection") mdi-arrow-right-bold-ou
 import Icon from '@/components/Icon.vue';
 import * as store from '@/store';
 import { defineComponent } from 'vue';
+
 export default defineComponent({
   name: 'VizEventEmitterSlot',
   components: { Icon },
@@ -22,6 +23,7 @@ export default defineComponent({
         startPosition: { x: payload.x, y: payload.y }
       });
     };
+
     return { startConnection };
   }
 });

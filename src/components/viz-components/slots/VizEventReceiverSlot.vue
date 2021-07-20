@@ -6,6 +6,7 @@ icon(v-else, :size="48") mdi-arrow-right-bold-outline
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
 import { defineComponent } from 'vue';
+
 export default defineComponent({
   name: 'VizEventReceiverSlot',
   components: { Icon },

@@ -39,6 +39,7 @@ import { convertNode, VizNode } from '@/shared/viz-components/nodes/VizNode';
 import * as store from '@/store';
 import { useMouse } from '@vueuse/core';
 import { computed, ComputedRef, defineComponent, onMounted, ref, Ref, watch } from 'vue';
+
 export default defineComponent({
   components: {
     VizEventStart,
@@ -53,17 +54,22 @@ export default defineComponent({
   },
   setup() {
     const pointerPosition: RefPositionModel = useMouse();
+
     const relativePointerPosition: ComputedRef<RefPositionModel> = computed<RefPositionModel>(() => ({
       x: ref(pointerPosition.x.value - 320),
       y: ref(pointerPosition.y.value - 56)
     }));
+
     store.initializeMock();
+
     const vizNodeMap: Record<string, Ref<VizNode>> = Object.fromEntries(
       Object.entries(store.vizNodeMap()).map(([id, node]) => [id, convertNode(node)])
     );
+
     const vizConnections: Ref<Array<Ref<VizConnection>>> = ref([]);
     const latestVizConnectionId: Ref<string | undefined> = ref();
     const currentConnection: ComputedRef<VizCurrentConnectionModel | null> = store.currentConnection;
+
     watch(
       latestVizConnectionId,
       (id) => {
@@ -82,7 +88,9 @@ export default defineComponent({
         if (!endVizNode) {
           return;
         }
+
         vizConnections.value.push(convertConnection(connection, [startVizNode, endVizNode]));
+
         if (connection.type === 'event') {
           switch (startVizNode.value.type) {
             case 'event-start':
@@ -97,6 +105,7 @@ export default defineComponent({
             default:
               throw Error(`[foundEventEmitter] connection not set for ${startVizNode.value.type}`);
           }
+
           switch (endVizNode.value.type) {
             case 'caller-function':
               endVizNode.value.eventReceiverConnected = true;
@@ -127,6 +136,7 @@ export default defineComponent({
             default:
               throw Error(`[outputSlotConnection] connection not set for ${startVizNode.value.type}`);
           }
+
           switch (endVizNode.value.type) {
             case 'caller-function':
               if (connection.endSlot === 1) {
@@ -155,11 +165,13 @@ export default defineComponent({
         flush: 'sync'
       }
     );
+
     onMounted(() =>
       store
         .findAllConnections()
         .forEach((connection) => setTimeout(() => (latestVizConnectionId.value = connection.id), Math.random() * 2000))
     );
+
     return { vizNodeMap, vizConnections, currentConnection, relativePointerPosition };
   }
 });

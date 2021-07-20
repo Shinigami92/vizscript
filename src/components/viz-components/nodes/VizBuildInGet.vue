@@ -20,6 +20,7 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import { isBuildInGetNode, VizBuildInGetNode } from '@/shared/viz-components/nodes/VizBuildInGetNode';
 import { defineComponent, PropType, WritableComputedRef } from 'vue';
+
 export default defineComponent({
   name: 'VizBuildInGet',
   components: { Icon, VizNode, VizOutputSlot },
@@ -27,6 +28,7 @@ export default defineComponent({
   emits: { 'update:modelValue': isBuildInGetNode as EmitType<VizBuildInGetNode> },
   setup(props, { emit }) {
     const internalModelValue: WritableComputedRef<VizBuildInGetNode> = useVModelValue(props, emit);
+
     return { internalModelValue };
   }
 });
