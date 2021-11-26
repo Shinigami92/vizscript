@@ -60,7 +60,7 @@
     "sass": "~1.35.2",
     "vite": "2.4.2",
     "vite-plugin-windicss": "~1.2.5",
-    "vue-tsc": "0.2.0",
+    "vue-tsc": "0.29.6",
     "windicss": "~3.1.5"
   }
 }
