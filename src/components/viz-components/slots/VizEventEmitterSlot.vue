@@ -1,8 +1,3 @@
-<template lang="pug">
-icon(v-if="connected", :size="48", @pointerdown="startConnection") mdi-arrow-right-bold
-icon(v-else, :size="48", @pointerdown="startConnection") mdi-arrow-right-bold-outline
-</template>
-
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
 import * as store from '@/store';
@@ -28,3 +23,8 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+icon(v-if="connected", :size="48", @pointerdown="startConnection") mdi-arrow-right-bold
+icon(v-else, :size="48", @pointerdown="startConnection") mdi-arrow-right-bold-outline
+</template>

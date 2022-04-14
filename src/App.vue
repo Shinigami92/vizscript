@@ -1,11 +1,3 @@
-<template lang="pug">
-.h-screen.grid(class="grid-cols-[320px,1fr]")
-  AppDrawer
-  .grid.max-h-screen(class="grid-rows-[56px,1fr]")
-    AppBar
-    AppMainContent
-</template>
-
 <script lang="ts">
 import AppBar from '@/components/AppBar.vue';
 import AppDrawer from '@/components/AppDrawer.vue';
@@ -26,6 +18,14 @@ export default defineComponent({
   components: { AppDrawer, AppBar, AppMainContent },
 });
 </script>
+
+<template lang="pug">
+.h-screen.grid(class="grid-cols-[320px,1fr]")
+  AppDrawer
+  .grid.max-h-screen(class="grid-rows-[56px,1fr]")
+    AppBar
+    AppMainContent
+</template>
 
 <style lang="scss">
 html {

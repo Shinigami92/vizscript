@@ -1,10 +1,3 @@
-<template lang="pug">
-.viz-output-slot.shape
-  .title {{ title }}
-  icon(v-if="connected", @pointerdown="startConnection") mdi-circle
-  icon(v-else, @pointerdown="startConnection") mdi-circle-outline
-</template>
-
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
 import * as store from '@/store';
@@ -33,6 +26,13 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+.viz-output-slot.shape
+  .title {{ title }}
+  icon(v-if="connected", @pointerdown="startConnection") mdi-circle
+  icon(v-else, @pointerdown="startConnection") mdi-circle-outline
+</template>
 
 <style lang="postcss" scoped>
 .viz-output-slot.shape {

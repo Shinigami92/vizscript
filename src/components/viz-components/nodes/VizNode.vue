@@ -1,13 +1,3 @@
-<template lang="pug">
-.viz-node(
-  ref="node",
-  :style="{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }",
-  @pointerdown="onPointerdown"
-)
-  slot(name="header")
-  slot
-</template>
-
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
 import type { UsePositionable } from '@/composables/usePositionable';
@@ -38,6 +28,16 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+.viz-node(
+  ref="node",
+  :style="{ left: `${modelValue.x + dx}px`, top: `${modelValue.y + dy}px` }",
+  @pointerdown="onPointerdown"
+)
+  slot(name="header")
+  slot
+</template>
 
 <style lang="postcss" scoped>
 .viz-node {

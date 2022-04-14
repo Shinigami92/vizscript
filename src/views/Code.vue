@@ -1,7 +1,3 @@
-<template lang="pug">
-prism(language="typescript") {{ current.sourceText }}
-</template>
-
 <script lang="ts">
 import type { Ref } from 'vue';
 import { defineComponent, ref } from 'vue';
@@ -22,3 +18,7 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+prism(language="typescript") {{ current.sourceText }}
+</template>

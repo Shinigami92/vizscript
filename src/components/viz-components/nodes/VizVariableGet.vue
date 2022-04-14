@@ -1,16 +1,3 @@
-<template lang="pug">
-viz-node.viz-function.shape(v-model="internalModelValue")
-  template(v-slot:default)
-    .body(v-if="internalModelValue.model")
-      .outputs
-        viz-output-slot(
-          :node-id="internalModelValue.model?.id",
-          :slot-number="0",
-          :title="modelValue.outputSlot.name",
-          :connected="modelValue.outputSlot.connected"
-        )
-</template>
-
 <script lang="ts">
 import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
@@ -41,6 +28,19 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+viz-node.viz-function.shape(v-model="internalModelValue")
+  template(v-slot:default)
+    .body(v-if="internalModelValue.model")
+      .outputs
+        viz-output-slot(
+          :node-id="internalModelValue.model?.id",
+          :slot-number="0",
+          :title="modelValue.outputSlot.name",
+          :connected="modelValue.outputSlot.connected"
+        )
+</template>
 
 <style lang="postcss" scoped>
 .viz-function.shape {

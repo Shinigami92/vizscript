@@ -1,7 +1,3 @@
-<template lang="pug">
-prism(language="json") {{ current.ast }}
-</template>
-
 <script lang="ts">
 import { createSourceFile, ScriptTarget } from 'typescript';
 import type { Ref } from 'vue';
@@ -27,3 +23,7 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+prism(language="json") {{ current.ast }}
+</template>

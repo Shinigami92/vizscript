@@ -1,7 +1,3 @@
-<template lang="pug">
-span.icon.mdi(:class="iconName", :style="style")
-</template>
-
 <script lang="ts">
 import type { HTMLAttributes } from '@vue/runtime-dom';
 import type { Ref } from 'vue';
@@ -29,3 +25,7 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+span.icon.mdi(:class="iconName", :style="style")
+</template>

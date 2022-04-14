@@ -1,10 +1,3 @@
-<template lang="pug">
-.viz-input-slot.shape
-  icon(v-if="connected") mdi-circle
-  icon(v-else) mdi-circle-outline
-  .title {{ title }}
-</template>
-
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
 import { defineComponent } from 'vue';
@@ -18,6 +11,13 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+.viz-input-slot.shape
+  icon(v-if="connected") mdi-circle
+  icon(v-else) mdi-circle-outline
+  .title {{ title }}
+</template>
 
 <style lang="postcss" scoped>
 .viz-input-slot.shape {

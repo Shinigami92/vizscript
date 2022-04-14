@@ -1,33 +1,3 @@
-<template lang="pug">
-viz-node.viz-set.shape(v-model="internalModelValue")
-  template(v-slot:header)
-    .header
-      .title SET
-  template(v-slot:default)
-    .body(v-if="internalModelValue.model")
-      .inputs
-        viz-event-receiver-slot(:connected="eventReceiverConnected")
-        viz-input-slot(
-          :title="modelValue.valueSlot.name",
-          :connected="modelValue.valueSlot.connected"
-        )
-        viz-input-slot(
-          :title="modelValue.targetSlot.name",
-          :connected="modelValue.targetSlot.connected"
-        )
-      .outputs
-        viz-event-emitter-slot(
-          :node-id="internalModelValue.model?.id",
-          :connected="eventEmitterConnected"
-        )
-        viz-output-slot(
-          :node-id="internalModelValue.model?.id",
-          :slot-number="0",
-          :title="modelValue.resultSlot.name",
-          :connected="modelValue.resultSlot.connected"
-        )
-</template>
-
 <script lang="ts">
 import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizEventEmitterSlot from '@/components/viz-components/slots/VizEventEmitterSlot.vue';
@@ -75,6 +45,36 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+viz-node.viz-set.shape(v-model="internalModelValue")
+  template(v-slot:header)
+    .header
+      .title SET
+  template(v-slot:default)
+    .body(v-if="internalModelValue.model")
+      .inputs
+        viz-event-receiver-slot(:connected="eventReceiverConnected")
+        viz-input-slot(
+          :title="modelValue.valueSlot.name",
+          :connected="modelValue.valueSlot.connected"
+        )
+        viz-input-slot(
+          :title="modelValue.targetSlot.name",
+          :connected="modelValue.targetSlot.connected"
+        )
+      .outputs
+        viz-event-emitter-slot(
+          :node-id="internalModelValue.model?.id",
+          :connected="eventEmitterConnected"
+        )
+        viz-output-slot(
+          :node-id="internalModelValue.model?.id",
+          :slot-number="0",
+          :title="modelValue.resultSlot.name",
+          :connected="modelValue.resultSlot.connected"
+        )
+</template>
 
 <style lang="postcss" scoped>
 .viz-set.shape {

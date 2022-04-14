@@ -1,17 +1,3 @@
-<template lang="pug">
-viz-node.viz-event-start.shape(v-model="internalModelValue")
-  template(v-slot:header)
-    .header
-      icon(:size="32") mdi-arrow-right-bold-hexagon-outline
-      .title Event Start
-  template(v-slot:default)
-    .body(v-if="internalModelValue.model")
-      viz-event-emitter-slot(
-        :node-id="internalModelValue.model?.id",
-        :connected="connected"
-      )
-</template>
-
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
 import VizNode from '@/components/viz-components/nodes/VizNode.vue';
@@ -42,6 +28,20 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+viz-node.viz-event-start.shape(v-model="internalModelValue")
+  template(v-slot:header)
+    .header
+      icon(:size="32") mdi-arrow-right-bold-hexagon-outline
+      .title Event Start
+  template(v-slot:default)
+    .body(v-if="internalModelValue.model")
+      viz-event-emitter-slot(
+        :node-id="internalModelValue.model?.id",
+        :connected="connected"
+      )
+</template>
 
 <style lang="postcss" scoped>
 .viz-event-start.shape {

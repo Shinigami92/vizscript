@@ -1,26 +1,3 @@
-<template lang="pug">
-.viz-canvas
-  template(v-for="vizNode in vizNodeMap")
-    component(
-      v-if="vizNode",
-      :is="`viz-${vizNode.value.type}`",
-      :key="vizNode.value.model?.id",
-      v-model="vizNode.value"
-    )
-  template(v-for="vizConnection in vizConnections")
-    component(
-      v-if="vizConnection",
-      :is="`viz-${vizConnection.value.type}-connection`",
-      :key="vizConnection.value.model?.id",
-      v-model="vizConnection.value"
-    )
-  viz-current-connection(
-    v-if="currentConnection",
-    :current-connection="currentConnection",
-    :pointer-position="relativePointerPosition"
-  )
-</template>
-
 <script lang="ts">
 import VizCurrentConnection from '@/components/viz-components/connections/VizCurrentConnection.vue';
 import VizEventConnection from '@/components/viz-components/connections/VizEventConnection.vue';
@@ -212,6 +189,29 @@ export default defineComponent({
   },
 });
 </script>
+
+<template lang="pug">
+.viz-canvas
+  template(v-for="vizNode in vizNodeMap")
+    component(
+      v-if="vizNode",
+      :is="`viz-${vizNode.value.type}`",
+      :key="vizNode.value.model?.id",
+      v-model="vizNode.value"
+    )
+  template(v-for="vizConnection in vizConnections")
+    component(
+      v-if="vizConnection",
+      :is="`viz-${vizConnection.value.type}-connection`",
+      :key="vizConnection.value.model?.id",
+      v-model="vizConnection.value"
+    )
+  viz-current-connection(
+    v-if="currentConnection",
+    :current-connection="currentConnection",
+    :pointer-position="relativePointerPosition"
+  )
+</template>
 
 <style lang="postcss" scoped>
 .viz-canvas {
