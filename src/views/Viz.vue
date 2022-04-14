@@ -172,12 +172,7 @@ export default defineComponent({
     onMounted(() =>
       store
         .findAllConnections()
-        .forEach((connection) =>
-          setTimeout(
-            () => (latestVizConnectionId.value = connection.id),
-            Math.random() * 2000,
-          ),
-        ),
+        .forEach((connection) => (latestVizConnectionId.value = connection.id)),
     );
 
     return {
