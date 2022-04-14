@@ -12,6 +12,10 @@ export function dataTypeColor(dataType: DataType): string {
   if (typeof dataType !== 'string') {
     return 'lightblue';
   }
-  console.warn('Undefined data-type color found:', dataType, 'Fallback to default color.');
+  console.warn(
+    'Undefined data-type color found:',
+    dataType,
+    'Fallback to default color.',
+  );
   return 'white';
 }

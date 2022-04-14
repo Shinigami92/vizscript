@@ -34,11 +34,14 @@ import VizVariableGet from '@/components/viz-components/nodes/VizVariableGet.vue
 import type { VizConnectionModel } from '@/shared/models/connections/VizConnectionModel';
 import type { VizCurrentConnectionModel } from '@/shared/models/connections/VizCurrentConnectionModel';
 import type { RefPositionModel } from '@/shared/models/PositionModel';
-import { convertConnection, VizConnection } from '@/shared/viz-components/connections/VizConnection';
-import { convertNode, VizNode } from '@/shared/viz-components/nodes/VizNode';
+import type { VizConnection } from '@/shared/viz-components/connections/VizConnection';
+import { convertConnection } from '@/shared/viz-components/connections/VizConnection';
+import type { VizNode } from '@/shared/viz-components/nodes/VizNode';
+import { convertNode } from '@/shared/viz-components/nodes/VizNode';
 import * as store from '@/store';
 import { useMouse } from '@vueuse/core';
-import { computed, ComputedRef, defineComponent, onMounted, ref, Ref, watch } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
+import { computed, defineComponent, onMounted, ref, watch } from 'vue';
 
 export default defineComponent({
   components: {
@@ -50,25 +53,30 @@ export default defineComponent({
     VizVariableGet,
     VizEventConnection,
     VizSlotConnection,
-    VizCurrentConnection
+    VizCurrentConnection,
   },
   setup() {
     const pointerPosition: RefPositionModel = useMouse();
 
-    const relativePointerPosition: ComputedRef<RefPositionModel> = computed<RefPositionModel>(() => ({
-      x: ref(pointerPosition.x.value - 320),
-      y: ref(pointerPosition.y.value - 56)
-    }));
+    const relativePointerPosition: ComputedRef<RefPositionModel> =
+      computed<RefPositionModel>(() => ({
+        x: ref(pointerPosition.x.value - 320),
+        y: ref(pointerPosition.y.value - 56),
+      }));
 
     store.initializeMock();
 
     const vizNodeMap: Record<string, Ref<VizNode>> = Object.fromEntries(
-      Object.entries(store.vizNodeMap()).map(([id, node]) => [id, convertNode(node)])
+      Object.entries(store.vizNodeMap()).map(([id, node]) => [
+        id,
+        convertNode(node),
+      ]),
     );
 
     const vizConnections: Ref<Array<Ref<VizConnection>>> = ref([]);
     const latestVizConnectionId: Ref<string | undefined> = ref();
-    const currentConnection: ComputedRef<VizCurrentConnectionModel | null> = store.currentConnection;
+    const currentConnection: ComputedRef<VizCurrentConnectionModel | null> =
+      store.currentConnection;
 
     watch(
       latestVizConnectionId,
@@ -76,20 +84,25 @@ export default defineComponent({
         if (!id) {
           return;
         }
-        const connection: VizConnectionModel | undefined = store.findConnectionById(id);
+        const connection: VizConnectionModel | undefined =
+          store.findConnectionById(id);
         if (!connection) {
           return;
         }
-        const startVizNode: Ref<VizNode> | undefined = vizNodeMap[connection.startNodeId];
+        const startVizNode: Ref<VizNode> | undefined =
+          vizNodeMap[connection.startNodeId];
         if (!startVizNode) {
           return;
         }
-        const endVizNode: Ref<VizNode> | undefined = vizNodeMap[connection.endNodeId];
+        const endVizNode: Ref<VizNode> | undefined =
+          vizNodeMap[connection.endNodeId];
         if (!endVizNode) {
           return;
         }
 
-        vizConnections.value.push(convertConnection(connection, [startVizNode, endVizNode]));
+        vizConnections.value.push(
+          convertConnection(connection, [startVizNode, endVizNode]),
+        );
 
         if (connection.type === 'event') {
           switch (startVizNode.value.type) {
@@ -103,7 +116,9 @@ export default defineComponent({
               startVizNode.value.eventEmitterConnected = true;
               break;
             default:
-              throw Error(`[foundEventEmitter] connection not set for ${startVizNode.value.type}`);
+              throw Error(
+                `[foundEventEmitter] connection not set for ${startVizNode.value.type}`,
+              );
           }
 
           switch (endVizNode.value.type) {
@@ -117,7 +132,9 @@ export default defineComponent({
               endVizNode.value.eventReceiverConnected = true;
               break;
             default:
-              throw Error(`[foundEventReveiver] connection not set for ${endVizNode.value.type}`);
+              throw Error(
+                `[foundEventReceiver] connection not set for ${endVizNode.value.type}`,
+              );
           }
         } else if (connection.type === 'slot') {
           switch (startVizNode.value.type) {
@@ -134,7 +151,9 @@ export default defineComponent({
               startVizNode.value.outputSlot.connected = true;
               break;
             default:
-              throw Error(`[outputSlotConnection] connection not set for ${startVizNode.value.type}`);
+              throw Error(
+                `[outputSlotConnection] connection not set for ${startVizNode.value.type}`,
+              );
           }
 
           switch (endVizNode.value.type) {
@@ -142,38 +161,55 @@ export default defineComponent({
               if (connection.endSlot === 1) {
                 endVizNode.value.callerSlot.connected = true;
               } else {
-                endVizNode.value.inputSlots[connection.endSlot - 2]!.connected = true;
+                endVizNode.value.inputSlots[connection.endSlot - 2]!.connected =
+                  true;
               }
               break;
             case 'function':
-              endVizNode.value.inputSlots[connection.endSlot - 1]!.connected = true;
+              endVizNode.value.inputSlots[connection.endSlot - 1]!.connected =
+                true;
               break;
             case 'set':
               if (connection.endSlot === 1) {
                 endVizNode.value.valueSlot.connected = true;
               } else if (connection.endSlot === 2) {
                 endVizNode.value.targetSlot.connected = true;
-                endVizNode.value.targetSlot.connectedToNode = { node: startVizNode.value, slot: connection.startSlot };
+                endVizNode.value.targetSlot.connectedToNode = {
+                  node: startVizNode.value,
+                  slot: connection.startSlot,
+                };
               }
               break;
             default:
-              throw Error(`[inputSlotConnection] connection not set for ${endVizNode.value.type}`);
+              throw Error(
+                `[inputSlotConnection] connection not set for ${endVizNode.value.type}`,
+              );
           }
         }
       },
       {
-        flush: 'sync'
-      }
+        flush: 'sync',
+      },
     );
 
     onMounted(() =>
       store
         .findAllConnections()
-        .forEach((connection) => setTimeout(() => (latestVizConnectionId.value = connection.id), Math.random() * 2000))
+        .forEach((connection) =>
+          setTimeout(
+            () => (latestVizConnectionId.value = connection.id),
+            Math.random() * 2000,
+          ),
+        ),
     );
 
-    return { vizNodeMap, vizConnections, currentConnection, relativePointerPosition };
-  }
+    return {
+      vizNodeMap,
+      vizConnections,
+      currentConnection,
+      relativePointerPosition,
+    };
+  },
 });
 </script>
 
@@ -182,14 +218,30 @@ export default defineComponent({
   @apply relative overflow-hidden h-full;
 
   /* Grid https://stackoverflow.com/a/25709375/6897682 */
-  background: linear-gradient(-90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+  background: linear-gradient(
+      -90deg,
+      rgba(255, 255, 255, 0.1) 1px,
+      transparent 1px
+    ),
     linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
     linear-gradient(-90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
     linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px),
-    linear-gradient(transparent 3px, transparent 3px, transparent 382px, transparent 382px),
+    linear-gradient(
+      transparent 3px,
+      transparent 3px,
+      transparent 382px,
+      transparent 382px
+    ),
     linear-gradient(-90deg, rgba(255, 255, 255, 0.4) 1px, transparent 1px),
-    linear-gradient(-90deg, transparent 3px, transparent 3px, transparent 382px, transparent 382px),
+    linear-gradient(
+      -90deg,
+      transparent 3px,
+      transparent 3px,
+      transparent 382px,
+      transparent 382px
+    ),
     linear-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px), transparent;
-  background-size: 48px 48px, 48px 48px, 384px 384px, 384px 384px, 384px 384px, 384px 384px, 384px 384px, 384px 384px;
+  background-size: 48px 48px, 48px 48px, 384px 384px, 384px 384px, 384px 384px,
+    384px 384px, 384px 384px, 384px 384px;
 }
 </style>

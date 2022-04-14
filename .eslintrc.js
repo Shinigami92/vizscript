@@ -1,30 +1,33 @@
 // @ts-check
 const { defineConfig } = require('eslint-define-config');
+const { readGitignoreFiles } = require('eslint-gitignore');
 
 module.exports = defineConfig({
-  ignorePatterns: ['.eslintrc.js', 'dist', 'node_modules'],
+  ignorePatterns: [
+    ...readGitignoreFiles(),
+    '.eslintrc.js', // Skip self linting
+  ],
   root: true,
   env: {
-    node: true
+    es6: true,
+    node: true,
   },
   extends: [
-    'plugin:vue/recommended',
-    '@vue/prettier',
-    '@vue/typescript',
+    'plugin:@typescript-eslint/recommended',
+    'plugin:vue/vue3-recommended',
     'plugin:import/errors',
     'plugin:import/warnings',
     'plugin:import/typescript',
-    'plugin:prettier/recommended'
+    'plugin:prettier/recommended',
   ],
-  parser: 'vue-eslint-parser',
+  parser: '@typescript-eslint/parser',
   parserOptions: {
-    parser: '@typescript-eslint/parser',
     project: ['./tsconfig.lint.json'],
-    warnOnUnsupportedTypeScriptVersion: false
+    warnOnUnsupportedTypeScriptVersion: false,
   },
   plugins: ['vue', '@typescript-eslint', 'prettier', 'import'],
   rules: {
-    'comma-dangle': ['error', 'never'],
+    curly: ['error'],
     'grouped-accessor-pairs': ['warn', 'getBeforeSet'],
     'linebreak-style': ['error', 'unix'],
     'max-classes-per-file': 'error',
@@ -59,10 +62,10 @@ module.exports = defineConfig({
       'Boolean',
       'boolean',
       'Undefined',
-      'undefined'
+      'undefined',
     ],
 
-    semi: ['off'],
+    semi: 'off',
     '@typescript-eslint/semi': ['error'],
     indent: ['off', 2],
     '@typescript-eslint/indent': ['off', 2],
@@ -70,65 +73,32 @@ module.exports = defineConfig({
     'no-shadow': 'off',
     '@typescript-eslint/no-shadow': ['warn'],
 
-    '@typescript-eslint/array-type': ['warn', { default: 'array-simple', readonly: 'generic' }],
-    '@typescript-eslint/ban-ts-comment': ['error', { 'ts-expect-error': 'allow-with-description' }],
-    '@typescript-eslint/ban-types': 'warn',
-    '@typescript-eslint/explicit-function-return-type': ['error', { allowExpressions: true }],
-    '@typescript-eslint/explicit-member-accessibility': 'error',
-    '@typescript-eslint/lines-between-class-members': ['warn', 'always', { exceptAfterSingleLine: true }],
-    // Waiting on https://github.com/typescript-eslint/typescript-eslint/issues/929
-    '@typescript-eslint/member-ordering': [
+    '@typescript-eslint/array-type': [
       'warn',
-      {
-        default: [
-          'signature',
-
-          'public-static-field',
-          'protected-static-field',
-          'private-static-field',
-          'static-field',
-
-          'public-static-method',
-          'protected-static-method',
-          'private-static-method',
-          'static-method',
-
-          'public-instance-field',
-          'protected-instance-field',
-          'private-instance-field',
-
-          'public-abstract-field',
-          'protected-abstract-field',
-          'private-abstract-field',
-
-          'public-field',
-          'protected-field',
-          'private-field',
-          'instance-field',
-          'abstract-field',
-          'field',
-
-          'constructor',
-
-          'public-instance-method',
-          'protected-instance-method',
-          'private-instance-method',
-
-          'public-abstract-method',
-          'protected-abstract-method',
-          'private-abstract-method',
-
-          'public-method',
-          'protected-method',
-          'private-method',
-
-          'instance-method',
-          'abstract-method',
-
-          'method'
-        ]
-      }
+      { default: 'array-simple', readonly: 'generic' },
     ],
+    '@typescript-eslint/ban-ts-comment': [
+      'error',
+      { 'ts-expect-error': 'allow-with-description' },
+    ],
+    '@typescript-eslint/ban-types': 'warn',
+    '@typescript-eslint/consistent-type-imports': [
+      'error',
+      { prefer: 'type-imports' },
+    ],
+    '@typescript-eslint/explicit-function-return-type': [
+      'error',
+      { allowExpressions: true },
+    ],
+    '@typescript-eslint/explicit-member-accessibility': 'error',
+    '@typescript-eslint/interface-name-prefix': 'off',
+    '@typescript-eslint/lines-between-class-members': [
+      'warn',
+      'always',
+      { exceptAfterSingleLine: true },
+    ],
+    '@typescript-eslint/member-ordering': 'off',
+    '@typescript-eslint/no-empty-interface': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
     '@typescript-eslint/no-inferrable-types': 'off',
     '@typescript-eslint/no-non-null-assertion': 'off',
@@ -140,25 +110,33 @@ module.exports = defineConfig({
     '@typescript-eslint/prefer-reduce-type-parameter': 'warn',
     '@typescript-eslint/prefer-string-starts-ends-with': 'error',
     '@typescript-eslint/require-await': 'warn',
+    '@typescript-eslint/restrict-template-expressions': 'off',
     '@typescript-eslint/typedef': [
       'warn',
-      {
-        arrowParameter: false,
-        memberVariableDeclaration: true,
-        objectDestructuring: false,
-        parameter: false,
-        propertyDeclaration: true,
-        variableDeclaration: true
-      }
-    ]
+      { memberVariableDeclaration: true, variableDeclaration: true },
+    ],
+
+    'vue/multi-word-component-names': 'warn',
   },
   settings: {
     'import/parsers': {
-      '@typescript-eslint/parser': ['.ts', '.tsx']
+      '@typescript-eslint/parser': ['.ts', '.tsx'],
     },
     'import/resolver': {
       // use <root>/tsconfig.json
-      typescript: {}
-    }
-  }
+      typescript: {},
+    },
+  },
+  overrides: [
+    {
+      files: ['*.vue'],
+      parser: 'vue-eslint-parser',
+      parserOptions: {
+        parser: '@typescript-eslint/parser',
+        project: 'tsconfig.lint.json',
+        extraFileExtensions: ['.vue'],
+        tsconfigRootDir: './',
+      },
+    },
+  ],
 });

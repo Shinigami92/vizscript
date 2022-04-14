@@ -1,13 +1,19 @@
-import { VizNodeModel } from '@/shared/models/nodes/VizNodeModel';
+import type { VizNodeModel } from '@/shared/models/nodes/VizNodeModel';
 import { isRecordObject } from '@/shared/utilities/common';
-import { Ref } from 'vue';
+import type { Ref } from 'vue';
 import { isPositionable } from '../Positionable';
-import { convertBuildInGetNode, VizBuildInGetNode } from './VizBuildInGetNode';
-import { convertCallerFunctionNode, VizCallerFunctionNode } from './VizCallerFunctionNode';
-import { convertEventStartNode, VizEventStartNode } from './VizEventStartNode';
-import { convertFunctionNode, VizFunctionNode } from './VizFunctionNode';
-import { convertSetNode, VizSetNode } from './VizSetNode';
-import { convertVariableGetNode, VizVariableGetNode } from './VizVariableGetNode';
+import type { VizBuildInGetNode } from './VizBuildInGetNode';
+import { convertBuildInGetNode } from './VizBuildInGetNode';
+import type { VizCallerFunctionNode } from './VizCallerFunctionNode';
+import { convertCallerFunctionNode } from './VizCallerFunctionNode';
+import type { VizEventStartNode } from './VizEventStartNode';
+import { convertEventStartNode } from './VizEventStartNode';
+import type { VizFunctionNode } from './VizFunctionNode';
+import { convertFunctionNode } from './VizFunctionNode';
+import type { VizSetNode } from './VizSetNode';
+import { convertSetNode } from './VizSetNode';
+import type { VizVariableGetNode } from './VizVariableGetNode';
+import { convertVariableGetNode } from './VizVariableGetNode';
 
 export type VizNode =
   | VizCallerFunctionNode

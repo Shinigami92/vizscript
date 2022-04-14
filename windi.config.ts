@@ -13,13 +13,13 @@ export default defineConfig({
         400: '#2e2f35',
         500: '#25272a',
         // 600: '#52525b',
-        700: '#070a0d'
+        700: '#070a0d',
         // 800: '#27272a',
         // 900: '#18181b'
       },
       red: colors.red,
       blue: colors.blue,
-      green: colors.green
-    }
-  }
+      green: colors.green,
+    },
+  },
 });

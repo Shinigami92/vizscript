@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
     plugins: [vue(), WindiCSS()],
     resolve: {
       alias: {
-        '@': resolve(__dirname, './src')
-      }
-    }
+        '@': resolve(__dirname, './src'),
+      },
+    },
   };
 });

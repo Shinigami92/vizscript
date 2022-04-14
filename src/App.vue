@@ -23,7 +23,7 @@ function preventMotion(event: Event): void {
 }
 
 export default defineComponent({
-  components: { AppDrawer, AppBar, AppMainContent }
+  components: { AppDrawer, AppBar, AppMainContent },
 });
 </script>
 

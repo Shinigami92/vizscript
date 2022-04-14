@@ -7,10 +7,19 @@ viz-node.viz-set.shape(v-model="internalModelValue")
     .body(v-if="internalModelValue.model")
       .inputs
         viz-event-receiver-slot(:connected="eventReceiverConnected")
-        viz-input-slot(:title="modelValue.valueSlot.name", :connected="modelValue.valueSlot.connected")
-        viz-input-slot(:title="modelValue.targetSlot.name", :connected="modelValue.targetSlot.connected")
+        viz-input-slot(
+          :title="modelValue.valueSlot.name",
+          :connected="modelValue.valueSlot.connected"
+        )
+        viz-input-slot(
+          :title="modelValue.targetSlot.name",
+          :connected="modelValue.targetSlot.connected"
+        )
       .outputs
-        viz-event-emitter-slot(:node-id="internalModelValue.model?.id", :connected="eventEmitterConnected")
+        viz-event-emitter-slot(
+          :node-id="internalModelValue.model?.id",
+          :connected="eventEmitterConnected"
+        )
         viz-output-slot(
           :node-id="internalModelValue.model?.id",
           :slot-number="0",
@@ -27,22 +36,43 @@ import VizInputSlot from '@/components/viz-components/slots/VizInputSlot.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
-import { isSetNode, VizSetNode } from '@/shared/viz-components/nodes/VizSetNode';
-import { computed, ComputedRef, defineComponent, PropType, WritableComputedRef } from 'vue';
+import type { VizSetNode } from '@/shared/viz-components/nodes/VizSetNode';
+import { isSetNode } from '@/shared/viz-components/nodes/VizSetNode';
+import type { ComputedRef, PropType, WritableComputedRef } from 'vue';
+import { computed, defineComponent } from 'vue';
 
 export default defineComponent({
   name: 'VizSet',
-  components: { VizNode, VizEventReceiverSlot, VizEventEmitterSlot, VizInputSlot, VizOutputSlot },
-  props: { modelValue: { type: Object as PropType<VizSetNode>, required: true } },
+  components: {
+    VizNode,
+    VizEventReceiverSlot,
+    VizEventEmitterSlot,
+    VizInputSlot,
+    VizOutputSlot,
+  },
+  props: {
+    modelValue: { type: Object as PropType<VizSetNode>, required: true },
+  },
   emits: { 'update:modelValue': isSetNode as EmitType<VizSetNode> },
   setup(props, { emit }) {
-    const internalModelValue: WritableComputedRef<VizSetNode> = useVModelValue(props, emit);
+    const internalModelValue: WritableComputedRef<VizSetNode> = useVModelValue(
+      props,
+      emit,
+    );
 
-    const eventReceiverConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventReceiverConnected);
-    const eventEmitterConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventEmitterConnected);
+    const eventReceiverConnected: ComputedRef<boolean> = computed(
+      () => props.modelValue.eventReceiverConnected,
+    );
+    const eventEmitterConnected: ComputedRef<boolean> = computed(
+      () => props.modelValue.eventEmitterConnected,
+    );
 
-    return { internalModelValue, eventReceiverConnected, eventEmitterConnected };
-  }
+    return {
+      internalModelValue,
+      eventReceiverConnected,
+      eventEmitterConnected,
+    };
+  },
 });
 </script>
 

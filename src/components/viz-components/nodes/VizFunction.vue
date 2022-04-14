@@ -15,7 +15,10 @@ viz-node.viz-function.shape(v-model="internalModelValue")
           :connected="slot.connected"
         )
       .outputs
-        viz-event-emitter-slot(:node-id="internalModelValue.model?.id", :connected="eventEmitterConnected")
+        viz-event-emitter-slot(
+          :node-id="internalModelValue.model?.id",
+          :connected="eventEmitterConnected"
+        )
         viz-output-slot(
           :node-id="internalModelValue.model?.id",
           :slot-number="0",
@@ -33,22 +36,42 @@ import VizInputSlot from '@/components/viz-components/slots/VizInputSlot.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
-import { isFunctionNode, VizFunctionNode } from '@/shared/viz-components/nodes/VizFunctionNode';
-import { computed, ComputedRef, defineComponent, PropType, WritableComputedRef } from 'vue';
+import type { VizFunctionNode } from '@/shared/viz-components/nodes/VizFunctionNode';
+import { isFunctionNode } from '@/shared/viz-components/nodes/VizFunctionNode';
+import type { ComputedRef, PropType, WritableComputedRef } from 'vue';
+import { computed, defineComponent } from 'vue';
 
 export default defineComponent({
   name: 'VizFunction',
-  components: { Icon, VizNode, VizEventReceiverSlot, VizEventEmitterSlot, VizInputSlot, VizOutputSlot },
-  props: { modelValue: { type: Object as PropType<VizFunctionNode>, required: true } },
+  components: {
+    Icon,
+    VizNode,
+    VizEventReceiverSlot,
+    VizEventEmitterSlot,
+    VizInputSlot,
+    VizOutputSlot,
+  },
+  props: {
+    modelValue: { type: Object as PropType<VizFunctionNode>, required: true },
+  },
   emits: { 'update:modelValue': isFunctionNode as EmitType<VizFunctionNode> },
   setup(props, { emit }) {
-    const internalModelValue: WritableComputedRef<VizFunctionNode> = useVModelValue(props, emit);
+    const internalModelValue: WritableComputedRef<VizFunctionNode> =
+      useVModelValue(props, emit);
 
-    const eventReceiverConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventReceiverConnected);
-    const eventEmitterConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventEmitterConnected);
+    const eventReceiverConnected: ComputedRef<boolean> = computed(
+      () => props.modelValue.eventReceiverConnected,
+    );
+    const eventEmitterConnected: ComputedRef<boolean> = computed(
+      () => props.modelValue.eventEmitterConnected,
+    );
 
-    return { internalModelValue, eventReceiverConnected, eventEmitterConnected };
-  }
+    return {
+      internalModelValue,
+      eventReceiverConnected,
+      eventEmitterConnected,
+    };
+  },
 });
 </script>
 

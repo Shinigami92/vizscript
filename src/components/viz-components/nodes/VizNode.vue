@@ -10,10 +10,13 @@
 
 <script lang="ts">
 import Icon from '@/components/Icon.vue';
-import { usePositionable, UsePositionable } from '@/composables/usePositionable';
+import type { UsePositionable } from '@/composables/usePositionable';
+import { usePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
-import { isNode, VizNode } from '@/shared/viz-components/nodes/VizNode';
-import { defineComponent, onMounted, PropType, ref, Ref } from 'vue';
+import type { VizNode } from '@/shared/viz-components/nodes/VizNode';
+import { isNode } from '@/shared/viz-components/nodes/VizNode';
+import type { PropType, Ref } from 'vue';
+import { defineComponent, onMounted, ref } from 'vue';
 
 export default defineComponent({
   name: 'VizNode',
@@ -24,10 +27,15 @@ export default defineComponent({
     const positionable: UsePositionable<VizNode> = usePositionable(props, emit);
     const node: Ref<HTMLDivElement | undefined> = ref();
 
-    onMounted(() => emit('update:modelValue', { ...props.modelValue, vizNodeDivRef: node.value }));
+    onMounted(() =>
+      emit('update:modelValue', {
+        ...props.modelValue,
+        vizNodeDivRef: node.value,
+      }),
+    );
 
     return { ...positionable, node };
-  }
+  },
 });
 </script>
 

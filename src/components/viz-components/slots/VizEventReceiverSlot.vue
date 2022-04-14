@@ -10,6 +10,6 @@ import { defineComponent } from 'vue';
 export default defineComponent({
   name: 'VizEventReceiverSlot',
   components: { Icon },
-  props: { connected: { type: Boolean, required: true } }
+  props: { connected: { type: Boolean, required: true } },
 });
 </script>

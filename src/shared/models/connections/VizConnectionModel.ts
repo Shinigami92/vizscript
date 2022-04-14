@@ -1,4 +1,6 @@
-import { VizEventConnectionModel } from './VizEventConnectionModel';
-import { VizSlotConnectionModel } from './VizSlotConnectionModel';
+import type { VizEventConnectionModel } from './VizEventConnectionModel';
+import type { VizSlotConnectionModel } from './VizSlotConnectionModel';
 
-export type VizConnectionModel = VizEventConnectionModel | VizSlotConnectionModel;
+export type VizConnectionModel =
+  | VizEventConnectionModel
+  | VizSlotConnectionModel;

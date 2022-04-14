@@ -1,7 +1,8 @@
 import type { VizNode } from '@/shared/viz-components/nodes/VizNode';
 import type { Positionable } from '@/shared/viz-components/Positionable';
 import { updateNodePosition } from '@/store';
-import { computed, ref, Ref, WritableComputedRef } from 'vue';
+import type { Ref, WritableComputedRef } from 'vue';
+import { computed, ref } from 'vue';
 
 export interface UsePositionable<T extends VizNode> {
   dx: Ref<number>;
@@ -11,11 +12,11 @@ export interface UsePositionable<T extends VizNode> {
 
 export function usePositionable<T extends VizNode>(
   props: { modelValue: T },
-  emit: (event: 'update:modelValue', value: T) => void
+  emit: (event: 'update:modelValue', value: T) => void,
 ): UsePositionable<T> {
   const internalValue: WritableComputedRef<T> = computed({
     get: () => props.modelValue,
-    set: (value) => emit('update:modelValue', value)
+    set: (value) => emit('update:modelValue', value),
   });
 
   const dx: Ref<number> = ref(0);

@@ -16,19 +16,29 @@ import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
-import { isVariableGetNode, VizVariableGetNode } from '@/shared/viz-components/nodes/VizVariableGetNode';
-import { defineComponent, PropType, WritableComputedRef } from 'vue';
+import type { VizVariableGetNode } from '@/shared/viz-components/nodes/VizVariableGetNode';
+import { isVariableGetNode } from '@/shared/viz-components/nodes/VizVariableGetNode';
+import type { PropType, WritableComputedRef } from 'vue';
+import { defineComponent } from 'vue';
 
 export default defineComponent({
   name: 'VizVariableGet',
   components: { VizNode, VizOutputSlot },
-  props: { modelValue: { type: Object as PropType<VizVariableGetNode>, required: true } },
-  emits: { 'update:modelValue': isVariableGetNode as EmitType<VizVariableGetNode> },
+  props: {
+    modelValue: {
+      type: Object as PropType<VizVariableGetNode>,
+      required: true,
+    },
+  },
+  emits: {
+    'update:modelValue': isVariableGetNode as EmitType<VizVariableGetNode>,
+  },
   setup(props, { emit }) {
-    const internalModelValue: WritableComputedRef<VizVariableGetNode> = useVModelValue(props, emit);
+    const internalModelValue: WritableComputedRef<VizVariableGetNode> =
+      useVModelValue(props, emit);
 
     return { internalModelValue };
-  }
+  },
 });
 </script>
 

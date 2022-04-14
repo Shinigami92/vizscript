@@ -1,7 +1,8 @@
-import { DataType } from '../DataType';
-import { AbstractVizNodeModel } from './AbstractVizNodeModel';
+import type { DataType } from '../DataType';
+import type { AbstractVizNodeModel } from './AbstractVizNodeModel';
 
-export interface VizVariableGetNodeModel extends AbstractVizNodeModel<'variable-get'> {
+export interface VizVariableGetNodeModel
+  extends AbstractVizNodeModel<'variable-get'> {
   name: string;
   dataType: DataType;
 }

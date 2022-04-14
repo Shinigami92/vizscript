@@ -1,4 +1,4 @@
-import { PositionModel } from '@/shared/models/PositionModel';
+import type { PositionModel } from '@/shared/models/PositionModel';
 import { isRecordObject } from '@/shared/utilities/common';
 
 interface VizCurrentEventConnection {
@@ -14,9 +14,13 @@ interface VizCurrentSlotConnection {
   startSlot: number;
 }
 
-export type VizCurrentConnection = VizCurrentEventConnection | VizCurrentSlotConnection;
+export type VizCurrentConnection =
+  | VizCurrentEventConnection
+  | VizCurrentSlotConnection;
 
-export function isCurrentConnection(modelValue: unknown): modelValue is VizCurrentConnection {
+export function isCurrentConnection(
+  modelValue: unknown,
+): modelValue is VizCurrentConnection {
   if (!isRecordObject(modelValue)) {
     return false;
   }

@@ -1,6 +1,6 @@
-import { Parameter } from '../Parameter';
-import { Return } from '../Return';
-import { AbstractVizNodeModel } from './AbstractVizNodeModel';
+import type { Parameter } from '../Parameter';
+import type { Return } from '../Return';
+import type { AbstractVizNodeModel } from './AbstractVizNodeModel';
 
 export interface VizFunctionNodeModel extends AbstractVizNodeModel<'function'> {
   title: string;

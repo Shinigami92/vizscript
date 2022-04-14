@@ -1,12 +1,14 @@
-import { VizCallerFunctionNodeModel } from '@/shared/models/nodes/VizCallerFunctionNodeModel';
+import type { VizCallerFunctionNodeModel } from '@/shared/models/nodes/VizCallerFunctionNodeModel';
 import { isRecordObject } from '@/shared/utilities/common';
 import { isPositionable } from '@/shared/viz-components/Positionable';
-import { ref, Ref } from 'vue';
-import { VizInputSlot } from '../slots/VizInputSlot';
-import { VizOutputSlot } from '../slots/VizOutputSlot';
-import { AbstractVizNode } from './AbstractVizNode';
+import type { Ref } from 'vue';
+import { ref } from 'vue';
+import type { VizInputSlot } from '../slots/VizInputSlot';
+import type { VizOutputSlot } from '../slots/VizOutputSlot';
+import type { AbstractVizNode } from './AbstractVizNode';
 
-export interface VizCallerFunctionNode extends AbstractVizNode<'caller-function'> {
+export interface VizCallerFunctionNode
+  extends AbstractVizNode<'caller-function'> {
   title: string;
   eventReceiverConnected: boolean;
   eventEmitterConnected: boolean;
@@ -15,7 +17,9 @@ export interface VizCallerFunctionNode extends AbstractVizNode<'caller-function'
   returnSlot: VizOutputSlot;
 }
 
-export function convertCallerFunctionNode(model: VizCallerFunctionNodeModel): Ref<VizCallerFunctionNode> {
+export function convertCallerFunctionNode(
+  model: VizCallerFunctionNodeModel,
+): Ref<VizCallerFunctionNode> {
   return ref<VizCallerFunctionNode>({
     model,
     ...model,
@@ -24,13 +28,15 @@ export function convertCallerFunctionNode(model: VizCallerFunctionNodeModel): Re
     callerSlot: { name: 'caller', connected: false },
     inputSlots: model.parameters.map((parameter) => ({
       name: parameter.name,
-      connected: false
+      connected: false,
     })),
-    returnSlot: { name: 'return', connected: false }
+    returnSlot: { name: 'return', connected: false },
   });
 }
 
-export function isCallerFunctionNode(modelValue: unknown): modelValue is VizCallerFunctionNode {
+export function isCallerFunctionNode(
+  modelValue: unknown,
+): modelValue is VizCallerFunctionNode {
   if (!isRecordObject(modelValue)) {
     return false;
   }

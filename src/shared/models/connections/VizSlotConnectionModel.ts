@@ -1,6 +1,7 @@
-import { AbstractVizConnectionModel } from './AbstractVizConnectionModel';
+import type { AbstractVizConnectionModel } from './AbstractVizConnectionModel';
 
-export interface VizSlotConnectionModel extends AbstractVizConnectionModel<'slot'> {
+export interface VizSlotConnectionModel
+  extends AbstractVizConnectionModel<'slot'> {
   startSlot: number;
   endSlot: number;
 }

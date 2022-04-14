@@ -1,3 +1,4 @@
-import { AbstractVizNodeModel } from './AbstractVizNodeModel';
+import type { AbstractVizNodeModel } from './AbstractVizNodeModel';
 
-export interface VizEventStartNodeModel extends AbstractVizNodeModel<'event-start'> {}
+export interface VizEventStartNodeModel
+  extends AbstractVizNodeModel<'event-start'> {}

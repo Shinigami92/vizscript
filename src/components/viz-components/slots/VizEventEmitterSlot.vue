@@ -13,18 +13,18 @@ export default defineComponent({
   components: { Icon },
   props: {
     nodeId: { type: String, required: true },
-    connected: { type: Boolean, required: true }
+    connected: { type: Boolean, required: true },
   },
   setup(props) {
     const startConnection: (payload: PointerEvent) => void = (payload) => {
       store.startConnection({
         type: 'event',
         startNodeId: props.nodeId,
-        startPosition: { x: payload.x, y: payload.y }
+        startPosition: { x: payload.x, y: payload.y },
       });
     };
 
     return { startConnection };
-  }
+  },
 });
 </script>

@@ -1,9 +1,11 @@
 {
   "recommendations": [
-    "editorconfig.editorconfig",
     "dbaeumer.vscode-eslint",
+    "editorconfig.editorconfig",
     "esbenp.prettier-vscode",
     "johnsoncodehk.volar",
+    "pflannery.vscode-versionlens",
+    "streetsidesoftware.code-spell-checker",
     "voorjaar.windicss-intellisense"
   ]
 }

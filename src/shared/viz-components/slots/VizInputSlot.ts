@@ -1,4 +1,4 @@
-import { VizNode } from '../nodes/VizNode';
+import type { VizNode } from '../nodes/VizNode';
 
 export interface VizInputSlot {
   name: string;

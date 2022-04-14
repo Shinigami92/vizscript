@@ -17,7 +17,7 @@ export default defineComponent({
     nodeId: { type: String, required: true },
     slotNumber: { type: Number, required: true },
     title: { type: String, required: true },
-    connected: { type: Boolean, required: true }
+    connected: { type: Boolean, required: true },
   },
   setup(props) {
     const startConnection: (payload: PointerEvent) => void = (payload) => {
@@ -25,12 +25,12 @@ export default defineComponent({
         type: 'slot',
         startNodeId: props.nodeId,
         startSlot: props.slotNumber,
-        startPosition: { x: payload.x, y: payload.y }
+        startPosition: { x: payload.x, y: payload.y },
       });
     };
 
     return { startConnection };
-  }
+  },
 });
 </script>
 

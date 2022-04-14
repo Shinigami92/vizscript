@@ -13,4 +13,6 @@ interface VizCurrentSlotConnectionModel {
   startSlot: number;
 }
 
-export type VizCurrentConnectionModel = VizCurrentEventConnectionModel | VizCurrentSlotConnectionModel;
+export type VizCurrentConnectionModel =
+  | VizCurrentEventConnectionModel
+  | VizCurrentSlotConnectionModel;

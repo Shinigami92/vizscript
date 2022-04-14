@@ -14,8 +14,8 @@ export default defineComponent({
   components: { Icon },
   props: {
     title: { type: String, required: true },
-    connected: { type: Boolean, required: true }
-  }
+    connected: { type: Boolean, required: true },
+  },
 });
 </script>
 

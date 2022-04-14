@@ -8,7 +8,10 @@ viz-node.viz-caller-function.shape(v-model="internalModelValue")
     .body(v-if="internalModelValue.model")
       .inputs
         viz-event-receiver-slot(:connected="eventReceiverConnected")
-        viz-input-slot(:title="modelValue.callerSlot.name", :connected="modelValue.callerSlot.connected")
+        viz-input-slot(
+          :title="modelValue.callerSlot.name",
+          :connected="modelValue.callerSlot.connected"
+        )
         viz-input-slot(
           v-for="slot in modelValue.inputSlots",
           :key="slot.name",
@@ -16,7 +19,10 @@ viz-node.viz-caller-function.shape(v-model="internalModelValue")
           :connected="slot.connected"
         )
       .outputs
-        viz-event-emitter-slot(:node-id="internalModelValue.model?.id", :connected="eventEmitterConnected")
+        viz-event-emitter-slot(
+          :node-id="internalModelValue.model?.id",
+          :connected="eventEmitterConnected"
+        )
         viz-output-slot(
           :node-id="internalModelValue.model?.id",
           :slot-number="0",
@@ -34,22 +40,48 @@ import VizInputSlot from '@/components/viz-components/slots/VizInputSlot.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
-import { isCallerFunctionNode, VizCallerFunctionNode } from '@/shared/viz-components/nodes/VizCallerFunctionNode';
-import { computed, ComputedRef, defineComponent, PropType, WritableComputedRef } from 'vue';
+import type { VizCallerFunctionNode } from '@/shared/viz-components/nodes/VizCallerFunctionNode';
+import { isCallerFunctionNode } from '@/shared/viz-components/nodes/VizCallerFunctionNode';
+import type { ComputedRef, PropType, WritableComputedRef } from 'vue';
+import { computed, defineComponent } from 'vue';
 
 export default defineComponent({
   name: 'VizCallerFunction',
-  components: { Icon, VizNode, VizEventReceiverSlot, VizEventEmitterSlot, VizInputSlot, VizOutputSlot },
-  props: { modelValue: { type: Object as PropType<VizCallerFunctionNode>, required: true } },
-  emits: { 'update:modelValue': isCallerFunctionNode as EmitType<VizCallerFunctionNode> },
+  components: {
+    Icon,
+    VizNode,
+    VizEventReceiverSlot,
+    VizEventEmitterSlot,
+    VizInputSlot,
+    VizOutputSlot,
+  },
+  props: {
+    modelValue: {
+      type: Object as PropType<VizCallerFunctionNode>,
+      required: true,
+    },
+  },
+  emits: {
+    'update:modelValue':
+      isCallerFunctionNode as EmitType<VizCallerFunctionNode>,
+  },
   setup(props, { emit }) {
-    const internalModelValue: WritableComputedRef<VizCallerFunctionNode> = useVModelValue(props, emit);
+    const internalModelValue: WritableComputedRef<VizCallerFunctionNode> =
+      useVModelValue(props, emit);
 
-    const eventReceiverConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventReceiverConnected);
-    const eventEmitterConnected: ComputedRef<boolean> = computed(() => props.modelValue.eventEmitterConnected);
+    const eventReceiverConnected: ComputedRef<boolean> = computed(
+      () => props.modelValue.eventReceiverConnected,
+    );
+    const eventEmitterConnected: ComputedRef<boolean> = computed(
+      () => props.modelValue.eventEmitterConnected,
+    );
 
-    return { internalModelValue, eventReceiverConnected, eventEmitterConnected };
-  }
+    return {
+      internalModelValue,
+      eventReceiverConnected,
+      eventEmitterConnected,
+    };
+  },
 });
 </script>
 

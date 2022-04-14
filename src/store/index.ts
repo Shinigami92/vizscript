@@ -7,12 +7,16 @@ import type { VizBuildInGetNodeModel } from '@/shared/models/nodes/VizBuildInGet
 import type { VizCallerFunctionNodeModel } from '@/shared/models/nodes/VizCallerFunctionNodeModel';
 import type { VizEventStartNodeModel } from '@/shared/models/nodes/VizEventStartNodeModel';
 import type { VizFunctionNodeModel } from '@/shared/models/nodes/VizFunctionNodeModel';
-import type { VizNodeModel, VizNodeType } from '@/shared/models/nodes/VizNodeModel';
+import type {
+  VizNodeModel,
+  VizNodeType,
+} from '@/shared/models/nodes/VizNodeModel';
 import type { VizSetNodeModel } from '@/shared/models/nodes/VizSetNodeModel';
 import type { VizVariableGetNodeModel } from '@/shared/models/nodes/VizVariableGetNodeModel';
 import type { PositionModel } from '@/shared/models/PositionModel';
 import { v4 as uuidv4 } from 'uuid';
-import { computed, ComputedRef, Ref, ref } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
+import { computed, ref } from 'vue';
 
 export interface RootState {
   currentViz: {
@@ -28,8 +32,8 @@ const state: Ref<RootState> = ref<RootState>({
     eventStartNode: null,
     nodes: {},
     connections: {},
-    currentConnection: null
-  }
+    currentConnection: null,
+  },
 });
 
 export function findAllNodes(): VizNodeModel[] {
@@ -53,10 +57,10 @@ export function findNodeById(id: string): VizNodeModel | undefined {
   return state.value.currentViz.nodes[id];
 }
 
-export function createNode<Type extends VizNodeType, Node extends AbstractVizNodeModel<Type>>(
-  type: Type,
-  node: Omit<Node, 'id' | 'type'>
-): Node {
+export function createNode<
+  Type extends VizNodeType,
+  Node extends AbstractVizNodeModel<Type>,
+>(type: Type, node: Omit<Node, 'id' | 'type'>): Node {
   const id: string = uuidv4();
   state.value.currentViz.nodes[id] = { ...node, type, id } as VizNodeModel;
   return state.value.currentViz.nodes[id] as Node;
@@ -68,7 +72,7 @@ export function findAllConnections(): VizConnectionModel[] {
 
 export function createEventConnection({
   startNode,
-  endNode
+  endNode,
 }: {
   startNode: VizNodeModel;
   endNode: VizNodeModel;
@@ -78,7 +82,7 @@ export function createEventConnection({
     id,
     type: 'event',
     startNodeId: startNode.id,
-    endNodeId: endNode.id
+    endNodeId: endNode.id,
   };
   return state.value.currentViz.connections[id] as VizEventConnectionModel;
 }
@@ -87,7 +91,7 @@ export function createSlotConnection({
   startNode,
   endNode,
   startSlot,
-  endSlot
+  endSlot,
 }: {
   startNode: VizNodeModel;
   endNode: VizNodeModel;
@@ -101,7 +105,7 @@ export function createSlotConnection({
     startNodeId: startNode.id,
     startSlot,
     endNodeId: endNode.id,
-    endSlot
+    endSlot,
   };
   return state.value.currentViz.connections[id] as VizSlotConnectionModel;
 }
@@ -114,9 +118,8 @@ export function findConnectionById(id: string): VizConnectionModel | undefined {
   return state.value.currentViz.connections[id];
 }
 
-export const currentConnection: ComputedRef<VizCurrentConnectionModel | null> = computed(
-  () => state.value.currentViz.currentConnection
-);
+export const currentConnection: ComputedRef<VizCurrentConnectionModel | null> =
+  computed(() => state.value.currentViz.currentConnection);
 
 // --- Mock Data ---
 let mockInitialized: boolean = false;
@@ -128,24 +131,32 @@ export function initializeMock(): void {
   mockInitialized = true;
 
   // Nodes
-  const eventStart: VizEventStartNodeModel = createNode('event-start', { x: 10, y: 48 });
+  const eventStart: VizEventStartNodeModel = createNode('event-start', {
+    x: 10,
+    y: 48,
+  });
 
   state.value.currentViz.eventStartNode = eventStart.id;
 
-  const user: VizVariableGetNodeModel = createNode('variable-get', { x: 30, y: 192, name: 'user', dataType: 'string' });
+  const user: VizVariableGetNodeModel = createNode('variable-get', {
+    x: 30,
+    y: 192,
+    name: 'user',
+    dataType: 'string',
+  });
   const greeter: VizFunctionNodeModel = createNode('function', {
     x: 360,
     y: 64,
     title: 'greeter',
     parameters: [{ name: 'person', type: 'string' }],
-    return: { type: 'string' }
+    return: { type: 'string' },
   });
   const setTextContent: VizSetNodeModel = createNode('set', { x: 610, y: 48 });
   const textContent: VizVariableGetNodeModel = createNode('variable-get', {
     x: 360,
     y: 260,
     name: 'textContent',
-    dataType: 'string'
+    dataType: 'string',
   });
   const log: VizCallerFunctionNodeModel = createNode('caller-function', {
     x: 870,
@@ -153,22 +164,47 @@ export function initializeMock(): void {
     title: 'log',
     caller: { type: { name: 'Console' } },
     parameters: [{ name: 'msg', type: 'any', required: false }],
-    return: { type: 'void' }
+    return: { type: 'void' },
   });
   const consoleNode: VizBuildInGetNodeModel = createNode('build-in-get', {
     x: 670,
     y: 290,
     name: 'console',
-    dataType: { name: 'Console' }
+    dataType: { name: 'Console' },
   });
 
   // Connections
   createEventConnection({ startNode: eventStart, endNode: greeter });
-  createSlotConnection({ startNode: user, startSlot: 1, endNode: greeter, endSlot: 1 });
+  createSlotConnection({
+    startNode: user,
+    startSlot: 1,
+    endNode: greeter,
+    endSlot: 1,
+  });
   createEventConnection({ startNode: greeter, endNode: setTextContent });
-  createSlotConnection({ startNode: greeter, startSlot: 1, endNode: setTextContent, endSlot: 1 });
-  createSlotConnection({ startNode: textContent, startSlot: 1, endNode: setTextContent, endSlot: 2 });
-  createSlotConnection({ startNode: consoleNode, startSlot: 1, endNode: log, endSlot: 1 });
+  createSlotConnection({
+    startNode: greeter,
+    startSlot: 1,
+    endNode: setTextContent,
+    endSlot: 1,
+  });
+  createSlotConnection({
+    startNode: textContent,
+    startSlot: 1,
+    endNode: setTextContent,
+    endSlot: 2,
+  });
+  createSlotConnection({
+    startNode: consoleNode,
+    startSlot: 1,
+    endNode: log,
+    endSlot: 1,
+  });
   createEventConnection({ startNode: setTextContent, endNode: log });
-  createSlotConnection({ startNode: setTextContent, startSlot: 1, endNode: log, endSlot: 2 });
+  createSlotConnection({
+    startNode: setTextContent,
+    startSlot: 1,
+    endNode: log,
+    endSlot: 2,
+  });
 }

@@ -13,6 +13,6 @@ import Icon from '@/components/Icon.vue';
 import { defineComponent } from 'vue';
 
 export default defineComponent({
-  components: { Icon }
+  components: { Icon },
 });
 </script>

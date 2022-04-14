@@ -1,9 +1,10 @@
-import { VizSetNodeModel } from '@/shared/models/nodes/VizSetNodeModel';
+import type { VizSetNodeModel } from '@/shared/models/nodes/VizSetNodeModel';
 import { isPositionable } from '@/shared/viz-components/Positionable';
-import { ref, Ref } from 'vue';
-import { VizInputSlot } from '../slots/VizInputSlot';
-import { VizOutputSlot } from '../slots/VizOutputSlot';
-import { AbstractVizNode } from './AbstractVizNode';
+import type { Ref } from 'vue';
+import { ref } from 'vue';
+import type { VizInputSlot } from '../slots/VizInputSlot';
+import type { VizOutputSlot } from '../slots/VizOutputSlot';
+import type { AbstractVizNode } from './AbstractVizNode';
 
 export interface VizSetNode extends AbstractVizNode<'set'> {
   eventReceiverConnected: boolean;
@@ -21,7 +22,7 @@ export function convertSetNode(model: VizSetNodeModel): Ref<VizSetNode> {
     eventEmitterConnected: false,
     valueSlot: { name: 'value', connected: false },
     targetSlot: { name: 'target', connected: false },
-    resultSlot: { name: 'result', connected: false }
+    resultSlot: { name: 'result', connected: false },
   });
 }
 

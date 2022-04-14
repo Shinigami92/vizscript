@@ -6,7 +6,10 @@ viz-node.viz-event-start.shape(v-model="internalModelValue")
       .title Event Start
   template(v-slot:default)
     .body(v-if="internalModelValue.model")
-      viz-event-emitter-slot(:node-id="internalModelValue.model?.id", :connected="connected")
+      viz-event-emitter-slot(
+        :node-id="internalModelValue.model?.id",
+        :connected="connected"
+      )
 </template>
 
 <script lang="ts">
@@ -15,21 +18,28 @@ import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizEventEmitterSlot from '@/components/viz-components/slots/VizEventEmitterSlot.vue';
 import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
-import { isEventStartNode, VizEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
-import { computed, defineComponent, PropType, Ref, WritableComputedRef } from 'vue';
+import type { VizEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
+import { isEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
+import type { PropType, Ref, WritableComputedRef } from 'vue';
+import { computed, defineComponent } from 'vue';
 
 export default defineComponent({
   name: 'VizEventStart',
   components: { Icon, VizNode, VizEventEmitterSlot },
-  props: { modelValue: { type: Object as PropType<VizEventStartNode>, required: true } },
-  emits: { 'update:modelValue': isEventStartNode as EmitType<VizEventStartNode> },
+  props: {
+    modelValue: { type: Object as PropType<VizEventStartNode>, required: true },
+  },
+  emits: {
+    'update:modelValue': isEventStartNode as EmitType<VizEventStartNode>,
+  },
   setup(props, { emit }) {
-    const internalModelValue: WritableComputedRef<VizEventStartNode> = useVModelValue(props, emit);
+    const internalModelValue: WritableComputedRef<VizEventStartNode> =
+      useVModelValue(props, emit);
 
     const connected: Ref<boolean> = computed(() => props.modelValue.connected);
 
     return { internalModelValue, connected };
-  }
+  },
 });
 </script>
 
