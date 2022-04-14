@@ -31,11 +31,11 @@ export default defineComponent({
 
 <template lang="pug">
 VizNode.viz-event-start.shape(v-model="internalModelValue")
-  template(v-slot:header)
+  template(#header)
     .header
       Icon(:size="32") mdi-arrow-right-bold-hexagon-outline
       .title Event Start
-  template(v-slot:default)
+  template(#default)
     .body(v-if="internalModelValue.model")
       VizEventEmitterSlot(
         :node-id="internalModelValue.model?.id",

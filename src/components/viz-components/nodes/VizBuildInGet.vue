@@ -29,7 +29,7 @@ export default defineComponent({
 
 <template lang="pug">
 VizNode.viz-build-in-get.shape(v-model="internalModelValue")
-  template(v-slot:default)
+  template(#default)
     .body(v-if="internalModelValue.model")
       Icon.mx-2 mdi-cards-diamond
       .outputs

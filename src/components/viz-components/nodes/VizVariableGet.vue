@@ -31,7 +31,7 @@ export default defineComponent({
 
 <template lang="pug">
 VizNode.viz-function.shape(v-model="internalModelValue")
-  template(v-slot:default)
+  template(#default)
     .body(v-if="internalModelValue.model")
       .outputs
         VizOutputSlot(

@@ -48,10 +48,10 @@ export default defineComponent({
 
 <template lang="pug">
 VizNode.viz-set.shape(v-model="internalModelValue")
-  template(v-slot:header)
+  template(#header)
     .header
       .title SET
-  template(v-slot:default)
+  template(#default)
     .body(v-if="internalModelValue.model")
       .inputs
         VizEventReceiverSlot(:connected="eventReceiverConnected")

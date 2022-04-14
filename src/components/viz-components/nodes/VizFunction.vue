@@ -48,11 +48,11 @@ export default defineComponent({
 
 <template lang="pug">
 VizNode.viz-function.shape(v-model="internalModelValue")
-  template(v-slot:header)
+  template(#header)
     .header
       Icon(:size="32") mdi-math-integral
       .title {{ modelValue.title }}
-  template(v-slot:default)
+  template(#default)
     .body(v-if="internalModelValue.model")
       .inputs
         VizEventReceiverSlot(:connected="eventReceiverConnected")
