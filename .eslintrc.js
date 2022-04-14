@@ -28,6 +28,7 @@ module.exports = defineConfig({
   plugins: ['vue', '@typescript-eslint', 'prettier', 'import'],
   rules: {
     curly: ['error'],
+    eqeqeq: ['error', 'always', { null: 'ignore' }],
     'grouped-accessor-pairs': ['warn', 'getBeforeSet'],
     'linebreak-style': ['error', 'unix'],
     'max-classes-per-file': 'error',
@@ -91,6 +92,7 @@ module.exports = defineConfig({
       { allowExpressions: true },
     ],
     '@typescript-eslint/explicit-member-accessibility': 'error',
+    '@typescript-eslint/explicit-module-boundary-types': 'error',
     '@typescript-eslint/interface-name-prefix': 'off',
     '@typescript-eslint/lines-between-class-members': [
       'warn',
@@ -100,9 +102,13 @@ module.exports = defineConfig({
     '@typescript-eslint/member-ordering': 'off',
     '@typescript-eslint/no-empty-interface': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
-    '@typescript-eslint/no-inferrable-types': 'off',
+    '@typescript-eslint/no-inferrable-types': [
+      'error',
+      { ignoreParameters: true },
+    ],
     '@typescript-eslint/no-non-null-assertion': 'off',
     '@typescript-eslint/no-parameter-properties': 'off',
+    '@typescript-eslint/no-unsafe-return': 'warn',
     '@typescript-eslint/no-unused-vars': 'off',
     '@typescript-eslint/prefer-nullish-coalescing': 'warn',
     '@typescript-eslint/prefer-optional-chain': 'warn',
@@ -110,13 +116,10 @@ module.exports = defineConfig({
     '@typescript-eslint/prefer-reduce-type-parameter': 'warn',
     '@typescript-eslint/prefer-string-starts-ends-with': 'error',
     '@typescript-eslint/require-await': 'warn',
-    '@typescript-eslint/restrict-template-expressions': 'off',
-    '@typescript-eslint/typedef': [
-      'warn',
-      { memberVariableDeclaration: true, variableDeclaration: true },
+    '@typescript-eslint/restrict-template-expressions': [
+      'error',
+      { allowNumber: true, allowBoolean: true },
     ],
-
-    'vue/multi-word-component-names': 'warn',
   },
   settings: {
     'import/parsers': {

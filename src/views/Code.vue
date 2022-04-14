@@ -1,21 +1,12 @@
-<script lang="ts">
+<script lang="ts" setup>
 import type { Ref } from 'vue';
-import { defineComponent, ref } from 'vue';
+import { ref } from 'vue';
 import Prism from 'vue-prism-component';
 import { fileName, sourceText } from './greeter-example';
 
-export default defineComponent({
-  components: {
-    Prism,
-  },
-  setup() {
-    const current: Ref<{ fileName: string; sourceText: string }> = ref({
-      fileName,
-      sourceText,
-    });
-
-    return { current };
-  },
+const current: Ref<{ fileName: string; sourceText: string }> = ref({
+  fileName,
+  sourceText,
 });
 </script>
 

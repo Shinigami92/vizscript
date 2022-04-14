@@ -16,7 +16,6 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "noUnusedLocals": true,
     "downlevelIteration": true,
     "removeComments": true
   },

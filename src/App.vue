@@ -1,12 +1,7 @@
-<script lang="ts">
+<script lang="ts" setup>
 import AppBar from '@/components/AppBar.vue';
 import AppDrawer from '@/components/AppDrawer.vue';
 import AppMainContent from '@/components/AppMainContent.vue';
-import { defineComponent } from 'vue';
-
-// https://stackoverflow.com/a/35171163/6897682
-window.addEventListener('scroll', preventMotion, false);
-window.addEventListener('touchmove', preventMotion, false);
 
 function preventMotion(event: Event): void {
   window.scrollTo(0, 0);
@@ -14,9 +9,9 @@ function preventMotion(event: Event): void {
   event.stopPropagation();
 }
 
-export default defineComponent({
-  components: { AppDrawer, AppBar, AppMainContent },
-});
+// https://stackoverflow.com/a/35171163/6897682
+window.addEventListener('scroll', preventMotion, false);
+window.addEventListener('touchmove', preventMotion, false);
 </script>
 
 <template lang="pug">

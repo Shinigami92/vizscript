@@ -1,12 +1,9 @@
-<script lang="ts">
+<script lang="ts" setup>
 import Icon from '@/components/Icon.vue';
-import { defineComponent } from 'vue';
 
-export default defineComponent({
-  name: 'VizEventReceiverSlot',
-  components: { Icon },
-  props: { connected: { type: Boolean, required: true } },
-});
+defineProps<{
+  connected: boolean;
+}>();
 </script>
 
 <template lang="pug">

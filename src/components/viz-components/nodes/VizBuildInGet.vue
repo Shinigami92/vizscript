@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang="ts" setup>
 import Icon from '@/components/Icon.vue';
 import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
@@ -6,25 +6,18 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizBuildInGetNode } from '@/shared/viz-components/nodes/VizBuildInGetNode';
 import { isBuildInGetNode } from '@/shared/viz-components/nodes/VizBuildInGetNode';
-import type { PropType, WritableComputedRef } from 'vue';
-import { defineComponent } from 'vue';
+import type { WritableComputedRef } from 'vue';
 
-export default defineComponent({
-  name: 'VizBuildInGet',
-  components: { Icon, VizNode, VizOutputSlot },
-  props: {
-    modelValue: { type: Object as PropType<VizBuildInGetNode>, required: true },
-  },
-  emits: {
-    'update:modelValue': isBuildInGetNode as EmitType<VizBuildInGetNode>,
-  },
-  setup(props, { emit }) {
-    const internalModelValue: WritableComputedRef<VizBuildInGetNode> =
-      useVModelValue(props, emit);
+const props = defineProps<{
+  modelValue: VizBuildInGetNode;
+}>();
 
-    return { internalModelValue };
-  },
+const emit = defineEmits({
+  'update:modelValue': isBuildInGetNode as EmitType<VizBuildInGetNode>,
 });
+
+const internalModelValue: WritableComputedRef<VizBuildInGetNode> =
+  useVModelValue(props, emit);
 </script>
 
 <template lang="pug">

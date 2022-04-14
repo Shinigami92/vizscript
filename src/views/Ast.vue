@@ -1,26 +1,17 @@
-<script lang="ts">
+<script lang="ts" setup>
 import { createSourceFile, ScriptTarget } from 'typescript';
 import type { Ref } from 'vue';
-import { defineComponent, ref } from 'vue';
+import { ref } from 'vue';
 import Prism from 'vue-prism-component';
 import { fileName, sourceText } from './greeter-example';
 
-export default defineComponent({
-  components: {
-    Prism,
-  },
-  setup() {
-    const current: Ref<{ fileName: string; ast: string }> = ref({
-      fileName,
-      ast: JSON.stringify(
-        createSourceFile(fileName, sourceText, ScriptTarget.ESNext, false),
-        null,
-        2,
-      ),
-    });
-
-    return { current };
-  },
+const current: Ref<{ fileName: string; ast: string }> = ref({
+  fileName,
+  ast: JSON.stringify(
+    createSourceFile(fileName, sourceText, ScriptTarget.ESNext, false),
+    null,
+    2,
+  ),
 });
 </script>
 

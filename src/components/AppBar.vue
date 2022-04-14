@@ -1,20 +1,12 @@
-<script lang="ts">
+<script lang="ts" setup>
 import Icon from '@/components/Icon.vue';
-import { defineComponent } from 'vue';
 import type { RouteLocationRaw, Router } from 'vue-router';
 import { useRouter } from 'vue-router';
 
-export default defineComponent({
-  components: { Icon },
-  setup() {
-    const router: Router = useRouter();
+const router: Router = useRouter();
 
-    const navigateTo: (location: RouteLocationRaw) => void = (location) =>
-      router.push(location);
-
-    return { navigateTo };
-  },
-});
+const navigateTo: (location: RouteLocationRaw) => void = (location) =>
+  router.push(location);
 </script>
 
 <template lang="pug">

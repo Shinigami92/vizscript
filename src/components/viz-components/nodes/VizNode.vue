@@ -1,32 +1,32 @@
-<script lang="ts">
-import Icon from '@/components/Icon.vue';
+<script lang="ts" setup>
 import type { UsePositionable } from '@/composables/usePositionable';
 import { usePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizNode } from '@/shared/viz-components/nodes/VizNode';
 import { isNode } from '@/shared/viz-components/nodes/VizNode';
-import type { PropType, Ref } from 'vue';
-import { defineComponent, onMounted, ref } from 'vue';
+import type { Ref } from 'vue';
+import { onMounted, ref } from 'vue';
 
-export default defineComponent({
-  name: 'VizNode',
-  components: { Icon },
-  props: { modelValue: { type: Object as PropType<VizNode>, required: true } },
-  emits: { 'update:modelValue': isNode as EmitType<VizNode> },
-  setup(props, { emit }) {
-    const positionable: UsePositionable<VizNode> = usePositionable(props, emit);
-    const node: Ref<HTMLDivElement | undefined> = ref();
+const props = defineProps<{
+  modelValue: VizNode;
+}>();
 
-    onMounted(() =>
-      emit('update:modelValue', {
-        ...props.modelValue,
-        vizNodeDivRef: node.value,
-      }),
-    );
-
-    return { ...positionable, node };
-  },
+const emit = defineEmits({
+  'update:modelValue': isNode as EmitType<VizNode>,
 });
+
+const { dx, dy, onPointerdown }: UsePositionable<VizNode> = usePositionable(
+  props,
+  emit,
+);
+const node: Ref<HTMLDivElement | undefined> = ref();
+
+onMounted(() =>
+  emit('update:modelValue', {
+    ...props.modelValue,
+    vizNodeDivRef: node.value,
+  }),
+);
 </script>
 
 <template lang="pug">

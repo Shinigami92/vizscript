@@ -122,7 +122,7 @@ export const currentConnection: ComputedRef<VizCurrentConnectionModel | null> =
   computed(() => state.value.currentViz.currentConnection);
 
 // --- Mock Data ---
-let mockInitialized: boolean = false;
+let mockInitialized = false;
 
 export function initializeMock(): void {
   if (mockInitialized) {

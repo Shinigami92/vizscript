@@ -1,9 +1,9 @@
 // This is only temporary
 // Later files can be uploaded, for example
 
-export const fileName: string = 'greeter.ts';
+export const fileName = 'greeter.ts';
 
-export const sourceText: string = `function greeter(person: string): string {
+export const sourceText = `function greeter(person: string): string {
   return "Hello, " + person;
 }
 

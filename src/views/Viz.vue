@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang="ts" setup>
 import VizCurrentConnection from '@/components/viz-components/connections/VizCurrentConnection.vue';
 import VizEventConnection from '@/components/viz-components/connections/VizEventConnection.vue';
 import VizSlotConnection from '@/components/viz-components/connections/VizSlotConnection.vue';
@@ -18,171 +18,184 @@ import { convertNode } from '@/shared/viz-components/nodes/VizNode';
 import * as store from '@/store';
 import { useMouse } from '@vueuse/core';
 import type { ComputedRef, Ref } from 'vue';
-import { computed, defineComponent, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
-export default defineComponent({
-  components: {
-    VizEventStart,
-    VizCallerFunction,
-    VizFunction,
-    VizSet,
-    VizBuildInGet,
-    VizVariableGet,
-    VizEventConnection,
-    VizSlotConnection,
-    VizCurrentConnection,
+const pointerPosition: RefPositionModel = useMouse();
+
+const relativePointerPosition: ComputedRef<RefPositionModel> =
+  computed<RefPositionModel>(() => ({
+    x: ref(pointerPosition.x.value - 320),
+    y: ref(pointerPosition.y.value - 56),
+  }));
+
+store.initializeMock();
+
+const vizNodeMap: Record<string, Ref<VizNode>> = Object.fromEntries(
+  Object.entries(store.vizNodeMap()).map(([id, node]) => [
+    id,
+    convertNode(node),
+  ]),
+);
+
+const vizConnections: Ref<Array<Ref<VizConnection>>> = ref([]);
+const latestVizConnectionId: Ref<string | undefined> = ref();
+const currentConnection: ComputedRef<VizCurrentConnectionModel | null> =
+  store.currentConnection;
+
+function nodeComponent(
+  node: VizNode,
+):
+  | typeof VizBuildInGet
+  | typeof VizCallerFunction
+  | typeof VizEventStart
+  | typeof VizFunction
+  | typeof VizSet
+  | typeof VizVariableGet {
+  switch (node.type) {
+    case 'build-in-get':
+      return VizBuildInGet;
+    case 'caller-function':
+      return VizCallerFunction;
+    case 'event-start':
+      return VizEventStart;
+    case 'function':
+      return VizFunction;
+    case 'set':
+      return VizSet;
+    case 'variable-get':
+      return VizVariableGet;
+  }
+}
+
+function connectionComponent(
+  connection: VizConnection,
+): typeof VizEventConnection | typeof VizSlotConnection {
+  switch (connection.type) {
+    case 'event':
+      return VizEventConnection;
+    case 'slot':
+      return VizSlotConnection;
+  }
+}
+
+watch(
+  latestVizConnectionId,
+  (id) => {
+    if (!id) {
+      return;
+    }
+    const connection: VizConnectionModel | undefined =
+      store.findConnectionById(id);
+    if (!connection) {
+      return;
+    }
+    const startVizNode: Ref<VizNode> | undefined =
+      vizNodeMap[connection.startNodeId];
+    if (!startVizNode) {
+      return;
+    }
+    const endVizNode: Ref<VizNode> | undefined =
+      vizNodeMap[connection.endNodeId];
+    if (!endVizNode) {
+      return;
+    }
+
+    vizConnections.value.push(
+      convertConnection(connection, [startVizNode, endVizNode]),
+    );
+
+    if (connection.type === 'event') {
+      switch (startVizNode.value.type) {
+        case 'event-start':
+          startVizNode.value.connected = true;
+          break;
+        case 'function':
+          startVizNode.value.eventEmitterConnected = true;
+          break;
+        case 'set':
+          startVizNode.value.eventEmitterConnected = true;
+          break;
+        default:
+          throw Error(
+            `[foundEventEmitter] connection not set for ${startVizNode.value.type}`,
+          );
+      }
+
+      switch (endVizNode.value.type) {
+        case 'caller-function':
+          endVizNode.value.eventReceiverConnected = true;
+          break;
+        case 'function':
+          endVizNode.value.eventReceiverConnected = true;
+          break;
+        case 'set':
+          endVizNode.value.eventReceiverConnected = true;
+          break;
+        default:
+          throw Error(
+            `[foundEventReceiver] connection not set for ${endVizNode.value.type}`,
+          );
+      }
+    } else if (connection.type === 'slot') {
+      switch (startVizNode.value.type) {
+        case 'function':
+          startVizNode.value.returnSlot.connected = true;
+          break;
+        case 'set':
+          startVizNode.value.resultSlot.connected = true;
+          break;
+        case 'build-in-get':
+          startVizNode.value.outputSlot.connected = true;
+          break;
+        case 'variable-get':
+          startVizNode.value.outputSlot.connected = true;
+          break;
+        default:
+          throw Error(
+            `[outputSlotConnection] connection not set for ${startVizNode.value.type}`,
+          );
+      }
+
+      switch (endVizNode.value.type) {
+        case 'caller-function':
+          if (connection.endSlot === 1) {
+            endVizNode.value.callerSlot.connected = true;
+          } else {
+            endVizNode.value.inputSlots[connection.endSlot - 2]!.connected =
+              true;
+          }
+          break;
+        case 'function':
+          endVizNode.value.inputSlots[connection.endSlot - 1]!.connected = true;
+          break;
+        case 'set':
+          if (connection.endSlot === 1) {
+            endVizNode.value.valueSlot.connected = true;
+          } else if (connection.endSlot === 2) {
+            endVizNode.value.targetSlot.connected = true;
+            endVizNode.value.targetSlot.connectedToNode = {
+              node: startVizNode.value,
+              slot: connection.startSlot,
+            };
+          }
+          break;
+        default:
+          throw Error(
+            `[inputSlotConnection] connection not set for ${endVizNode.value.type}`,
+          );
+      }
+    }
   },
-  setup() {
-    const pointerPosition: RefPositionModel = useMouse();
-
-    const relativePointerPosition: ComputedRef<RefPositionModel> =
-      computed<RefPositionModel>(() => ({
-        x: ref(pointerPosition.x.value - 320),
-        y: ref(pointerPosition.y.value - 56),
-      }));
-
-    store.initializeMock();
-
-    const vizNodeMap: Record<string, Ref<VizNode>> = Object.fromEntries(
-      Object.entries(store.vizNodeMap()).map(([id, node]) => [
-        id,
-        convertNode(node),
-      ]),
-    );
-
-    const vizConnections: Ref<Array<Ref<VizConnection>>> = ref([]);
-    const latestVizConnectionId: Ref<string | undefined> = ref();
-    const currentConnection: ComputedRef<VizCurrentConnectionModel | null> =
-      store.currentConnection;
-
-    watch(
-      latestVizConnectionId,
-      (id) => {
-        if (!id) {
-          return;
-        }
-        const connection: VizConnectionModel | undefined =
-          store.findConnectionById(id);
-        if (!connection) {
-          return;
-        }
-        const startVizNode: Ref<VizNode> | undefined =
-          vizNodeMap[connection.startNodeId];
-        if (!startVizNode) {
-          return;
-        }
-        const endVizNode: Ref<VizNode> | undefined =
-          vizNodeMap[connection.endNodeId];
-        if (!endVizNode) {
-          return;
-        }
-
-        vizConnections.value.push(
-          convertConnection(connection, [startVizNode, endVizNode]),
-        );
-
-        if (connection.type === 'event') {
-          switch (startVizNode.value.type) {
-            case 'event-start':
-              startVizNode.value.connected = true;
-              break;
-            case 'function':
-              startVizNode.value.eventEmitterConnected = true;
-              break;
-            case 'set':
-              startVizNode.value.eventEmitterConnected = true;
-              break;
-            default:
-              throw Error(
-                `[foundEventEmitter] connection not set for ${startVizNode.value.type}`,
-              );
-          }
-
-          switch (endVizNode.value.type) {
-            case 'caller-function':
-              endVizNode.value.eventReceiverConnected = true;
-              break;
-            case 'function':
-              endVizNode.value.eventReceiverConnected = true;
-              break;
-            case 'set':
-              endVizNode.value.eventReceiverConnected = true;
-              break;
-            default:
-              throw Error(
-                `[foundEventReceiver] connection not set for ${endVizNode.value.type}`,
-              );
-          }
-        } else if (connection.type === 'slot') {
-          switch (startVizNode.value.type) {
-            case 'function':
-              startVizNode.value.returnSlot.connected = true;
-              break;
-            case 'set':
-              startVizNode.value.resultSlot.connected = true;
-              break;
-            case 'build-in-get':
-              startVizNode.value.outputSlot.connected = true;
-              break;
-            case 'variable-get':
-              startVizNode.value.outputSlot.connected = true;
-              break;
-            default:
-              throw Error(
-                `[outputSlotConnection] connection not set for ${startVizNode.value.type}`,
-              );
-          }
-
-          switch (endVizNode.value.type) {
-            case 'caller-function':
-              if (connection.endSlot === 1) {
-                endVizNode.value.callerSlot.connected = true;
-              } else {
-                endVizNode.value.inputSlots[connection.endSlot - 2]!.connected =
-                  true;
-              }
-              break;
-            case 'function':
-              endVizNode.value.inputSlots[connection.endSlot - 1]!.connected =
-                true;
-              break;
-            case 'set':
-              if (connection.endSlot === 1) {
-                endVizNode.value.valueSlot.connected = true;
-              } else if (connection.endSlot === 2) {
-                endVizNode.value.targetSlot.connected = true;
-                endVizNode.value.targetSlot.connectedToNode = {
-                  node: startVizNode.value,
-                  slot: connection.startSlot,
-                };
-              }
-              break;
-            default:
-              throw Error(
-                `[inputSlotConnection] connection not set for ${endVizNode.value.type}`,
-              );
-          }
-        }
-      },
-      {
-        flush: 'sync',
-      },
-    );
-
-    onMounted(() =>
-      store
-        .findAllConnections()
-        .forEach((connection) => (latestVizConnectionId.value = connection.id)),
-    );
-
-    return {
-      vizNodeMap,
-      vizConnections,
-      currentConnection,
-      relativePointerPosition,
-    };
+  {
+    flush: 'sync',
   },
-});
+);
+
+onMounted(() =>
+  store
+    .findAllConnections()
+    .forEach((connection) => (latestVizConnectionId.value = connection.id)),
+);
 </script>
 
 <template lang="pug">
@@ -190,14 +203,14 @@ export default defineComponent({
   template(v-for="vizNode in vizNodeMap")
     component(
       v-if="vizNode",
-      :is="`viz-${vizNode.value.type}`",
+      :is="nodeComponent(vizNode.value)",
       :key="vizNode.value.model?.id",
       v-model="vizNode.value"
     )
   template(v-for="vizConnection in vizConnections")
     component(
       v-if="vizConnection",
-      :is="`viz-${vizConnection.value.type}-connection`",
+      :is="connectionComponent(vizConnection.value)",
       :key="vizConnection.value.model?.id",
       v-model="vizConnection.value"
     )

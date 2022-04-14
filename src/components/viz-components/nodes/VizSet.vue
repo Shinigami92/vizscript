@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang="ts" setup>
 import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizEventEmitterSlot from '@/components/viz-components/slots/VizEventEmitterSlot.vue';
 import VizEventReceiverSlot from '@/components/viz-components/slots/VizEventReceiverSlot.vue';
@@ -8,42 +8,28 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizSetNode } from '@/shared/viz-components/nodes/VizSetNode';
 import { isSetNode } from '@/shared/viz-components/nodes/VizSetNode';
-import type { ComputedRef, PropType, WritableComputedRef } from 'vue';
-import { computed, defineComponent } from 'vue';
+import type { ComputedRef, WritableComputedRef } from 'vue';
+import { computed } from 'vue';
 
-export default defineComponent({
-  name: 'VizSet',
-  components: {
-    VizNode,
-    VizEventReceiverSlot,
-    VizEventEmitterSlot,
-    VizInputSlot,
-    VizOutputSlot,
-  },
-  props: {
-    modelValue: { type: Object as PropType<VizSetNode>, required: true },
-  },
-  emits: { 'update:modelValue': isSetNode as EmitType<VizSetNode> },
-  setup(props, { emit }) {
-    const internalModelValue: WritableComputedRef<VizSetNode> = useVModelValue(
-      props,
-      emit,
-    );
+const props = defineProps<{
+  modelValue: VizSetNode;
+}>();
 
-    const eventReceiverConnected: ComputedRef<boolean> = computed(
-      () => props.modelValue.eventReceiverConnected,
-    );
-    const eventEmitterConnected: ComputedRef<boolean> = computed(
-      () => props.modelValue.eventEmitterConnected,
-    );
-
-    return {
-      internalModelValue,
-      eventReceiverConnected,
-      eventEmitterConnected,
-    };
-  },
+const emit = defineEmits({
+  'update:modelValue': isSetNode as EmitType<VizSetNode>,
 });
+
+const internalModelValue: WritableComputedRef<VizSetNode> = useVModelValue(
+  props,
+  emit,
+);
+
+const eventReceiverConnected: ComputedRef<boolean> = computed(
+  () => props.modelValue.eventReceiverConnected,
+);
+const eventEmitterConnected: ComputedRef<boolean> = computed(
+  () => props.modelValue.eventEmitterConnected,
+);
 </script>
 
 <template lang="pug">

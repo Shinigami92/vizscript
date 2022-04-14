@@ -1,29 +1,29 @@
-<script lang="ts">
-import type { HTMLAttributes } from '@vue/runtime-dom';
-import type { Ref } from 'vue';
-import { defineComponent, ref } from 'vue';
+<script lang="ts" setup>
+import type { HTMLAttributes, Ref } from 'vue';
+import { ref, useSlots } from 'vue';
 
-export default defineComponent({
-  name: 'Icon',
-  props: {
-    size: { type: Number, default: 16 },
+const props = withDefaults(
+  defineProps<{
+    size: number;
+  }>(),
+  {
+    size: 16,
   },
-  setup(props, { slots }) {
-    const iconName: Ref<string | undefined> = ref(
-      slots.default!()[0]?.children as string,
-    );
+);
 
-    if (!iconName.value?.startsWith('mdi-')) {
-      iconName.value = `mdi-${iconName.value}`;
-    }
+const slots = useSlots();
 
-    const style: HTMLAttributes['style'] = {
-      fontSize: `${props.size}px`,
-    };
+const iconName: Ref<string | undefined> = ref(
+  slots.default!()[0]?.children as string,
+);
 
-    return { iconName, style };
-  },
-});
+if (!iconName.value?.startsWith('mdi-')) {
+  iconName.value = `mdi-${iconName.value!}`;
+}
+
+const style: HTMLAttributes['style'] = {
+  fontSize: `${props.size}px`,
+};
 </script>
 
 <template lang="pug">

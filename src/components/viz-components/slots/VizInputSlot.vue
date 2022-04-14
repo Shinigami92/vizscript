@@ -1,15 +1,10 @@
-<script lang="ts">
+<script lang="ts" setup>
 import Icon from '@/components/Icon.vue';
-import { defineComponent } from 'vue';
 
-export default defineComponent({
-  name: 'VizInputSlot',
-  components: { Icon },
-  props: {
-    title: { type: String, required: true },
-    connected: { type: Boolean, required: true },
-  },
-});
+defineProps<{
+  title: string;
+  connected: boolean;
+}>();
 </script>
 
 <template lang="pug">

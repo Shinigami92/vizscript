@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang="ts" setup>
 import Icon from '@/components/Icon.vue';
 import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizEventEmitterSlot from '@/components/viz-components/slots/VizEventEmitterSlot.vue';
@@ -6,27 +6,21 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
 import { isEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
-import type { PropType, Ref, WritableComputedRef } from 'vue';
-import { computed, defineComponent } from 'vue';
+import type { Ref, WritableComputedRef } from 'vue';
+import { computed } from 'vue';
 
-export default defineComponent({
-  name: 'VizEventStart',
-  components: { Icon, VizNode, VizEventEmitterSlot },
-  props: {
-    modelValue: { type: Object as PropType<VizEventStartNode>, required: true },
-  },
-  emits: {
-    'update:modelValue': isEventStartNode as EmitType<VizEventStartNode>,
-  },
-  setup(props, { emit }) {
-    const internalModelValue: WritableComputedRef<VizEventStartNode> =
-      useVModelValue(props, emit);
+const props = defineProps<{
+  modelValue: VizEventStartNode;
+}>();
 
-    const connected: Ref<boolean> = computed(() => props.modelValue.connected);
-
-    return { internalModelValue, connected };
-  },
+const emit = defineEmits({
+  'update:modelValue': isEventStartNode as EmitType<VizEventStartNode>,
 });
+
+const internalModelValue: WritableComputedRef<VizEventStartNode> =
+  useVModelValue(props, emit);
+
+const connected: Ref<boolean> = computed(() => props.modelValue.connected);
 </script>
 
 <template lang="pug">

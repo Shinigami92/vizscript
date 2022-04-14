@@ -1,10 +1,5 @@
-<script lang="ts">
+<script lang="ts" setup>
 import Icon from '@/components/Icon.vue';
-import { defineComponent } from 'vue';
-
-export default defineComponent({
-  components: { Icon },
-});
 </script>
 
 <template lang="pug">

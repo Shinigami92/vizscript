@@ -1,30 +1,22 @@
-<script lang="ts">
+<script lang="ts" setup>
 import Icon from '@/components/Icon.vue';
 import * as store from '@/store';
-import { defineComponent } from 'vue';
 
-export default defineComponent({
-  name: 'VizOutputSlot',
-  components: { Icon },
-  props: {
-    nodeId: { type: String, required: true },
-    slotNumber: { type: Number, required: true },
-    title: { type: String, required: true },
-    connected: { type: Boolean, required: true },
-  },
-  setup(props) {
-    const startConnection: (payload: PointerEvent) => void = (payload) => {
-      store.startConnection({
-        type: 'slot',
-        startNodeId: props.nodeId,
-        startSlot: props.slotNumber,
-        startPosition: { x: payload.x, y: payload.y },
-      });
-    };
+const props = defineProps<{
+  nodeId: string;
+  slotNumber: number;
+  title: string;
+  connected: boolean;
+}>();
 
-    return { startConnection };
-  },
-});
+const startConnection: (payload: PointerEvent) => void = (payload) => {
+  store.startConnection({
+    type: 'slot',
+    startNodeId: props.nodeId,
+    startSlot: props.slotNumber,
+    startPosition: { x: payload.x, y: payload.y },
+  });
+};
 </script>
 
 <template lang="pug">
