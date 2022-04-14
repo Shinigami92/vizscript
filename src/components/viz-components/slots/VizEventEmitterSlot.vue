@@ -7,13 +7,13 @@ const props = defineProps<{
   connected: boolean;
 }>();
 
-const startConnection: (payload: PointerEvent) => void = (payload) => {
+function startConnection(payload: PointerEvent): void {
   store.startConnection({
     type: 'event',
     startNodeId: props.nodeId,
     startPosition: { x: payload.x, y: payload.y },
   });
-};
+}
 </script>
 
 <template lang="pug">

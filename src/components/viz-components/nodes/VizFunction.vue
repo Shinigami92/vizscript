@@ -9,7 +9,6 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizFunctionNode } from '@/shared/viz-components/nodes/VizFunctionNode';
 import { isFunctionNode } from '@/shared/viz-components/nodes/VizFunctionNode';
-import type { ComputedRef, WritableComputedRef } from 'vue';
 import { computed } from 'vue';
 
 const props = defineProps<{
@@ -20,27 +19,24 @@ const emit = defineEmits({
   'update:modelValue': isFunctionNode as EmitType<VizFunctionNode>,
 });
 
-const internalModelValue: WritableComputedRef<VizFunctionNode> = useVModelValue(
-  props,
-  emit,
-);
+const modelValue = useVModelValue(props, emit);
 
-const eventReceiverConnected: ComputedRef<boolean> = computed(
+const eventReceiverConnected = computed(
   () => props.modelValue.eventReceiverConnected,
 );
-const eventEmitterConnected: ComputedRef<boolean> = computed(
+const eventEmitterConnected = computed(
   () => props.modelValue.eventEmitterConnected,
 );
 </script>
 
 <template lang="pug">
-VizNode.viz-function.shape(v-model="internalModelValue")
+VizNode.viz-function.shape(v-model="modelValue")
   template(#header)
     .header
       Icon(:size="32") mdi-math-integral
       .title {{ modelValue.title }}
   template(#default)
-    .body(v-if="internalModelValue.model")
+    .body(v-if="modelValue.model")
       .inputs
         VizEventReceiverSlot(:connected="eventReceiverConnected")
         VizInputSlot(
@@ -51,11 +47,11 @@ VizNode.viz-function.shape(v-model="internalModelValue")
         )
       .outputs
         VizEventEmitterSlot(
-          :node-id="internalModelValue.model?.id",
+          :node-id="modelValue.model?.id",
           :connected="eventEmitterConnected"
         )
         VizOutputSlot(
-          :node-id="internalModelValue.model?.id",
+          :node-id="modelValue.model?.id",
           :slot-number="0",
           :title="modelValue.returnSlot.name",
           :connected="modelValue.returnSlot.connected"

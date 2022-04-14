@@ -1,10 +1,8 @@
 <script lang="ts" setup>
-import type { UsePositionable } from '@/composables/usePositionable';
 import { usePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizNode } from '@/shared/viz-components/nodes/VizNode';
 import { isNode } from '@/shared/viz-components/nodes/VizNode';
-import type { Ref } from 'vue';
 import { onMounted, ref } from 'vue';
 
 const props = defineProps<{
@@ -15,11 +13,8 @@ const emit = defineEmits({
   'update:modelValue': isNode as EmitType<VizNode>,
 });
 
-const { dx, dy, onPointerdown }: UsePositionable<VizNode> = usePositionable(
-  props,
-  emit,
-);
-const node: Ref<HTMLDivElement | undefined> = ref();
+const { dx, dy, onPointerdown } = usePositionable(props, emit);
+const node = ref<HTMLDivElement>();
 
 onMounted(() =>
   emit('update:modelValue', {

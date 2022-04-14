@@ -20,27 +20,25 @@ import { useMouse } from '@vueuse/core';
 import type { ComputedRef, Ref } from 'vue';
 import { computed, onMounted, ref, watch } from 'vue';
 
-const pointerPosition: RefPositionModel = useMouse();
+const pointerPosition = useMouse();
 
-const relativePointerPosition: ComputedRef<RefPositionModel> =
-  computed<RefPositionModel>(() => ({
-    x: ref(pointerPosition.x.value - 320),
-    y: ref(pointerPosition.y.value - 56),
-  }));
+const relativePointerPosition = computed(() => ({
+  x: ref(pointerPosition.x.value - 320),
+  y: ref(pointerPosition.y.value - 56),
+}));
 
 store.initializeMock();
 
-const vizNodeMap: Record<string, Ref<VizNode>> = Object.fromEntries(
+const vizNodeMap = Object.fromEntries(
   Object.entries(store.vizNodeMap()).map(([id, node]) => [
     id,
     convertNode(node),
   ]),
 );
 
-const vizConnections: Ref<Array<Ref<VizConnection>>> = ref([]);
-const latestVizConnectionId: Ref<string | undefined> = ref();
-const currentConnection: ComputedRef<VizCurrentConnectionModel | null> =
-  store.currentConnection;
+const vizConnections = ref<Array<Ref<VizConnection>>>([]);
+const latestVizConnectionId = ref<string>();
+const currentConnection = store.currentConnection;
 
 function nodeComponent(
   node: VizNode,
@@ -84,18 +82,15 @@ watch(
     if (!id) {
       return;
     }
-    const connection: VizConnectionModel | undefined =
-      store.findConnectionById(id);
+    const connection = store.findConnectionById(id);
     if (!connection) {
       return;
     }
-    const startVizNode: Ref<VizNode> | undefined =
-      vizNodeMap[connection.startNodeId];
+    const startVizNode = vizNodeMap[connection.startNodeId];
     if (!startVizNode) {
       return;
     }
-    const endVizNode: Ref<VizNode> | undefined =
-      vizNodeMap[connection.endNodeId];
+    const endVizNode = vizNodeMap[connection.endNodeId];
     if (!endVizNode) {
       return;
     }

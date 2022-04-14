@@ -6,7 +6,6 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizBuildInGetNode } from '@/shared/viz-components/nodes/VizBuildInGetNode';
 import { isBuildInGetNode } from '@/shared/viz-components/nodes/VizBuildInGetNode';
-import type { WritableComputedRef } from 'vue';
 
 const props = defineProps<{
   modelValue: VizBuildInGetNode;
@@ -16,18 +15,17 @@ const emit = defineEmits({
   'update:modelValue': isBuildInGetNode as EmitType<VizBuildInGetNode>,
 });
 
-const internalModelValue: WritableComputedRef<VizBuildInGetNode> =
-  useVModelValue(props, emit);
+const modelValue = useVModelValue(props, emit);
 </script>
 
 <template lang="pug">
-VizNode.viz-build-in-get.shape(v-model="internalModelValue")
+VizNode.viz-build-in-get.shape(v-model="modelValue")
   template(#default)
-    .body(v-if="internalModelValue.model")
+    .body(v-if="modelValue.model")
       Icon.mx-2 mdi-cards-diamond
       .outputs
         VizOutputSlot(
-          :node-id="internalModelValue.model?.id",
+          :node-id="modelValue.model?.id",
           :slot-number="0",
           :title="modelValue.outputSlot.name",
           :connected="modelValue.outputSlot.connected"

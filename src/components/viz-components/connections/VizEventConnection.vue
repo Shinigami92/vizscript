@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import Icon from '@/components/Icon.vue';
+import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizEventConnection } from '@/shared/viz-components/connections/VizEventConnection';
 import { isEventConnection } from '@/shared/viz-components/connections/VizEventConnection';
-import type { ComputedRef, Ref, WritableComputedRef } from 'vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps<{
@@ -14,35 +14,28 @@ const emit = defineEmits({
   'update:modelValue': isEventConnection as EmitType<VizEventConnection>,
 });
 
-const internalValue: WritableComputedRef<VizEventConnection> = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-});
+const modelValue = useVModelValue(props, emit);
 
-console.debug('Unused const', internalValue);
+console.debug('Unused const', modelValue);
 
-const connection: Ref<HTMLDivElement | undefined> = ref();
+const connection = ref<HTMLDivElement>();
 
-const left: ComputedRef<number> = computed(() =>
+const left = computed(() =>
   Math.min(props.modelValue.start.x, props.modelValue.end.x),
 );
-const top: ComputedRef<number> = computed(() =>
+const top = computed(() =>
   Math.min(props.modelValue.start.y, props.modelValue.end.y),
 );
 
-const xFlip: ComputedRef<boolean> = computed(
-  () => props.modelValue.end.x - left.value > 0,
-);
-const yFlip: ComputedRef<boolean> = computed(
-  () => props.modelValue.end.y - top.value > 0,
-);
+const xFlip = computed(() => props.modelValue.end.x - left.value > 0);
+const yFlip = computed(() => props.modelValue.end.y - top.value > 0);
 
-const width: ComputedRef<number> = computed(() =>
+const width = computed(() =>
   xFlip.value
     ? props.modelValue.end.x - left.value
     : props.modelValue.start.x - left.value,
 );
-const height: ComputedRef<number> = computed(() =>
+const height = computed(() =>
   yFlip.value
     ? props.modelValue.end.y - top.value
     : props.modelValue.start.y - top.value,
@@ -51,7 +44,7 @@ const height: ComputedRef<number> = computed(() =>
 const padding = 30;
 const strength = 60;
 
-const d: ComputedRef<string> = computed(() => {
+const d = computed(() => {
   if (xFlip.value) {
     if (yFlip.value) {
       return `M ${padding} ${padding + 2} C ${padding + strength} ${
@@ -80,7 +73,7 @@ const d: ComputedRef<string> = computed(() => {
   }, ${padding} ${padding + 2}`;
 });
 
-const iconX1: ComputedRef<number> = computed(() => {
+const iconX1 = computed(() => {
   if (xFlip.value) {
     if (yFlip.value) {
       return padding - 8;
@@ -93,7 +86,7 @@ const iconX1: ComputedRef<number> = computed(() => {
   return width.value + padding + -8;
 });
 
-const iconY1: ComputedRef<number> = computed(() => {
+const iconY1 = computed(() => {
   if (xFlip.value) {
     if (yFlip.value) {
       return padding - 8 - 2;
@@ -106,7 +99,7 @@ const iconY1: ComputedRef<number> = computed(() => {
   return height.value + padding + -8 - 2;
 });
 
-const iconX2: ComputedRef<number> = computed(() => {
+const iconX2 = computed(() => {
   if (xFlip.value) {
     if (yFlip.value) {
       return width.value + padding + -8;
@@ -119,7 +112,7 @@ const iconX2: ComputedRef<number> = computed(() => {
   return padding - 8;
 });
 
-const iconY2: ComputedRef<number> = computed(() => {
+const iconY2 = computed(() => {
   if (xFlip.value) {
     if (yFlip.value) {
       return height.value + padding + -8 - 2;

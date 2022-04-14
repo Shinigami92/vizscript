@@ -13,13 +13,13 @@ export function convertSlotConnection(
   model: VizSlotConnectionModel,
   nodes: Array<Ref<VizNode>>,
 ): Ref<VizSlotConnection> {
-  const startNode: Ref<VizNode> | undefined = nodes.find(
+  const startNode = nodes.find(
     (node) => node.value.model?.id === model.startNodeId,
   );
   if (!startNode) {
     throw Error("[convertSlotConnection] startNode wasn't found");
   }
-  const endNode: Ref<VizNode> | undefined = nodes.find(
+  const endNode = nodes.find(
     (node) => node.value.model?.id === model.endNodeId,
   );
   if (!endNode) {
@@ -61,8 +61,8 @@ export function calculateOutputSlotPosition(
   switch (vizNode.type) {
     case 'function':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const slotIcon: HTMLSpanElement | null = vizNodeDiv.querySelector(
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const slotIcon = vizNodeDiv.querySelector<HTMLSpanElement>(
           '.body .outputs .viz-output-slot .icon',
         );
         if (!slotIcon) {
@@ -72,8 +72,8 @@ export function calculateOutputSlotPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const slotIconRect: DOMRect = slotIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const slotIconRect = slotIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -89,8 +89,8 @@ export function calculateOutputSlotPosition(
       return { x: vizNode.x + 163, y: vizNode.y + 134 };
     case 'set':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const slotIcon: HTMLSpanElement | null = vizNodeDiv.querySelector(
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const slotIcon = vizNodeDiv.querySelector<HTMLSpanElement>(
           '.body .viz-output-slot .icon',
         );
         if (!slotIcon) {
@@ -100,8 +100,8 @@ export function calculateOutputSlotPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const slotIconRect: DOMRect = slotIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const slotIconRect = slotIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -117,8 +117,8 @@ export function calculateOutputSlotPosition(
       return { x: vizNode.x + 103, y: vizNode.y + 14 };
     case 'build-in-get':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const slotIcon: HTMLSpanElement | null = vizNodeDiv.querySelector(
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const slotIcon = vizNodeDiv.querySelector<HTMLSpanElement>(
           '.body .viz-output-slot .icon',
         );
         if (!slotIcon) {
@@ -128,8 +128,8 @@ export function calculateOutputSlotPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const slotIconRect: DOMRect = slotIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const slotIconRect = slotIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -145,9 +145,9 @@ export function calculateOutputSlotPosition(
       return { x: vizNode.x + 103, y: vizNode.y + 14 };
     case 'variable-get':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const slotIcon: HTMLSpanElement | null =
-          vizNodeDiv.querySelector('.body .icon');
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const slotIcon =
+          vizNodeDiv.querySelector<HTMLSpanElement>('.body .icon');
         if (!slotIcon) {
           throw Error(
             `[calculateOutputSlotPosition] Output Icon wasn't found ${JSON.stringify(
@@ -155,8 +155,8 @@ export function calculateOutputSlotPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const slotIconRect: DOMRect = slotIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const slotIconRect = slotIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -184,11 +184,10 @@ export function calculateInputSlotPosition(
   switch (vizNode.type) {
     case 'caller-function':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const slotIcon: HTMLSpanElement | undefined =
-          vizNodeDiv.querySelectorAll<HTMLSpanElement>(
-            '.body .inputs .viz-input-slot .icon',
-          )[slot - 1];
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const slotIcon = vizNodeDiv.querySelectorAll<HTMLSpanElement>(
+          '.body .inputs .viz-input-slot .icon',
+        )[slot - 1];
         if (!slotIcon) {
           throw Error(
             `[calculateInputSlotPosition] Input Icon wasn't found ${JSON.stringify(
@@ -196,8 +195,8 @@ export function calculateInputSlotPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const slotIconRect: DOMRect = slotIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const slotIconRect = slotIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -213,8 +212,8 @@ export function calculateInputSlotPosition(
       return { x: vizNode.x + 17, y: vizNode.y + 168 };
     case 'function':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const slotIcon: HTMLSpanElement | null = vizNodeDiv.querySelector(
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const slotIcon = vizNodeDiv.querySelector<HTMLSpanElement>(
           '.body .inputs .viz-input-slot .icon',
         );
         if (!slotIcon) {
@@ -224,8 +223,8 @@ export function calculateInputSlotPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const slotIconRect: DOMRect = slotIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const slotIconRect = slotIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -241,11 +240,10 @@ export function calculateInputSlotPosition(
       return { x: vizNode.x + 17, y: vizNode.y + 134 };
     case 'set':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const slotIcon: HTMLSpanElement | undefined =
-          vizNodeDiv.querySelectorAll<HTMLSpanElement>(
-            '.body .inputs .viz-input-slot .icon',
-          )[slot - 1];
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const slotIcon = vizNodeDiv.querySelectorAll<HTMLSpanElement>(
+          '.body .inputs .viz-input-slot .icon',
+        )[slot - 1];
         if (!slotIcon) {
           throw Error(
             `[calculateInputSlotPosition] Input Icon wasn't found ${JSON.stringify(
@@ -253,8 +251,8 @@ export function calculateInputSlotPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const slotIconRect: DOMRect = slotIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const slotIconRect = slotIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +

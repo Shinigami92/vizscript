@@ -8,7 +8,6 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizSetNode } from '@/shared/viz-components/nodes/VizSetNode';
 import { isSetNode } from '@/shared/viz-components/nodes/VizSetNode';
-import type { ComputedRef, WritableComputedRef } from 'vue';
 import { computed } from 'vue';
 
 const props = defineProps<{
@@ -19,26 +18,23 @@ const emit = defineEmits({
   'update:modelValue': isSetNode as EmitType<VizSetNode>,
 });
 
-const internalModelValue: WritableComputedRef<VizSetNode> = useVModelValue(
-  props,
-  emit,
-);
+const modelValue = useVModelValue(props, emit);
 
-const eventReceiverConnected: ComputedRef<boolean> = computed(
+const eventReceiverConnected = computed(
   () => props.modelValue.eventReceiverConnected,
 );
-const eventEmitterConnected: ComputedRef<boolean> = computed(
+const eventEmitterConnected = computed(
   () => props.modelValue.eventEmitterConnected,
 );
 </script>
 
 <template lang="pug">
-VizNode.viz-set.shape(v-model="internalModelValue")
+VizNode.viz-set.shape(v-model="modelValue")
   template(#header)
     .header
       .title SET
   template(#default)
-    .body(v-if="internalModelValue.model")
+    .body(v-if="modelValue.model")
       .inputs
         VizEventReceiverSlot(:connected="eventReceiverConnected")
         VizInputSlot(
@@ -51,11 +47,11 @@ VizNode.viz-set.shape(v-model="internalModelValue")
         )
       .outputs
         VizEventEmitterSlot(
-          :node-id="internalModelValue.model?.id",
+          :node-id="modelValue.model?.id",
           :connected="eventEmitterConnected"
         )
         VizOutputSlot(
-          :node-id="internalModelValue.model?.id",
+          :node-id="modelValue.model?.id",
           :slot-number="0",
           :title="modelValue.resultSlot.name",
           :connected="modelValue.resultSlot.connected"

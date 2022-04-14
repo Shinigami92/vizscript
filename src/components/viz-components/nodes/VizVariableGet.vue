@@ -15,17 +15,16 @@ const emit = defineEmits({
   'update:modelValue': isVariableGetNode as EmitType<VizVariableGetNode>,
 });
 
-const internalModelValue: WritableComputedRef<VizVariableGetNode> =
-  useVModelValue(props, emit);
+const modelValue = useVModelValue(props, emit);
 </script>
 
 <template lang="pug">
-VizNode.viz-function.shape(v-model="internalModelValue")
+VizNode.viz-function.shape(v-model="modelValue")
   template(#default)
-    .body(v-if="internalModelValue.model")
+    .body(v-if="modelValue.model")
       .outputs
         VizOutputSlot(
-          :node-id="internalModelValue.model?.id",
+          :node-id="modelValue.model?.id",
           :slot-number="0",
           :title="modelValue.outputSlot.name",
           :connected="modelValue.outputSlot.connected"

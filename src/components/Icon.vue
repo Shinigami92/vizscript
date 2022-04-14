@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { HTMLAttributes, Ref } from 'vue';
+import type { HTMLAttributes } from 'vue';
 import { ref, useSlots } from 'vue';
 
 const props = withDefaults(
@@ -13,9 +13,7 @@ const props = withDefaults(
 
 const slots = useSlots();
 
-const iconName: Ref<string | undefined> = ref(
-  slots.default!()[0]?.children as string,
-);
+const iconName = ref(slots.default!()[0]?.children as string | undefined);
 
 if (!iconName.value?.startsWith('mdi-')) {
   iconName.value = `mdi-${iconName.value!}`;

@@ -6,7 +6,6 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
 import { isEventStartNode } from '@/shared/viz-components/nodes/VizEventStartNode';
-import type { Ref, WritableComputedRef } from 'vue';
 import { computed } from 'vue';
 
 const props = defineProps<{
@@ -17,22 +16,21 @@ const emit = defineEmits({
   'update:modelValue': isEventStartNode as EmitType<VizEventStartNode>,
 });
 
-const internalModelValue: WritableComputedRef<VizEventStartNode> =
-  useVModelValue(props, emit);
+const modelValue = useVModelValue(props, emit);
 
-const connected: Ref<boolean> = computed(() => props.modelValue.connected);
+const connected = computed(() => props.modelValue.connected);
 </script>
 
 <template lang="pug">
-VizNode.viz-event-start.shape(v-model="internalModelValue")
+VizNode.viz-event-start.shape(v-model="modelValue")
   template(#header)
     .header
       Icon(:size="32") mdi-arrow-right-bold-hexagon-outline
       .title Event Start
   template(#default)
-    .body(v-if="internalModelValue.model")
+    .body(v-if="modelValue.model")
       VizEventEmitterSlot(
-        :node-id="internalModelValue.model?.id",
+        :node-id="modelValue.model?.id",
         :connected="connected"
       )
 </template>

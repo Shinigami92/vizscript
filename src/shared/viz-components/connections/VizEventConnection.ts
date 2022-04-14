@@ -13,13 +13,13 @@ export function convertEventConnection(
   model: VizEventConnectionModel,
   nodes: Array<Ref<VizNode>>,
 ): Ref<VizEventConnection> {
-  const startNode: Ref<VizNode> | undefined = nodes.find(
+  const startNode = nodes.find(
     (node) => node.value.model?.id === model.startNodeId,
   );
   if (!startNode) {
     throw Error("[convertEventConnection] startNode wasn't found");
   }
-  const endNode: Ref<VizNode> | undefined = nodes.find(
+  const endNode = nodes.find(
     (node) => node.value.model?.id === model.endNodeId,
   );
   if (!endNode) {
@@ -54,9 +54,10 @@ export function calculateInputEventReceiverPosition(
   switch (vizNode.type) {
     case 'caller-function':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const eventReceiverIcon: HTMLSpanElement | null =
-          vizNodeDiv.querySelector('.body .inputs .icon');
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const eventReceiverIcon = vizNodeDiv.querySelector<HTMLSpanElement>(
+          '.body .inputs .icon',
+        );
         if (!eventReceiverIcon) {
           throw Error(
             `[calculateInputEventReceiverPosition] Emitter Icon wasn't found ${JSON.stringify(
@@ -64,9 +65,8 @@ export function calculateInputEventReceiverPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const emitterIconRect: DOMRect =
-          eventReceiverIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const emitterIconRect = eventReceiverIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -81,9 +81,10 @@ export function calculateInputEventReceiverPosition(
       return { x: vizNode.x + 14, y: vizNode.y + 82 };
     case 'function':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const eventReceiverIcon: HTMLSpanElement | null =
-          vizNodeDiv.querySelector('.body .inputs .icon');
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const eventReceiverIcon = vizNodeDiv.querySelector<HTMLSpanElement>(
+          '.body .inputs .icon',
+        );
         if (!eventReceiverIcon) {
           throw Error(
             `[calculateInputEventReceiverPosition] Emitter Icon wasn't found ${JSON.stringify(
@@ -91,9 +92,8 @@ export function calculateInputEventReceiverPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const emitterIconRect: DOMRect =
-          eventReceiverIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const emitterIconRect = eventReceiverIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -108,9 +108,10 @@ export function calculateInputEventReceiverPosition(
       return { x: vizNode.x + 14, y: vizNode.y + 82 };
     case 'set':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const eventReceiverIcon: HTMLSpanElement | null =
-          vizNodeDiv.querySelector('.body .inputs .icon');
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const eventReceiverIcon = vizNodeDiv.querySelector<HTMLSpanElement>(
+          '.body .inputs .icon',
+        );
         if (!eventReceiverIcon) {
           throw Error(
             `[calculateInputEventReceiverPosition] Emitter Icon wasn't found ${JSON.stringify(
@@ -118,9 +119,8 @@ export function calculateInputEventReceiverPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const emitterIconRect: DOMRect =
-          eventReceiverIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const emitterIconRect = eventReceiverIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -146,9 +146,9 @@ export function calculateOutputEventEmitterPosition(
   switch (vizNode.type) {
     case 'event-start':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const eventEmitterIcon: HTMLSpanElement | null =
-          vizNodeDiv.querySelector('.body .icon');
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const eventEmitterIcon =
+          vizNodeDiv.querySelector<HTMLSpanElement>('.body .icon');
         if (!eventEmitterIcon) {
           throw Error(
             `[calculateOutputEventEmitterPosition] Emitter Icon wasn't found ${JSON.stringify(
@@ -156,9 +156,8 @@ export function calculateOutputEventEmitterPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const emitterIconRect: DOMRect =
-          eventEmitterIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const emitterIconRect = eventEmitterIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -173,9 +172,10 @@ export function calculateOutputEventEmitterPosition(
       return { x: vizNode.x + 174, y: vizNode.y + 82 };
     case 'function':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const eventEmitterIcon: HTMLSpanElement | null =
-          vizNodeDiv.querySelector('.body .outputs .icon');
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const eventEmitterIcon = vizNodeDiv.querySelector<HTMLSpanElement>(
+          '.body .outputs .icon',
+        );
         if (!eventEmitterIcon) {
           throw Error(
             `[calculateOutputEventEmitterPosition] Emitter Icon wasn't found ${JSON.stringify(
@@ -183,9 +183,8 @@ export function calculateOutputEventEmitterPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const emitterIconRect: DOMRect =
-          eventEmitterIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const emitterIconRect = eventEmitterIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
@@ -200,9 +199,10 @@ export function calculateOutputEventEmitterPosition(
       return { x: vizNode.x + 160, y: vizNode.y + 82 };
     case 'set':
       if (vizNode.vizNodeDivRef) {
-        const vizNodeDiv: HTMLDivElement = vizNode.vizNodeDivRef;
-        const eventEmitterIcon: HTMLSpanElement | null =
-          vizNodeDiv.querySelector('.body .outputs .icon');
+        const vizNodeDiv = vizNode.vizNodeDivRef;
+        const eventEmitterIcon = vizNodeDiv.querySelector<HTMLSpanElement>(
+          '.body .outputs .icon',
+        );
         if (!eventEmitterIcon) {
           throw Error(
             `[calculateOutputEventEmitterPosition] Emitter Icon wasn't found ${JSON.stringify(
@@ -210,9 +210,8 @@ export function calculateOutputEventEmitterPosition(
             )}`,
           );
         }
-        const nodeRect: DOMRect = vizNodeDiv.getBoundingClientRect();
-        const emitterIconRect: DOMRect =
-          eventEmitterIcon.getBoundingClientRect();
+        const nodeRect = vizNodeDiv.getBoundingClientRect();
+        const emitterIconRect = eventEmitterIcon.getBoundingClientRect();
         return {
           x:
             vizNode.x +
