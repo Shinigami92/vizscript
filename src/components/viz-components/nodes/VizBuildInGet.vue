@@ -28,12 +28,12 @@ export default defineComponent({
 </script>
 
 <template lang="pug">
-viz-node.viz-build-in-get.shape(v-model="internalModelValue")
+VizNode.viz-build-in-get.shape(v-model="internalModelValue")
   template(v-slot:default)
     .body(v-if="internalModelValue.model")
-      icon.mx-2 mdi-cards-diamond
+      Icon.mx-2 mdi-cards-diamond
       .outputs
-        viz-output-slot(
+        VizOutputSlot(
           :node-id="internalModelValue.model?.id",
           :slot-number="0",
           :title="modelValue.outputSlot.name",

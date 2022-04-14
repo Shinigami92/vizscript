@@ -167,8 +167,8 @@ export default defineComponent({
 )
   svg(:width="width + padding * 2", :height="height + 4 + padding * 2")
     path(stroke="white", stroke-width="4", fill="transparent", :d="d")
-  icon.absolute(:style="{ left: `${iconX1}px`, top: `${iconY1}px` }") mdi-circle
-  icon.absolute(:style="{ left: `${iconX2}px`, top: `${iconY2}px` }") mdi-circle
+  Icon.absolute(:style="{ left: `${iconX1}px`, top: `${iconY1}px` }") mdi-circle
+  Icon.absolute(:style="{ left: `${iconX2}px`, top: `${iconY2}px` }") mdi-circle
 </template>
 
 <style lang="postcss" scoped>

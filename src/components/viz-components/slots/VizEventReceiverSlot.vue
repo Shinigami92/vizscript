@@ -10,6 +10,6 @@ export default defineComponent({
 </script>
 
 <template lang="pug">
-icon(v-if="connected", :size="48") mdi-arrow-right-bold
-icon(v-else, :size="48") mdi-arrow-right-bold-outline
+Icon(v-if="connected", :size="48") mdi-arrow-right-bold
+Icon(v-else, :size="48") mdi-arrow-right-bold-outline
 </template>

@@ -30,8 +30,8 @@ export default defineComponent({
 <template lang="pug">
 .viz-output-slot.shape
   .title {{ title }}
-  icon(v-if="connected", @pointerdown="startConnection") mdi-circle
-  icon(v-else, @pointerdown="startConnection") mdi-circle-outline
+  Icon(v-if="connected", @pointerdown="startConnection") mdi-circle
+  Icon(v-else, @pointerdown="startConnection") mdi-circle-outline
 </template>
 
 <style lang="postcss" scoped>

@@ -30,11 +30,11 @@ export default defineComponent({
 </script>
 
 <template lang="pug">
-viz-node.viz-function.shape(v-model="internalModelValue")
+VizNode.viz-function.shape(v-model="internalModelValue")
   template(v-slot:default)
     .body(v-if="internalModelValue.model")
       .outputs
-        viz-output-slot(
+        VizOutputSlot(
           :node-id="internalModelValue.model?.id",
           :slot-number="0",
           :title="modelValue.outputSlot.name",

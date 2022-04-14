@@ -20,5 +20,5 @@ export default defineComponent({
 </script>
 
 <template lang="pug">
-prism(language="typescript") {{ current.sourceText }}
+Prism(language="typescript") {{ current.sourceText }}
 </template>

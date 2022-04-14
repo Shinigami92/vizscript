@@ -30,14 +30,14 @@ export default defineComponent({
 </script>
 
 <template lang="pug">
-viz-node.viz-event-start.shape(v-model="internalModelValue")
+VizNode.viz-event-start.shape(v-model="internalModelValue")
   template(v-slot:header)
     .header
-      icon(:size="32") mdi-arrow-right-bold-hexagon-outline
+      Icon(:size="32") mdi-arrow-right-bold-hexagon-outline
       .title Event Start
   template(v-slot:default)
     .body(v-if="internalModelValue.model")
-      viz-event-emitter-slot(
+      VizEventEmitterSlot(
         :node-id="internalModelValue.model?.id",
         :connected="connected"
       )

@@ -206,7 +206,7 @@ export default defineComponent({
       :key="vizConnection.value.model?.id",
       v-model="vizConnection.value"
     )
-  viz-current-connection(
+  VizCurrentConnection(
     v-if="currentConnection",
     :current-connection="currentConnection",
     :pointer-position="relativePointerPosition"

@@ -47,27 +47,27 @@ export default defineComponent({
 </script>
 
 <template lang="pug">
-viz-node.viz-function.shape(v-model="internalModelValue")
+VizNode.viz-function.shape(v-model="internalModelValue")
   template(v-slot:header)
     .header
-      icon(:size="32") mdi-math-integral
+      Icon(:size="32") mdi-math-integral
       .title {{ modelValue.title }}
   template(v-slot:default)
     .body(v-if="internalModelValue.model")
       .inputs
-        viz-event-receiver-slot(:connected="eventReceiverConnected")
-        viz-input-slot(
+        VizEventReceiverSlot(:connected="eventReceiverConnected")
+        VizInputSlot(
           v-for="slot in modelValue.inputSlots",
           :key="slot.name",
           :title="slot.name",
           :connected="slot.connected"
         )
       .outputs
-        viz-event-emitter-slot(
+        VizEventEmitterSlot(
           :node-id="internalModelValue.model?.id",
           :connected="eventEmitterConnected"
         )
-        viz-output-slot(
+        VizOutputSlot(
           :node-id="internalModelValue.model?.id",
           :slot-number="0",
           :title="modelValue.returnSlot.name",

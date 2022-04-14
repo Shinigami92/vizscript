@@ -19,7 +19,7 @@ export default defineComponent({
 
 <template lang="pug">
 header.flex.justify-end.items-center.bg-background-400
-  icon.text-primary-400(:size="32", @click="navigateTo('code')") mdi-code-braces
-  icon.text-primary-400(:size="32", @click="navigateTo('viz')") mdi-math-integral
-  icon.text-primary-400(:size="32", @click="navigateTo('ast')") mdi-pine-tree
+  Icon.text-primary-400(:size="32", @click="navigateTo('code')") mdi-code-braces
+  Icon.text-primary-400(:size="32", @click="navigateTo('viz')") mdi-math-integral
+  Icon.text-primary-400(:size="32", @click="navigateTo('ast')") mdi-pine-tree
 </template>

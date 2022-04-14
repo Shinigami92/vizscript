@@ -25,5 +25,5 @@ export default defineComponent({
 </script>
 
 <template lang="pug">
-prism(language="json") {{ current.ast }}
+Prism(language="json") {{ current.ast }}
 </template>

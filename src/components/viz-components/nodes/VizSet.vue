@@ -47,28 +47,28 @@ export default defineComponent({
 </script>
 
 <template lang="pug">
-viz-node.viz-set.shape(v-model="internalModelValue")
+VizNode.viz-set.shape(v-model="internalModelValue")
   template(v-slot:header)
     .header
       .title SET
   template(v-slot:default)
     .body(v-if="internalModelValue.model")
       .inputs
-        viz-event-receiver-slot(:connected="eventReceiverConnected")
-        viz-input-slot(
+        VizEventReceiverSlot(:connected="eventReceiverConnected")
+        VizInputSlot(
           :title="modelValue.valueSlot.name",
           :connected="modelValue.valueSlot.connected"
         )
-        viz-input-slot(
+        VizInputSlot(
           :title="modelValue.targetSlot.name",
           :connected="modelValue.targetSlot.connected"
         )
       .outputs
-        viz-event-emitter-slot(
+        VizEventEmitterSlot(
           :node-id="internalModelValue.model?.id",
           :connected="eventEmitterConnected"
         )
-        viz-output-slot(
+        VizOutputSlot(
           :node-id="internalModelValue.model?.id",
           :slot-number="0",
           :title="modelValue.resultSlot.name",

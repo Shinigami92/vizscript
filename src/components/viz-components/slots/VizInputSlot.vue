@@ -14,8 +14,8 @@ export default defineComponent({
 
 <template lang="pug">
 .viz-input-slot.shape
-  icon(v-if="connected") mdi-circle
-  icon(v-else) mdi-circle-outline
+  Icon(v-if="connected") mdi-circle
+  Icon(v-else) mdi-circle-outline
   .title {{ title }}
 </template>
 
