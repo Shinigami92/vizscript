@@ -2,14 +2,9 @@
 import type { HTMLAttributes } from 'vue';
 import { ref, useSlots } from 'vue';
 
-const props = withDefaults(
-  defineProps<{
-    size: number;
-  }>(),
-  {
-    size: 16,
-  },
-);
+const props = withDefaults(defineProps<{ size?: number }>(), {
+  size: 16,
+});
 
 const slots = useSlots();
 
