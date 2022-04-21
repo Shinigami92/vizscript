@@ -38,23 +38,23 @@ VizNode.viz-set.shape(v-model="modelValue")
       .inputs
         VizEventReceiverSlot(:connected="eventReceiverConnected")
         VizInputSlot(
-          :title="modelValue.valueSlot.name",
-          :connected="modelValue.valueSlot.connected"
+          :connected="modelValue.valueSlot.connected",
+          :title="modelValue.valueSlot.name"
         )
         VizInputSlot(
-          :title="modelValue.targetSlot.name",
-          :connected="modelValue.targetSlot.connected"
+          :connected="modelValue.targetSlot.connected",
+          :title="modelValue.targetSlot.name"
         )
       .outputs
         VizEventEmitterSlot(
-          :node-id="modelValue.model?.id",
-          :connected="eventEmitterConnected"
+          :connected="eventEmitterConnected",
+          :node-id="modelValue.model?.id"
         )
         VizOutputSlot(
+          :connected="modelValue.resultSlot.connected",
           :node-id="modelValue.model?.id",
           :slot-number="0",
-          :title="modelValue.resultSlot.name",
-          :connected="modelValue.resultSlot.connected"
+          :title="modelValue.resultSlot.name"
         )
 </template>
 

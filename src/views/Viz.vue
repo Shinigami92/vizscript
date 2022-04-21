@@ -197,15 +197,15 @@ onMounted(() =>
 .viz-canvas
   template(v-for="vizNode in vizNodeMap")
     component(
-      v-if="vizNode",
       :is="nodeComponent(vizNode.value)",
+      v-if="vizNode",
       :key="vizNode.value.model?.id",
       v-model="vizNode.value"
     )
   template(v-for="vizConnection in vizConnections")
     component(
-      v-if="vizConnection",
       :is="connectionComponent(vizConnection.value)",
+      v-if="vizConnection",
       :key="vizConnection.value.model?.id",
       v-model="vizConnection.value"
     )

@@ -24,10 +24,10 @@ VizNode.viz-function.shape(v-model="modelValue")
     .body(v-if="modelValue.model")
       .outputs
         VizOutputSlot(
+          :connected="modelValue.outputSlot.connected",
           :node-id="modelValue.model?.id",
           :slot-number="0",
-          :title="modelValue.outputSlot.name",
-          :connected="modelValue.outputSlot.connected"
+          :title="modelValue.outputSlot.name"
         )
 </template>
 

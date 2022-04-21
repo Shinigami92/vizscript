@@ -130,8 +130,8 @@ const iconY2 = computed(() => {
   ref="connection",
   :style="{ left: `${left - padding}px`, top: `${top - padding}px` }"
 )
-  svg(:width="width + padding * 2", :height="height + 4 + padding * 2")
-    path(stroke="white", stroke-width="4", fill="transparent", :d="d")
+  svg(:height="height + 4 + padding * 2", :width="width + padding * 2")
+    path(:d="d", fill="transparent", stroke="white", stroke-width="4")
   Icon.absolute(:style="{ left: `${iconX1}px`, top: `${iconY1}px` }") mdi-circle
   Icon.absolute(:style="{ left: `${iconX2}px`, top: `${iconY2}px` }") mdi-circle
 </template>

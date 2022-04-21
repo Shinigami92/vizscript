@@ -15,6 +15,7 @@ module.exports = defineConfig({
   extends: [
     'plugin:@typescript-eslint/recommended',
     'plugin:vue/vue3-recommended',
+    'plugin:vue-pug/vue3-recommended',
     'plugin:import/errors',
     'plugin:import/warnings',
     'plugin:import/typescript',
@@ -22,10 +23,11 @@ module.exports = defineConfig({
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {
-    project: ['./tsconfig.lint.json'],
+    project: 'tsconfig.lint.json',
+    sourceType: 'module',
     warnOnUnsupportedTypeScriptVersion: false,
   },
-  plugins: ['vue', '@typescript-eslint', 'prettier', 'import'],
+  plugins: ['vue', '@typescript-eslint/eslint-plugin', 'prettier', 'import'],
   rules: {
     curly: ['error'],
     eqeqeq: ['error', 'always', { null: 'ignore' }],
@@ -120,6 +122,9 @@ module.exports = defineConfig({
       'error',
       { allowNumber: true, allowBoolean: true },
     ],
+
+    'vue/no-parsing-error': 'off',
+    'vue/no-template-shadow': 'off',
   },
   settings: {
     'import/parsers': {
@@ -138,6 +143,9 @@ module.exports = defineConfig({
         parser: '@typescript-eslint/parser',
         project: 'tsconfig.lint.json',
         extraFileExtensions: ['.vue'],
+        templateTokenizer: {
+          pug: 'vue-eslint-parser-template-tokenizer-pug',
+        },
         tsconfigRootDir: './',
       },
     },

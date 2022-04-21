@@ -30,8 +30,8 @@ VizNode.viz-event-start.shape(v-model="modelValue")
   template(#default)
     .body(v-if="modelValue.model")
       VizEventEmitterSlot(
-        :node-id="modelValue.model?.id",
-        :connected="connected"
+        :connected="connected",
+        :node-id="modelValue.model?.id"
       )
 </template>
 

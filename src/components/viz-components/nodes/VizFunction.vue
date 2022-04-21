@@ -42,19 +42,19 @@ VizNode.viz-function.shape(v-model="modelValue")
         VizInputSlot(
           v-for="slot in modelValue.inputSlots",
           :key="slot.name",
-          :title="slot.name",
-          :connected="slot.connected"
+          :connected="slot.connected",
+          :title="slot.name"
         )
       .outputs
         VizEventEmitterSlot(
-          :node-id="modelValue.model?.id",
-          :connected="eventEmitterConnected"
+          :connected="eventEmitterConnected",
+          :node-id="modelValue.model?.id"
         )
         VizOutputSlot(
+          :connected="modelValue.returnSlot.connected",
           :node-id="modelValue.model?.id",
           :slot-number="0",
-          :title="modelValue.returnSlot.name",
-          :connected="modelValue.returnSlot.connected"
+          :title="modelValue.returnSlot.name"
         )
 </template>
 
