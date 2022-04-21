@@ -8,20 +8,25 @@ import VizEventStart from '@/components/viz-components/nodes/VizEventStart.vue';
 import VizFunction from '@/components/viz-components/nodes/VizFunction.vue';
 import VizSet from '@/components/viz-components/nodes/VizSet.vue';
 import VizVariableGet from '@/components/viz-components/nodes/VizVariableGet.vue';
+import type { Point } from '@/shared/models/Point';
+import type { PositionModel } from '@/shared/models/PositionModel';
 import type { VizConnection } from '@/shared/viz-components/connections/VizConnection';
 import { convertConnection } from '@/shared/viz-components/connections/VizConnection';
 import type { VizNode } from '@/shared/viz-components/nodes/VizNode';
 import { convertNode } from '@/shared/viz-components/nodes/VizNode';
 import * as store from '@/store';
-import { useMouse } from '@vueuse/core';
+import { useElementByPoint, useMouse, usePointer } from '@vueuse/core';
 import type { Ref } from 'vue';
 import { computed, onMounted, ref, watch } from 'vue';
 
-const pointerPosition = useMouse();
+const clientOffset = ref<Point>({ x: 0, y: 0 });
+
+const pointerPosition = useMouse({ type: 'client' });
+const { element } = useElementByPoint(pointerPosition);
 
 const relativePointerPosition = computed(() => ({
-  x: ref(pointerPosition.x.value - 320),
-  y: ref(pointerPosition.y.value - 56),
+  x: ref(pointerPosition.x.value - clientOffset.value.x),
+  y: ref(pointerPosition.y.value - clientOffset.value.y),
 }));
 
 store.initializeMock();
@@ -36,6 +41,33 @@ const vizNodeMap = Object.fromEntries(
 const vizConnections = ref<Array<Ref<VizConnection>>>([]);
 const latestVizConnectionId = ref<string>();
 const currentConnection = store.currentConnection;
+
+const canvasRef = ref<HTMLDivElement | null>(null);
+
+const {
+  x: pointerPositionX,
+  y: pointerPositionY,
+  pressure,
+} = usePointer({ target: canvasRef });
+
+const lastPointerPosition = ref<PositionModel>({ x: 0, y: 0 });
+watch([pointerPositionX, pointerPositionY], () => {
+  if (pressure.value >= 0.5 && element.value === canvasRef.value) {
+    const dx = pointerPositionX.value - lastPointerPosition.value.x;
+    const dy = pointerPositionY.value - lastPointerPosition.value.y;
+
+    store.moveAllNodes({ dx, dy });
+    Object.entries(vizNodeMap).forEach(([id, node]) => {
+      node.value.x += dx;
+      node.value.y += dy;
+    });
+  }
+
+  lastPointerPosition.value = {
+    x: pointerPositionX.value,
+    y: pointerPositionY.value,
+  };
+});
 
 function nodeComponent(
   node: VizNode,
@@ -183,15 +215,20 @@ watch(
   },
 );
 
-onMounted(() =>
+onMounted(() => {
   store
     .findAllConnections()
-    .forEach((connection) => (latestVizConnectionId.value = connection.id)),
-);
+    .forEach((connection) => (latestVizConnectionId.value = connection.id));
+
+  const { x: xOffset, y: yOffset } = canvasRef.value
+    ?.getClientRects()
+    .item(0) ?? { x: 0, y: 0 };
+  clientOffset.value = { x: xOffset, y: yOffset };
+});
 </script>
 
 <template lang="pug">
-.viz-canvas
+.viz-canvas(ref="canvasRef")
   template(v-for="vizNode in vizNodeMap")
     component(
       :is="nodeComponent(vizNode.value)",

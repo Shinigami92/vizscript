@@ -49,6 +49,16 @@ export function updateNodePosition(id: string, { x, y }: PositionModel): void {
   n.y = y;
 }
 
+export function moveAllNodes({ dx, dy }: { dx: number; dy: number }): void {
+  const allNodes = findAllNodes();
+  for (const node of allNodes) {
+    updateNodePosition(node.id, {
+      x: node.x + dx,
+      y: node.y + dy,
+    });
+  }
+}
+
 export function vizNodeMap(): Record<string, VizNodeModel> {
   return state.value.currentViz.nodes;
 }
