@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+<script setup lang="ts">
 import VizCurrentConnection from '@/components/viz-components/connections/VizCurrentConnection.vue';
 import VizEventConnection from '@/components/viz-components/connections/VizEventConnection.vue';
 import VizSlotConnection from '@/components/viz-components/connections/VizSlotConnection.vue';
@@ -8,16 +8,13 @@ import VizEventStart from '@/components/viz-components/nodes/VizEventStart.vue';
 import VizFunction from '@/components/viz-components/nodes/VizFunction.vue';
 import VizSet from '@/components/viz-components/nodes/VizSet.vue';
 import VizVariableGet from '@/components/viz-components/nodes/VizVariableGet.vue';
-import type { VizConnectionModel } from '@/shared/models/connections/VizConnectionModel';
-import type { VizCurrentConnectionModel } from '@/shared/models/connections/VizCurrentConnectionModel';
-import type { RefPositionModel } from '@/shared/models/PositionModel';
 import type { VizConnection } from '@/shared/viz-components/connections/VizConnection';
 import { convertConnection } from '@/shared/viz-components/connections/VizConnection';
 import type { VizNode } from '@/shared/viz-components/nodes/VizNode';
 import { convertNode } from '@/shared/viz-components/nodes/VizNode';
 import * as store from '@/store';
 import { useMouse } from '@vueuse/core';
-import type { ComputedRef, Ref } from 'vue';
+import type { Ref } from 'vue';
 import { computed, onMounted, ref, watch } from 'vue';
 
 const pointerPosition = useMouse();

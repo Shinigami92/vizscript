@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+<script setup lang="ts">
 import Icon from '@/components/Icon.vue';
 import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizEventEmitterSlot from '@/components/viz-components/slots/VizEventEmitterSlot.vue';

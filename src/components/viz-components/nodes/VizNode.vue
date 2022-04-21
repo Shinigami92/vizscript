@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+<script setup lang="ts">
 import { usePositionable } from '@/composables/usePositionable';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizNode } from '@/shared/viz-components/nodes/VizNode';

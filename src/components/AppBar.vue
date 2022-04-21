@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+<script setup lang="ts">
 import Icon from '@/components/Icon.vue';
 import type { Router } from 'vue-router';
 import { useRouter } from 'vue-router';

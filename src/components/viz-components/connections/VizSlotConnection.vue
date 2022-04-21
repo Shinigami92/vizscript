@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+<script setup lang="ts">
 import Icon from '@/components/Icon.vue';
 import { useVModelValue } from '@/composables/useVModelValue';
 import { dataTypeColor } from '@/shared/models/DataType';

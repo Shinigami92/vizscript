@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+<script setup lang="ts">
 import { ref } from 'vue';
 import Prism from 'vue-prism-component';
 import { fileName, sourceText } from './greeter-example';

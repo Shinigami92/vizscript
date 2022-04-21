@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+<script setup lang="ts">
 import AppBar from '@/components/AppBar.vue';
 import AppDrawer from '@/components/AppDrawer.vue';
 import AppMainContent from '@/components/AppMainContent.vue';

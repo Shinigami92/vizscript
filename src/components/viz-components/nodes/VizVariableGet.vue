@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+<script setup lang="ts">
 import VizNode from '@/components/viz-components/nodes/VizNode.vue';
 import VizOutputSlot from '@/components/viz-components/slots/VizOutputSlot.vue';
 import { useVModelValue } from '@/composables/useVModelValue';
