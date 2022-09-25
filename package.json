@@ -28,11 +28,11 @@
   "bugs": "https://github.com/Shinigami92/vizscript/issues",
   "license": "MIT",
   "dependencies": {
-    "@mdi/font": "~6.6.96",
-    "@vueuse/core": "~8.3.0",
+    "@mdi/font": "~7.0.0",
+    "@vueuse/core": "~9.2.0",
     "prismjs": "~1.28.0",
     "typescript": "~4.6.3",
-    "uuid": "~8.3.2",
+    "uuid": "~9.0.0",
     "vue": "~3.2.33",
     "vue-prism-component": "~2.0.0",
     "vue-router": "~4.0.14"
