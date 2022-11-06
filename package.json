@@ -42,6 +42,7 @@
     "@types/node": "~18.11.9",
     "@types/prismjs": "~1.26.0",
     "@types/uuid": "~8.3.4",
+    "@types/web-bluetooth": "~0.0.16",
     "@typescript-eslint/eslint-plugin": "~5.42.0",
     "@typescript-eslint/parser": "~5.42.0",
     "@vitejs/plugin-vue": "~3.2.0",
