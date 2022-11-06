@@ -5,7 +5,6 @@ import { useVModelValue } from '@/composables/useVModelValue';
 import type { EmitType } from '@/shared/utilities/vue';
 import type { VizVariableGetNode } from '@/shared/viz-components/nodes/VizVariableGetNode';
 import { isVariableGetNode } from '@/shared/viz-components/nodes/VizVariableGetNode';
-import type { WritableComputedRef } from 'vue';
 
 const props = defineProps<{
   modelValue: VizVariableGetNode;
