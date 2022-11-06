@@ -125,6 +125,7 @@ module.exports = defineConfig({
 
     'vue/no-parsing-error': 'off',
     'vue/no-template-shadow': 'off',
+    'vue/multi-word-component-names': 'off',
   },
   settings: {
     'import/parsers': {
