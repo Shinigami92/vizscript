@@ -15,11 +15,11 @@ window.addEventListener('touchmove', preventMotion, false);
 </script>
 
 <template lang="pug">
-.h-screen.grid(class="grid-cols-[320px,1fr]")
-  AppDrawer
-  .grid.max-h-screen(class="grid-rows-[56px,1fr]")
-    AppBar
-    AppMainContent
+.h-screen.flex
+  AppDrawer.flex-initial
+  .flex-1.flex.flex-col.overflow-hidden
+    AppBar.flex-shrink-0
+    AppMainContent.flex-shrink
 </template>
 
 <style lang="scss">
