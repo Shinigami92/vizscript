@@ -24,17 +24,19 @@ import type {
 } from '@vizscript/core';
 import {
   arrayElementType,
-  arrayOf,
   arrayOfAll,
   attachComments,
   createEdge,
   isArrayType,
   lineIndent,
+  linkSymbolGraphs,
   markUnusedValue,
   NodeIdFactory,
   refinesType,
   truncate,
 } from '@vizscript/core';
+import { patternAnnotation, typeFromAnnotation } from './annotations';
+import { typeScriptSymbols } from './symbols';
 
 export const LANGUAGE_ID = 'typescript';
 
@@ -126,101 +128,6 @@ function unwrap(expr: t.Expression): t.Expression {
   }
 }
 
-function typeFromAnnotation(annotation: t.Node | null | undefined): DataType {
-  if (!annotation) {
-    return 'any';
-  }
-
-  const node =
-    annotation.type === 'TSTypeAnnotation'
-      ? annotation.typeAnnotation
-      : annotation;
-  switch (node.type) {
-    case 'TSStringKeyword': {
-      return 'string';
-    }
-
-    case 'TSNumberKeyword': {
-      return 'number';
-    }
-
-    case 'TSBooleanKeyword': {
-      return 'bool';
-    }
-
-    case 'TSBigIntKeyword': {
-      return 'bigint';
-    }
-
-    case 'TSVoidKeyword':
-    case 'TSUndefinedKeyword': {
-      return 'void';
-    }
-
-    case 'TSNullKeyword': {
-      return 'null';
-    }
-
-    case 'TSObjectKeyword':
-    case 'TSTypeLiteral': {
-      return 'object';
-    }
-
-    case 'TSArrayType': {
-      return arrayOf(typeFromAnnotation(node.elementType));
-    }
-
-    case 'TSTupleType': {
-      return 'array';
-    }
-
-    case 'TSFunctionType': {
-      return 'function';
-    }
-
-    case 'TSLiteralType': {
-      const literal = node.literal;
-      if (
-        literal.type === 'StringLiteral' ||
-        literal.type === 'TemplateLiteral'
-      ) {
-        return 'string';
-      }
-
-      if (literal.type === 'BooleanLiteral') {
-        return 'bool';
-      }
-
-      if (literal.type === 'BigIntLiteral') {
-        return 'bigint';
-      }
-
-      return 'number';
-    }
-
-    case 'TSTypeReference': {
-      const name =
-        node.typeName.type === 'Identifier' ? node.typeName.name : undefined;
-      if (name === 'Array' || name === 'ReadonlyArray') {
-        return arrayOf(typeFromAnnotation(node.typeArguments?.params[0]));
-      }
-
-      return name ?? 'object';
-    }
-
-    case 'TSUnionType': {
-      const types = new Set(node.types.map((ty) => typeFromAnnotation(ty)));
-      types.delete('null');
-      types.delete('void');
-      return types.size === 1 ? ([...types][0] ?? 'any') : 'any';
-    }
-
-    default: {
-      return 'any';
-    }
-  }
-}
-
 function patternName(pattern: t.Node, text: string): string {
   if (pattern.type === 'Identifier') {
     return pattern.name;
@@ -240,22 +147,6 @@ function patternName(pattern: t.Node, text: string): string {
 
   const r = rangeOf(pattern);
   return truncate(text.slice(r.start, r.end), 24);
-}
-
-function patternAnnotation(pattern: t.Node): t.Node | null | undefined {
-  if (pattern.type === 'AssignmentPattern') {
-    return patternAnnotation(pattern.left);
-  }
-
-  if (pattern.type === 'TSParameterProperty') {
-    return patternAnnotation(pattern.parameter);
-  }
-
-  if ('typeAnnotation' in pattern && pattern.typeAnnotation) {
-    return pattern.typeAnnotation;
-  }
-
-  return undefined;
 }
 
 /** Returns `['a', 'b', 'c']` for chains like `a.b.c` without computed keys. */
@@ -2437,7 +2328,9 @@ export function parseTypeScript(
     language: LANGUAGE_ID,
     functions: lowering.functions,
     diagnostics,
+    symbols: typeScriptSymbols(program, text),
   };
   attachComments(doc, text, comments);
+  linkSymbolGraphs(doc);
   return doc;
 }
