@@ -101,6 +101,22 @@ const GROUPS: ReadonlyArray<{
     ],
   },
   {
+    title: 'Tabs',
+    rows: [
+      {
+        action: 'Open a file',
+        input: 'Click it in Explorer (preview tab, in italics)',
+      },
+      {
+        action: 'Keep a tab open',
+        input: 'Double-click the file or the tab, or edit the file',
+      },
+      { action: 'Close a tab', input: 'Its ×, or a middle click' },
+      { action: 'Reorder tabs', input: 'Drag a tab' },
+      { action: 'More', input: 'Right-click a tab: close others, close all' },
+    ],
+  },
+  {
     title: 'My Script',
     rows: [
       {

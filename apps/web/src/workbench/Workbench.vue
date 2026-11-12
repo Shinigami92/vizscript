@@ -160,6 +160,8 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
       </template>
 
       <div class="flex min-w-0 flex-1 flex-col">
+        <!-- Editor tabs (open files) go here, between the sidebars. -->
+        <div id="workbench-editor-tabs" class="min-w-0 shrink-0" />
         <WorkbenchZone
           v-if="shown.center.length > 0"
           zone="center"
@@ -233,44 +235,47 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
     </div>
 
     <!-- Phones: one view at a time, explorer and details as overlays. -->
-    <div v-else class="relative min-h-0 flex-1">
-      <div
-        :key="store.mobileMainView"
-        :ref="placeRef(store.mobileMainView)"
-        class="absolute inset-0"
-        :aria-label="mobileTitle"
-      />
-      <template v-if="store.mobileDrawer && store.available.has('explorer')">
+    <div v-else class="flex min-h-0 flex-1 flex-col">
+      <div id="workbench-editor-tabs" class="min-w-0 shrink-0" />
+      <div class="relative min-h-0 flex-1">
         <div
-          class="fixed inset-0 z-30 bg-black/50"
-          @click="store.mobileDrawer = false"
+          :key="store.mobileMainView"
+          :ref="placeRef(store.mobileMainView)"
+          class="absolute inset-0"
+          :aria-label="mobileTitle"
         />
-        <aside
-          class="fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-80 flex-col border-r border-zinc-800 bg-zinc-950"
-        >
+        <template v-if="store.mobileDrawer && store.available.has('explorer')">
           <div
-            class="flex h-10 shrink-0 items-center justify-between border-b border-zinc-800 px-3 text-sm"
+            class="fixed inset-0 z-30 bg-black/50"
+            @click="store.mobileDrawer = false"
+          />
+          <aside
+            class="fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-80 flex-col border-r border-zinc-800 bg-zinc-950"
           >
-            <span class="flex items-center gap-2">
-              <span :class="VIEW_ICONS.explorer" /> Explorer
-            </span>
-            <button
-              type="button"
-              class="btn-ghost px-2"
-              aria-label="Close"
-              @click="store.mobileDrawer = false"
+            <div
+              class="flex h-10 shrink-0 items-center justify-between border-b border-zinc-800 px-3 text-sm"
             >
-              <span class="i-mdi-close" />
-            </button>
-          </div>
-          <div :ref="placeRef('explorer')" class="relative min-h-0 flex-1" />
-        </aside>
-      </template>
-      <div
-        v-if="store.mobileDetails && store.available.has('details')"
-        :ref="placeRef('details')"
-        class="absolute inset-y-0 right-0 z-10 w-[min(20rem,88vw)] shadow-2xl"
-      />
+              <span class="flex items-center gap-2">
+                <span :class="VIEW_ICONS.explorer" /> Explorer
+              </span>
+              <button
+                type="button"
+                class="btn-ghost px-2"
+                aria-label="Close"
+                @click="store.mobileDrawer = false"
+              >
+                <span class="i-mdi-close" />
+              </button>
+            </div>
+            <div :ref="placeRef('explorer')" class="relative min-h-0 flex-1" />
+          </aside>
+        </template>
+        <div
+          v-if="store.mobileDetails && store.available.has('details')"
+          :ref="placeRef('details')"
+          class="absolute inset-y-0 right-0 z-10 w-[min(20rem,88vw)] shadow-2xl"
+        />
+      </div>
     </div>
 
     <!-- Status bar like VS Code's; views teleport their items into it. -->

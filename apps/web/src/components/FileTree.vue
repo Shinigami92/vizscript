@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TreeEntry } from '@vizscript/api-contract';
 import { computed, ref, watch } from 'vue';
-import { isPreviewable, isVisualizable } from '../graph/languages';
+import { fileIcon, isPreviewable, isVisualizable } from '../graph/languages';
 
 interface DirNode {
   name: string;
@@ -23,7 +23,11 @@ const props = defineProps<{
   selectedPath: string | null;
 }>();
 
-const emit = defineEmits<{ select: [path: string] }>();
+const emit = defineEmits<{
+  select: [path: string];
+  /** Double-click: open the file in a tab that stays (not a preview). */
+  pin: [path: string];
+}>();
 
 const filter = ref('');
 const expanded = ref(new Set<string>());
@@ -146,15 +150,7 @@ function icon(row: Row): string {
       : 'i-mdi-folder text-amber-300/80';
   }
 
-  if (/\.tsx?$|\.mts$|\.cts$/.test(row.path)) {
-    return 'i-mdi-language-typescript text-sky-400';
-  }
-
-  if (/\.[cm]?jsx?$/.test(row.path)) {
-    return 'i-mdi-language-javascript text-yellow-300';
-  }
-
-  return 'i-mdi-file-outline text-zinc-500';
+  return fileIcon(row.path);
 }
 </script>
 
@@ -186,6 +182,7 @@ function icon(row: Row): string {
           :style="{ paddingLeft: `${8 + row.depth * 14}px` }"
           :title="row.path"
           @click="toggle(row)"
+          @dblclick="row.type === 'file' && emit('pin', row.path)"
         >
           <span class="shrink-0" :class="icon(row)" />
           <span class="truncate">{{ row.name }}</span>

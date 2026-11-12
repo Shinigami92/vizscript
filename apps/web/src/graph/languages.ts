@@ -61,3 +61,28 @@ export function monacoLanguage(path: string): string {
 export function isPreviewable(path: string): boolean {
   return /\.(md|markdown|mdown|mkd)$/i.test(path);
 }
+
+/** Icon classes of a file, by its language. */
+export function fileIcon(path: string): string {
+  if (/\.tsx?$|\.mts$|\.cts$/.test(path)) {
+    return 'i-mdi-language-typescript text-sky-400';
+  }
+
+  if (/\.[cm]?jsx?$/.test(path)) {
+    return 'i-mdi-language-javascript text-yellow-300';
+  }
+
+  if (/\.pyw?$/.test(path)) {
+    return 'i-mdi-language-python text-sky-300';
+  }
+
+  if (path.endsWith('.gd')) {
+    return 'i-mdi-robot-outline text-sky-300';
+  }
+
+  if (/\.md$/i.test(path)) {
+    return 'i-mdi-language-markdown-outline text-zinc-400';
+  }
+
+  return 'i-mdi-file-outline text-zinc-500';
+}

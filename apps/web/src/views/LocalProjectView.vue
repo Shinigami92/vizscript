@@ -1,15 +1,25 @@
 <script setup lang="ts">
 import type { TreeEntry } from '@vizscript/api-contract';
 import { useDebounceFn, useEventListener } from '@vueuse/core';
-import { computed, ref, shallowRef, watch } from 'vue';
+import {
+  computed,
+  onBeforeUnmount,
+  ref,
+  shallowReactive,
+  shallowRef,
+  watch,
+} from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
+import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
 import ScriptWorkspace from '../components/ScriptWorkspace.vue';
+import { useFileTabs } from '../composables/use-file-tabs';
 import { useToasts } from '../composables/use-toasts';
 import { localLayoutStore } from '../graph/layout-store';
 import { shortcut } from '../graph/source';
 import type { LocalProject, OpenResult } from '../local/projects';
 import { openProject } from '../local/projects';
+import { disposeModel } from '../monaco/models';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
 import Workbench from '../workbench/Workbench.vue';
@@ -112,8 +122,88 @@ async function grant(): Promise<void> {
 
 let fileRequest = 0;
 
+// ---------------------------------------------------------------- tabs
+
+const fileTabs = useFileTabs(
+  computed(() => `vizscript:tabs:local/${id.value}`)
+);
+
+/** Read files of the open tabs with their current text. */
+const buffers = shallowReactive(
+  new Map<string, { saved: string; text: string }>()
+);
+
+const dirtyTabs = computed(() => {
+  const result = new Set<string>();
+  for (const tab of fileTabs.tabs.value) {
+    const buffer = buffers.get(tab.path);
+    if (buffer && buffer.text !== buffer.saved) {
+      result.add(tab.path);
+    }
+  }
+
+  return result;
+});
+
+function forget(paths: ReadonlyArray<string>): void {
+  for (const p of paths) {
+    buffers.delete(p);
+    disposeModel(p);
+  }
+}
+
+watch(id, () => forget([...buffers.keys()]));
+onBeforeUnmount(() => forget(fileTabs.tabs.value.map((t) => t.path)));
+
+function showNoFile(): void {
+  void router.push({ name: 'local', params: { id: id.value, path: [] } });
+}
+
+function closeTab(tabPath: string): void {
+  const next = fileTabs.close(tabPath, shown.value);
+  forget([tabPath]);
+  if (tabPath === shown.value) {
+    if (next) {
+      selectFile(next);
+    } else {
+      showNoFile();
+    }
+  }
+}
+
+function closeOtherTabs(tabPath: string): void {
+  forget(fileTabs.tabs.value.map((t) => t.path).filter((p) => p !== tabPath));
+  fileTabs.closeOthers(tabPath);
+  if (tabPath !== shown.value) {
+    selectFile(tabPath);
+  }
+}
+
+function closeAllTabs(): void {
+  forget(fileTabs.tabs.value.map((t) => t.path));
+  fileTabs.closeAll();
+  showNoFile();
+}
+
+function pinFile(next: string): void {
+  fileTabs.open(next, { preview: false });
+  if (next !== path.value) {
+    selectFile(next);
+  }
+}
+
+watch(
+  () => dirtyTabs.value.has(shown.value ?? ''),
+  (isDirty) => {
+    if (isDirty && shown.value) {
+      fileTabs.pin(shown.value);
+    }
+  }
+);
+
 async function loadFile(): Promise<void> {
   const request = ++fileRequest;
+  const previous = shown.value ?? undefined;
   fileError.value = null;
   if (!project.value || !isFile.value) {
     shown.value = null;
@@ -122,8 +212,19 @@ async function loadFile(): Promise<void> {
     return;
   }
 
-  loadingFile.value = true;
   const next = path.value;
+  const cached = buffers.get(next);
+  if (cached) {
+    // An open tab: instant, with its unsaved changes.
+    text.value = cached.text;
+    saved.value = cached.saved;
+    shown.value = next;
+    fileTabs.open(next, { after: previous });
+    loadingFile.value = false;
+    return;
+  }
+
+  loadingFile.value = true;
   try {
     const content = await project.value.read(next);
     if (request !== fileRequest) {
@@ -147,6 +248,8 @@ async function loadFile(): Promise<void> {
     text.value = initial;
     saved.value = content;
     shown.value = next;
+    buffers.set(next, { saved: content, text: initial });
+    fileTabs.open(next, { after: previous });
   } catch (error) {
     if (request === fileRequest) {
       shown.value = null;
@@ -183,6 +286,12 @@ const saveDraft = useDebounceFn(() => {
   }
 }, 500);
 
+// The open tab keeps the text and what is on disk.
+watch([text, saved], ([value, onDisk]) => {
+  if (shown.value && onDisk !== null) {
+    buffers.set(shown.value, { saved: onDisk, text: value });
+  }
+});
 watch(text, saveDraft);
 
 async function save(): Promise<void> {
@@ -299,9 +408,29 @@ function selectFile(next: string, symbol?: string): void {
           :entries="entries"
           :selected-path="path || null"
           @select="selectFile"
+          @pin="pinFile"
         />
       </div>
     </WorkbenchView>
+
+    <!-- Re-created when the layout switches between phone and desktop. -->
+    <Teleport
+      :key="String(workbench.isMobile)"
+      defer
+      to="#workbench-editor-tabs"
+    >
+      <FileTabs
+        :tabs="fileTabs.tabs.value"
+        :active="shown"
+        :dirty="dirtyTabs"
+        @select="selectFile"
+        @pin="fileTabs.pin"
+        @close="closeTab"
+        @close-others="closeOtherTabs"
+        @close-all="closeAllTabs"
+        @move="fileTabs.move"
+      />
+    </Teleport>
 
     <ScriptWorkspace
       v-if="project && shown !== null && saved !== null"
@@ -312,6 +441,7 @@ function selectFile(next: string, symbol?: string): void {
       :state-key="`local/${id}:${shown}`"
       :files="files"
       hide-share
+      keep-editor
       @open="selectFile"
     >
       <template #toolbar>

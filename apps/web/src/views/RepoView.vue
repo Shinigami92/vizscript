@@ -6,14 +6,24 @@ import type {
   TreeResponse,
 } from '@vizscript/api-contract';
 import { useDebounceFn } from '@vueuse/core';
-import { computed, ref, shallowRef, watch } from 'vue';
+import {
+  computed,
+  onBeforeUnmount,
+  ref,
+  shallowReactive,
+  shallowRef,
+  watch,
+} from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api/client';
+import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
 import ScriptWorkspace from '../components/ScriptWorkspace.vue';
+import { useFileTabs } from '../composables/use-file-tabs';
 import { useToasts } from '../composables/use-toasts';
 import type { LayoutStore } from '../graph/layout-store';
 import { apiLayoutStore } from '../graph/layout-store';
+import { disposeModel } from '../monaco/models';
 import { useRecentStore } from '../stores/recent';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
@@ -100,6 +110,108 @@ async function loadTree(): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------- tabs
+
+/** Open files of this branch, like VS Code's editor tabs. */
+const tabsKey = computed(
+  () =>
+    `vizscript:tabs:${provider.value}/${owner.value}/${repo.value}@${ref_.value}`
+);
+const fileTabs = useFileTabs(tabsKey);
+
+/**
+ * Loaded files of the open tabs with their current text, so switching tabs
+ * is instant and keeps unsaved changes.
+ */
+const buffers = shallowReactive(
+  new Map<string, { file: FileResponse; text: string }>()
+);
+
+/** Tabs with unsaved changes (also those not loaded yet: their drafts). */
+const dirtyTabs = computed(() => {
+  const result = new Set<string>();
+  for (const tab of fileTabs.tabs.value) {
+    const buffer = buffers.get(tab.path);
+    const hasDraft = (): boolean => {
+      try {
+        return localStorage.getItem(draftKeyOf(tab.path)) !== null;
+      } catch {
+        return false;
+      }
+    };
+    if (buffer ? buffer.text !== buffer.file.content : hasDraft()) {
+      result.add(tab.path);
+    }
+  }
+
+  return result;
+});
+
+function forget(paths: ReadonlyArray<string>): void {
+  for (const p of paths) {
+    buffers.delete(p);
+    disposeModel(p);
+  }
+}
+
+// Another branch has other files: start fresh.
+watch(ref_, () => {
+  forget([...buffers.keys()]);
+});
+
+onBeforeUnmount(() => {
+  forget(fileTabs.tabs.value.map((t) => t.path));
+});
+
+/** Shows the folder view (no file) when the last tab closes. */
+function showNoFile(): void {
+  void router.push({ name: 'repo', params: { ...route.params, path: [] } });
+}
+
+function closeTab(tabPath: string): void {
+  const next = fileTabs.close(tabPath, file.value?.path ?? null);
+  forget([tabPath]);
+  if (tabPath === file.value?.path) {
+    if (next) {
+      selectFile(next);
+    } else {
+      showNoFile();
+    }
+  }
+}
+
+function closeOtherTabs(tabPath: string): void {
+  forget(fileTabs.tabs.value.map((t) => t.path).filter((p) => p !== tabPath));
+  fileTabs.closeOthers(tabPath);
+  if (tabPath !== file.value?.path) {
+    selectFile(tabPath);
+  }
+}
+
+function closeAllTabs(): void {
+  forget(fileTabs.tabs.value.map((t) => t.path));
+  fileTabs.closeAll();
+  showNoFile();
+}
+
+/** Double-click in the explorer: open in a tab that stays. */
+function pinFile(next: string): void {
+  fileTabs.open(next, { preview: false });
+  if (next !== path.value) {
+    selectFile(next);
+  }
+}
+
+// Editing a file keeps its tab open, like VS Code.
+watch(
+  () => dirtyTabs.value.has(file.value?.path ?? ''),
+  (isDirty) => {
+    if (isDirty && file.value) {
+      fileTabs.pin(file.value.path);
+    }
+  }
+);
+
 let fileRequest = 0;
 
 /**
@@ -109,9 +221,20 @@ let fileRequest = 0;
  */
 async function loadFile(): Promise<void> {
   const request = ++fileRequest;
+  const previousPath = file.value?.path;
   fileError.value = null;
   if (!isFile.value) {
     file.value = null;
+    loadingFile.value = false;
+    return;
+  }
+
+  const cached = buffers.get(path.value);
+  if (cached) {
+    // An open tab: instant, with its unsaved changes.
+    text.value = cached.text;
+    file.value = cached.file;
+    fileTabs.open(cached.file.path, { after: previousPath });
     loadingFile.value = false;
     return;
   }
@@ -145,6 +268,8 @@ async function loadFile(): Promise<void> {
     // Both at once: the workspace of the new file gets the new text.
     text.value = initial;
     file.value = loaded;
+    buffers.set(loaded.path, { file: loaded, text: initial });
+    fileTabs.open(loaded.path, { after: previousPath });
   } catch (error) {
     if (request === fileRequest) {
       file.value = null;
@@ -194,7 +319,13 @@ const saveDraft = useDebounceFn(() => {
   }
 }, 500);
 
-watch(text, saveDraft);
+watch(text, (value) => {
+  if (file.value) {
+    buffers.set(file.value.path, { file: file.value, text: value });
+  }
+
+  void saveDraft();
+});
 
 function discard(): void {
   if (file.value) {
@@ -254,9 +385,29 @@ function switchBranch(event: Event): void {
           :entries="tree.entries"
           :selected-path="path || null"
           @select="selectFile"
+          @pin="pinFile"
         />
       </div>
     </WorkbenchView>
+
+    <!-- Re-created when the layout switches between phone and desktop. -->
+    <Teleport
+      :key="String(workbench.isMobile)"
+      defer
+      to="#workbench-editor-tabs"
+    >
+      <FileTabs
+        :tabs="fileTabs.tabs.value"
+        :active="file?.path ?? null"
+        :dirty="dirtyTabs"
+        @select="selectFile"
+        @pin="fileTabs.pin"
+        @close="closeTab"
+        @close-others="closeOtherTabs"
+        @close-all="closeAllTabs"
+        @move="fileTabs.move"
+      />
+    </Teleport>
 
     <ScriptWorkspace
       v-if="file"
@@ -266,6 +417,7 @@ function switchBranch(event: Event): void {
       :layout-store="layoutStore"
       :state-key="`${provider}/${owner}/${repo}@${ref_}:${file.path}`"
       :files="files"
+      keep-editor
       @open="selectFile"
     >
       <template #toolbar>

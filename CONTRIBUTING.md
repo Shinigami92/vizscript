@@ -107,14 +107,15 @@ Graph changes are `GraphOp`s. Each backend turns them into minimal text edits on
 
 ### Persistence
 
-| Data                              | Where                                                                                       |
-| --------------------------------- | ------------------------------------------------------------------------------------------- |
-| Node positions and reroute points | `file_layouts`, per repository, branch and file, shared by all users                        |
-| Workbench layout                  | `user_preferences` (key `workbench.layout`), cached in the browser                          |
-| Recently opened projects          | `recent_projects`, the newest 20 per user                                                   |
-| Unsaved code edits                | Local draft in the browser                                                                  |
-| Local folders                     | Handles in IndexedDB (`vizscript` → `folders`), their layouts and drafts in browser storage |
-| Camera, color scheme              | URL (`?view=x,y,zoom`) and browser storage                                                  |
+| Data                              | Where                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Node positions and reroute points | `file_layouts`, per repository, branch and file, shared by all users                             |
+| Workbench layout                  | `user_preferences` (key `workbench.layout`), cached in the browser                               |
+| Recently opened projects          | `recent_projects`, the newest 20 per user                                                        |
+| Unsaved code edits                | Local draft in the browser                                                                       |
+| Local folders                     | Handles in IndexedDB (`vizscript` → `folders`), their layouts and drafts in browser storage      |
+| Open tabs                         | Browser storage per repository branch or local folder; their Monaco models stay alive while open |
+| Camera, color scheme              | URL (`?view=x,y,zoom`) and browser storage                                                       |
 
 Repositories are keyed by the provider's numeric id, so layouts survive renames. The playground uses browser storage only.
 
