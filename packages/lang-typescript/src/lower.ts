@@ -10,6 +10,7 @@ import type {
   NodeCategory,
   NodeKind,
   NodePurity,
+  ParseOptions,
   Pin,
   PinLiteral,
   PinRef,
@@ -30,6 +31,7 @@ import {
   createEdge,
   isArrayType,
   lineIndent,
+  linkImports,
   linkSymbolGraphs,
   markUnusedValue,
   NodeIdFactory,
@@ -2298,7 +2300,8 @@ export function parseFile(
 
 export function parseTypeScript(
   text: string,
-  fileName = 'file.ts'
+  fileName = 'file.ts',
+  options: ParseOptions = {}
 ): GraphDocument {
   const diagnostics: Diagnostic[] = [];
   let program: t.Program;
@@ -2341,6 +2344,10 @@ export function parseTypeScript(
   };
   attachComments(doc, text, comments);
   linkSymbolGraphs(doc);
-  completeCallPins(doc, text, { placeholder: 'undefined' });
+  linkImports(doc, options.imports);
+  completeCallPins(doc, text, {
+    placeholder: 'undefined',
+    imports: options.imports,
+  });
   return doc;
 }

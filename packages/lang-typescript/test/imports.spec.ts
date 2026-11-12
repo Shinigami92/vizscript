@@ -1,5 +1,11 @@
-import type { GraphOp } from '@vizscript/core';
-import { applyTextEdits } from '@vizscript/core';
+import type { GraphOp, ParseOptions, ScriptSymbol } from '@vizscript/core';
+import {
+  applyTextEdits,
+  defaultExport,
+  exportedSymbols,
+  summarizeGraph,
+  summarizeSymbols,
+} from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
 
@@ -74,6 +80,87 @@ describe('deleting imports', () => {
   it('removes the statement with its last name', () => {
     expect(del("import { a } from './x';\n\nconst y = 1;\n", 'a')).toBe(
       'const y = 1;\n'
+    );
+  });
+});
+
+describe('declarations of imported files', () => {
+  const util = [
+    "export function greet(name: string, punctuation = '!'): string {",
+    '  return name + punctuation;',
+    '}',
+    'export const LIMIT = 3;',
+    'function hidden(): void {}',
+    'export default function main(): void {}',
+    '',
+  ].join('\n');
+  const exports = exportedSymbols(parseTypeScript(util, 'util.ts'), util);
+  const declaration = (name: string): ScriptSymbol | undefined =>
+    exports.find((s) => s.name === name);
+  const options: ParseOptions = {
+    imports: [
+      { name: 'main', declaration: defaultExport(exports) },
+      { name: 'greet', declaration: declaration('greet') },
+      { name: 'LIMIT', declaration: declaration('LIMIT') },
+      { name: 'u', members: exports },
+    ],
+  };
+  const text = [
+    "import main, { greet, LIMIT } from './util';",
+    "import * as u from './util';",
+    "greet('a');",
+    "u.greet('b', '?');",
+    'main();',
+    'console.log(LIMIT);',
+    '',
+  ].join('\n');
+
+  it('exports only exported names', () => {
+    expect(exports.map((s) => s.name)).toEqual(['greet', 'LIMIT', 'main']);
+  });
+
+  it('gives imports their declarations', () => {
+    const doc = parseTypeScript(text, 'm.ts', options);
+    expect(summarizeSymbols(doc)).toMatchInlineSnapshot(`
+      "import main(): void ← default of ./util
+      import greet(name: string, punctuation = …): string ← greet of ./util
+      import LIMIT ~number ← LIMIT of ./util
+      import u ← * of ./util"
+    `);
+    expect(summarizeGraph(doc)).toMatchInlineSnapshot(`
+      "function Module
+        #0 entry "Module" (m.ts) [>then:▶]
+        #1 call "greet" [<exec:▶ >then:▶ <arg0:string='a' <param:punctuation:string= >return:string]
+        #2 call "u.greet" [<exec:▶ >then:▶ <arg0:string='b' <arg1:string='?' >return:string]
+        #3 call "main" [<exec:▶ >then:▶]
+        #4 getVar "LIMIT" [>value:number]
+        #5 call "console.log" [<exec:▶ >then:▶ <arg0:any >return:any]
+        ==> #0.then -> #1.exec
+        ==> #1.then -> #2.exec
+        ==> #2.then -> #3.exec
+        --> #4.value -> #5.arg0
+        ==> #3.then -> #5.exec"
+    `);
+  });
+
+  it('fills in arguments of imported functions', () => {
+    const doc = parseTypeScript(text, 'm.ts', options);
+    const call = doc.functions[0]?.nodes.find(
+      (n) => n.kind === 'call' && n.title === 'greet'
+    );
+    const result = applyTypeScriptOp(
+      text,
+      {
+        type: 'setLiteral',
+        node: call?.id ?? '',
+        pin: 'param:punctuation',
+        value: '?',
+      },
+      'm.ts',
+      options
+    );
+    expect(result.ok && applyTextEdits(text, result.edits)).toContain(
+      "greet('a', '?');"
     );
   });
 });

@@ -33,6 +33,8 @@ export interface SymbolParam {
   dataType: DataType;
   /** Default value expression. */
   defaultRange?: SourceRange;
+  /** Default value of a parameter declared in another file. */
+  defaultText?: string;
   /** `...rest`, `*args`, `**kwargs`. */
   rest?: boolean;
 }
@@ -83,6 +85,8 @@ export interface ScriptSymbol {
    * `*` for the whole module (`import * as ns`, `import os`, a preload).
    */
   imported?: string;
+  /** Kind of the imported declaration, once its file was read. */
+  importedKind?: SymbolKind;
 }
 
 /** Qualified name of a symbol, e.g. `Item.total`. */

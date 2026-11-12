@@ -1,3 +1,4 @@
+import type { ParseOptions } from './imports';
 import type { DataType, GraphDocument, PinRef, Point } from './ir';
 import type { ModuleReference } from './module-refs';
 
@@ -217,8 +218,14 @@ export interface LanguageBackend {
   name: string;
   /** Handled file extensions including the dot. */
   extensions: ReadonlyArray<string>;
-  parse(text: string, fileName?: string): GraphDocument;
-  applyOp(text: string, op: GraphOp, fileName?: string): OpResult;
+  /** `options` carries the declarations of imported names. */
+  parse(text: string, fileName?: string, options?: ParseOptions): GraphDocument;
+  applyOp(
+    text: string,
+    op: GraphOp,
+    fileName?: string,
+    options?: ParseOptions
+  ): OpResult;
   /** Files referenced by the source (imports, …) for Ctrl/Cmd+click. */
   references?(text: string, fileName?: string): ModuleReference[];
   /** Types and modifiers offered by the Details panel. */

@@ -2,6 +2,7 @@ import type {
   DeclarationSyntax,
   GraphOp,
   OpResult,
+  ParseOptions,
   PinLiteral,
   StatementSyntax,
   TypeSystemInfo,
@@ -346,11 +347,12 @@ export const PYTHON_SYNTAX: StatementSyntax = {
 export function applyPythonOp(
   text: string,
   op: GraphOp,
-  fileName?: string
+  fileName?: string,
+  options?: ParseOptions
 ): OpResult {
   return applyTextOp(
     text,
-    parsePythonDocument(text, fileName),
+    parsePythonDocument(text, fileName, options),
     op,
     PYTHON_SYNTAX
   );

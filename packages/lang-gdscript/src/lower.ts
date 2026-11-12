@@ -7,6 +7,7 @@ import type {
   InputSpec,
   InsertPoint,
   OutputPinMeta,
+  ParseOptions,
   Pin,
   SourceRange,
   StatementMeta,
@@ -23,6 +24,7 @@ import {
   isArrayType,
   lineEnd,
   lineIndent,
+  linkImports,
   linkSymbolGraphs,
   markUnusedValue,
   truncate,
@@ -1558,7 +1560,8 @@ class FnGraphBuilder extends GraphBuilderBase {
 
 export function parseGDScriptDocument(
   text: string,
-  fileName = 'script.gd'
+  fileName = 'script.gd',
+  options: ParseOptions = {}
 ): GraphDocument {
   const { script, diagnostics, comments } = parseGDScript(text);
   const lowering = new DocumentLowering(
@@ -1578,6 +1581,10 @@ export function parseGDScriptDocument(
   };
   attachComments(doc, text, comments);
   linkSymbolGraphs(doc);
-  completeCallPins(doc, text, { placeholder: 'null' });
+  linkImports(doc, options.imports);
+  completeCallPins(doc, text, {
+    placeholder: 'null',
+    imports: options.imports,
+  });
   return doc;
 }

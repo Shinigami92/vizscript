@@ -3,6 +3,7 @@ import type {
   GraphDocument,
   GraphOp,
   OpResult,
+  ParseOptions,
   ScriptSymbol,
   StatementSyntax,
   TypeSystemInfo,
@@ -430,9 +431,10 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
 export function applyTypeScriptOp(
   text: string,
   op: GraphOp,
-  fileName?: string
+  fileName?: string,
+  options?: ParseOptions
 ): OpResult {
-  return applyTextOp(text, parseTypeScript(text, fileName), op, {
+  return applyTextOp(text, parseTypeScript(text, fileName, options), op, {
     ...TYPESCRIPT_SYNTAX,
     declarations: declarations(text, fileName),
   });

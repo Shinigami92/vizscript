@@ -49,7 +49,7 @@ export function summarizeSymbols(doc: GraphDocument): string {
         ? `(${s.params
             .map(
               (p) =>
-                `${p.rest ? '...' : ''}${p.name}${p.type ? `: ${p.type.text}` : ''}${p.defaultRange ? ' = …' : ''}`
+                `${p.rest ? '...' : ''}${p.name}${p.type ? `: ${p.type.text}` : ''}${p.defaultRange || p.defaultText !== undefined ? ' = …' : ''}`
             )
             .join(', ')})`
         : '';

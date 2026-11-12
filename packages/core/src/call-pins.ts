@@ -1,4 +1,5 @@
 import type { InputPinMeta } from './edit-meta';
+import type { ImportedDeclaration } from './imports';
 import type {
   FunctionGraph,
   GraphDocument,
@@ -16,6 +17,8 @@ export interface CallPinOptions {
    * skipped parameters stay; otherwise positionally with placeholders.
    */
   keywordArguments?: boolean;
+  /** Declarations of imported names, read from their files. */
+  imports?: ReadonlyArray<ImportedDeclaration>;
 }
 
 const ARG_PIN = /^arg\d+$/;
@@ -46,12 +49,16 @@ function literalKind(param: SymbolParam): LiteralKind {
   }
 }
 
-/** The function a call node calls, when the file declares it. */
+/**
+ * The function a call node calls, when the file declares it or imports it
+ * (`fn()`, `ns.fn()`, `module.fn()`).
+ */
 function calledSymbol(
   text: string,
   doc: GraphDocument,
   fn: FunctionGraph,
-  node: GraphNode
+  node: GraphNode,
+  imports: ReadonlyMap<string, ImportedDeclaration>
 ): ScriptSymbol | undefined {
   const symbols = doc.symbols ?? [];
   const owner = symbols.find(
@@ -79,13 +86,52 @@ function calledSymbol(
     );
   }
 
+  // `ns.fn()`: a function of an imported module.
+  const module =
+    targetText ?? (title.includes('.') ? title.split('.')[0] : undefined);
+  if (module) {
+    return imports
+      .get(module)
+      ?.members?.find((s) => s.name === name && s.kind === 'function');
+  }
+
   if (title.includes('.') || target) {
     return undefined;
   }
 
-  return symbols.find(
-    (s) => s.name === name && s.scope === '' && s.kind === 'function'
+  const imported = imports.get(name)?.declaration;
+  return (
+    symbols.find(
+      (s) => s.name === name && s.scope === '' && s.kind === 'function'
+    ) ?? (imported?.kind === 'function' ? imported : undefined)
   );
+}
+
+/**
+ * Calls of imported functions get the output of their declaration: its
+ * type, or no pin for functions without a result (unless wired).
+ */
+function typeResult(
+  fn: FunctionGraph,
+  node: GraphNode,
+  symbol: ScriptSymbol
+): void {
+  const at = node.pins.findIndex((p) => p.id === 'return');
+  const pin = node.pins[at];
+  if (!pin || symbol.returnType === undefined) {
+    return;
+  }
+
+  if (symbol.returnType === 'void') {
+    const wired = fn.edges.some(
+      (e) => e.from.node === node.id && e.from.pin === 'return'
+    );
+    if (!wired) {
+      node.pins.splice(at, 1);
+    }
+  } else if (pin.type === 'any') {
+    pin.type = symbol.returnType;
+  }
 }
 
 /**
@@ -99,13 +145,19 @@ export function completeCallPins(
   text: string,
   options: CallPinOptions
 ): void {
+  const imports = new Map((options.imports ?? []).map((i) => [i.name, i]));
+  const own = new Set(doc.symbols ?? []);
   for (const fn of doc.functions) {
     for (const node of fn.nodes) {
       if (node.kind !== 'call') {
         continue;
       }
 
-      const symbol = calledSymbol(text, doc, fn, node);
+      const symbol = calledSymbol(text, doc, fn, node, imports);
+      if (symbol && !own.has(symbol)) {
+        typeResult(fn, node, symbol);
+      }
+
       const params = symbol?.params;
       if (!symbol || !params) {
         continue;
@@ -130,6 +182,11 @@ export function completeCallPins(
         const param = params[index];
         if (param && !param.rest && pin.type === 'any') {
           pin.type = param.dataType;
+        }
+
+        // Imported functions are unknown while lowering: name them here.
+        if (param && !param.rest && pin.name === '') {
+          pin.name = param.name;
         }
       }
 
@@ -168,7 +225,7 @@ export function completeCallPins(
         };
         const defaultText = param.defaultRange
           ? text.slice(param.defaultRange.start, param.defaultRange.end)
-          : '';
+          : (param.defaultText ?? '');
         added.push({
           id: `param:${param.name}`,
           name: param.name,

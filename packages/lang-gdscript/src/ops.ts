@@ -3,6 +3,7 @@ import type {
   GraphDocument,
   GraphOp,
   OpResult,
+  ParseOptions,
   ScriptSymbol,
   StatementSyntax,
   TypeSystemInfo,
@@ -407,11 +408,12 @@ export const GDSCRIPT_SYNTAX: StatementSyntax = {
 export function applyGDScriptOp(
   text: string,
   op: GraphOp,
-  fileName?: string
+  fileName?: string,
+  options?: ParseOptions
 ): OpResult {
   return applyTextOp(
     text,
-    parseGDScriptDocument(text, fileName),
+    parseGDScriptDocument(text, fileName, options),
     op,
     GDSCRIPT_SYNTAX
   );

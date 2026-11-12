@@ -5,6 +5,7 @@ export * from './edit-meta';
 export * from './geometry';
 export * from './graph-builder';
 export * from './ids';
+export * from './imports';
 export type * from './ir';
 export * from './language';
 export * from './layout';

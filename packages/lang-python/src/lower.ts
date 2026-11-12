@@ -7,6 +7,7 @@ import type {
   InputSpec,
   InsertPoint,
   OutputPinMeta,
+  ParseOptions,
   Pin,
   SourceRange,
   StatementMeta,
@@ -23,6 +24,7 @@ import {
   isArrayType,
   lineEnd,
   lineIndent,
+  linkImports,
   linkSymbolGraphs,
   markUnusedValue,
   truncate,
@@ -1831,7 +1833,8 @@ class FnGraphBuilder extends GraphBuilderBase {
 
 export function parsePythonDocument(
   text: string,
-  fileName = 'script.py'
+  fileName = 'script.py',
+  options: ParseOptions = {}
 ): GraphDocument {
   const { body, diagnostics, comments } = parsePython(text);
   const lowering = new DocumentLowering(
@@ -1851,6 +1854,11 @@ export function parsePythonDocument(
   };
   attachComments(doc, text, comments);
   linkSymbolGraphs(doc);
-  completeCallPins(doc, text, { placeholder: 'None', keywordArguments: true });
+  linkImports(doc, options.imports);
+  completeCallPins(doc, text, {
+    placeholder: 'None',
+    keywordArguments: true,
+    imports: options.imports,
+  });
   return doc;
 }
