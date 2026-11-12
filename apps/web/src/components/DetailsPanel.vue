@@ -9,11 +9,11 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import type { StatementMeta } from '@vizscript/core';
-import { CATEGORY_COLORS, getMeta } from '@vizscript/core';
-import { computed } from 'vue';
+import { CATEGORY_COLORS, COMMENT_BOX_COLORS, getMeta } from '@vizscript/core';
+import { computed, provide, ref } from 'vue';
 import { indexDocument, pinPeers } from '../graph/doc-index';
 import { lineColumn, snippet } from '../graph/source';
-import DetailsSection from './DetailsSection.vue';
+import DetailsSection, { DETAILS_QUERY } from './DetailsSection.vue';
 import PinIcon from './PinIcon.vue';
 import SymbolDetails from './SymbolDetails.vue';
 
@@ -36,6 +36,8 @@ const props = defineProps<{
   docText?: string;
   /** Variable of a selected Get / Set node, shown above the node. */
   nodeSymbol?: ScriptSymbol | null;
+  /** Palette index of a comment box's color (0: default). */
+  boxColorOf?: (boxId: string) => number;
 }>();
 
 const emit = defineEmits<{
@@ -46,9 +48,75 @@ const emit = defineEmits<{
   openSymbol: [id: string];
   openImport: [id: string];
   selectSymbol: [id: string];
+  /** A comment box gets another color (palette index, 0: default). */
+  boxColor: [boxId: string, index: number];
   op: [op: GraphOp];
   close: [];
 }>();
+
+// --------------------------------------------------------- search, lock
+
+/** Filters the sections (`DetailsSection` injects it). */
+const query = ref('');
+provide(DETAILS_QUERY, query);
+
+/** UE's lock: the panel keeps showing what was selected when locked. */
+const locked = ref<{
+  selection: string[];
+  symbolId: string | null;
+  nodeSymbolId: string | null;
+} | null>(null);
+
+function toggleLock(): void {
+  locked.value = locked.value
+    ? null
+    : {
+        selection: [...props.selection],
+        symbolId: props.symbol?.id ?? null,
+        nodeSymbolId: props.nodeSymbol?.id ?? null,
+      };
+}
+
+function symbolById(id: string | null): ScriptSymbol | null {
+  return id ? (props.doc?.symbols?.find((s) => s.id === id) ?? null) : null;
+}
+
+const shownSelection = computed(
+  () => locked.value?.selection ?? props.selection
+);
+const shownSymbol = computed(() =>
+  locked.value ? symbolById(locked.value.symbolId) : (props.symbol ?? null)
+);
+const shownNodeSymbol = computed(() =>
+  locked.value
+    ? symbolById(locked.value.nodeSymbolId)
+    : (props.nodeSymbol ?? null)
+);
+/** Uses and file of a locked symbol are only known while it's selected. */
+const shownUses = computed(() =>
+  shownSymbol.value?.id === props.symbol?.id
+    ? (props.symbolUses ?? 0)
+    : undefined
+);
+const shownImportPath = computed(() =>
+  shownSymbol.value?.id === props.symbol?.id ? props.importPath : undefined
+);
+
+/** Edits from the panel; a locked symbol follows its rename. */
+function onSymbolOp(op: GraphOp): void {
+  const lock = locked.value;
+  if (lock && op.type === 'renameSymbol') {
+    const renamed = (id: string | null): string | null =>
+      id === op.symbol ? op.symbol.replace(/[^:.]+$/, op.name) : id;
+    locked.value = {
+      ...lock,
+      symbolId: renamed(lock.symbolId),
+      nodeSymbolId: renamed(lock.nodeSymbolId),
+    };
+  }
+
+  emit('op', op);
+}
 
 const index = computed(() => indexDocument(props.doc));
 /** Classes, interfaces, type aliases and enums of the file. */
@@ -59,7 +127,7 @@ const declaredTypes = computed(() =>
 );
 
 const selected = computed(() =>
-  props.selection
+  shownSelection.value
     .map((id) => index.value.nodes.get(id))
     .filter((entry) => entry !== undefined)
 );
@@ -146,6 +214,32 @@ function descriptionOf(
   return node ? { nodeId: node.id, text: node.comment?.text ?? '' } : undefined;
 }
 
+/** A comment box whose nodes are exactly the selection (title clicked). */
+const selectedBox = computed(() => {
+  const ids = new Set(shownSelection.value);
+  if (ids.size === 0) {
+    return undefined;
+  }
+
+  return (props.doc?.functions ?? [])
+    .flatMap((f) => f.comments ?? [])
+    .find(
+      (box) =>
+        box.nodes.length === ids.size && box.nodes.every((id) => ids.has(id))
+    );
+});
+
+const boxColor = computed(() =>
+  selectedBox.value ? (props.boxColorOf?.(selectedBox.value.id) ?? 0) : 0
+);
+
+function renameBox(title: string): void {
+  const box = selectedBox.value;
+  if (box && title.trim() !== box.title) {
+    emit('op', { type: 'renameCommentBox', box: box.id, title: title.trim() });
+  }
+}
+
 function setSetting(setting: string, value: string): void {
   emit('op', { type: 'setScriptSetting', setting, value });
 }
@@ -180,7 +274,7 @@ function setDefault(symbol: ScriptSymbol, before: string, value: string): void {
 }
 
 function deleteSelection(): void {
-  emit('op', { type: 'deleteNodes', nodeIds: [...props.selection] });
+  emit('op', { type: 'deleteNodes', nodeIds: [...shownSelection.value] });
 }
 </script>
 
@@ -190,11 +284,36 @@ function deleteSelection(): void {
     class="flex h-full min-h-0 flex-col bg-zinc-950 text-sm"
     aria-label="Details"
   >
+    <!-- Like UE: search the details, lock them to the current selection. -->
     <div
-      v-if="closable"
-      class="flex h-9 shrink-0 items-center justify-end border-b border-zinc-800 px-1.5"
+      data-ui="details-toolbar"
+      class="flex h-9 shrink-0 items-center gap-1 border-b border-zinc-800 px-1.5"
     >
+      <input
+        v-model="query"
+        type="search"
+        class="input min-w-0 flex-1 py-1 text-xs"
+        placeholder="Search details"
+        aria-label="Search details"
+      />
       <button
+        type="button"
+        class="btn-ghost px-1.5"
+        :class="{ 'text-amber-400': locked }"
+        :title="
+          locked
+            ? 'Unlock: show what is selected'
+            : 'Lock: keep showing this selection'
+        "
+        :aria-pressed="locked !== null"
+        @click="toggleLock"
+      >
+        <span
+          :class="locked ? 'i-mdi-lock' : 'i-mdi-lock-open-variant-outline'"
+        />
+      </button>
+      <button
+        v-if="closable"
         type="button"
         class="btn-ghost px-1.5"
         title="Hide panel"
@@ -205,29 +324,77 @@ function deleteSelection(): void {
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto">
+      <!-- UE's comment box details: its title and color. -->
+      <DetailsSection
+        v-if="selectedBox && !shownSymbol"
+        id="comment-box"
+        title="Comment box"
+      >
+        <dl
+          class="grid grid-cols-[6.5rem_1fr] items-center gap-x-2 gap-y-1.5 px-3 text-xs"
+        >
+          <dt class="text-zinc-500">Title</dt>
+          <dd>
+            <input
+              :key="`${selectedBox.id}:${selectedBox.title}`"
+              class="input py-1 text-xs"
+              :value="selectedBox.title"
+              :readonly="!editable"
+              placeholder="Comment"
+              aria-label="Comment box title"
+              @keydown.enter="($event.target as HTMLInputElement).blur()"
+              @change="renameBox(($event.target as HTMLInputElement).value)"
+            />
+          </dd>
+          <dt class="text-zinc-500">Color</dt>
+          <dd class="flex flex-wrap gap-1" role="radiogroup" aria-label="Color">
+            <button
+              v-for="(swatch, index) in COMMENT_BOX_COLORS"
+              :key="swatch.name"
+              type="button"
+              role="radio"
+              class="size-5 rounded border"
+              :class="
+                boxColor === index
+                  ? 'border-amber-400 ring-1 ring-amber-400'
+                  : 'border-zinc-700 hover:border-zinc-400'
+              "
+              :style="{
+                background: swatch.color || 'var(--colors-zinc-700)',
+              }"
+              :title="swatch.name"
+              :aria-label="swatch.name"
+              :aria-checked="boxColor === index"
+              :disabled="!editable"
+              @click="emit('boxColor', selectedBox.id, index)"
+            />
+          </dd>
+        </dl>
+      </DetailsSection>
+
       <SymbolDetails
-        v-if="symbol"
-        :symbol="symbol"
-        :description="descriptionOf(symbol)"
+        v-if="shownSymbol"
+        :symbol="shownSymbol"
+        :description="descriptionOf(shownSymbol)"
         :text="docText ?? text"
-        :uses="symbolUses ?? 0"
+        :uses="shownUses"
         :editable="editable"
         :types="types ?? null"
         :declared="declaredTypes"
         :language="doc?.language ?? ''"
-        :import-path="importPath"
+        :import-path="shownImportPath"
         @reveal="(range) => emit('reveal', range)"
-        @op="(op) => emit('op', op)"
-        @open="emit('openSymbol', symbol.id)"
-        @open-import="emit('openImport', symbol.id)"
+        @op="onSymbolOp"
+        @open="emit('openSymbol', shownSymbol.id)"
+        @open-import="emit('openImport', shownSymbol.id)"
       />
 
       <!-- Details of the selection -->
       <template v-else-if="single">
-        <template v-if="nodeSymbol">
+        <template v-if="shownNodeSymbol">
           <SymbolDetails
-            :symbol="nodeSymbol"
-            :description="descriptionOf(nodeSymbol)"
+            :symbol="shownNodeSymbol"
+            :description="descriptionOf(shownNodeSymbol)"
             :text="docText ?? text"
             :uses="0"
             :editable="editable"
@@ -236,7 +403,7 @@ function deleteSelection(): void {
             :language="doc?.language ?? ''"
             compact
             @reveal="(range) => emit('reveal', range)"
-            @op="(op) => emit('op', op)"
+            @op="onSymbolOp"
           />
           <h3 class="section-title border-b border-zinc-800/80 pt-3">Node</h3>
         </template>

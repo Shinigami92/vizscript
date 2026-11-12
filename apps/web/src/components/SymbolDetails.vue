@@ -19,7 +19,8 @@ const props = defineProps<{
   symbol: ScriptSymbol;
   text: string;
   /** Number of nodes using the symbol (highlighted in the graph). */
-  uses: number;
+  /** Unknown (not shown) for a locked symbol that isn't selected. */
+  uses?: number;
   editable: boolean;
   /** Types and modifiers of the language (from the parser worker). */
   types: TypeSystemInfo | null;
@@ -345,9 +346,52 @@ const otherModifiers = computed(() => {
     ...(options?.access ?? []),
     ...(options?.flags ?? []),
     ...(options?.flags?.includes('export') ? ['export default'] : []),
+    ...(props.types?.exportHints ?? []).map((h) => h.name),
   ]);
   return props.symbol.modifiers.filter((m) => !known.has(m));
 });
+
+// ----------------------------------------------------------- export hints
+
+/** Exported variables of the script can get an editor hint (GDScript). */
+const exportHints = computed(() =>
+  props.symbol.kind === 'variable' && props.symbol.scope === ''
+    ? (props.types?.exportHints ?? [])
+    : []
+);
+
+/** The export annotation written (`@export_range(0, 10)`), if any. */
+const currentExport = computed(() => {
+  const range = props.symbol.range;
+  const lineAbove = props.text.lastIndexOf(
+    '\n',
+    props.text.lastIndexOf('\n', range.start - 1) - 1
+  );
+  const head = props.text.slice(lineAbove + 1, props.symbol.nameRange.start);
+  const match = head.match(/(@export\w*)(?:\(([^)]*)\))?/);
+  return match ? { name: match[1] ?? '', args: match[2] ?? '' } : undefined;
+});
+
+function setExportHint(name: string): void {
+  const current = currentExport.value;
+  if (!name) {
+    if (current) {
+      setModifier(current.name, false);
+    }
+
+    return;
+  }
+
+  const hint = exportHints.value.find((h) => h.name === name);
+  setModifier(hint?.args ? `${name}(${hint.args})` : name, true);
+}
+
+function setExportArgs(args: string): void {
+  const current = currentExport.value;
+  if (current && args.trim() !== current.args) {
+    setModifier(`${current.name}(${args.trim()})`, true);
+  }
+}
 
 /** The access level written, else the default (the first, `public`). */
 const access = computed(() => {
@@ -413,7 +457,7 @@ function setModifier(modifier: string, enabled: boolean): void {
       />
     </div>
 
-    <section class="section">
+    <DetailsSection id="symbol-general" :title="symbolLabel(symbol)">
       <dl class="grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1.5 px-3 text-xs">
         <template v-if="isImport">
           <dt class="text-zinc-500">Module</dt>
@@ -573,6 +617,40 @@ function setModifier(modifier: string, enabled: boolean): void {
             </button>
           </dd>
         </template>
+        <template v-if="exportHints.length > 0">
+          <dt class="pt-1 text-zinc-500">Export</dt>
+          <dd class="flex min-w-0 flex-col gap-1">
+            <select
+              class="input py-1 font-mono text-xs"
+              :value="currentExport?.name ?? ''"
+              :disabled="!editable"
+              aria-label="Export hint"
+              @change="
+                setExportHint(($event.target as HTMLSelectElement).value)
+              "
+            >
+              <option value="">not exported</option>
+              <option
+                v-for="hint in exportHints"
+                :key="hint.name"
+                :value="hint.name"
+              >
+                {{ hint.name }}
+              </option>
+            </select>
+            <input
+              v-if="currentExport && currentExport.args !== ''"
+              :key="`${currentExport.name}:${currentExport.args}`"
+              class="input py-1 font-mono text-xs"
+              :value="currentExport.args"
+              :readonly="!editable"
+              :aria-label="`Arguments of ${currentExport.name}`"
+              spellcheck="false"
+              @keydown.enter="($event.target as HTMLInputElement).blur()"
+              @change="setExportArgs(($event.target as HTMLInputElement).value)"
+            />
+          </dd>
+        </template>
         <template v-if="modifierOptions?.flags">
           <dt class="pt-0.5 text-zinc-500">Modifiers</dt>
           <dd class="flex flex-wrap gap-x-3 gap-y-1">
@@ -624,6 +702,7 @@ function setModifier(modifier: string, enabled: boolean): void {
         <template
           v-if="
             !compact &&
+            uses !== undefined &&
             symbol.kind !== 'type' &&
             symbol.kind !== 'enum' &&
             !(isImport && symbol.modifiers.includes('type'))
@@ -636,7 +715,7 @@ function setModifier(modifier: string, enabled: boolean): void {
           </dd>
         </template>
       </dl>
-    </section>
+    </DetailsSection>
 
     <DetailsSection v-if="symbol.params" id="symbol-inputs" title="Inputs">
       <template #actions>

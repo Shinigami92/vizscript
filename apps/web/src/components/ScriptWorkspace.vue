@@ -20,12 +20,15 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  boxColorEntries,
+  boxColorIndex,
+  boxColorKey,
   defaultExport,
   exportedSymbols,
   findDefinition,
   findNode,
   findNodeAtOffset,
-  isRerouteKey,
+  isExtraLayoutKey,
   layoutDocument,
   qualifiedName,
   reconcilePositions,
@@ -797,6 +800,7 @@ function relayout(): void {
       pinned.value
     ),
     ...rerouteEntries(pinned.value),
+    ...boxColorEntries(pinned.value),
   };
 }
 
@@ -827,6 +831,7 @@ async function reparse(): Promise<void> {
     ? {
         ...reconcilePositions(previous, next, pinned.value),
         ...reconcileReroutes(previous, next, pinned.value),
+        ...boxColorEntries(pinned.value),
       }
     : pinned.value;
 
@@ -1030,7 +1035,7 @@ function onLayoutChange(patch: LayoutPatch): void {
   // The first move freezes the current auto layout so nothing jumps around
   // after a reload; afterwards only moved nodes are sent.
   const full: LayoutPatch = { ...patch };
-  if (Object.keys(patch).some((key) => !isRerouteKey(key))) {
+  if (Object.keys(patch).some((key) => !isExtraLayoutKey(key))) {
     const current = canvas.value?.getPositions() ?? positions.value;
     for (const [id, p] of Object.entries(current)) {
       if (!pinned.value[id] && !(id in full)) {
@@ -1040,6 +1045,15 @@ function onLayoutChange(patch: LayoutPatch): void {
   }
 
   recordLayout(full);
+}
+
+/** Colors of comment boxes are layout entries, undone like moves. */
+function boxColorOf(boxId: string): number {
+  return boxColorIndex(pinned.value, boxId);
+}
+
+function setBoxColor(boxId: string, index: number): void {
+  recordLayout({ [boxColorKey(boxId)]: index > 0 ? { x: index, y: 0 } : null });
 }
 
 function resetLayout(ids: ReadonlyArray<string>): void {
@@ -1810,6 +1824,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :node-symbol="nodeSymbol"
         :symbol-uses="symbolUses.length"
         :import-path="selectedImportPath"
+        :box-color-of="boxColorOf"
         :types="typeSystem"
         :doc-text="docText"
         @select="selectNodes"
@@ -1819,6 +1834,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         @open-symbol="openSymbol"
         @open-import="openImport"
         @select-symbol="selectSymbol"
+        @box-color="setBoxColor"
         @op="onScriptOp"
         @close="workbench.hide('details')"
       />
