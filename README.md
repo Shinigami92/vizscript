@@ -41,29 +41,7 @@ To run it from source or to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Working with the graph
 
-| Action                       | Input                                                                                                |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Pan                          | Right or middle drag, Space + drag, or two-finger scroll                                             |
-| Zoom                         | Mouse wheel, Ctrl + scroll, pinch, or the zoom controls in the graph's corner                        |
-| Select / multi-select        | Click, Shift + click (add), Ctrl/Cmd + click (toggle), drag a marquee                                |
-| Select a whole function      | Click its frame title                                                                                |
-| Move                         | Drag a node; all selected nodes (and reroute points) move together                                   |
-| Zoom to selection / fit all  | `F` / `Home`                                                                                         |
-| Find nodes                   | Ctrl/Cmd + F, then Enter / Shift + Enter to step through the results                                 |
-| Context menu                 | Right-click a node, pin, wire, reroute point, frame title or empty space                             |
-| Jump to code                 | Double-click a node                                                                                  |
-| Go to definition             | `F12` or right-click → Go to definition on a call or variable node                                   |
-| Edit a value                 | Double-click an inline value on a pin, or use the details panel                                      |
-| Rewire                       | Drag from a pin to another pin                                                                       |
-| Reorder statements           | Drag an exec output onto another node's exec input                                                   |
-| Add a node                   | Drag a wire out of any pin and release it on empty space (actions depend on the pin), or right-click |
-| Add a reroute point          | Double-click a wire; Alt + click a reroute point removes it                                          |
-| Disconnect                   | Alt + click a pin (the nodes stay, only the wire is removed)                                         |
-| Problems panel               | Shift + Ctrl/Cmd + M, or the error / warning counter in the status bar                               |
-| Delete                       | `Delete` / `Backspace`                                                                               |
-| Undo / redo                  | Toolbar buttons, Ctrl/Cmd + Z, Ctrl/Cmd + Shift + Z                                                  |
-| Comment a node               | Double-click its comment bubble, or right-click → Add comment                                        |
-| Comment box around selection | `C`; double-click the box title to rename it, click it to select and move its nodes                  |
+Press `?` in the app, or use the keyboard button in the top bar, to see all mouse and keyboard controls.
 
 On phones the viewer is read-only: you can switch between code and graph, pan and pinch-zoom.
 

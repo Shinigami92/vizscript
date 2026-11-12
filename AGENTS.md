@@ -4,7 +4,8 @@ Guidance for AI agents and contributors working in this repository.
 
 ## Documentation
 
-- **README.md** is the overview and showcase for users: what vizscript does, how to try it, the graph controls.
+- **README.md** is the overview and showcase for users: what vizscript does and how to try it.
+- **Mouse and keyboard controls** are listed in the app (`apps/web/src/components/ShortcutsDialog.vue`, opened with `?`), not in the README. Update it when you add or change a shortcut.
 - **CONTRIBUTING.md** holds everything technical: setup, architecture, persistence, scripts, verifying changes, commit rules.
 - Update the matching file when a change affects it.
 

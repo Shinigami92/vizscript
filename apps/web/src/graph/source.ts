@@ -44,7 +44,8 @@ export function snippet(
   return dedented.join('\n');
 }
 
-const isMac =
+/** Whether shortcuts use ⌘ / ⌥ / ⇧ (macOS, iOS) instead of Ctrl / Alt. */
+export const isMac =
   typeof navigator !== 'undefined' &&
   /Mac|iPhone|iPad/.test(navigator.platform);
 

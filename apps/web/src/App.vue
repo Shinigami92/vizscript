@@ -2,7 +2,9 @@
 import { computed } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import RecentMenu from './components/RecentMenu.vue';
+import ShortcutsDialog from './components/ShortcutsDialog.vue';
 import ToastHost from './components/ToastHost.vue';
+import { useShortcutsDialog } from './composables/use-shortcuts-dialog';
 import { useTheme } from './composables/use-theme';
 import { useSessionStore } from './stores/session';
 
@@ -11,6 +13,7 @@ const route = useRoute();
 const router = useRouter();
 const fullscreen = computed(() => route.meta.fullscreen === true);
 const { preference } = useTheme();
+const shortcutsOpen = useShortcutsDialog();
 
 const THEMES = {
   auto: { icon: 'i-mdi-theme-light-dark', label: 'System', next: 'light' },
@@ -80,6 +83,16 @@ async function logout(): Promise<void> {
       <div class="ml-auto flex items-center gap-2">
         <button
           type="button"
+          class="btn-ghost hidden px-2 sm:inline-flex"
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+          aria-haspopup="dialog"
+          @click="shortcutsOpen = true"
+        >
+          <span class="i-mdi-keyboard-outline" />
+        </button>
+        <button
+          type="button"
           class="btn-ghost px-2"
           :title="`Theme: ${theme.label} (click to switch)`"
           :aria-label="`Theme: ${theme.label}`"
@@ -123,5 +136,6 @@ async function logout(): Promise<void> {
       <RouterView />
     </main>
     <ToastHost />
+    <ShortcutsDialog />
   </div>
 </template>
