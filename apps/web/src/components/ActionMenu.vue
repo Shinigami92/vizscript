@@ -81,10 +81,8 @@ function score(entry: ActionEntry, tokens: string[]): number | undefined {
 const groups = computed(() => {
   const text = query.value.trim();
   const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
-  const candidates = [
-    ...(text && props.suggest ? props.suggest(text) : []),
-    ...props.entries,
-  ].filter(
+  const typed = text && props.suggest ? props.suggest(text) : [];
+  const candidates = [...typed, ...props.entries].filter(
     (e) => !(props.contextToggle && contextSensitive.value && e.fits === false)
   );
 
@@ -94,10 +92,14 @@ const groups = computed(() => {
   >();
   let count = 0;
   for (const entry of candidates) {
-    const s = tokens.length > 0 ? score(entry, tokens) : 2;
-    if (s === undefined || count >= MAX_RESULTS) {
+    const matched = tokens.length > 0 ? score(entry, tokens) : 2;
+    if (matched === undefined || count >= MAX_RESULTS) {
       continue;
     }
+
+    // Made from the search text ("Call loop()"): after real actions that
+    // match as well, before ones that match worse.
+    const s = typed.includes(entry) ? matched + 1.5 : matched;
 
     count++;
     const group = byCategory.get(entry.category) ?? {

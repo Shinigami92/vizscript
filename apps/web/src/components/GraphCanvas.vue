@@ -14,6 +14,7 @@ import {
   MIN_ZOOM,
 } from '@vizscript/canvas';
 import type {
+  FlowTemplate,
   GraphDocument,
   GraphNode,
   GraphOp,
@@ -844,6 +845,58 @@ const ALIGN_ENTRIES: ReadonlyArray<{
 const ICON_CALL = 'i-mdi-function-variant text-sky-400';
 const ICON_VARIABLE = 'i-mdi-alpha-x-box-outline text-sky-400';
 
+const JUMPS: ReadonlySet<FlowTemplate> = new Set([
+  'throw',
+  'break',
+  'continue',
+]);
+
+const FLOW_ENTRIES: Record<
+  FlowTemplate,
+  { label: string; icon: string; keywords: string }
+> = {
+  forEach: {
+    label: 'For Each loop',
+    icon: 'i-mdi-repeat',
+    keywords: 'for of in each array list iterate loop',
+  },
+  forRange: {
+    label: 'For loop (counter)',
+    icon: 'i-mdi-counter',
+    keywords: 'for range index count loop',
+  },
+  while: {
+    label: 'While loop',
+    icon: 'i-mdi-sync',
+    keywords: 'while loop condition repeat',
+  },
+  switch: {
+    label: 'Switch / match',
+    icon: 'i-mdi-call-split',
+    keywords: 'switch match case select',
+  },
+  try: {
+    label: 'Try / catch',
+    icon: 'i-mdi-shield-outline',
+    keywords: 'try catch except error exception',
+  },
+  throw: {
+    label: 'Throw error',
+    icon: 'i-mdi-alert-octagon-outline',
+    keywords: 'throw raise error exception',
+  },
+  break: {
+    label: 'Break',
+    icon: 'i-mdi-debug-step-out',
+    keywords: 'break exit loop stop',
+  },
+  continue: {
+    label: 'Continue',
+    icon: 'i-mdi-debug-step-over',
+    keywords: 'continue next skip loop',
+  },
+};
+
 /** Add-node actions at an exec pin (or, without one, at the end). */
 function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
   return [
@@ -881,6 +934,21 @@ function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
           },
         ]
       : []),
+    // UE's For Each Loop, For Loop, While Loop, Switch …, in the language's
+    // syntax; jumps (break, throw) only after a statement, like Return.
+    ...(props.types?.flow ?? [])
+      .filter((flow) => after || !JUMPS.has(flow))
+      // On empty space the node goes to the end of the function, never
+      // into a loop: no break / continue there.
+      .filter(
+        (flow) =>
+          state.from !== undefined || (flow !== 'break' && flow !== 'continue')
+      )
+      .map((flow): ActionEntry => ({
+        ...FLOW_ENTRIES[flow],
+        category: 'Flow control',
+        action: () => addNode({ type: 'flow', flow }, state),
+      })),
     {
       label: 'Declare variable…',
       category: 'Variables',

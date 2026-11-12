@@ -91,6 +91,11 @@ const GROUPS: ReadonlyArray<{
         input: 'Right-click a call → Add argument pin',
       },
       {
+        action: 'Add a loop, switch or try',
+        input:
+          'Right-click or drag from an exec pin, then type (loop, switch …)',
+      },
+      {
         action: 'Add an operator or value',
         input: 'Drag a wire into empty space and type (+, ==, join, text …)',
       },
