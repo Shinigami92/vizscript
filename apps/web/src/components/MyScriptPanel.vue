@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import type { GraphDocument, GraphOp, ScriptSymbol } from '@vizscript/core';
+import type {
+  GraphDocument,
+  GraphOp,
+  ScriptSymbol,
+  TypeSystemInfo,
+} from '@vizscript/core';
 import { pinColor, qualifiedName, uniqueName } from '@vizscript/core';
 import { useStorage } from '@vueuse/core';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
@@ -28,6 +33,8 @@ const props = defineProps<{
   /** Qualified name of the function the selection is in (its locals show). */
   currentFunction: string | null;
   editable: boolean;
+  /** Types and modifiers of the language (the export eye). */
+  types?: TypeSystemInfo | null;
   /** Whether an import resolves to a file that can be opened. */
   canOpenImport?: (symbol: ScriptSymbol) => boolean;
 }>();
@@ -225,8 +232,54 @@ function typeColor(symbol: ScriptSymbol): string {
   return pinColor(symbol.returnType ?? symbol.dataType, scheme.value);
 }
 
+/**
+ * Whether a variable can be exported from the row (UE's eye): TypeScript
+ * `export`, GDScript `@export` (with its hint, e.g. `@export_range`).
+ */
+function exportState(
+  symbol: ScriptSymbol
+): { exported: boolean; marker: string; current?: string } | undefined {
+  if (
+    !props.editable ||
+    symbol.scope !== '' ||
+    (symbol.kind !== 'variable' && symbol.kind !== 'constant')
+  ) {
+    return undefined;
+  }
+
+  if (props.types?.exportHints && symbol.kind === 'variable') {
+    const current = symbol.modifiers.find((m) => m.startsWith('@export'));
+    return {
+      exported: current !== undefined,
+      marker: current ?? '@export',
+      ...(current ? { current } : {}),
+    };
+  }
+
+  if (props.types?.modifiers[symbol.kind]?.flags?.includes('export')) {
+    const exported = symbol.modifiers.some((m) => m.startsWith('export'));
+    return { exported, marker: 'export' };
+  }
+
+  return undefined;
+}
+
+function toggleExport(symbol: ScriptSymbol): void {
+  const state = exportState(symbol);
+  if (state) {
+    emit('op', {
+      type: 'setModifier',
+      symbol: symbol.id,
+      modifier: state.current ?? state.marker,
+      enabled: !state.exported,
+    });
+  }
+}
+
 /** Short modifiers shown next to the name. */
 function badges(symbol: ScriptSymbol): string {
+  // The eye shows these.
+  const eye = exportState(symbol) !== undefined;
   if (symbol.kind === 'import') {
     const from =
       symbol.imported === 'default' ||
@@ -243,6 +296,9 @@ function badges(symbol: ScriptSymbol): string {
   }
 
   return symbol.modifiers
+    .filter(
+      (m) => !(eye && (m.startsWith('export') || m.startsWith('@export')))
+    )
     .filter((m) =>
       /^(?:export|export default|static|async|private|protected|@export.*|@onready|readonly|get|set)$/.test(
         m
@@ -669,6 +725,28 @@ function addLabel(kind: AddKind, owner: string): string {
                   />
                   <span class="truncate">{{ symbolType(symbol).text }}</span>
                 </span>
+                <!-- UE's eye: Instance Editable, here export / @export. -->
+                <span
+                  v-if="exportState(symbol)"
+                  role="checkbox"
+                  data-ui="export-eye"
+                  class="shrink-0 rounded p-0.5"
+                  :class="[
+                    exportState(symbol)?.exported
+                      ? 'i-mdi-eye text-amber-400'
+                      : 'i-mdi-eye-off-outline text-zinc-600 hover:text-zinc-300',
+                    symbolType(symbol).text ? '' : 'ml-auto',
+                  ]"
+                  :aria-checked="exportState(symbol)?.exported"
+                  :aria-label="`Export ${symbol.name}`"
+                  :title="
+                    exportState(symbol)?.exported
+                      ? `Exported (${exportState(symbol)?.marker}); click to stop`
+                      : `Click to export (${exportState(symbol)?.marker})`
+                  "
+                  @click.stop="toggleExport(symbol)"
+                  @dblclick.stop
+                />
               </button>
             </template>
           </template>

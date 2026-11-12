@@ -39,6 +39,8 @@ const props = defineProps<{
    * carries it; missing when the declaration can't have one.
    */
   description?: { nodeId: string; text: string };
+  /** Runs on its own (engine callback, signal handler): name is fixed. */
+  event?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -362,12 +364,14 @@ const exportHints = computed(() =>
 
 /** The export annotation written (`@export_range(0, 10)`), if any. */
 const currentExport = computed(() => {
-  const range = props.symbol.range;
-  const lineAbove = props.text.lastIndexOf(
-    '\n',
-    props.text.lastIndexOf('\n', range.start - 1) - 1
-  );
-  const head = props.text.slice(lineAbove + 1, props.symbol.nameRange.start);
+  // The declaration's line, and the line above when it holds only an
+  // annotation (`@export_range(0, 10)` on its own line).
+  const own = props.text.lastIndexOf('\n', props.symbol.range.start - 1) + 1;
+  const above = own > 0 ? props.text.lastIndexOf('\n', own - 2) + 1 : own;
+  const start = /^\s*@\w+(?:\([^)]*\))?\s*$/.test(props.text.slice(above, own))
+    ? above
+    : own;
+  const head = props.text.slice(start, props.symbol.nameRange.start);
   const match = head.match(/(@export\w*)(?:\(([^)]*)\))?/);
   return match ? { name: match[1] ?? '', args: match[2] ?? '' } : undefined;
 });
@@ -386,11 +390,105 @@ function setExportHint(name: string): void {
   setModifier(hint?.args ? `${name}(${hint.args})` : name, true);
 }
 
+// `@export_range(min, max, step, "or_greater", "suffix:m")` as fields.
+const RANGE_FIELDS = ['min', 'max', 'step'];
+const RANGE_FLAGS = ['or_greater', 'or_less'];
+
+/** Top-level arguments (commas inside strings stay). */
+function splitArgs(args: string): string[] {
+  return (args.match(/"(?:\\.|[^"\\])*"|[^,]+/g) ?? [])
+    .map((a) => a.trim())
+    .filter(Boolean);
+}
+
+const range = computed(() => {
+  const current = currentExport.value;
+  if (current?.name !== '@export_range') {
+    return undefined;
+  }
+
+  const args = splitArgs(current.args);
+  const numbers = args.filter((a) => !a.startsWith('"'));
+  const hints = args
+    .filter((a) => a.startsWith('"'))
+    .map((a) => a.slice(1, -1));
+  return {
+    numbers,
+    flags: hints.filter((h) => RANGE_FLAGS.includes(h)),
+    /** Other hints (`suffix:m`, `exp`) are kept as they are. */
+    other: hints.filter((h) => !RANGE_FLAGS.includes(h)),
+  };
+});
+
+function writeRange(
+  numbers: ReadonlyArray<string>,
+  hints: ReadonlyArray<string>
+): void {
+  const filled = numbers.map((n) => n.trim()).filter(Boolean);
+  setExportArgs([...filled, ...hints.map((h) => `"${h}"`)].join(', '));
+}
+
+function setRangeNumber(index: number, value: string): void {
+  const current = range.value;
+  if (!current) {
+    return;
+  }
+
+  const numbers = [...current.numbers];
+  numbers[index] = value;
+  writeRange(numbers, [...current.flags, ...current.other]);
+}
+
+function setRangeFlag(flag: string, enabled: boolean): void {
+  const current = range.value;
+  if (!current) {
+    return;
+  }
+
+  // Godot's order: or_greater, or_less, then the other hints.
+  const flags = RANGE_FLAGS.filter((f) =>
+    f === flag ? enabled : current.flags.includes(f)
+  );
+  writeRange(current.numbers, [...flags, ...current.other]);
+}
+
 function setExportArgs(args: string): void {
   const current = currentExport.value;
   if (current && args.trim() !== current.args) {
     setModifier(`${current.name}(${args.trim()})`, true);
   }
+}
+
+// ---------------------------------------------------------------- private
+
+/**
+ * UE's "Private" switch where privacy is a naming convention (`_name` in
+ * Python and GDScript): switching renames the symbol and its uses. Not for
+ * `__dunder__` names and engine callbacks (`_ready`).
+ */
+const privatePrefix = computed(() => {
+  const prefix = props.types?.privatePrefix;
+  const { kind, name } = props.symbol;
+  return prefix &&
+    ['variable', 'constant', 'function', 'method', 'signal'].includes(kind) &&
+    !name.startsWith(`${prefix}${prefix}`) &&
+    !props.event
+    ? prefix
+    : undefined;
+});
+
+function setPrivate(enabled: boolean): void {
+  const prefix = privatePrefix.value;
+  const name = props.symbol.name;
+  if (!prefix || name.startsWith(prefix) === enabled) {
+    return;
+  }
+
+  emit('op', {
+    type: 'renameSymbol',
+    symbol: props.symbol.id,
+    name: enabled ? `${prefix}${name}` : name.slice(prefix.length),
+  });
 }
 
 /** The access level written, else the default (the first, `public`). */
@@ -549,6 +647,7 @@ function setModifier(modifier: string, enabled: boolean): void {
             </label>
             <input
               v-else
+              :key="`${symbol.id}:${valueKind}`"
               v-model="draft"
               class="input py-0.5 text-xs"
               :class="valueKind === 'string' ? '' : 'font-mono'"
@@ -638,8 +737,53 @@ function setModifier(modifier: string, enabled: boolean): void {
                 {{ hint.name }}
               </option>
             </select>
+            <!-- UE's Slider / Value Range: min … max, step, open ends. -->
+            <div
+              v-if="range"
+              :key="currentExport?.args"
+              data-ui="export-range"
+              class="flex flex-col gap-1"
+            >
+              <div class="flex items-center gap-1">
+                <input
+                  v-for="(field, i) in RANGE_FIELDS"
+                  :key="field"
+                  class="input min-w-0 py-1 font-mono text-xs"
+                  :value="range.numbers[i] ?? ''"
+                  :placeholder="field"
+                  :readonly="!editable"
+                  :aria-label="field"
+                  :title="field"
+                  @keydown.enter="($event.target as HTMLInputElement).blur()"
+                  @change="
+                    setRangeNumber(i, ($event.target as HTMLInputElement).value)
+                  "
+                />
+              </div>
+              <div class="flex flex-wrap gap-x-3">
+                <label
+                  v-for="flag in RANGE_FLAGS"
+                  :key="flag"
+                  class="flex cursor-pointer items-center gap-1.5 font-mono text-zinc-300"
+                >
+                  <input
+                    type="checkbox"
+                    class="accent-amber-500"
+                    :checked="range.flags.includes(flag)"
+                    :disabled="!editable"
+                    @change="
+                      setRangeFlag(
+                        flag,
+                        ($event.target as HTMLInputElement).checked
+                      )
+                    "
+                  />
+                  {{ flag }}
+                </label>
+              </div>
+            </div>
             <input
-              v-if="currentExport && currentExport.args !== ''"
+              v-else-if="currentExport && currentExport.args !== ''"
               :key="`${currentExport.name}:${currentExport.args}`"
               class="input py-1 font-mono text-xs"
               :value="currentExport.args"
@@ -649,6 +793,29 @@ function setModifier(modifier: string, enabled: boolean): void {
               @keydown.enter="($event.target as HTMLInputElement).blur()"
               @change="setExportArgs(($event.target as HTMLInputElement).value)"
             />
+          </dd>
+        </template>
+        <template v-if="privatePrefix && !compact">
+          <dt class="pt-0.5 text-zinc-500">Private</dt>
+          <dd>
+            <label
+              class="flex cursor-pointer items-center gap-1.5 text-zinc-300"
+              :title="`Renames to ${symbol.name.startsWith(privatePrefix) ? symbol.name.slice(privatePrefix.length) : privatePrefix + symbol.name}`"
+            >
+              <input
+                type="checkbox"
+                class="accent-amber-500"
+                :checked="symbol.name.startsWith(privatePrefix)"
+                :disabled="!editable"
+                aria-label="Private"
+                @change="
+                  setPrivate(($event.target as HTMLInputElement).checked)
+                "
+              />
+              <span class="font-mono text-zinc-500"
+                >{{ privatePrefix }}name</span
+              >
+            </label>
           </dd>
         </template>
         <template v-if="modifierOptions?.flags">
@@ -676,6 +843,32 @@ function setModifier(modifier: string, enabled: boolean): void {
           <dt class="text-zinc-500">Extends</dt>
           <dd class="truncate font-mono text-zinc-200">{{ symbol.extends }}</dd>
         </template>
+        <template
+          v-if="
+            !compact &&
+            uses !== undefined &&
+            symbol.kind !== 'type' &&
+            symbol.kind !== 'enum' &&
+            !(isImport && symbol.modifiers.includes('type'))
+          "
+        >
+          <dt class="text-zinc-500">Used by</dt>
+          <dd class="text-zinc-300">
+            {{ uses }} node{{ uses === 1 ? '' : 's' }}
+            <span v-if="uses > 0" class="text-zinc-500">(highlighted)</span>
+          </dd>
+        </template>
+      </dl>
+    </DetailsSection>
+
+    <!-- Rarely needed rows, folded like UE's "Advanced". -->
+    <DetailsSection
+      v-if="!compact"
+      id="symbol-advanced"
+      title="Advanced"
+      default-collapsed
+    >
+      <dl class="grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1.5 px-3 text-xs">
         <template v-if="otherModifiers.length > 0 && !isImport">
           <dt class="text-zinc-500">
             {{ modifierOptions ? 'Also' : 'Modifiers' }}
@@ -699,21 +892,6 @@ function setModifier(modifier: string, enabled: boolean): void {
             Line {{ location.line }}, column {{ location.column }}
           </button>
         </dd>
-        <template
-          v-if="
-            !compact &&
-            uses !== undefined &&
-            symbol.kind !== 'type' &&
-            symbol.kind !== 'enum' &&
-            !(isImport && symbol.modifiers.includes('type'))
-          "
-        >
-          <dt class="text-zinc-500">Used by</dt>
-          <dd class="text-zinc-300">
-            {{ uses }} node{{ uses === 1 ? '' : 's' }}
-            <span v-if="uses > 0" class="text-zinc-500">(highlighted)</span>
-          </dd>
-        </template>
       </dl>
     </DetailsSection>
 

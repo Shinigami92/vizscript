@@ -273,6 +273,14 @@ function setDefault(symbol: ScriptSymbol, before: string, value: string): void {
   }
 }
 
+/** A function that runs on its own (engine callback, signal handler). */
+function isEvent(symbol: ScriptSymbol): boolean {
+  const fn = props.doc?.functions.find((f) => f.id === symbol.fnId);
+  return (
+    fn?.nodes.some((n) => n.kind === 'entry' && n.category === 'event') ?? false
+  );
+}
+
 function deleteSelection(): void {
   emit('op', { type: 'deleteNodes', nodeIds: [...shownSelection.value] });
 }
@@ -376,6 +384,7 @@ function deleteSelection(): void {
         v-if="shownSymbol"
         :symbol="shownSymbol"
         :description="descriptionOf(shownSymbol)"
+        :event="isEvent(shownSymbol)"
         :text="docText ?? text"
         :uses="shownUses"
         :editable="editable"

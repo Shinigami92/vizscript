@@ -1798,6 +1798,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
       <MyScriptPanel
         :doc="doc"
         :text="text"
+        :types="typeSystem"
         :selected-symbol="selectedSymbol?.id ?? null"
         :current-function="currentFunction"
         :editable="editable"
