@@ -3,6 +3,7 @@ export * from './infer-types';
 export * from './collapse';
 export * from './comment-ops';
 export * from './comments';
+export * from './display';
 export * from './edit-meta';
 export * from './flow';
 export * from './geometry';

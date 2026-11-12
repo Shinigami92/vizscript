@@ -1,3 +1,4 @@
+import { withImplicitSelf } from './display';
 import type {
   FunctionGraph,
   GraphDocument,
@@ -147,7 +148,8 @@ export function layoutDocument(
   const boxes: FunctionBox[] = [];
   let offsetY = 0;
 
-  for (const fn of doc.functions) {
+  // Laid out as drawn: implicit `self` Gets take no space.
+  for (const fn of doc.functions.map(withImplicitSelf)) {
     const index = indexFunction(fn);
     const above = spaceAboveNodes(fn, options);
     const auto = layoutFunction(

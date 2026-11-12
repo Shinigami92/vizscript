@@ -1,6 +1,12 @@
 import type { GraphNode, Pin } from './ir';
 
-export type TextStyle = 'title' | 'subtitle' | 'label' | 'literal' | 'compact';
+export type TextStyle =
+  | 'title'
+  | 'subtitle'
+  | 'label'
+  | 'literal'
+  | 'compact'
+  | 'glyph';
 
 /** Measures the rendered width of `text` in pixels for a given style. */
 export type MeasureText = (text: string, style: TextStyle) => number;
@@ -11,6 +17,7 @@ const APPROX_CHAR_WIDTH: Record<TextStyle, number> = {
   label: 6.6,
   literal: 6.6,
   compact: 8.5,
+  glyph: 15,
 };
 
 /** Rough estimate used when no canvas is available (tests, workers). */
@@ -69,9 +76,31 @@ function isSetter(node: GraphNode): boolean {
   return node.kind === 'setVar' && node.title.startsWith('Set ');
 }
 
+/**
+ * An operator drawn as a large faded symbol (`*`, `==`, `&&`), like UE's
+ * compact math nodes; words (`as f64`, `not`) stay plain titles.
+ */
+export function isOperatorGlyph(node: GraphNode): boolean {
+  return (
+    node.kind === 'operator' &&
+    isCompact(node) &&
+    /^[^\w\s]{1,3}$/.test(node.title)
+  );
+}
+
+/** Math signs of binary operators (`*` is a small superscript in most fonts). */
+const GLYPHS: Record<string, string> = { '*': '×', '/': '÷' };
+
 /** Text in the middle of a compact node (`SET` for setters). */
 export function compactTitle(node: GraphNode): string {
-  return isSetter(node) ? 'SET' : node.title;
+  if (isSetter(node)) {
+    return 'SET';
+  }
+
+  const binary =
+    node.pins.filter((p) => p.direction === 'in' && p.kind === 'data')
+      .length === 2;
+  return (isOperatorGlyph(node) && binary && GLYPHS[node.title]) || node.title;
 }
 
 /**
@@ -203,7 +232,7 @@ export function computeNodeGeometry(
   let height: number;
   if (compact) {
     const titleWidth = Math.max(
-      measure(compactTitle(node), 'compact'),
+      measure(compactTitle(node), isOperatorGlyph(node) ? 'glyph' : 'compact'),
       node.subtitle ? measure(node.subtitle, 'subtitle') : 0
     );
     width =
