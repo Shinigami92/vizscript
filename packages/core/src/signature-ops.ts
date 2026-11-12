@@ -1,7 +1,7 @@
+import type { DeclarationSyntax } from './declaration-syntax';
 import type { GraphDocument, SourceRange } from './ir';
 import type { OpResult, TextEdit, ValueKind } from './ops';
-import type { DeclarationSyntax } from './symbol-ops';
-import { setSymbolType, setSymbolValue } from './symbol-ops';
+import { setSymbolType, setSymbolValue } from './symbol-edits';
 import type { ScriptSymbol, SymbolParam } from './symbols';
 import { qualifiedName } from './symbols';
 

@@ -1,3 +1,4 @@
+import type { DeclarationSyntax, ExtractParam } from './declaration-syntax';
 import type { StatementMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import type {
@@ -8,7 +9,6 @@ import type {
   SourceRange,
 } from './ir';
 import type { OpResult, TextEdit } from './ops';
-import type { DeclarationSyntax, ExtractParam } from './symbol-ops';
 import { addToClass, checkName, classOf } from './symbol-ops';
 import type { ScriptSymbol } from './symbols';
 import { qualifiedName } from './symbols';
