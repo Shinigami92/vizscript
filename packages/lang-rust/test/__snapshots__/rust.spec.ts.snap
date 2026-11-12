@@ -1,0 +1,190 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`parseRustDocument > collects symbols 1`] = `
+[
+  "import HashMap: any",
+  "import round: any",
+  "import Cents: any",
+  "constant TAX_RATE: number",
+  "class Item: Item",
+  "variable Item.name: string",
+  "variable Item.price: number",
+  "variable Item.quantity: number",
+  "method Item.new: function",
+  "method Item.total: function",
+  "function total_price: function",
+  "local total_price.total: number",
+  "local total_price.item: any",
+  "local total_price.discounted: number",
+  "function find: function",
+  "function label: function",
+  "function main: function",
+  "local main.cart: array",
+  "local main.by_name: object",
+]
+`;
+
+exports[`parseRustDocument > lowers the fixture 1`] = `
+"function Module
+  #0 entry "Module" (shop.rs) [>then:▶]
+  #1 setVar "Set TAX_RATE" (const) [<exec:▶ >then:▶ <value:number=0.19 >out:number]
+  ==> #0.then -> #1.exec
+function Item::new
+  #0 entry "new" (associated fn of Item) [>then:▶ >param0:string >param1:number]
+  #1 call "to_string" [<exec:▶ >then:▶ <target:object >return:any]
+  #2 makeObject "Make Self" [<p0:any <p1:number <p2:number=1 >value:Item]
+  #3 return "Return" (value) [<exec:▶ <value:Item]
+  --> #0.param0 -> #1.target
+  ==> #0.then -> #1.exec
+  --> #1.return -> #2.p0
+  --> #0.param1 -> #2.p1
+  --> #2.value -> #3.value
+  ==> #1.then -> #3.exec
+function Item::total
+  #0 entry "total" (method of Item) [>then:▶ >self:Item]
+  #1 getProperty ".price" [<target:object >value:any]
+  #2 getProperty ".quantity" [<target:object >value:any]
+  #3 operator "*" [<a:any <b:any >value:any]
+  #4 operator "as f64" [<a:any >value:number]
+  #5 return "Return" (value) [<exec:▶ <value:number]
+  --> #0.self -> #1.target
+  --> #0.self -> #2.target
+  --> #1.value -> #3.a
+  --> #2.value -> #3.b
+  --> #3.value -> #4.a
+  --> #4.value -> #5.value
+  ==> #0.then -> #5.exec
+function total_price
+  #0 entry "total_price" (fn) [>then:▶ >param0:Item[] >param1:number]
+  #1 setVar "Set total" (let mut) [<exec:▶ >then:▶ <value:number=0.0 >out:number]
+  #2 forEach "For Each" [<exec:▶ <array:Item[] >body:▶ >element:Item >completed:▶]
+  #3 getProperty ".quantity" [<target:object >value:any]
+  #4 operator "==" [<a:any <b:number=0 >value:bool]
+  #5 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
+  #6 continue "Continue" [<exec:▶]
+  #7 call "total" [<exec:▶ >then:▶ <target:object >return:any]
+  #8 setVar "Set total" (+=) [<exec:▶ >then:▶ <value:number >out:number]
+  #9 getVar "total" [>value:number]
+  #10 getVar "total" [>value:number]
+  #11 operator "*" [<a:number <b:number >value:number]
+  #12 operator "-" [<a:number <b:number >value:number]
+  #13 setVar "Set discounted" (let) [<exec:▶ >then:▶ <value:number >out:number]
+  #14 getVar "discounted" [>value:number]
+  #15 getVar "TAX_RATE" [>value:number]
+  #16 operator "+" [<a:number=1.0 <b:number >value:number]
+  #17 operator "*" [<a:number <b:number >value:number]
+  #18 call "round" [<exec:▶ >then:▶ <arg0:number >return:any]
+  #19 return "Return" (value) [<exec:▶ <value:number]
+  ==> #0.then -> #1.exec
+  --> #0.param0 -> #2.array
+  ==> #1.then -> #2.exec
+  --> #2.element -> #3.target
+  --> #3.value -> #4.a
+  --> #4.value -> #5.condition
+  ==> #2.body -> #5.exec
+  ==> #5.true -> #6.exec
+  --> #2.element -> #7.target
+  ==> #5.completed -> #7.exec
+  --> #7.return -> #8.value
+  ==> #7.then -> #8.exec
+  --> #10.value -> #11.a
+  --> #0.param1 -> #11.b
+  --> #9.value -> #12.a
+  --> #11.value -> #12.b
+  --> #12.value -> #13.value
+  ==> #2.completed -> #13.exec
+  --> #15.value -> #16.b
+  --> #14.value -> #17.a
+  --> #16.value -> #17.b
+  --> #17.value -> #18.arg0
+  ==> #13.then -> #18.exec
+  --> #18.return -> #19.value
+  ==> #18.then -> #19.exec
+function find
+  #0 entry "find" (fn) [>then:▶ >param0:Item[] >param1:string]
+  #1 call "iter" [<exec:▶ >then:▶ <target:object >return:any]
+  #2 functionRef "ƒ position callback" [>value:function]
+  #3 call "position" [<exec:▶ >then:▶ <target:object <arg0:function >return:any]
+  #4 branch "If Let" (Some(index)) [<exec:▶ <condition:any >true:▶ >false:▶ >bind0:any >completed:▶]
+  #5 call "println!" [<exec:▶ >then:▶ <arg0:string="found {} at {}" <arg1:string <arg2:any]
+  #6 call "Some" [<exec:▶ >then:▶ <arg0:any >return:any]
+  #7 return "Return" [<exec:▶ <value:number]
+  #8 getVar "None" [>value:any]
+  #9 return "Return" (value) [<exec:▶ <value:number]
+  --> #0.param0 -> #1.target
+  ==> #0.then -> #1.exec
+  --> #1.return -> #3.target
+  --> #2.value -> #3.arg0
+  ==> #1.then -> #3.exec
+  --> #3.return -> #4.condition
+  ==> #3.then -> #4.exec
+  --> #0.param1 -> #5.arg1
+  --> #4.bind0 -> #5.arg2
+  ==> #4.true -> #5.exec
+  --> #4.bind0 -> #6.arg0
+  ==> #5.then -> #6.exec
+  --> #6.return -> #7.value
+  ==> #6.then -> #7.exec
+  --> #8.value -> #9.value
+  ==> #4.completed -> #9.exec
+function label
+  #0 entry "label" (fn) [>then:▶ >param0:number]
+  #1 switch "Match" [<exec:▶ <value:number >case0:▶ >case1:▶ >case2:▶]
+  #2 return "Return" (value) [<exec:▶ <value:string="empty"]
+  #3 return "Return" (value) [<exec:▶ <value:string="small"]
+  #4 return "Return" (value) [<exec:▶ <value:string="big"]
+  --> #0.param0 -> #1.value
+  ==> #0.then -> #1.exec
+  ==> #1.case0 -> #2.exec
+  ==> #1.case1 -> #3.exec
+  ==> #1.case2 -> #4.exec
+function main
+  #0 entry "main" (fn) [>then:▶]
+  #1 call "Item::new" [<exec:▶ >then:▶ <arg0:string="Keyboard" <arg1:number=89.9 >return:Item]
+  #2 call "Item::new" [<exec:▶ >then:▶ <arg0:string="Cable" <arg1:number=4.5 >return:Item]
+  #3 makeArray "Make Vec" [<e0:Item <e1:Item >value:Item[]]
+  #4 setVar "Set cart" (let) [<exec:▶ >then:▶ <value:Item[] >out:Item[]]
+  #5 call "HashMap::new" [<exec:▶ >then:▶ >return:HashMap]
+  #6 setVar "Set by_name" (let : HashMap<String, f64>) [<exec:▶ >then:▶ <value:object >out:object]
+  #7 getVar "cart" [>value:Item[]]
+  #8 operator "&" [<a:Item[] >value:Item[]]
+  #9 call "total_price" [<exec:▶ >then:▶ <arg0:Item[] <arg1:number=0.1 >return:number]
+  #10 call "println!" [<exec:▶ >then:▶ <arg0:string="Total: {} EUR" <arg1:number]
+  #11 call "cart.last" [<exec:▶ >then:▶ >return:any]
+  #12 loop "While Let" (Some(item)) [<exec:▶ <condition:any >body:▶ >bind0:any >completed:▶]
+  #13 getProperty ".name" [<target:object >value:any]
+  #14 call "println!" [<exec:▶ >then:▶ <arg0:string="{}" <arg1:any]
+  #15 break "Break" [<exec:▶]
+  ==> #0.then -> #1.exec
+  ==> #1.then -> #2.exec
+  --> #1.return -> #3.e0
+  --> #2.return -> #3.e1
+  --> #3.value -> #4.value
+  ==> #2.then -> #4.exec
+  ==> #4.then -> #5.exec
+  --> #5.return -> #6.value
+  ==> #5.then -> #6.exec
+  --> #7.value -> #8.a
+  --> #8.value -> #9.arg0
+  ==> #6.then -> #9.exec
+  --> #9.return -> #10.arg1
+  ==> #9.then -> #10.exec
+  ==> #10.then -> #11.exec
+  --> #11.return -> #12.condition
+  ==> #11.then -> #12.exec
+  --> #12.bind0 -> #13.target
+  --> #13.value -> #14.arg1
+  ==> #12.body -> #14.exec
+  ==> #14.then -> #15.exec
+function position callback
+  #0 entry "position callback" (closure) [>then:▶ >param0:any]
+  #1 getProperty ".name" [<target:object >value:any]
+  #2 getVar "name" [>value:any]
+  #3 operator "==" [<a:any <b:any >value:bool]
+  #4 return "Return" (value) [<exec:▶ <value:bool]
+  --> #0.param0 -> #1.target
+  --> #1.value -> #3.a
+  --> #2.value -> #3.b
+  --> #3.value -> #4.value
+  ==> #0.then -> #4.exec"
+`;

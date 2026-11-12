@@ -17,6 +17,7 @@
     "@vizscript/core": "workspace:*",
     "@vizscript/lang-gdscript": "workspace:*",
     "@vizscript/lang-python": "workspace:*",
+    "@vizscript/lang-rust": "workspace:*",
     "@vizscript/lang-typescript": "workspace:*",
     "@vizscript/workbench": "workspace:*",
     "@vueuse/core": "~15.0.0",
