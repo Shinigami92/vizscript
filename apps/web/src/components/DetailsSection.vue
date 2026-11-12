@@ -17,6 +17,7 @@ import {
   useTemplateRef,
   watch,
 } from 'vue';
+import CollapseTransition from './CollapseTransition.vue';
 
 /**
  * A category of the Details panel, collapsible like UE's (remembered in
@@ -37,11 +38,7 @@ const isCollapsed = computed(
   () => collapsed.value[props.id] ?? props.defaultCollapsed ?? false
 );
 
-/** Opened by a click (not by showing another selection): animate it. */
-const toggled = ref(false);
-
 function toggle(): void {
-  toggled.value = true;
   collapsed.value = { ...collapsed.value, [props.id]: !isCollapsed.value };
 }
 
@@ -102,8 +99,10 @@ onUpdated(check);
       </button>
       <slot v-if="open" name="actions" />
     </div>
-    <div v-if="open" :class="toggled ? 'motion-expand' : ''">
-      <slot />
-    </div>
+    <CollapseTransition>
+      <div v-if="open">
+        <slot />
+      </div>
+    </CollapseTransition>
   </section>
 </template>

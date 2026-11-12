@@ -37,6 +37,7 @@ import {
   useTemplateRef,
   watch,
 } from 'vue';
+import CollapseTransition from './CollapseTransition.vue';
 
 const props = defineProps<{
   x: number;
@@ -312,10 +313,8 @@ onMounted(async () => {
             @click="toggleCategory(group.category)"
           >
             <span
-              class="shrink-0"
-              :class="
-                group.folded ? 'i-mdi-chevron-right' : 'i-mdi-chevron-down'
-              "
+              class="motion-rotate i-mdi-chevron-down shrink-0"
+              :class="{ '-rotate-90': group.folded }"
             />
             <span
               v-if="group.category === FAVORITES"
@@ -329,51 +328,59 @@ onMounted(async () => {
             >
           </button>
         </li>
-        <li
-          v-for="row in group.rows"
-          :id="`action-${row.index}`"
-          :key="`${group.category}|${keyOf(row.entry)}`"
-          role="option"
-          :aria-selected="row.index === active"
-          :data-active="row.index === active"
-          class="group flex cursor-pointer items-center gap-2 rounded px-2.5 py-1 text-zinc-200"
-          :class="
-            row.index === active ? 'bg-amber-500/20' : 'hover:bg-zinc-800'
-          "
-          @mousemove="active = row.index"
-          @click="run(row.entry)"
-        >
-          <span
-            class="shrink-0"
-            :class="row.entry.icon ?? 'i-mdi-circle-small text-zinc-500'"
-          />
-          <span class="min-w-0 flex-1 truncate">{{ row.entry.label }}</span>
-          <span
-            v-if="row.entry.hint"
-            class="shrink-0 font-mono text-[11px] text-zinc-500"
-            >{{ row.entry.hint }}</span
-          >
-          <button
-            type="button"
-            tabindex="-1"
-            class="shrink-0"
-            :class="
-              favorites.includes(keyOf(row.entry))
-                ? 'i-mdi-star text-amber-400'
-                : 'i-mdi-star-outline text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-amber-400'
-            "
-            :aria-label="
-              favorites.includes(keyOf(row.entry))
-                ? 'Remove from favorites'
-                : 'Add to favorites'
-            "
-            :title="
-              favorites.includes(keyOf(row.entry))
-                ? 'Remove from favorites'
-                : 'Add to favorites'
-            "
-            @click.stop="toggleFavorite(row.entry)"
-          />
+        <li role="presentation">
+          <CollapseTransition>
+            <ul v-if="!group.folded" role="group" :aria-label="group.category">
+              <li
+                v-for="row in group.rows"
+                :id="`action-${row.index}`"
+                :key="`${group.category}|${keyOf(row.entry)}`"
+                role="option"
+                :aria-selected="row.index === active"
+                :data-active="row.index === active"
+                class="group flex cursor-pointer items-center gap-2 rounded px-2.5 py-1 text-zinc-200"
+                :class="
+                  row.index === active ? 'bg-amber-500/20' : 'hover:bg-zinc-800'
+                "
+                @mousemove="active = row.index"
+                @click="run(row.entry)"
+              >
+                <span
+                  class="shrink-0"
+                  :class="row.entry.icon ?? 'i-mdi-circle-small text-zinc-500'"
+                />
+                <span class="min-w-0 flex-1 truncate">{{
+                  row.entry.label
+                }}</span>
+                <span
+                  v-if="row.entry.hint"
+                  class="shrink-0 font-mono text-[11px] text-zinc-500"
+                  >{{ row.entry.hint }}</span
+                >
+                <button
+                  type="button"
+                  tabindex="-1"
+                  class="shrink-0"
+                  :class="
+                    favorites.includes(keyOf(row.entry))
+                      ? 'i-mdi-star text-amber-400'
+                      : 'i-mdi-star-outline text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-amber-400'
+                  "
+                  :aria-label="
+                    favorites.includes(keyOf(row.entry))
+                      ? 'Remove from favorites'
+                      : 'Add to favorites'
+                  "
+                  :title="
+                    favorites.includes(keyOf(row.entry))
+                      ? 'Remove from favorites'
+                      : 'Add to favorites'
+                  "
+                  @click.stop="toggleFavorite(row.entry)"
+                />
+              </li>
+            </ul>
+          </CollapseTransition>
         </li>
       </template>
     </ul>

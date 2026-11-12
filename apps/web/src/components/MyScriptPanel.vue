@@ -25,6 +25,7 @@ import {
   symbolType,
   topLevelGraph,
 } from '../graph/symbols';
+import CollapseTransition from './CollapseTransition.vue';
 import type { MenuEntry } from './ContextMenu.vue';
 import ContextMenu from './ContextMenu.vue';
 
@@ -610,22 +611,23 @@ function addLabel(kind: AddKind, owner: string): string {
           @click="toggle('graphs')"
         >
           <span
-            :class="
-              collapsed.graphs ? 'i-mdi-chevron-right' : 'i-mdi-chevron-down'
-            "
+            class="motion-rotate i-mdi-chevron-down"
+            :class="{ '-rotate-90': collapsed.graphs }"
           />
           Graphs
         </button>
-        <button
-          v-if="!collapsed.graphs"
-          type="button"
-          class="row pl-6"
-          title="Show this graph"
-          @click="emit('selectFunction', graph.id)"
-        >
-          <span class="i-mdi-graph-outline text-red-400" />
-          <span class="truncate">{{ graph.name }}</span>
-        </button>
+        <CollapseTransition>
+          <button
+            v-if="!collapsed.graphs"
+            type="button"
+            class="row pl-6"
+            title="Show this graph"
+            @click="emit('selectFunction', graph.id)"
+          >
+            <span class="i-mdi-graph-outline text-red-400" />
+            <span class="truncate">{{ graph.name }}</span>
+          </button>
+        </CollapseTransition>
       </section>
 
       <section
@@ -642,11 +644,8 @@ function addLabel(kind: AddKind, owner: string): string {
             @click="toggle(section.id)"
           >
             <span
-              :class="
-                collapsed[section.id]
-                  ? 'i-mdi-chevron-right'
-                  : 'i-mdi-chevron-down'
-              "
+              class="motion-rotate i-mdi-chevron-down"
+              :class="{ '-rotate-90': collapsed[section.id] }"
             />
             <span class="truncate">{{ section.title }}</span>
           </button>
@@ -661,155 +660,157 @@ function addLabel(kind: AddKind, owner: string): string {
             <span class="i-mdi-plus" />
           </button>
         </div>
-        <template v-if="!collapsed[section.id]">
-          <p
-            v-if="section.groups.every((g) => g.items.length === 0)"
-            class="px-7 py-0.5 text-xs text-zinc-600"
-          >
-            {{ query ? 'No matches' : section.empty }}
-          </p>
-          <template v-for="group in section.groups" :key="group.owner">
-            <div
-              v-if="group.owner && section.id !== 'locals'"
-              class="flex items-center gap-1.5 pt-1 pr-1 pl-6 text-xs text-zinc-500"
+        <CollapseTransition>
+          <div v-if="!collapsed[section.id]">
+            <p
+              v-if="section.groups.every((g) => g.items.length === 0)"
+              class="px-7 py-0.5 text-xs text-zinc-600"
             >
-              <span
-                :class="
-                  section.id === 'imports'
-                    ? 'i-mdi-file-import-outline'
-                    : group.category
-                      ? 'i-mdi-folder-outline'
-                      : 'i-mdi-cube-outline'
-                "
-              />
-              <span
-                class="min-w-0 flex-1 truncate"
-                :class="{ 'font-mono': section.id === 'imports' }"
-                :title="group.owner"
-                >{{ group.owner }}</span
-              >
-              <button
-                v-if="editable && section.add && !group.category"
-                type="button"
-                class="add"
-                :title="addLabel(section.add, group.owner)"
-                :aria-label="addLabel(section.add, group.owner)"
-                @click="add(section.add, group.owner)"
-              >
-                <span class="i-mdi-plus" />
-              </button>
-            </div>
-            <template v-for="symbol in group.items" :key="symbol.id">
+              {{ query ? 'No matches' : section.empty }}
+            </p>
+            <template v-for="group in section.groups" :key="group.owner">
               <div
-                v-if="editing === symbol.id"
-                class="flex items-center gap-2 py-0.5 pr-2"
-                :class="
-                  group.owner && section.id !== 'locals' ? 'pl-9' : 'pl-6'
-                "
-              >
-                <span class="shrink-0" :class="SYMBOL_ICONS[symbol.kind]" />
-                <input
-                  ref="field"
-                  v-model="draft"
-                  class="input py-0.5 font-mono text-xs"
-                  :aria-label="`New name of ${symbol.name}`"
-                  spellcheck="false"
-                  @keydown.enter.prevent="commitRename(symbol)"
-                  @keydown.esc.prevent="cancelRename"
-                  @blur="commitRename(symbol)"
-                />
-              </div>
-              <button
-                v-else
-                type="button"
-                role="treeitem"
-                class="row"
-                :class="[
-                  group.owner && section.id !== 'locals' ? 'pl-9' : 'pl-6',
-                  symbol.id === selectedSymbol
-                    ? 'bg-amber-500/15 text-zinc-50'
-                    : '',
-                  fresh.has(symbol.id) ? 'motion-flash' : '',
-                ]"
-                :aria-selected="symbol.id === selectedSymbol"
-                :title="
-                  symbol.kind === 'import'
-                    ? `${symbol.name} — double-click to open its definition${editable ? ', drag it into the graph' : ''}`
-                    : `${symbol.name} — double-click to show it in the graph${editable ? ', drag it into the graph, F2 to rename' : ''}`
-                "
-                @click="emit('selectSymbol', symbol.id)"
-                @dblclick="
-                  symbol.kind === 'import' && canOpenImport?.(symbol)
-                    ? emit('openImport', symbol.id)
-                    : emit('openSymbol', symbol.id)
-                "
-                :draggable="editable && draggable(symbol)"
-                @dragstart="onDragStart($event, symbol)"
-                @keydown="onRowKeydown($event, symbol)"
-                @contextmenu.prevent="openMenu($event, symbol)"
+                v-if="group.owner && section.id !== 'locals'"
+                class="flex items-center gap-1.5 pt-1 pr-1 pl-6 text-xs text-zinc-500"
               >
                 <span
-                  class="shrink-0"
-                  :class="SYMBOL_ICONS[symbol.importedKind ?? symbol.kind]"
-                />
-                <!-- The name before badges and type: they shrink first. -->
-                <span
-                  class="max-w-[65%] min-w-0 shrink-0 truncate"
-                  :title="symbol.name"
-                  >{{ symbol.name }}</span
-                >
-                <span
-                  v-if="badges(symbol)"
-                  class="min-w-0 truncate text-[10px] text-zinc-500"
-                  :title="badges(symbol)"
-                  >{{ badges(symbol) }}</span
-                >
-                <span
-                  v-if="symbolType(symbol).text"
-                  class="ml-auto flex min-w-0 shrink items-center gap-1 pl-2 font-mono text-[11px]"
                   :class="
-                    symbolType(symbol).inferred
-                      ? 'text-zinc-500 italic'
-                      : 'text-zinc-400'
+                    section.id === 'imports'
+                      ? 'i-mdi-file-import-outline'
+                      : group.category
+                        ? 'i-mdi-folder-outline'
+                        : 'i-mdi-cube-outline'
                   "
+                />
+                <span
+                  class="min-w-0 flex-1 truncate"
+                  :class="{ 'font-mono': section.id === 'imports' }"
+                  :title="group.owner"
+                  >{{ group.owner }}</span
+                >
+                <button
+                  v-if="editable && section.add && !group.category"
+                  type="button"
+                  class="add"
+                  :title="addLabel(section.add, group.owner)"
+                  :aria-label="addLabel(section.add, group.owner)"
+                  @click="add(section.add, group.owner)"
+                >
+                  <span class="i-mdi-plus" />
+                </button>
+              </div>
+              <template v-for="symbol in group.items" :key="symbol.id">
+                <div
+                  v-if="editing === symbol.id"
+                  class="flex items-center gap-2 py-0.5 pr-2"
+                  :class="
+                    group.owner && section.id !== 'locals' ? 'pl-9' : 'pl-6'
+                  "
+                >
+                  <span class="shrink-0" :class="SYMBOL_ICONS[symbol.kind]" />
+                  <input
+                    ref="field"
+                    v-model="draft"
+                    class="input py-0.5 font-mono text-xs"
+                    :aria-label="`New name of ${symbol.name}`"
+                    spellcheck="false"
+                    @keydown.enter.prevent="commitRename(symbol)"
+                    @keydown.esc.prevent="cancelRename"
+                    @blur="commitRename(symbol)"
+                  />
+                </div>
+                <button
+                  v-else
+                  type="button"
+                  role="treeitem"
+                  class="row"
+                  :class="[
+                    group.owner && section.id !== 'locals' ? 'pl-9' : 'pl-6',
+                    symbol.id === selectedSymbol
+                      ? 'bg-amber-500/15 text-zinc-50'
+                      : '',
+                    fresh.has(symbol.id) ? 'motion-flash' : '',
+                  ]"
+                  :aria-selected="symbol.id === selectedSymbol"
                   :title="
-                    symbolType(symbol).inferred
-                      ? `Inferred: ${symbolType(symbol).text}`
-                      : symbolType(symbol).text
+                    symbol.kind === 'import'
+                      ? `${symbol.name} — double-click to open its definition${editable ? ', drag it into the graph' : ''}`
+                      : `${symbol.name} — double-click to show it in the graph${editable ? ', drag it into the graph, F2 to rename' : ''}`
                   "
+                  @click="emit('selectSymbol', symbol.id)"
+                  @dblclick="
+                    symbol.kind === 'import' && canOpenImport?.(symbol)
+                      ? emit('openImport', symbol.id)
+                      : emit('openSymbol', symbol.id)
+                  "
+                  :draggable="editable && draggable(symbol)"
+                  @dragstart="onDragStart($event, symbol)"
+                  @keydown="onRowKeydown($event, symbol)"
+                  @contextmenu.prevent="openMenu($event, symbol)"
                 >
                   <span
-                    class="size-2 shrink-0 rounded-full"
-                    :style="{ background: typeColor(symbol) }"
+                    class="shrink-0"
+                    :class="SYMBOL_ICONS[symbol.importedKind ?? symbol.kind]"
                   />
-                  <span class="truncate">{{ symbolType(symbol).text }}</span>
-                </span>
-                <!-- UE's eye: Instance Editable, here export / @export. -->
-                <span
-                  v-if="exportState(symbol)"
-                  role="checkbox"
-                  data-ui="export-eye"
-                  class="shrink-0 rounded p-0.5"
-                  :class="[
-                    exportState(symbol)?.exported
-                      ? 'i-mdi-eye text-amber-400'
-                      : 'i-mdi-eye-off-outline text-zinc-600 hover:text-zinc-300',
-                    symbolType(symbol).text ? '' : 'ml-auto',
-                  ]"
-                  :aria-checked="exportState(symbol)?.exported"
-                  :aria-label="`Export ${symbol.name}`"
-                  :title="
-                    exportState(symbol)?.exported
-                      ? `Exported (${exportState(symbol)?.marker}); click to stop`
-                      : `Click to export (${exportState(symbol)?.marker})`
-                  "
-                  @click.stop="toggleExport(symbol)"
-                  @dblclick.stop
-                />
-              </button>
+                  <!-- The name before badges and type: they shrink first. -->
+                  <span
+                    class="max-w-[65%] min-w-0 shrink-0 truncate"
+                    :title="symbol.name"
+                    >{{ symbol.name }}</span
+                  >
+                  <span
+                    v-if="badges(symbol)"
+                    class="min-w-0 truncate text-[10px] text-zinc-500"
+                    :title="badges(symbol)"
+                    >{{ badges(symbol) }}</span
+                  >
+                  <span
+                    v-if="symbolType(symbol).text"
+                    class="ml-auto flex min-w-0 shrink items-center gap-1 pl-2 font-mono text-[11px]"
+                    :class="
+                      symbolType(symbol).inferred
+                        ? 'text-zinc-500 italic'
+                        : 'text-zinc-400'
+                    "
+                    :title="
+                      symbolType(symbol).inferred
+                        ? `Inferred: ${symbolType(symbol).text}`
+                        : symbolType(symbol).text
+                    "
+                  >
+                    <span
+                      class="size-2 shrink-0 rounded-full"
+                      :style="{ background: typeColor(symbol) }"
+                    />
+                    <span class="truncate">{{ symbolType(symbol).text }}</span>
+                  </span>
+                  <!-- UE's eye: Instance Editable, here export / @export. -->
+                  <span
+                    v-if="exportState(symbol)"
+                    role="checkbox"
+                    data-ui="export-eye"
+                    class="shrink-0 rounded p-0.5"
+                    :class="[
+                      exportState(symbol)?.exported
+                        ? 'i-mdi-eye text-amber-400'
+                        : 'i-mdi-eye-off-outline text-zinc-600 hover:text-zinc-300',
+                      symbolType(symbol).text ? '' : 'ml-auto',
+                    ]"
+                    :aria-checked="exportState(symbol)?.exported"
+                    :aria-label="`Export ${symbol.name}`"
+                    :title="
+                      exportState(symbol)?.exported
+                        ? `Exported (${exportState(symbol)?.marker}); click to stop`
+                        : `Click to export (${exportState(symbol)?.marker})`
+                    "
+                    @click.stop="toggleExport(symbol)"
+                    @dblclick.stop
+                  />
+                </button>
+              </template>
             </template>
-          </template>
-        </template>
+          </div>
+        </CollapseTransition>
       </section>
 
       <section
@@ -824,28 +825,29 @@ function addLabel(kind: AddKind, owner: string): string {
           @click="toggle('comments')"
         >
           <span
-            :class="
-              collapsed.comments ? 'i-mdi-chevron-right' : 'i-mdi-chevron-down'
-            "
+            class="motion-rotate i-mdi-chevron-down"
+            :class="{ '-rotate-90': collapsed.comments }"
           />
           Comment boxes
         </button>
-        <template v-if="!collapsed.comments">
-          <button
-            v-for="{ box, fn } in commentBoxes"
-            :key="box.id"
-            type="button"
-            class="row pl-6"
-            :title="`Select the ${box.nodes.length} nodes of this comment box`"
-            @click="emit('select', [...box.nodes])"
-          >
-            <span class="i-mdi-comment-multiple-outline text-zinc-400" />
-            <span class="truncate">{{ box.title || 'Comment' }}</span>
-            <span class="ml-auto truncate pl-2 text-xs text-zinc-500">{{
-              fn.name
-            }}</span>
-          </button>
-        </template>
+        <CollapseTransition>
+          <div v-if="!collapsed.comments">
+            <button
+              v-for="{ box, fn } in commentBoxes"
+              :key="box.id"
+              type="button"
+              class="row pl-6"
+              :title="`Select the ${box.nodes.length} nodes of this comment box`"
+              @click="emit('select', [...box.nodes])"
+            >
+              <span class="i-mdi-comment-multiple-outline text-zinc-400" />
+              <span class="truncate">{{ box.title || 'Comment' }}</span>
+              <span class="ml-auto truncate pl-2 text-xs text-zinc-500">{{
+                fn.name
+              }}</span>
+            </button>
+          </div>
+        </CollapseTransition>
       </section>
     </div>
 

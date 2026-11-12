@@ -34,10 +34,6 @@ body {
     animation: motion-drawer 200ms ease-out;
   }
 
-  .motion-expand {
-    animation: motion-expand 150ms ease-out;
-  }
-
   .motion-flash {
     animation: motion-flash 1.2s ease-out;
   }
@@ -70,13 +66,6 @@ body {
 @keyframes motion-drawer {
   from {
     transform: translateX(-100%);
-  }
-}
-
-@keyframes motion-expand {
-  from {
-    opacity: 0;
-    transform: translateY(-3px);
   }
 }
 
