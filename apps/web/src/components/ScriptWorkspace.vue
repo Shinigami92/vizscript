@@ -234,6 +234,62 @@ const importedNames = computed(() => [
   ),
 ]);
 
+/**
+ * The file an import comes from and the name to open there; `null` when it
+ * is not a repository file, `undefined` without a repository (playground).
+ */
+function importTarget(
+  symbol: ScriptSymbol
+): { path: string; symbol?: string } | null | undefined {
+  if (!props.files || symbol.kind !== 'import') {
+    return undefined;
+  }
+
+  const within = symbol.declarationRange ?? symbol.range;
+  const paths = references.value.filter(
+    (r) =>
+      !r.symbol && r.range.start >= within.start && r.range.end <= within.end
+  );
+  // `from . import utils`: the name is a module itself.
+  const submodule = paths.find((r) => r.specifier === symbol.imported);
+  const reference =
+    paths.find((r) => r.specifier === symbol.module) ?? submodule;
+  const target = reference ? resolveReference(reference) : undefined;
+  if (!target) {
+    return null;
+  }
+
+  const name =
+    reference === submodule ||
+    symbol.imported === '*' ||
+    symbol.imported === 'default'
+      ? undefined
+      : symbol.imported;
+  return { path: target.path, ...(name ? { symbol: name } : {}) };
+}
+
+function canOpenImport(symbol: ScriptSymbol): boolean {
+  return Boolean(importTarget(symbol));
+}
+
+function openImport(id: string): void {
+  const symbol = doc.value?.symbols?.find((s) => s.id === id);
+  const target = symbol ? importTarget(symbol) : undefined;
+  if (target) {
+    emit('open', target.path, target.symbol);
+  }
+}
+
+const selectedImportPath = computed(() => {
+  const symbol = selectedSymbol.value;
+  if (symbol?.kind !== 'import') {
+    return undefined;
+  }
+
+  const target = importTarget(symbol);
+  return target === undefined ? undefined : (target?.path ?? null);
+});
+
 async function updateReferences(seq: number): Promise<void> {
   const refs = await client.references(text.value, props.path);
   if (seq === parseSeq) {
@@ -1390,8 +1446,10 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :selected-symbol="selectedSymbol?.id ?? null"
         :current-function="currentFunction"
         :editable="editable"
+        :can-open-import="canOpenImport"
         @select-symbol="selectSymbol"
         @open-symbol="openSymbol"
+        @open-import="openImport"
         @select-function="selectFunction"
         @select="selectNodes"
         @reveal="revealSymbol"
@@ -1410,6 +1468,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :symbol="selection.length === 0 ? selectedSymbol : null"
         :node-symbol="nodeSymbol"
         :symbol-uses="symbolUses.length"
+        :import-path="selectedImportPath"
         :types="typeSystem"
         :doc-text="docText"
         @select="selectNodes"
@@ -1417,6 +1476,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         @activate="onActivate"
         @reveal="revealRange"
         @open-symbol="openSymbol"
+        @open-import="openImport"
         @op="onScriptOp"
         @close="workbench.hide('details')"
       />

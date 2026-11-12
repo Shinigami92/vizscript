@@ -28,11 +28,15 @@ const props = defineProps<{
   /** Qualified name of the function the selection is in (its locals show). */
   currentFunction: string | null;
   editable: boolean;
+  /** Whether an import resolves to a file that can be opened. */
+  canOpenImport?: (symbol: ScriptSymbol) => boolean;
 }>();
 
 const emit = defineEmits<{
   selectSymbol: [id: string];
   openSymbol: [id: string];
+  /** Open the file an import comes from, at the imported name. */
+  openImport: [id: string];
   selectFunction: [fnId: string];
   select: [ids: string[]];
   reveal: [id: string];
@@ -171,6 +175,22 @@ const sections = computed<Section[]>(() => {
     result.push({ id: 'types', title: 'Types', groups: grouped(types) });
   }
 
+  // Grouped by module, in code order.
+  const imports = of('import');
+  if (imports.length > 0) {
+    const modules = new Map<string, ScriptSymbol[]>();
+    for (const item of imports) {
+      const module = item.module ?? '';
+      modules.set(module, [...(modules.get(module) ?? []), item]);
+    }
+
+    result.push({
+      id: 'imports',
+      title: 'Imports',
+      groups: [...modules].map(([owner, items]) => ({ owner, items })),
+    });
+  }
+
   const signals = of('signal');
   if (signals.length > 0 || props.doc?.language === 'gdscript') {
     result.push({
@@ -207,6 +227,21 @@ function typeColor(symbol: ScriptSymbol): string {
 
 /** Short modifiers shown next to the name. */
 function badges(symbol: ScriptSymbol): string {
+  if (symbol.kind === 'import') {
+    const from =
+      symbol.imported === 'default' ||
+      (symbol.imported === '*' && props.doc?.language === 'typescript')
+        ? symbol.imported
+        : symbol.imported &&
+            symbol.imported !== '*' &&
+            symbol.imported !== symbol.name
+          ? symbol.imported
+          : '';
+    return [...symbol.modifiers.filter((m) => m === 'type'), from]
+      .filter(Boolean)
+      .join(' ');
+  }
+
   return symbol.modifiers
     .filter((m) =>
       /^(?:export|export default|static|async|private|protected|@export.*|@onready|readonly|get|set)$/.test(
@@ -226,7 +261,7 @@ const field = useTemplateRef<HTMLInputElement[]>('field');
 let pending: { scope: string; name: string } | null = null;
 
 async function startRename(symbol: ScriptSymbol): Promise<void> {
-  if (!props.editable) {
+  if (!props.editable || symbol.kind === 'import') {
     return;
   }
 
@@ -335,6 +370,14 @@ function remove(symbol: ScriptSymbol): void {
   emit('op', { type: 'deleteSymbol', symbol: symbol.id });
 }
 
+/** Type-only imports have no value to use in the graph. */
+function draggable(symbol: ScriptSymbol): boolean {
+  return (
+    DRAGGABLE_KINDS.has(symbol.kind) &&
+    !(symbol.kind === 'import' && symbol.modifiers.includes('type'))
+  );
+}
+
 /** Like UE: drag a function or variable into the graph. */
 function onDragStart(event: DragEvent, symbol: ScriptSymbol): void {
   if (!event.dataTransfer) {
@@ -373,10 +416,21 @@ const menuEntries = computed<MenuEntry[]>(() => {
     return [];
   }
 
+  const isImport = symbol.kind === 'import';
   return [
     { type: 'header', label: `${SYMBOL_LABELS[symbol.kind]} ${symbol.name}` },
+    ...(isImport
+      ? [
+          {
+            label: 'Open definition',
+            icon: 'i-mdi-file-find-outline',
+            disabled: !props.canOpenImport?.(symbol),
+            action: () => emit('openImport', symbol.id),
+          },
+        ]
+      : []),
     {
-      label: 'Show in graph',
+      label: isImport ? 'Show uses in graph' : 'Show in graph',
       icon: 'i-mdi-graph-outline',
       action: () => emit('openSymbol', symbol.id),
     },
@@ -388,12 +442,16 @@ const menuEntries = computed<MenuEntry[]>(() => {
     ...(props.editable
       ? [
           { type: 'separator' } as const,
-          {
-            label: 'Rename',
-            icon: 'i-mdi-rename-outline',
-            shortcut: 'F2',
-            action: () => void startRename(symbol),
-          },
+          ...(isImport
+            ? []
+            : [
+                {
+                  label: 'Rename',
+                  icon: 'i-mdi-rename-outline',
+                  shortcut: 'F2',
+                  action: () => void startRename(symbol),
+                },
+              ]),
           {
             label: 'Delete',
             icon: 'i-mdi-delete-outline',
@@ -509,8 +567,19 @@ function addLabel(kind: AddKind, owner: string): string {
               v-if="group.owner && section.id !== 'locals'"
               class="flex items-center gap-1.5 pt-1 pr-1 pl-6 text-xs text-zinc-500"
             >
-              <span class="i-mdi-cube-outline" />
-              <span class="min-w-0 flex-1 truncate">{{ group.owner }}</span>
+              <span
+                :class="
+                  section.id === 'imports'
+                    ? 'i-mdi-file-import-outline'
+                    : 'i-mdi-cube-outline'
+                "
+              />
+              <span
+                class="min-w-0 flex-1 truncate"
+                :class="{ 'font-mono': section.id === 'imports' }"
+                :title="group.owner"
+                >{{ group.owner }}</span
+              >
               <button
                 v-if="editable && section.add"
                 type="button"
@@ -554,10 +623,18 @@ function addLabel(kind: AddKind, owner: string): string {
                     : '',
                 ]"
                 :aria-selected="symbol.id === selectedSymbol"
-                :title="`${symbol.name} — double-click to show it in the graph${editable ? ', drag it into the graph, F2 to rename' : ''}`"
+                :title="
+                  symbol.kind === 'import'
+                    ? `${symbol.name} — double-click to open its definition${editable ? ', drag it into the graph' : ''}`
+                    : `${symbol.name} — double-click to show it in the graph${editable ? ', drag it into the graph, F2 to rename' : ''}`
+                "
                 @click="emit('selectSymbol', symbol.id)"
-                @dblclick="emit('openSymbol', symbol.id)"
-                :draggable="editable && DRAGGABLE_KINDS.has(symbol.kind)"
+                @dblclick="
+                  symbol.kind === 'import' && canOpenImport?.(symbol)
+                    ? emit('openImport', symbol.id)
+                    : emit('openSymbol', symbol.id)
+                "
+                :draggable="editable && draggable(symbol)"
                 @dragstart="onDragStart($event, symbol)"
                 @keydown="onRowKeydown($event, symbol)"
                 @contextmenu.prevent="openMenu($event, symbol)"

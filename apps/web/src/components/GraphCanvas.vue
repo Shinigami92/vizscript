@@ -497,6 +497,42 @@ function onDrop(event: DragEvent): void {
     return;
   }
 
+  if (symbol.kind === 'import') {
+    // Without the module's declarations it may be a function or a value.
+    const name = symbol.name;
+    const call =
+      symbol.imported === '*'
+        ? symbol.modifiers.some((m) => m === 'preload' || m === 'load')
+          ? `${name}.new`
+          : undefined
+        : name;
+    const get = (): void => add({ type: 'value', expression: name });
+    if (event.ctrlKey || event.metaKey || !call) {
+      get();
+      return;
+    }
+
+    dropMenu.value = {
+      x: event.clientX,
+      y: event.clientY,
+      entries: [
+        { type: 'header', label: name },
+        {
+          label: `Call ${call}()`,
+          icon: 'i-mdi-function',
+          action: () => add({ type: 'call', callee: call }),
+        },
+        {
+          label: `Get ${name}`,
+          icon: 'i-mdi-arrow-right-bold-box-outline',
+          shortcut: isMac ? '⌘ drag' : 'Ctrl drag',
+          action: get,
+        },
+      ],
+    };
+    return;
+  }
+
   if (
     symbol.kind === 'local' &&
     owner &&

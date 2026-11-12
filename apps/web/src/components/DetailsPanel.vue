@@ -26,6 +26,8 @@ const props = defineProps<{
   symbol?: ScriptSymbol | null;
   /** Number of nodes using the symbol. */
   symbolUses?: number;
+  /** File the selected import resolves to (`null`: none). */
+  importPath?: string | null;
   /** Types and modifiers of the file's language. */
   types?: TypeSystemInfo | null;
   /** The text `doc` was parsed from (symbol ranges point into it). */
@@ -40,6 +42,7 @@ const emit = defineEmits<{
   activate: [id: string];
   reveal: [range: SourceRange];
   openSymbol: [id: string];
+  openImport: [id: string];
   op: [op: GraphOp];
   close: [];
 }>();
@@ -144,9 +147,11 @@ function deleteSelection(): void {
         :types="types ?? null"
         :declared="declaredTypes"
         :language="doc?.language ?? ''"
+        :import-path="importPath"
         @reveal="(range) => emit('reveal', range)"
         @op="(op) => emit('op', op)"
         @open="emit('openSymbol', symbol.id)"
+        @open-import="emit('openImport', symbol.id)"
       />
 
       <!-- Details of the selection -->

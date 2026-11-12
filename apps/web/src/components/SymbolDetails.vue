@@ -30,11 +30,15 @@ const props = defineProps<{
    * variable when its Get / Set node is selected): no source, no uses.
    */
   compact?: boolean;
+  /** File an import resolves to (`null`: not in the repository). */
+  importPath?: string | null;
 }>();
 
 const emit = defineEmits<{
   reveal: [range: SourceRange];
   open: [];
+  /** Open the file of an import at the imported name. */
+  openImport: [];
   op: [op: GraphOp];
 }>();
 
@@ -43,7 +47,25 @@ const type = computed(() => symbolType(props.symbol));
 const location = computed(() =>
   lineColumn(props.text, props.symbol.nameRange.start)
 );
-const source = computed(() => snippet(props.text, props.symbol.range, 16));
+const source = computed(() =>
+  snippet(
+    props.text,
+    props.symbol.kind === 'import'
+      ? (props.symbol.declarationRange ?? props.symbol.range)
+      : props.symbol.range,
+    16
+  )
+);
+const isImport = computed(() => props.symbol.kind === 'import');
+/** What an import takes from its module, in words. */
+const importedText = computed(() => {
+  const imported = props.symbol.imported;
+  if (imported === '*') {
+    return 'the whole module';
+  }
+
+  return imported === 'default' ? 'the default export' : (imported ?? '');
+});
 const isVariable = computed(() =>
   ['variable', 'constant', 'local'].includes(props.symbol.kind)
 );
@@ -286,7 +308,38 @@ function setModifier(modifier: string, enabled: boolean): void {
 
     <section class="section">
       <dl class="grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1.5 px-3 text-xs">
-        <template v-if="!symbol.params">
+        <template v-if="isImport">
+          <dt class="text-zinc-500">Module</dt>
+          <dd class="truncate font-mono text-zinc-200" :title="symbol.module">
+            {{ symbol.module }}
+          </dd>
+          <dt class="text-zinc-500">Imports</dt>
+          <dd class="truncate text-zinc-200">
+            <span
+              :class="{
+                'font-mono':
+                  symbol.imported !== '*' && symbol.imported !== 'default',
+              }"
+              >{{ importedText }}</span
+            >
+          </dd>
+          <template v-if="importPath !== undefined">
+            <dt class="text-zinc-500">File</dt>
+            <dd class="min-w-0">
+              <button
+                v-if="importPath"
+                type="button"
+                class="block max-w-full truncate text-left font-mono text-sky-300 hover:text-sky-200 hover:underline"
+                :title="`Open ${importPath}`"
+                @click="emit('openImport')"
+              >
+                {{ importPath }}
+              </button>
+              <span v-else class="text-zinc-500">Not in this repository</span>
+            </dd>
+          </template>
+        </template>
+        <template v-else-if="!symbol.params">
           <dt class="pt-0.5 text-zinc-500">Type</dt>
           <dd class="min-w-0">
             <TypePicker
@@ -415,7 +468,9 @@ function setModifier(modifier: string, enabled: boolean): void {
           <dt class="text-zinc-500">Extends</dt>
           <dd class="truncate font-mono text-zinc-200">{{ symbol.extends }}</dd>
         </template>
-        <template v-if="symbol.modifiers.length > 0 && !modifierOptions">
+        <template
+          v-if="symbol.modifiers.length > 0 && !modifierOptions && !isImport"
+        >
           <dt class="text-zinc-500">Modifiers</dt>
           <dd class="flex flex-wrap gap-1">
             <span
@@ -437,7 +492,12 @@ function setModifier(modifier: string, enabled: boolean): void {
           </button>
         </dd>
         <template
-          v-if="!compact && symbol.kind !== 'type' && symbol.kind !== 'enum'"
+          v-if="
+            !compact &&
+            symbol.kind !== 'type' &&
+            symbol.kind !== 'enum' &&
+            !(isImport && symbol.modifiers.includes('type'))
+          "
         >
           <dt class="text-zinc-500">Used by</dt>
           <dd class="text-zinc-300">
