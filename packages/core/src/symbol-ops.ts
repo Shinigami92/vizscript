@@ -69,6 +69,13 @@ export interface DeclarationSyntax {
     symbol: ScriptSymbol,
     name: string
   ) => OpResult;
+  /** Edits that change a script setting (`GraphDocument.settings`). */
+  setScriptSetting?: (
+    text: string,
+    doc: GraphDocument,
+    setting: string,
+    value: string
+  ) => OpResult;
   /** How collapsed nodes become a function and its call (`collapse.ts`). */
   extract?: ExtractSyntax;
   /** Edits that import a name of another file (see `addImport`). */
@@ -897,7 +904,11 @@ export function setModifier(
     return failed('Unknown symbol.');
   }
 
-  if (symbol.modifiers.includes(modifier) === enabled) {
+  // `export default` counts as exported.
+  const has =
+    symbol.modifiers.includes(modifier) ||
+    (modifier === 'export' && symbol.modifiers.includes('export default'));
+  if (has === enabled) {
     return succeeded([]);
   }
 

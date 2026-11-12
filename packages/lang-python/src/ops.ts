@@ -7,7 +7,7 @@ import type {
   StatementSyntax,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { applyTextOp } from '@vizscript/core';
+import { applyTextOp, removeModifier } from '@vizscript/core';
 import { parsePython, splitString } from './convert';
 import { addPythonImport } from './imports';
 import { parsePythonDocument } from './lower';
@@ -250,7 +250,10 @@ export const PYTHON_TYPES: TypeSystemInfo = {
   ],
   containerDefaults: { array: '[]', map: '{}', set: 'set()' },
   // Python has no declaration keywords; constants are UPPER_CASE names.
-  modifiers: {},
+  modifiers: {
+    function: { flags: ['async'] },
+    method: { flags: ['async'] },
+  },
 };
 
 const DECLARATIONS: DeclarationSyntax = {
@@ -273,10 +276,31 @@ const DECLARATIONS: DeclarationSyntax = {
   // `x = 1` needs its value; `x: int` alone is a declaration (not `self.x`).
   valueRequired: (symbol, typed) =>
     !typed || symbol.modifiers.some((m) => m.endsWith('.')),
-  setModifier: () => ({
-    ok: false,
-    error: 'Python has no declaration modifiers; constants are UPPER_CASE.',
-  }),
+  setModifier: (text, _doc, symbol, modifier, enabled) => {
+    if (
+      modifier !== 'async' ||
+      (symbol.kind !== 'function' && symbol.kind !== 'method')
+    ) {
+      return {
+        ok: false,
+        error: 'Python has no declaration modifiers; constants are UPPER_CASE.',
+      };
+    }
+
+    if (!enabled) {
+      return removeModifier(text, symbol, 'async');
+    }
+
+    // `async def`, after the decorators.
+    const start = symbol.range.start;
+    const def = text.slice(start, symbol.nameRange.start).search(/\bdef\b/);
+    return def === -1
+      ? { ok: false, error: `Cannot find the def of ${symbol.name}.` }
+      : {
+          ok: true,
+          edits: [{ start: start + def, end: start + def, text: 'async ' }],
+        };
+  },
   identifier: /^[A-Za-z_]\w*$/,
   keywords: KEYWORDS,
   defaultIndent: '    ',

@@ -40,6 +40,7 @@ import type {
   VarDecl,
 } from './ast';
 import { parseGDScript } from './parser';
+import { gdscriptSettings } from './settings';
 import { gdscriptSymbols } from './symbols';
 
 export const LANGUAGE_ID = 'gdscript';
@@ -1582,6 +1583,7 @@ export function parseGDScriptDocument(
       severity: 'error',
     })),
     symbols: gdscriptSymbols(script.body, text),
+    settings: gdscriptSettings(script),
   };
   attachComments(doc, text, comments);
   linkSymbolGraphs(doc);

@@ -138,3 +138,56 @@ describe('descriptions', () => {
     );
   });
 });
+
+function toggle(
+  text: string,
+  symbol: string,
+  modifier: string,
+  enabled = true
+): string {
+  const result = applyTypeScriptOp(
+    text,
+    { type: 'setModifier', symbol, modifier, enabled },
+    't.ts'
+  );
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+
+  return applyTextEdits(text, result.edits);
+}
+
+describe('function settings', () => {
+  it('exports functions and makes them async', () => {
+    const text = 'function load() {}\n';
+    const exported = toggle(text, 'function:load', 'export');
+    expect(exported).toBe('export function load() {}\n');
+    expect(toggle(exported, 'function:load', 'async')).toBe(
+      'export async function load() {}\n'
+    );
+    expect(
+      toggle(
+        'export default function load() {}\n',
+        'function:load',
+        'export',
+        false
+      )
+    ).toBe('function load() {}\n');
+  });
+
+  it('writes access, static and async of methods in order', () => {
+    const text = 'class A {\n  run() {}\n}\n';
+    const asyncRun = toggle(text, 'method:A.run', 'async');
+    expect(asyncRun).toBe('class A {\n  async run() {}\n}\n');
+    const staticRun = toggle(asyncRun, 'method:A.run', 'static');
+    expect(staticRun).toBe('class A {\n  static async run() {}\n}\n');
+    const privateRun = toggle(staticRun, 'method:A.run', 'private');
+    expect(privateRun).toBe('class A {\n  private static async run() {}\n}\n');
+    expect(toggle(privateRun, 'method:A.run', 'protected')).toBe(
+      'class A {\n  protected static async run() {}\n}\n'
+    );
+    expect(toggle(privateRun, 'method:A.run', 'public')).toBe(
+      'class A {\n  static async run() {}\n}\n'
+    );
+  });
+});

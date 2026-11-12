@@ -24,6 +24,7 @@ const KEYWORDS = new Set(
 );
 
 const KINDS = ['const', 'let', 'var'];
+const ACCESS = ['public', 'protected', 'private'];
 
 export const TYPESCRIPT_TYPES: TypeSystemInfo = {
   primitives: [
@@ -227,7 +228,9 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
     variable: { keywords: KINDS, flags: ['export'] },
     constant: { keywords: KINDS, flags: ['export'] },
     local: { keywords: KINDS },
-    member: { flags: ['static', 'readonly'] },
+    member: { access: ACCESS, flags: ['static', 'readonly'] },
+    function: { flags: ['export', 'async'] },
+    method: { access: ACCESS, flags: ['static', 'async'] },
   },
 };
 
@@ -257,13 +260,71 @@ function setModifier(
     return replaceKeyword(text, symbol, KINDS, modifier);
   }
 
+  if (ACCESS.includes(modifier)) {
+    if (!enabled) {
+      return { ok: true, edits: [] };
+    }
+
+    if (symbol.scope === '' || symbol.kind === 'local') {
+      return { ok: false, error: 'Only class members have an access level.' };
+    }
+
+    const current = symbol.modifiers.find((m) => ACCESS.includes(m));
+    if (modifier === 'public') {
+      // Public is the default: no keyword.
+      return current && current !== 'public'
+        ? removeModifier(text, symbol, current)
+        : { ok: true, edits: [] };
+    }
+
+    if (current) {
+      return replaceKeyword(text, symbol, ACCESS, modifier);
+    }
+
+    // The access level comes first (`private static readonly`).
+    const at = (symbol.declarationRange ?? symbol.range).start;
+    return { ok: true, edits: [{ start: at, end: at, text: `${modifier} ` }] };
+  }
+
+  if (modifier === 'async') {
+    if (!enabled) {
+      return removeModifier(text, symbol, 'async');
+    }
+
+    const start = (symbol.declarationRange ?? symbol.range).start;
+    const head = text.slice(start, symbol.nameRange.start);
+    const fn = head.search(/\bfunction\b/);
+    if (symbol.kind === 'method') {
+      // Before the name (or the `*` of a generator).
+      const star = head.trimEnd().endsWith('*')
+        ? start + head.trimEnd().length - 1
+        : symbol.nameRange.start;
+      return { ok: true, edits: [{ start: star, end: star, text: 'async ' }] };
+    }
+
+    if (fn === -1) {
+      return { ok: false, error: 'Change async in the code of this function.' };
+    }
+
+    return {
+      ok: true,
+      edits: [{ start: start + fn, end: start + fn, text: 'async ' }],
+    };
+  }
+
   if (modifier === 'export') {
     if (symbol.scope !== '' || symbol.kind === 'local') {
       return { ok: false, error: 'Only module declarations can be exported.' };
     }
 
     if (!enabled) {
-      return removeModifier(text, symbol, 'export');
+      return removeModifier(
+        text,
+        symbol,
+        symbol.modifiers.includes('export default')
+          ? 'export default'
+          : 'export'
+      );
     }
 
     const at = (symbol.declarationRange ?? symbol.range).start;
@@ -279,13 +340,14 @@ function setModifier(
       return removeModifier(text, symbol, modifier);
     }
 
-    // `private static readonly name`: static before readonly.
+    // `private static async name()`, `static readonly name`: static goes
+    // before readonly, async, get and set; readonly right before the name.
     const lineStart = text.lastIndexOf('\n', symbol.nameRange.start - 1) + 1;
     const head = text.slice(lineStart, symbol.nameRange.start);
-    const readonly = head.search(/\breadonly\b/);
+    const later = head.search(/\b(?:readonly|async|get|set)\b|\*/);
     const at =
-      modifier === 'static' && readonly !== -1
-        ? lineStart + readonly
+      modifier === 'static' && later !== -1
+        ? lineStart + later
         : symbol.nameRange.start;
     return { ok: true, edits: [{ start: at, end: at, text: `${modifier} ` }] };
   }

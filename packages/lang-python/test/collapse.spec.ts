@@ -83,3 +83,22 @@ describe('collapse to function', () => {
     );
   });
 });
+
+describe('function settings', () => {
+  it('makes functions async after their decorators', () => {
+    const text = '@cache\ndef load():\n    pass\n';
+    const result = applyPythonOp(
+      text,
+      {
+        type: 'setModifier',
+        symbol: 'function:load',
+        modifier: 'async',
+        enabled: true,
+      },
+      't.py'
+    );
+    expect(result.ok && applyTextEdits(text, result.edits)).toBe(
+      '@cache\nasync def load():\n    pass\n'
+    );
+  });
+});

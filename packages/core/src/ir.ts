@@ -201,6 +201,21 @@ export interface GraphDocument {
   symbols?: ScriptSymbol[];
   /** Names exported from other modules (`export { a } from './x'`). */
   reexports?: Reexport[];
+  /**
+   * Settings of the whole script (UE's Class Settings), e.g. GDScript's
+   * `@tool`, `class_name` and `extends`.
+   */
+  settings?: ScriptSetting[];
+}
+
+/** A setting of the whole script, edited with `setScriptSetting`. */
+export interface ScriptSetting {
+  id: string;
+  label: string;
+  /** A text field, or a switch (`value` is `true` / `false`). */
+  kind: 'text' | 'flag';
+  value: string;
+  placeholder?: string;
 }
 
 /**

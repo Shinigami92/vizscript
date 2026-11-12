@@ -79,3 +79,68 @@ describe('descriptions', () => {
     );
   });
 });
+
+describe('function settings', () => {
+  it('makes functions static', () => {
+    const text = 'extends Node\n\n\nfunc make() -> void:\n\tpass\n';
+    const result = applyGDScriptOp(
+      text,
+      {
+        type: 'setModifier',
+        symbol: 'function:make',
+        modifier: 'static',
+        enabled: true,
+      },
+      't.gd'
+    );
+    expect(result.ok && applyTextEdits(text, result.edits)).toBe(
+      'extends Node\n\n\nstatic func make() -> void:\n\tpass\n'
+    );
+  });
+});
+
+function set(text: string, setting: string, value: string): string {
+  const result = applyGDScriptOp(
+    text,
+    { type: 'setScriptSetting', setting, value },
+    't.gd'
+  );
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+
+  return applyTextEdits(text, result.edits);
+}
+
+describe('script settings', () => {
+  it('reads @tool, class_name and extends', () => {
+    const doc = parseGDScriptDocument(
+      '@tool\nclass_name Player\nextends Node2D\n',
+      't.gd'
+    );
+    expect(doc.settings?.map((s) => `${s.id}=${s.value}`)).toEqual([
+      'tool=true',
+      'class_name=Player',
+      'extends=Node2D',
+    ]);
+  });
+
+  it('writes them in Godot’s order and removes them', () => {
+    const text = 'extends Node\n\n\nfunc f() -> void:\n\tpass\n';
+    const named = set(text, 'class_name', 'Player');
+    expect(named).toBe(
+      'class_name Player\nextends Node\n\n\nfunc f() -> void:\n\tpass\n'
+    );
+    const tool = set(named, 'tool', 'true');
+    expect(tool.startsWith('@tool\nclass_name Player\nextends Node\n')).toBe(
+      true
+    );
+    expect(set(tool, 'extends', 'Node2D')).toContain('extends Node2D\n');
+    expect(set(tool, 'class_name', '')).toBe(
+      '@tool\nextends Node\n\n\nfunc f() -> void:\n\tpass\n'
+    );
+    expect(() => set(text, 'class_name', 'not valid')).toThrow(
+      'is not a valid class name'
+    );
+  });
+});

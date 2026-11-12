@@ -13,6 +13,7 @@ import { addGDScriptImport } from './add-import';
 import { parseGDScriptDocument } from './lower';
 import { parseGDScript } from './parser';
 import { gdscriptCallSites, renameGDScriptSymbol } from './rename';
+import { setGDScriptSetting } from './settings';
 
 const IDENTIFIER = /^[A-Za-z_]\w*$/;
 
@@ -261,6 +262,7 @@ export const GDSCRIPT_TYPES: TypeSystemInfo = {
     constant: { keywords: KINDS },
     local: { keywords: KINDS },
     member: { keywords: KINDS },
+    function: { flags: ['static'] },
   },
 };
 
@@ -297,7 +299,7 @@ function setModifier(
     if (symbol.kind === 'local' || symbol.scope !== '') {
       return {
         ok: false,
-        error: `Only member variables of the script can be ${modifier}.`,
+        error: `Only members of the script can be ${modifier}.`,
       };
     }
 
@@ -309,9 +311,9 @@ function setModifier(
       return { ok: false, error: `A const cannot be ${modifier}.` };
     }
 
-    // Annotations come first, `static` right before `var`.
+    // Annotations come first, `static` right before `var` / `func`.
     const head = text.slice(symbol.range.start, symbol.nameRange.start);
-    const keyword = head.search(/\bvar\b/);
+    const keyword = head.search(/\b(?:var|func)\b/);
     const at =
       modifier === 'static' && keyword !== -1
         ? symbol.range.start + keyword
@@ -364,6 +366,7 @@ const DECLARATIONS: DeclarationSyntax = {
     // Functions of the script are called by name, inner classes by self.
     method: (name, _className, isStatic) => (isStatic ? name : `self.${name}`),
   },
+  setScriptSetting: setGDScriptSetting,
   addImport: (text, doc, request) =>
     addGDScriptImport(text, doc, request, DECLARATIONS),
   rename: (text, doc, symbol, name) =>

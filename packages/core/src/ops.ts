@@ -175,6 +175,8 @@ export type GraphOp =
       /** Where the call node goes (where the collapsed nodes were). */
       position?: Point;
     }
+  /** Changes a setting of the script (`extends`, `@tool`; see `settings`). */
+  | { type: 'setScriptSetting'; setting: string; value: string }
   /** Another op that uses a name of another file, plus its import. */
   | { type: 'withImport'; import: ImportRequest; op: GraphOp };
 
@@ -226,11 +228,16 @@ export interface TypeSystemInfo {
   /** Modifiers the Details panel offers per kind of symbol. */
   modifiers: Partial<
     Record<
-      'variable' | 'constant' | 'member' | 'local',
+      'variable' | 'constant' | 'member' | 'local' | 'function' | 'method',
       {
         /** Mutually exclusive declaration keywords (`const` / `let`). */
         keywords?: string[];
-        /** Independent switches (`export`, `@export`). */
+        /**
+         * Access levels of class members (`public` / `protected` /
+         * `private`); none written means the first.
+         */
+        access?: string[];
+        /** Independent switches (`export`, `@export`, `async`). */
         flags?: string[];
       }
     >

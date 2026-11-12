@@ -1646,6 +1646,13 @@ export function applyTextOp(
       return moveWires(text, doc, op.from, op.to, syntax);
     }
 
+    case 'setScriptSetting': {
+      const set = syntax.declarations?.setScriptSetting;
+      return set
+        ? set(text, doc, op.setting, op.value)
+        : failed('This language has no script settings.');
+    }
+
     case 'collapseToFunction': {
       return collapseToFunction(
         text,
