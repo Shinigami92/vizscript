@@ -2070,6 +2070,12 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
                 // UE's "Collapse to Function".
                 label: 'Collapse to function…',
                 icon: 'i-mdi-function-variant',
+                // Only inside named functions and methods for now.
+                disabled: !props.doc?.symbols?.some(
+                  (sym) =>
+                    sym.fnId === first?.fn.id &&
+                    (sym.kind === 'function' || sym.kind === 'method')
+                ),
                 action: () => collapseToFunction(ids),
               },
             ]

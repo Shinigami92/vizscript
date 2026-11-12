@@ -18,6 +18,7 @@ import type {
   Positions,
   ScriptSymbol,
   SourceRange,
+  TextEdit,
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
@@ -25,6 +26,7 @@ import {
   boxColorIndex,
   boxColorKey,
   defaultExport,
+  diffEdits,
   exportedSymbols,
   findDefinition,
   findNode,
@@ -164,6 +166,8 @@ const pinned = shallowRef<Positions>({});
 const positions = shallowRef<Positions>({});
 const selection = ref<string[]>([]);
 const saving = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
+/** The edits of the last op and the text they were made on. */
+let lastOpEdits: { base: string; edits: ReadonlyArray<TextEdit> } | null = null;
 let pendingPlacement: {
   world: Point;
   known: Set<string>;
@@ -870,10 +874,20 @@ async function reparse(): Promise<void> {
     void router.replace({ query });
   }
 
+  // Nodes are followed through the op's edits when this parse is its
+  // result, else through the change of the text (typing, undo, redo).
+  const change = {
+    before: docText.value,
+    edits:
+      lastOpEdits && lastOpEdits.base === docText.value
+        ? lastOpEdits.edits
+        : diffEdits(docText.value, source),
+  };
+  lastOpEdits = null;
   pinned.value = previous
     ? {
-        ...reconcilePositions(previous, next, pinned.value),
-        ...reconcileReroutes(previous, next, pinned.value),
+        ...reconcilePositions(previous, next, pinned.value, change),
+        ...reconcileReroutes(previous, next, pinned.value, change),
         ...boxColorEntries(pinned.value),
       }
     : pinned.value;
@@ -1623,6 +1637,7 @@ async function onOp(op: GraphOp): Promise<void> {
     applyLayoutPatch(freeze);
   }
 
+  lastOpEdits = { base: text.value, edits: result.edits };
   editor.value?.applyEdits(result.edits);
 
   // Like UE, nothing stays selected after a delete (entry nodes would).
