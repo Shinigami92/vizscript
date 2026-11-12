@@ -1163,6 +1163,75 @@ function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
   ];
 }
 
+const ICON_MEMBER = 'i-mdi-code-braces text-sky-400';
+
+/**
+ * Fields and methods of a value's type, like UE's "Target is …" actions:
+ * the fields of an interface or object type of the file, the public members
+ * of a class of the file.
+ */
+function memberEntries(
+  pin: Pin,
+  source: PinRef,
+  state: MenuState
+): ActionEntry[] {
+  const typeName = String(pin.type);
+  const symbols = props.doc?.symbols ?? [];
+  const declared = /^[A-Za-z_$][\w$]*$/.test(typeName)
+    ? symbols.find(
+        (s) =>
+          s.name === typeName &&
+          s.scope === '' &&
+          (s.kind === 'type' || s.kind === 'class')
+      )
+    : undefined;
+  if (!declared) {
+    return [];
+  }
+
+  const scope = qualifiedName(declared);
+  const members =
+    declared.kind === 'class'
+      ? symbols
+          .filter(
+            (s) =>
+              s.scope === scope &&
+              (s.kind === 'variable' ||
+                s.kind === 'constant' ||
+                s.kind === 'method') &&
+              s.name !== 'constructor' &&
+              !s.name.startsWith('#') &&
+              !s.modifiers.includes('static') &&
+              !s.modifiers.includes('private')
+          )
+          .map((s) => ({
+            name: s.name,
+            type: s.type?.text ?? String(s.dataType),
+            method: s.kind === 'method',
+          }))
+      : (declared.fields ?? []).map((f) => ({
+          name: f.name,
+          type: f.type?.text ?? String(f.dataType),
+          method: f.method === true,
+        }));
+  return members.map((member): ActionEntry => ({
+    label: member.method ? `.${member.name}()` : `.${member.name}`,
+    category: `Members of ${typeName}`,
+    icon: member.method ? ICON_CALL : ICON_MEMBER,
+    ...(member.method ? {} : { hint: member.type }),
+    keywords: `${member.name} get member property field`,
+    action: () =>
+      emitOp({
+        type: 'useValue',
+        pin: source,
+        expression: member.method
+          ? `$value.${member.name}()`
+          : `$value.${member.name}`,
+        position: { ...state.world },
+      }),
+  }));
+}
+
 /** The searchable actions for a dropped wire or the empty graph. */
 function actionEntries(state: MenuState): ActionEntry[] {
   const v = view.value;
@@ -1234,6 +1303,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
   if (pin.direction === 'out') {
     const named = node.kind === 'setVar' || node.kind === 'entry';
     return [
+      ...memberEntries(pin, source, state),
       ...callables.value.map((callee): ActionEntry => ({
         label: `${callee}(value)`,
         category: 'Call function with this value',

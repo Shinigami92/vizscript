@@ -9,7 +9,12 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import type { StatementMeta } from '@vizscript/core';
-import { CATEGORY_COLORS, COMMENT_BOX_COLORS, getMeta } from '@vizscript/core';
+import {
+  ASSIGN_OPERATORS,
+  CATEGORY_COLORS,
+  COMMENT_BOX_COLORS,
+  getMeta,
+} from '@vizscript/core';
 import { computed, provide, ref } from 'vue';
 import { indexDocument, pinPeers } from '../graph/doc-index';
 import { lineColumn, snippet } from '../graph/source';
@@ -306,6 +311,28 @@ function isEvent(symbol: ScriptSymbol): boolean {
   );
 }
 
+/** The operator of a selected assignment (`undefined`: no assignment). */
+const assignOperator = computed(() => {
+  const node = single.value?.node;
+  if (
+    node?.kind !== 'setVar' ||
+    !node.title.startsWith('Set ') ||
+    node.meta?.declares !== undefined
+  ) {
+    return undefined;
+  }
+
+  const operator = node.subtitle ?? '=';
+  return ASSIGN_OPERATORS.includes(operator) ? operator : undefined;
+});
+
+function setAssignOperator(operator: string): void {
+  const node = single.value?.node;
+  if (node && operator !== assignOperator.value) {
+    emit('op', { type: 'setAssignOperator', node: node.id, operator });
+  }
+}
+
 function deleteSelection(): void {
   emit('op', {
     type: 'deleteNodes',
@@ -491,6 +518,28 @@ function deleteSelection(): void {
                 {{ single.fn.name }}
               </button>
             </dd>
+            <!-- An assignment's operator: `=`, `+=` … (UE has none). -->
+            <template v-if="assignOperator">
+              <dt class="text-zinc-500">Operator</dt>
+              <dd class="flex flex-wrap gap-1">
+                <button
+                  v-for="operator in ASSIGN_OPERATORS"
+                  :key="operator"
+                  type="button"
+                  class="rounded px-1.5 py-0.5 font-mono"
+                  :class="
+                    operator === assignOperator
+                      ? 'bg-zinc-700 text-zinc-50'
+                      : 'text-zinc-400 hover:bg-zinc-800'
+                  "
+                  :aria-pressed="operator === assignOperator"
+                  :disabled="!editable"
+                  @click="setAssignOperator(operator)"
+                >
+                  {{ operator }}
+                </button>
+              </dd>
+            </template>
             <template v-if="location">
               <dt class="text-zinc-500">Location</dt>
               <dd>

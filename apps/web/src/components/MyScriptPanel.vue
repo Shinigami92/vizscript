@@ -57,7 +57,7 @@ const collapsed = useStorage<Record<string, boolean>>(
   {}
 );
 
-type AddKind = 'function' | 'variable' | 'local' | 'signal';
+type AddKind = 'function' | 'variable' | 'local' | 'signal' | 'type';
 
 interface Group {
   /** Class (or other owner) the items belong to; `''` for the module. */
@@ -86,6 +86,7 @@ const BASE_NAMES: Record<AddKind, [string, string]> = {
   variable: ['newVar', 'new_var'],
   local: ['newLocal', 'new_local'],
   signal: ['newSignal', 'new_signal'],
+  type: ['NewType', 'NewType'],
 };
 
 function matches(symbol: ScriptSymbol): boolean {
@@ -189,10 +190,13 @@ const sections = computed<Section[]>(() => {
     });
   }
 
-  const types = of('class', 'type', 'enum');
-  if (types.length > 0) {
-    result.push({ id: 'types', title: 'Types', groups: grouped(types) });
-  }
+  result.push({
+    id: 'types',
+    title: 'Types',
+    groups: grouped(of('class', 'type', 'enum')),
+    empty: 'No types',
+    add: 'type',
+  });
 
   // Grouped by module, in code order.
   const imports = of('import');
@@ -402,6 +406,11 @@ function add(kind: AddKind, owner: string): void {
 
     case 'signal': {
       emit('op', { type: 'addSignal', name });
+      break;
+    }
+
+    case 'type': {
+      emit('op', { type: 'addType', name });
       break;
     }
   }
@@ -713,10 +722,16 @@ function addLabel(kind: AddKind, owner: string): string {
                   class="shrink-0"
                   :class="SYMBOL_ICONS[symbol.importedKind ?? symbol.kind]"
                 />
-                <span class="min-w-0 truncate">{{ symbol.name }}</span>
+                <!-- The name before badges and type: they shrink first. -->
+                <span
+                  class="max-w-[65%] min-w-0 shrink-0 truncate"
+                  :title="symbol.name"
+                  >{{ symbol.name }}</span
+                >
                 <span
                   v-if="badges(symbol)"
-                  class="shrink-0 truncate text-[10px] text-zinc-500"
+                  class="min-w-0 truncate text-[10px] text-zinc-500"
+                  :title="badges(symbol)"
                   >{{ badges(symbol) }}</span
                 >
                 <span
