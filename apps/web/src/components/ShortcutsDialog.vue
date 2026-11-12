@@ -98,6 +98,19 @@ const GROUPS: ReadonlyArray<{
         action: 'Disconnect a wire',
         input: '{Alt} + click a pin (the nodes stay)',
       },
+      {
+        action: 'Move all wires of a pin',
+        input: '{Mod} + drag the pin onto another pin',
+      },
+      { action: 'Straighten connections', input: '{Q}' },
+      {
+        action: 'Align top / bottom / left / right',
+        input: '{Shift}{W} / {Shift}{S} / {Shift}{A} / {Shift}{D}',
+      },
+      {
+        action: 'Align middle / center',
+        input: '{Alt}{Shift}{W} / {Alt}{Shift}{S}, more in the node menu',
+      },
       { action: 'Add a reroute point', input: 'Double-click a wire' },
       { action: 'Remove a reroute point', input: '{Alt} + click it' },
       { action: 'Delete', input: '{Delete} / {Backspace}' },

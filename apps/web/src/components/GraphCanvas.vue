@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {
+  AlignMode,
   Camera,
   CommentTarget,
   ContextTarget,
@@ -773,6 +774,61 @@ function extractEntry(source: PinRef, pin: Pin, world: Point): MenuEntry {
   };
 }
 
+/** UE's alignment tools for two or more selected nodes. */
+const ALIGN_ENTRIES: ReadonlyArray<{
+  label: string;
+  icon: string;
+  mode: AlignMode;
+  keys?: string;
+}> = [
+  {
+    label: 'Align top',
+    icon: 'i-mdi-align-vertical-top',
+    mode: 'top',
+    keys: 'Shift+W',
+  },
+  {
+    label: 'Align middle',
+    icon: 'i-mdi-align-vertical-center',
+    mode: 'middle',
+    keys: 'Alt+Shift+W',
+  },
+  {
+    label: 'Align bottom',
+    icon: 'i-mdi-align-vertical-bottom',
+    mode: 'bottom',
+    keys: 'Shift+S',
+  },
+  {
+    label: 'Align left',
+    icon: 'i-mdi-align-horizontal-left',
+    mode: 'left',
+    keys: 'Shift+A',
+  },
+  {
+    label: 'Align center',
+    icon: 'i-mdi-align-horizontal-center',
+    mode: 'center',
+    keys: 'Alt+Shift+S',
+  },
+  {
+    label: 'Align right',
+    icon: 'i-mdi-align-horizontal-right',
+    mode: 'right',
+    keys: 'Shift+D',
+  },
+  {
+    label: 'Distribute horizontally',
+    icon: 'i-mdi-distribute-horizontal-center',
+    mode: 'distributeHorizontally',
+  },
+  {
+    label: 'Distribute vertically',
+    icon: 'i-mdi-distribute-vertical-center',
+    mode: 'distributeVertically',
+  },
+];
+
 /** Actions for a wire dropped on empty space (like Blueprints). */
 const ICON_CALL = 'i-mdi-function-variant text-sky-400';
 const ICON_VARIABLE = 'i-mdi-alpha-x-box-outline text-sky-400';
@@ -1198,6 +1254,26 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
           icon: 'i-mdi-auto-fix',
           action: () => emit('resetLayout', ids),
         },
+        // UE's alignment section (positions only, the code stays).
+        { type: 'header', label: 'Alignment' },
+        {
+          label: 'Straighten connections',
+          icon: 'i-mdi-ray-start-end',
+          shortcut: 'Q',
+          action: () => v.alignSelection('straighten'),
+        },
+        ...(ids.length > 1
+          ? ALIGN_ENTRIES.map((entry) => ({
+              label: entry.label,
+              icon: entry.icon,
+              shortcut: entry.keys
+                ? isMac
+                  ? entry.keys.replace('Alt+', '⌥').replace('Shift+', '⇧')
+                  : entry.keys
+                : undefined,
+              action: () => v.alignSelection(entry.mode),
+            }))
+          : []),
         ...(props.editable
           ? [
               { type: 'separator' as const },

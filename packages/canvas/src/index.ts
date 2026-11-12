@@ -3,6 +3,7 @@ export * from './bubble';
 export * from './camera';
 export { Emitter } from './emitter';
 export type {
+  AlignMode,
   CommentTarget,
   ContextTarget,
   GraphViewEvents,

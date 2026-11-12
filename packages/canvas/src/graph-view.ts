@@ -84,6 +84,44 @@ export type CommentTarget =
   | { kind: 'node'; nodeId: string }
   | { kind: 'box'; boxId: string };
 
+/** How `alignSelection` arranges the selected nodes (UE's alignment). */
+export type AlignMode =
+  | 'top'
+  | 'middle'
+  | 'bottom'
+  | 'left'
+  | 'center'
+  | 'right'
+  | 'distributeHorizontally'
+  | 'distributeVertically'
+  | 'straighten';
+
+/** UE's alignment shortcuts. */
+function alignKey(e: KeyboardEvent): AlignMode | undefined {
+  const key = e.key.toLowerCase();
+  if (key === 'q' && !e.shiftKey && !e.altKey) {
+    return 'straighten';
+  }
+
+  if (!e.shiftKey) {
+    return undefined;
+  }
+
+  // Alt changes `e.key` on macOS (Alt+Shift+W is „): use the key's code.
+  const code = e.code.replace(/^Key/, '').toLowerCase();
+  if (e.altKey) {
+    return code === 'w' ? 'middle' : code === 's' ? 'center' : undefined;
+  }
+
+  const modes: Record<string, AlignMode> = {
+    w: 'top',
+    s: 'bottom',
+    a: 'left',
+    d: 'right',
+  };
+  return modes[code];
+}
+
 /** Whether a boolean value is true (`true`, Python's `True`). */
 function isChecked(value: string): boolean {
   return value.trim().toLowerCase() === 'true';
@@ -200,6 +238,16 @@ type Drag =
       problem: string | null;
       /** The target input has a wire that the new one replaces. */
       replaces: boolean;
+    }
+  | {
+      /** Ctrl+drag of a pin: all its wires move to another pin (UE). */
+      type: 'moveWires';
+      from: { ns: NodeState; pg: PinGeometry };
+      /** The other ends of the moved wires. */
+      ends: Array<{ ns: NodeState; pg: PinGeometry }>;
+      currentWorld: Point;
+      target: { ns: NodeState; pg: PinGeometry } | null;
+      problem: string | null;
     }
   | {
       type: 'pinch';
@@ -1171,6 +1219,62 @@ export class GraphView {
     return null;
   }
 
+  /** The pins at the other end of a pin's wires. */
+  private wireEnds(
+    ns: NodeState,
+    pg: PinGeometry
+  ): Array<{ ns: NodeState; pg: PinGeometry }> {
+    const fn = this.doc?.functions.find((f) => f.id === ns.fnId);
+    const ends: Array<{ ns: NodeState; pg: PinGeometry }> = [];
+    for (const edge of fn?.edges ?? []) {
+      const [mine, other] =
+        pg.pin.direction === 'out'
+          ? [edge.from, edge.to]
+          : [edge.to, edge.from];
+      if (mine.node !== ns.node.id || mine.pin !== pg.pin.id) {
+        continue;
+      }
+
+      const otherNs = this.nodes.get(other.node);
+      const otherPg = otherNs?.geom.pins.get(other.pin);
+      if (otherNs && otherPg) {
+        ends.push({ ns: otherNs, pg: otherPg });
+      }
+    }
+
+    return ends;
+  }
+
+  /** Why the wires of a Ctrl+drag can't move to `target`. */
+  private moveProblem(
+    drag: {
+      from: { ns: NodeState; pg: PinGeometry };
+      ends: ReadonlyArray<{ ns: NodeState; pg: PinGeometry }>;
+    },
+    target: { ns: NodeState; pg: PinGeometry }
+  ): string | null {
+    const from = drag.from.pg.pin;
+    const to = target.pg.pin;
+    if (from.kind === 'exec') {
+      return 'Only data wires can be moved together';
+    }
+
+    if (to.kind !== from.kind || to.direction !== from.direction) {
+      return from.direction === 'out'
+        ? 'Move the wires to another output'
+        : 'Move the wire to another input';
+    }
+
+    for (const end of drag.ends) {
+      const problem = this.connectProblem(end, target);
+      if (problem) {
+        return problem;
+      }
+    }
+
+    return null;
+  }
+
   /** Why two pins can't be wired, like UE's messages; `null` if they can. */
   private connectProblem(
     a: { ns: NodeState; pg: PinGeometry },
@@ -1292,6 +1396,21 @@ export class GraphView {
       const ref = { node: hit.ns.node.id, pin: hit.pg.pin.id };
       if (e.altKey) {
         this.emitter.emit('op', { type: 'disconnect', pin: ref });
+        return;
+      }
+
+      // Like UE: Ctrl+drag picks up all wires of the pin.
+      const ends = e.ctrlKey || e.metaKey ? this.wireEnds(hit.ns, hit.pg) : [];
+      if (ends.length > 0) {
+        this.drag = {
+          type: 'moveWires',
+          from: { ns: hit.ns, pg: hit.pg },
+          ends,
+          currentWorld: world,
+          target: null,
+          problem: null,
+        };
+        this.requestRender();
         return;
       }
 
@@ -1507,6 +1626,23 @@ export class GraphView {
         return;
       }
 
+      case 'moveWires': {
+        const world = this.toWorld(e);
+        drag.currentWorld = world;
+        const hit = this.hitTest(world);
+        const problem =
+          hit?.type === 'pin' && hit.pg !== drag.from.pg
+            ? this.moveProblem(drag, hit)
+            : null;
+        drag.target =
+          hit?.type === 'pin' && hit.pg !== drag.from.pg && !problem
+            ? { ns: hit.ns, pg: hit.pg }
+            : null;
+        drag.problem = problem;
+        this.requestRender();
+        return;
+      }
+
       case 'wire': {
         const world = this.toWorld(e);
         drag.currentWorld = world;
@@ -1639,6 +1775,18 @@ export class GraphView {
       }
 
       case 'marquee': {
+        break;
+      }
+
+      case 'moveWires': {
+        if (drag.target) {
+          this.emitter.emit('op', {
+            type: 'moveWires',
+            from: { node: drag.from.ns.node.id, pin: drag.from.pg.pin.id },
+            to: { node: drag.target.ns.node.id, pin: drag.target.pg.pin.id },
+          });
+        }
+
         break;
       }
 
@@ -1910,6 +2058,15 @@ export class GraphView {
       return;
     }
 
+    // UE's alignment keys: Q straightens, Shift+W/S/A/D align top, bottom,
+    // left, right, Alt+Shift+W/S align middle and center.
+    const align = command ? undefined : alignKey(e);
+    if (align) {
+      e.preventDefault();
+      this.alignSelection(align);
+      return;
+    }
+
     if (command || e.altKey) {
       return;
     }
@@ -1921,6 +2078,154 @@ export class GraphView {
       e.preventDefault();
       this.frameAll();
     }
+  }
+
+  // ------------------------------------------------------------- alignment
+
+  /**
+   * Arranges the selected nodes like UE's alignment tools. Straighten moves
+   * each node so a wire into it (exec first) is level. Only positions
+   * change; the code stays the same.
+   */
+  public alignSelection(mode: AlignMode): void {
+    const selected = [...this.selection]
+      .map((id) => this.nodes.get(id))
+      .filter((ns): ns is NodeState => ns !== undefined);
+    if (
+      selected.length === 0 ||
+      (mode !== 'straighten' && selected.length < 2)
+    ) {
+      return;
+    }
+
+    const moved = new Map<NodeState, Point>();
+    const set = (ns: NodeState, x: number, y: number): void => {
+      moved.set(ns, { x: Math.round(x), y: Math.round(y) });
+    };
+    const top = Math.min(...selected.map((ns) => ns.y));
+    const bottom = Math.max(...selected.map((ns) => ns.y + ns.geom.height));
+    const left = Math.min(...selected.map((ns) => ns.x));
+    const right = Math.max(...selected.map((ns) => ns.x + ns.geom.width));
+    switch (mode) {
+      case 'top':
+      case 'middle':
+      case 'bottom': {
+        const middle =
+          selected.reduce((sum, ns) => sum + ns.y + ns.geom.height / 2, 0) /
+          selected.length;
+        for (const ns of selected) {
+          const y =
+            mode === 'top'
+              ? top
+              : mode === 'bottom'
+                ? bottom - ns.geom.height
+                : middle - ns.geom.height / 2;
+          set(ns, ns.x, y);
+        }
+
+        break;
+      }
+
+      case 'left':
+      case 'center':
+      case 'right': {
+        const center =
+          selected.reduce((sum, ns) => sum + ns.x + ns.geom.width / 2, 0) /
+          selected.length;
+        for (const ns of selected) {
+          const x =
+            mode === 'left'
+              ? left
+              : mode === 'right'
+                ? right - ns.geom.width
+                : center - ns.geom.width / 2;
+          set(ns, x, ns.y);
+        }
+
+        break;
+      }
+
+      case 'distributeHorizontally':
+      case 'distributeVertically': {
+        // Equal gaps between the nodes, the outer ones stay.
+        const horizontal = mode === 'distributeHorizontally';
+        const sorted = selected.toSorted((a, b) =>
+          horizontal ? a.x - b.x : a.y - b.y
+        );
+        const size = sorted.reduce(
+          (sum, ns) => sum + (horizontal ? ns.geom.width : ns.geom.height),
+          0
+        );
+        const span = horizontal ? right - left : bottom - top;
+        const gap = (span - size) / Math.max(1, sorted.length - 1);
+        let at = horizontal ? left : top;
+        for (const ns of sorted) {
+          set(ns, horizontal ? at : ns.x, horizontal ? ns.y : at);
+          at += (horizontal ? ns.geom.width : ns.geom.height) + gap;
+        }
+
+        break;
+      }
+
+      case 'straighten': {
+        for (const ns of selected.toSorted((a, b) => a.x - b.x)) {
+          const level = this.straightenOffset(ns, moved);
+          if (level !== undefined) {
+            set(ns, ns.x, ns.y + level);
+          }
+        }
+
+        break;
+      }
+    }
+
+    const patch: LayoutPatch = {};
+    for (const [ns, point] of moved) {
+      if (point.x !== ns.x || point.y !== ns.y) {
+        ns.x = point.x;
+        ns.y = point.y;
+        this.index.insert(ns.node.id, this.nodeRect(ns));
+        patch[ns.node.id] = { ...point };
+      }
+    }
+
+    if (Object.keys(patch).length > 0) {
+      this.framesDirty = true;
+      this.emitter.emit('layoutChange', { patch });
+      this.requestRender();
+    }
+  }
+
+  /**
+   * How far a node moves down so the wire into it is level: its exec input
+   * first, else its first wired data input, else its first wired output.
+   */
+  private straightenOffset(
+    ns: NodeState,
+    moved: ReadonlyMap<NodeState, Point>
+  ): number | undefined {
+    const fn = this.doc?.functions.find((f) => f.id === ns.fnId);
+    const edges = fn?.edges ?? [];
+    const incoming = edges.filter((e) => e.to.node === ns.node.id);
+    const edge =
+      incoming.find((e) => e.kind === 'exec') ??
+      incoming[0] ??
+      edges.find((e) => e.from.node === ns.node.id);
+    if (!edge) {
+      return undefined;
+    }
+
+    const [mine, other] =
+      edge.to.node === ns.node.id ? [edge.to, edge.from] : [edge.from, edge.to];
+    const otherNs = this.nodes.get(other.node);
+    const otherPg = otherNs?.geom.pins.get(other.pin);
+    const minePg = ns.geom.pins.get(mine.pin);
+    if (!otherNs || !otherPg || !minePg) {
+      return undefined;
+    }
+
+    const otherY = (moved.get(otherNs)?.y ?? otherNs.y) + otherPg.y;
+    return otherY - (ns.y + minePg.y);
   }
 
   // ------------------------------------------------------------- rendering
@@ -2690,6 +2995,26 @@ export class GraphView {
       ctx.setLineDash([6 / this.camera.zoom, 4 / this.camera.zoom]);
       ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
       ctx.setLineDash([]);
+    }
+
+    if (drag?.type === 'moveWires') {
+      const end = drag.target
+        ? this.pinWorld(drag.target.ns, drag.target.pg)
+        : drag.currentWorld;
+      for (const other of drag.ends) {
+        this.drawLooseWire(other, end, drag.target !== null);
+      }
+
+      const count = drag.ends.length;
+      if (drag.problem) {
+        this.drawWireMessage(drag.currentWorld, drag.problem, false);
+      } else if (drag.target) {
+        this.drawWireMessage(
+          drag.currentWorld,
+          `Moves ${count} wire${count === 1 ? '' : 's'} here`,
+          true
+        );
+      }
     }
 
     if (drag?.type === 'wire') {
