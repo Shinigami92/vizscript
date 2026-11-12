@@ -86,6 +86,8 @@ const props = defineProps<{
   files?: ReadonlySet<string>;
   /** Hide the share button (e.g. local folders, which have no shareable URL). */
   hideShare?: boolean;
+  /** The file is open in a tab: keep its editor state when switching. */
+  keepEditor?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -1290,6 +1292,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :read-only="!editable"
         :links="fileLinks"
         :diagnostics="parserDiagnostics"
+        :keep-model="keepEditor"
         @problems="problems = $event"
         @change="onCodeChange"
         @cursor="onCursor"

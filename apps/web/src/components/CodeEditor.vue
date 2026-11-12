@@ -12,6 +12,7 @@ import { monacoLanguage } from '../graph/languages';
 import type { Problem, ProblemSeverity } from '../graph/problems';
 import type { FileLinkSource } from '../monaco/file-links';
 import { registerFileLinks } from '../monaco/file-links';
+import { modelUri, saveViewState, viewStateOf } from '../monaco/models';
 import { monaco, monacoTheme } from '../monaco/setup';
 
 const props = defineProps<{
@@ -22,6 +23,11 @@ const props = defineProps<{
   links?: FileLinkSource;
   /** Parser problems to show as markers (languages without a checker). */
   diagnostics?: ReadonlyArray<Diagnostic>;
+  /**
+   * Keep the model (and its undo history) and the view state when the
+   * editor goes away, for files open in tabs.
+   */
+  keepModel?: boolean;
 }>();
 
 export interface EditorHistory {
@@ -139,13 +145,27 @@ const { scheme } = useTheme();
 watch(scheme, (value) => monaco.editor.setTheme(monacoTheme(value)));
 
 onMounted(() => {
-  const uri = monaco.Uri.parse(`file:///${props.path.replace(/^\/+/, '')}`);
-  monaco.editor.getModel(uri)?.dispose();
-  model = monaco.editor.createModel(
-    props.value,
-    monacoLanguage(props.path),
-    uri
-  );
+  const uri = modelUri(props.path);
+  const existing = monaco.editor.getModel(uri);
+  if (props.keepModel && existing) {
+    // A tab shown again: same model, same undo history.
+    model = existing;
+    if (model.getValue() !== props.value) {
+      model.pushEditOperations(
+        [],
+        [{ range: model.getFullModelRange(), text: props.value }],
+        () => null
+      );
+    }
+  } else {
+    existing?.dispose();
+    model = monaco.editor.createModel(
+      props.value,
+      monacoLanguage(props.path),
+      uri
+    );
+  }
+
   unregisterLinks = registerFileLinks(model, {
     links: (text) => props.links?.links(text) ?? Promise.resolve([]),
     open: (path, symbol) => props.links?.open(path, symbol),
@@ -170,6 +190,11 @@ onMounted(() => {
       emitProblems();
     }
   });
+  const viewState = props.keepModel ? viewStateOf(props.path) : undefined;
+  if (viewState) {
+    editor.value.restoreViewState(viewState);
+  }
+
   setParserMarkers(props.diagnostics ?? []);
   emitProblems();
   selected = editor.value.createDecorationsCollection();
@@ -243,8 +268,14 @@ watch(
 onBeforeUnmount(() => {
   unregisterLinks?.();
   markerListener?.dispose();
+  if (props.keepModel) {
+    saveViewState(props.path, editor.value?.saveViewState() ?? null);
+  }
+
   editor.value?.dispose();
-  model?.dispose();
+  if (!props.keepModel) {
+    model?.dispose();
+  }
 });
 
 defineExpose({
