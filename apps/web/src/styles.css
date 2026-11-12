@@ -1,0 +1,13 @@
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+:root {
+  color-scheme: dark;
+}

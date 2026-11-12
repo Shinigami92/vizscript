@@ -1,0 +1,1354 @@
+<script setup lang="ts">
+import type {
+  Camera,
+  CommentTarget,
+  ContextTarget,
+  GraphViewEvents,
+} from '@vizscript/canvas';
+import { DARK_THEME, GraphView, LIGHT_THEME } from '@vizscript/canvas';
+import type {
+  GraphDocument,
+  GraphNode,
+  GraphOp,
+  LayoutPatch,
+  NodeTemplate,
+  Pin,
+  PinRef,
+  Point,
+  Positions,
+} from '@vizscript/core';
+import { isTypeCompatible } from '@vizscript/core';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  shallowRef,
+  toRaw,
+  useTemplateRef,
+  watch,
+} from 'vue';
+import { useTheme } from '../composables/use-theme';
+import { useToasts } from '../composables/use-toasts';
+import { indexDocument, pinEdges } from '../graph/doc-index';
+import type { Problem, ProblemSeverity } from '../graph/problems';
+import { worstSeverity } from '../graph/problems';
+import { shortcut, snippet } from '../graph/source';
+import type { ActionEntry } from './ActionMenu.vue';
+import ActionMenu from './ActionMenu.vue';
+import type { MenuEntry } from './ContextMenu.vue';
+import ContextMenu from './ContextMenu.vue';
+import GraphSearch from './GraphSearch.vue';
+import NodeTooltip from './NodeTooltip.vue';
+
+const props = defineProps<{
+  doc: GraphDocument | null;
+  positions: Positions;
+  editable: boolean;
+  text: string;
+  initialCamera?: Camera | null;
+  /** Describes where "Go to definition" of a node leads, if anywhere. */
+  definitionOf?: (nodeId: string) => string | undefined;
+  /** Problems per node, shown as ERROR / WARNING banners. */
+  problems?: ReadonlyMap<string, ReadonlyArray<Problem>>;
+  /** Names imported into the file (offered in the action menu). */
+  imports?: ReadonlyArray<string>;
+}>();
+
+const emit = defineEmits<{
+  selectionChange: [ids: string[]];
+  hoverChange: [id: string | null];
+  layoutChange: [patch: LayoutPatch];
+  op: [op: GraphOp];
+  activate: [id: string];
+  goToDefinition: [id: string];
+  cameraChange: [camera: Camera];
+  /** Forget saved positions so the nodes go back to the auto layout. */
+  resetLayout: [ids: string[]];
+  undo: [];
+  redo: [];
+}>();
+
+const { show } = useToasts();
+const { scheme } = useTheme();
+const canvasTheme = computed(() =>
+  scheme.value === 'light' ? LIGHT_THEME : DARK_THEME
+);
+const canvas = useTemplateRef<HTMLCanvasElement>('canvas');
+const view = shallowRef<GraphView>();
+const index = computed(() => indexDocument(props.doc));
+const selection = ref<string[]>([]);
+
+// ------------------------------------------------------- inline literal
+
+const literal = ref<GraphViewEvents['editLiteral'] | null>(null);
+const literalValue = ref('');
+const literalInput = useTemplateRef<HTMLInputElement>('literalInput');
+
+// --------------------------------------------------------- comment edit
+
+const commentEdit = ref<GraphViewEvents['editComment'] | null>(null);
+const commentValue = ref('');
+const commentInput = useTemplateRef<HTMLInputElement | HTMLTextAreaElement>(
+  'commentInput'
+);
+
+function commitComment(): void {
+  const current = commentEdit.value;
+  commentEdit.value = null;
+  if (!current || commentValue.value.trim() === current.value.trim()) {
+    canvas.value?.focus();
+    return;
+  }
+
+  emitOp(
+    current.target.kind === 'node'
+      ? {
+          type: 'setComment',
+          node: current.target.nodeId,
+          text: commentValue.value,
+        }
+      : {
+          type: 'renameCommentBox',
+          box: current.target.boxId,
+          title: commentValue.value,
+        }
+  );
+}
+
+function cancelComment(): void {
+  commentEdit.value = null;
+  canvas.value?.focus();
+}
+
+function onCommentKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    cancelComment();
+  } else if (event.key === 'Enter' && !event.shiftKey) {
+    // Shift+Enter starts a new line.
+    event.preventDefault();
+    commitComment();
+  }
+}
+
+function editComment(target: CommentTarget): void {
+  closeMenu();
+  view.value?.editComment(target);
+}
+
+/** Asks for a title and wraps the nodes' code in a region. */
+function createCommentBox(ids: ReadonlyArray<string>, client: Point): void {
+  if (!props.editable || ids.length === 0) {
+    return;
+  }
+
+  openMenu({
+    world: { x: 0, y: 0 },
+    client,
+    target: { kind: 'node', nodeId: ids[0] ?? '' },
+  });
+  void ask({
+    label: 'Comment box title',
+    placeholder: 'Comment',
+    allowEmpty: true,
+    submit: (title) =>
+      emitOp({ type: 'addCommentBox', nodes: [...ids], title }),
+  });
+}
+
+// --------------------------------------------------------------- tooltip
+
+const pointer = { x: 0, y: 0 };
+const hover = ref<{ nodeId: string; pin: string | null } | null>(null);
+const tooltip = ref<{
+  nodeId: string;
+  pin: string | null;
+  x: number;
+  y: number;
+} | null>(null);
+let tooltipTimer: ReturnType<typeof setTimeout> | undefined;
+
+function hideTooltip(): void {
+  clearTimeout(tooltipTimer);
+  tooltip.value = null;
+}
+
+function scheduleTooltip(): void {
+  hideTooltip();
+  const current = hover.value;
+  if (!current || menu.value || literal.value || commentEdit.value) {
+    return;
+  }
+
+  tooltipTimer = setTimeout(() => {
+    tooltip.value = { ...current, x: pointer.x, y: pointer.y };
+  }, 550);
+}
+
+// ---------------------------------------------------------------- search
+
+const searchOpen = ref(false);
+const search = useTemplateRef<InstanceType<typeof GraphSearch>>('search');
+
+async function openSearch(): Promise<void> {
+  hideTooltip();
+  if (searchOpen.value) {
+    search.value?.focus();
+    return;
+  }
+
+  searchOpen.value = true;
+  await nextTick();
+  search.value?.focus();
+}
+
+function closeSearch(): void {
+  searchOpen.value = false;
+  view.value?.setHighlight([]);
+  canvas.value?.focus();
+}
+
+function selectNodes(ids: string[], focus = true): void {
+  view.value?.setSelection(ids);
+  selection.value = ids;
+  emit('selectionChange', ids);
+  if (focus) {
+    view.value?.focusNodes(ids);
+  }
+}
+
+// ---------------------------------------------------------- context menu
+
+type MenuState = GraphViewEvents['contextMenu'];
+const menu = ref<MenuState | null>(null);
+
+/** A one-field form that replaces the menu list (names, expressions). */
+interface Prompt {
+  label: string;
+  placeholder: string;
+  value: string;
+  /** Submit an empty value too (otherwise Enter does nothing). */
+  allowEmpty?: boolean;
+  submit: (value: string) => void;
+}
+
+const prompt = ref<Prompt | null>(null);
+const promptInput = useTemplateRef<HTMLInputElement>('promptInput');
+
+function openMenu(state: MenuState): void {
+  hideTooltip();
+  prompt.value = null;
+  menu.value = state;
+}
+
+function closeMenu(): void {
+  menu.value = null;
+  prompt.value = null;
+  view.value?.clearPendingWire();
+}
+
+async function ask(
+  options: Omit<Prompt, 'value'> & { value?: string }
+): Promise<void> {
+  prompt.value = { value: '', ...options };
+  await nextTick();
+  promptInput.value?.focus();
+  promptInput.value?.select();
+}
+
+function commitPrompt(): void {
+  const current = prompt.value;
+  const value = current?.value.trim() ?? '';
+  if (!current || (!value && !current.allowEmpty)) {
+    return;
+  }
+
+  current.submit(value);
+}
+
+/** Emits an op built from the menu state and closes the menu. */
+function emitOp(op: GraphOp): void {
+  closeMenu();
+  // Ops are posted to a worker: strip reactive proxies (ops are plain JSON).
+  emit('op', JSON.parse(JSON.stringify(op)) as GraphOp);
+  canvas.value?.focus();
+}
+
+function pinOf(pinRef: PinRef): { node: GraphNode; pin: Pin } | undefined {
+  const node = index.value.nodes.get(pinRef.node)?.node;
+  const pin = node?.pins.find((p) => p.id === pinRef.pin);
+  return node && pin ? { node, pin } : undefined;
+}
+
+function addNode(template: NodeTemplate, state: MenuState | null): void {
+  const current = toRaw(state);
+  if (!current) {
+    closeMenu();
+    return;
+  }
+
+  const from = current.from ? pinOf(current.from) : undefined;
+  const anchor: PinRef | undefined =
+    from?.pin.kind === 'exec' && current.from
+      ? { ...toRaw(current.from) }
+      : undefined;
+  emitOp({
+    type: 'addNode',
+    template,
+    after: from?.pin.direction === 'out' ? anchor : undefined,
+    before: from?.pin.direction === 'in' ? anchor : undefined,
+    position: { ...current.world },
+  });
+}
+
+interface Variable {
+  name: string;
+  type: string;
+}
+
+/** Variables that can be read in the function of `nodeId`, with types. */
+function variablesNear(nodeId: string): Variable[] {
+  const fn = index.value.nodes.get(nodeId)?.fn;
+  const found = new Map<string, string>();
+  const add = (name: string, type: string): void => {
+    if (/^[A-Za-z_$][\w$]*$/.test(name) && !found.has(name)) {
+      found.set(name, type);
+    }
+  };
+
+  for (const node of fn?.nodes ?? []) {
+    const out = node.pins.find(
+      (p) => p.kind === 'data' && p.direction === 'out'
+    );
+    if (node.kind === 'entry' || node.kind === 'forEach') {
+      for (const pin of node.pins) {
+        if (pin.kind === 'data' && pin.direction === 'out') {
+          add(pin.name.replace(/^\*+/, ''), String(pin.type));
+        }
+      }
+    } else if (Array.isArray(node.meta?.declares)) {
+      // Declarations name what they bind (including destructuring).
+      const names = (node.meta.declares as unknown[]).filter(
+        (n): n is string => typeof n === 'string'
+      );
+      for (const name of names) {
+        add(name, names.length === 1 ? String(out?.type ?? 'any') : 'any');
+      }
+    } else if (
+      node.kind === 'setVar' &&
+      /^Set [A-Za-z_$][\w$]*$/.test(node.title)
+    ) {
+      add(node.title.slice(4), String(out?.type ?? 'any'));
+    }
+  }
+
+  return [...found]
+    .map(([name, type]) => ({ name, type }))
+    .toSorted((a, b) => a.name.localeCompare(b.name));
+}
+
+const IDENTIFIER_PATH = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
+
+/** Functions worth offering: called in this file, defined, or imported. */
+const callables = computed(() => {
+  const names = new Set<string>();
+  for (const fn of props.doc?.functions ?? []) {
+    // Not the file's top-level graph ("Module").
+    const topLevel = fn.range.start === 0 && fn.range.end >= props.text.length;
+    if (!topLevel && /^[A-Za-z_$][\w$]*$/.test(fn.name)) {
+      names.add(fn.name);
+    }
+
+    for (const node of fn.nodes) {
+      if (node.kind === 'call' && IDENTIFIER_PATH.test(node.title)) {
+        names.add(node.title);
+      }
+    }
+  }
+
+  for (const name of props.imports ?? []) {
+    names.add(name);
+  }
+
+  return [...names].toSorted((a, b) => a.localeCompare(b));
+});
+
+function suggestName(pin: Pin): string {
+  if (/^[A-Za-z_$][\w$]*$/.test(pin.name)) {
+    return pin.name;
+  }
+
+  // `&"parameters/move/blend_amount"` → `blend_amount`
+  const words = (pin.literal?.value ?? '').match(/[A-Za-z_][\w]*/g);
+  return words?.at(-1) ?? 'value';
+}
+
+/** "Extract to variable…": declare the input's value before its statement. */
+function extractEntry(source: PinRef, pin: Pin, world: Point): MenuEntry {
+  return {
+    label: 'Extract to variable…',
+    icon: 'i-mdi-variable text-sky-400',
+    disabled: !pin.range,
+    action: () =>
+      void ask({
+        label: 'Variable name',
+        placeholder: 'value',
+        value: suggestName(pin),
+        submit: (name) =>
+          emitOp({
+            type: 'extract',
+            pin: source,
+            name,
+            position: { ...world },
+          }),
+      }),
+  };
+}
+
+/** Actions for a wire dropped on empty space (like Blueprints). */
+const ICON_CALL = 'i-mdi-function-variant text-sky-400';
+const ICON_VARIABLE = 'i-mdi-alpha-x-box-outline text-sky-400';
+
+/** Add-node actions at an exec pin (or, without one, at the end). */
+function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
+  return [
+    ...callables.value.map((callee): ActionEntry => ({
+      label: callee,
+      category: 'Call function',
+      icon: ICON_CALL,
+      action: () => addNode({ type: 'call', callee }, state),
+    })),
+    {
+      label: 'Branch (if)',
+      category: 'Flow control',
+      icon: 'i-mdi-source-branch',
+      keywords: 'if condition',
+      action: () => addNode({ type: 'branch' }, state),
+    },
+    ...(after
+      ? [
+          {
+            label: 'Return',
+            category: 'Flow control',
+            icon: 'i-mdi-keyboard-return text-purple-400',
+            action: () => addNode({ type: 'return' }, state),
+          },
+        ]
+      : []),
+    {
+      label: 'Declare variable…',
+      category: 'Variables',
+      icon: 'i-mdi-variable text-sky-400',
+      keywords: 'let const var set',
+      action: (query) =>
+        void ask({
+          label: 'Variable name',
+          placeholder: 'value',
+          value: IDENTIFIER_PATH.test(query) ? query : '',
+          submit: (name) =>
+            addNode({ type: 'setVar', name, declaration: 'const' }, state),
+        }),
+    },
+  ];
+}
+
+/** The searchable actions for a dropped wire or the empty graph. */
+function actionEntries(state: MenuState): ActionEntry[] {
+  const v = view.value;
+  if (!state.from) {
+    return [
+      ...(props.editable ? addNodeActions(state, true) : []),
+      {
+        label: 'Find…',
+        category: 'Graph',
+        icon: 'i-mdi-magnify',
+        hint: shortcut('F'),
+        action: () => void openSearch(),
+      },
+      {
+        label: 'Select all',
+        category: 'Graph',
+        icon: 'i-mdi-select-all',
+        hint: shortcut('A'),
+        action: () => v?.selectAll(),
+      },
+      {
+        label: 'Frame all',
+        category: 'Graph',
+        icon: 'i-mdi-fit-to-screen-outline',
+        hint: 'Home',
+        action: () => v?.frameAll(),
+      },
+    ];
+  }
+
+  const source = state.from;
+  const found = pinOf(source);
+  if (!found || !props.editable) {
+    return [];
+  }
+
+  const { node, pin } = found;
+  if (pin.kind === 'exec') {
+    return addNodeActions(state, pin.direction === 'out');
+  }
+
+  if (pin.direction === 'out') {
+    const named = node.kind === 'setVar' || node.kind === 'entry';
+    return [
+      ...callables.value.map((callee): ActionEntry => ({
+        label: `${callee}(value)`,
+        category: 'Call function with this value',
+        icon: ICON_CALL,
+        keywords: callee,
+        action: () =>
+          emitOp({
+            type: 'callWith',
+            pin: source,
+            callee,
+            position: { ...state.world },
+          }),
+      })),
+      ...(named
+        ? []
+        : [
+            {
+              label: 'Store in variable…',
+              category: 'Variables',
+              icon: 'i-mdi-variable text-sky-400',
+              keywords: 'promote const let',
+              action: (query: string) =>
+                void ask({
+                  label: 'Variable name',
+                  placeholder: 'value',
+                  value: IDENTIFIER_PATH.test(query)
+                    ? query
+                    : pin.name && /^[A-Za-z_$][\w$]*$/.test(pin.name)
+                      ? pin.name
+                      : '',
+                  submit: (name) =>
+                    emitOp({
+                      type: 'promote',
+                      pin: source,
+                      name,
+                      position: { ...state.world },
+                    }),
+                }),
+            },
+          ]),
+    ];
+  }
+
+  const extract = extractEntry(source, pin, state.world);
+  return [
+    ...variablesNear(node.id).map((variable): ActionEntry => ({
+      label: variable.name,
+      category: 'Variables',
+      icon: ICON_VARIABLE,
+      hint: variable.type,
+      keywords: 'get',
+      fits: isTypeCompatible(variable.type, pin.type),
+      action: () =>
+        emitOp({ type: 'setInput', pin: source, expression: variable.name }),
+    })),
+    ...callables.value.map((callee): ActionEntry => ({
+      label: `${callee}()`,
+      category: 'Call function',
+      icon: ICON_CALL,
+      keywords: callee,
+      action: () =>
+        emitOp({ type: 'setInput', pin: source, expression: `${callee}()` }),
+    })),
+    ...(extract.type === undefined || extract.type === 'item'
+      ? extract.disabled
+        ? []
+        : [
+            {
+              label: extract.label,
+              category: 'Value',
+              icon: extract.icon,
+              action: () => extract.action(),
+            },
+          ]
+      : []),
+    {
+      label: 'Replace with value…',
+      category: 'Value',
+      icon: 'i-mdi-form-textbox',
+      keywords: 'literal expression',
+      action: () =>
+        void ask({
+          label: 'New value or expression',
+          placeholder: pin.type === 'string' ? '"text"' : '42',
+          value: pin.range
+            ? props.text.slice(pin.range.start, pin.range.end)
+            : '',
+          submit: (expression) =>
+            emitOp({ type: 'setInput', pin: source, expression }),
+        }),
+    },
+  ];
+}
+
+/** Actions made from the search text: call or use exactly what was typed. */
+function suggestActions(state: MenuState, query: string): ActionEntry[] {
+  const found = state.from ? pinOf(state.from) : undefined;
+  const source = state.from;
+  const callable = IDENTIFIER_PATH.test(query);
+  if (!props.editable) {
+    return [];
+  }
+
+  if (!found || !source || found.pin.kind === 'exec') {
+    if (!callable) {
+      return [];
+    }
+
+    return [
+      {
+        label: `Call ${query}()`,
+        category: 'Typed',
+        icon: ICON_CALL,
+        action: () => addNode({ type: 'call', callee: query }, state),
+      },
+      {
+        label: `Declare variable ${query}`,
+        category: 'Typed',
+        icon: 'i-mdi-variable text-sky-400',
+        action: () =>
+          addNode({ type: 'setVar', name: query, declaration: 'const' }, state),
+      },
+    ];
+  }
+
+  if (found.pin.direction === 'out') {
+    return callable
+      ? [
+          {
+            label: `Call ${query}(value)`,
+            category: 'Typed',
+            icon: ICON_CALL,
+            action: () =>
+              emitOp({
+                type: 'callWith',
+                pin: source,
+                callee: query,
+                position: { ...state.world },
+              }),
+          },
+        ]
+      : [];
+  }
+
+  return [
+    {
+      label: `Use ${query}`,
+      category: 'Typed',
+      icon: 'i-mdi-form-textbox',
+      action: () =>
+        emitOp({ type: 'setInput', pin: source, expression: query }),
+    },
+    ...(callable
+      ? [
+          {
+            label: `Call ${query}()`,
+            category: 'Typed',
+            icon: ICON_CALL,
+            action: () =>
+              emitOp({
+                type: 'setInput',
+                pin: source,
+                expression: `${query}()`,
+              }),
+          },
+        ]
+      : []),
+  ];
+}
+
+/** Title of the action menu, like "Actions taking a string". */
+function actionTitle(state: MenuState): string {
+  const found = state.from ? pinOf(state.from) : undefined;
+  if (!found) {
+    return 'All actions';
+  }
+
+  if (found.pin.kind === 'exec') {
+    return found.pin.direction === 'out' ? 'Add node after' : 'Add node before';
+  }
+
+  return found.pin.direction === 'out'
+    ? `Actions taking ${String(found.pin.type)}`
+    : `Actions providing ${String(found.pin.type)}`;
+}
+
+async function copyCode(ids: ReadonlyArray<string>): Promise<void> {
+  const parts = ids
+    .map((id) => index.value.nodes.get(id)?.node)
+    .filter(
+      (n): n is GraphNode => n !== undefined && n.range.end > n.range.start
+    )
+    .toSorted((a, b) => a.range.start - b.range.start)
+    .map((n) => snippet(props.text, n.range, Number.POSITIVE_INFINITY));
+  if (parts.length === 0) {
+    show('These nodes have no source code to copy.');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(parts.join('\n'));
+    show('Code copied to the clipboard.');
+  } catch {
+    show('The clipboard is not available.', 'error');
+  }
+}
+
+function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
+  const v = view.value;
+  if (!v) {
+    return [];
+  }
+
+  switch (target.kind) {
+    case 'background': {
+      // Shown by the searchable action menu.
+      return [];
+    }
+
+    case 'node': {
+      const ids = selection.value.includes(target.nodeId)
+        ? selection.value
+        : [target.nodeId];
+      const first = index.value.nodes.get(target.nodeId);
+      const definition =
+        ids.length === 1 ? props.definitionOf?.(target.nodeId) : undefined;
+      const deletable = ids.some(
+        (id) => index.value.nodes.get(id)?.node.kind !== 'entry'
+      );
+      return [
+        {
+          type: 'header',
+          label:
+            ids.length > 1 ? `${ids.length} nodes` : (first?.node.title ?? ''),
+        },
+        {
+          label: 'Jump to code',
+          icon: 'i-mdi-code-tags',
+          shortcut: 'Double-click',
+          action: () => emit('activate', target.nodeId),
+        },
+        ...(definition
+          ? [
+              {
+                label: `Go to definition (${definition})`,
+                icon: 'i-mdi-arrow-top-right',
+                shortcut: 'F12',
+                action: () => emit('goToDefinition', target.nodeId),
+              },
+            ]
+          : []),
+        {
+          label: ids.length > 1 ? 'Copy code of nodes' : 'Copy code',
+          icon: 'i-mdi-content-copy',
+          action: () => void copyCode(ids),
+        },
+        { type: 'separator' },
+        {
+          label: 'Frame selection',
+          icon: 'i-mdi-image-filter-center-focus',
+          shortcut: 'F',
+          action: () => v.frameSelection(),
+        },
+        {
+          label: `Select all of ${first?.fn.name ?? 'function'}`,
+          icon: 'i-mdi-selection-multiple',
+          disabled: !first,
+          action: () => first && v.selectFunction(first.fn.id),
+        },
+        {
+          label: 'Reset position',
+          icon: 'i-mdi-auto-fix',
+          action: () => emit('resetLayout', ids),
+        },
+        ...(props.editable
+          ? [
+              { type: 'separator' as const },
+              {
+                label: first?.node.comment ? 'Edit comment…' : 'Add comment…',
+                icon: 'i-mdi-comment-text-outline',
+                shortcut: first?.node.comment ? 'Double-click' : undefined,
+                action: () =>
+                  editComment({ kind: 'node', nodeId: target.nodeId }),
+              },
+              ...(first?.node.comment
+                ? [
+                    {
+                      label: 'Remove comment',
+                      icon: 'i-mdi-comment-remove-outline',
+                      action: () =>
+                        emitOp({
+                          type: 'setComment',
+                          node: target.nodeId,
+                          text: '',
+                        }),
+                    },
+                  ]
+                : []),
+              {
+                label: 'Create comment box…',
+                icon: 'i-mdi-comment-multiple-outline',
+                shortcut: 'C',
+                action: () => createCommentBox(ids, state.client),
+              },
+              { type: 'separator' as const },
+              {
+                label: ids.length > 1 ? 'Delete nodes' : 'Delete',
+                icon: 'i-mdi-delete-outline',
+                shortcut: 'Del',
+                danger: true,
+                disabled: !deletable,
+                action: () =>
+                  emit('op', { type: 'deleteNodes', nodeIds: [...ids] }),
+              },
+            ]
+          : []),
+      ];
+    }
+
+    case 'pin': {
+      const entry = index.value.nodes.get(target.pin.node);
+      const pin = entry?.node.pins.find((p) => p.id === target.pin.pin);
+      if (!entry || !pin) {
+        return [];
+      }
+
+      const edges = pinEdges(index.value, entry.node.id, pin);
+      const peers = edges.map((e) =>
+        pin.direction === 'in' ? e.from.node : e.to.node
+      );
+      return [
+        {
+          type: 'header',
+          label: `${pin.name || (pin.kind === 'exec' ? 'Exec' : 'Value')} · ${
+            pin.kind === 'exec' ? 'exec' : String(pin.type)
+          }`,
+        },
+        ...(pin.literal && edges.length === 0 && props.editable
+          ? [
+              {
+                label: 'Edit value',
+                icon: 'i-mdi-pencil-outline',
+                shortcut: 'Double-click',
+                action: () => v.editLiteral(entry.node.id, pin.id),
+              },
+            ]
+          : []),
+        ...(pin.kind === 'data' && pin.direction === 'in' && props.editable
+          ? [extractEntry({ ...target.pin }, pin, state.world)]
+          : []),
+        {
+          label:
+            pin.direction === 'in'
+              ? 'Select connected source'
+              : 'Select connected targets',
+          icon: 'i-mdi-ray-start-arrow',
+          disabled: peers.length === 0,
+          action: () => selectNodes([...new Set(peers)]),
+        },
+        ...(props.editable
+          ? [
+              {
+                label: edges.length > 1 ? 'Break all links' : 'Break link',
+                icon: 'i-mdi-link-variant-off',
+                shortcut: 'Alt+Click',
+                disabled:
+                  pin.kind === 'exec' ||
+                  (pin.direction === 'in' ? !pin.range : edges.length === 0),
+                action: () =>
+                  emit('op', {
+                    type: 'disconnect',
+                    pin: { ...toRaw(target.pin) },
+                  }),
+              },
+            ]
+          : []),
+      ];
+    }
+
+    case 'wire': {
+      const edge = target.edge;
+      const knots = v.getReroutes(edge.id).length;
+      return [
+        {
+          type: 'header',
+          label: edge.kind === 'exec' ? 'Execution wire' : 'Data wire',
+        },
+        {
+          label: 'Add reroute node',
+          icon: 'i-mdi-circle-medium',
+          shortcut: 'Double-click',
+          action: () => v.addReroute(edge.id, state.world),
+        },
+        {
+          label: 'Remove reroute nodes',
+          icon: 'i-mdi-vector-polyline-remove',
+          disabled: knots === 0,
+          action: () => v.clearReroutes(edge.id),
+        },
+        { type: 'separator' },
+        {
+          label: 'Select source node',
+          icon: 'i-mdi-ray-start',
+          action: () => selectNodes([edge.from.node]),
+        },
+        {
+          label: 'Select target node',
+          icon: 'i-mdi-ray-end',
+          action: () => selectNodes([edge.to.node]),
+        },
+        ...(props.editable
+          ? [
+              { type: 'separator' as const },
+              {
+                label: 'Break link',
+                icon: 'i-mdi-link-variant-off',
+                disabled: edge.kind === 'exec',
+                action: () =>
+                  emit('op', {
+                    type: 'disconnect',
+                    pin: { ...toRaw(edge.to) },
+                  }),
+              },
+            ]
+          : []),
+      ];
+    }
+
+    case 'knot': {
+      return [
+        { type: 'header', label: 'Reroute node' },
+        {
+          label: 'Remove reroute node',
+          icon: 'i-mdi-close-circle-outline',
+          shortcut: 'Alt+Click',
+          action: () => v.removeReroute(target.edgeId, target.index),
+        },
+        {
+          label: 'Remove all on this wire',
+          icon: 'i-mdi-vector-polyline-remove',
+          action: () => v.clearReroutes(target.edgeId),
+        },
+      ];
+    }
+
+    case 'comment': {
+      const fn = props.doc?.functions.find((f) => f.id === target.fnId);
+      const box = fn?.comments?.find((b) => b.id === target.boxId);
+      if (!box) {
+        return [];
+      }
+
+      return [
+        { type: 'header', label: box.title || 'Comment box' },
+        {
+          label: 'Select nodes',
+          icon: 'i-mdi-selection-multiple',
+          action: () => v.setSelection(box.nodes),
+        },
+        {
+          label: 'Frame comment box',
+          icon: 'i-mdi-image-filter-center-focus',
+          action: () => {
+            v.setSelection(box.nodes);
+            v.frameSelection();
+          },
+        },
+        {
+          label: 'Jump to code',
+          icon: 'i-mdi-code-tags',
+          action: () => box.nodes[0] && emit('activate', box.nodes[0]),
+        },
+        ...(props.editable
+          ? [
+              { type: 'separator' as const },
+              {
+                label: 'Rename…',
+                icon: 'i-mdi-rename-outline',
+                shortcut: 'Double-click',
+                action: () => editComment({ kind: 'box', boxId: box.id }),
+              },
+              {
+                label: 'Remove comment box',
+                icon: 'i-mdi-comment-remove-outline',
+                danger: true,
+                action: () => emitOp({ type: 'deleteCommentBox', box: box.id }),
+              },
+            ]
+          : []),
+      ];
+    }
+
+    case 'function': {
+      const fn = props.doc?.functions.find((f) => f.id === target.fnId);
+      const entryNode = fn?.nodes.find((n) => n.kind === 'entry');
+      return [
+        { type: 'header', label: fn?.name ?? 'Function' },
+        {
+          label: 'Select all nodes',
+          icon: 'i-mdi-selection-multiple',
+          action: () => v.selectFunction(target.fnId),
+        },
+        {
+          label: 'Frame function',
+          icon: 'i-mdi-image-filter-center-focus',
+          action: () => {
+            v.selectFunction(target.fnId);
+            v.frameSelection();
+          },
+        },
+        {
+          label: 'Jump to code',
+          icon: 'i-mdi-code-tags',
+          disabled: !entryNode,
+          action: () => entryNode && emit('activate', entryNode.id),
+        },
+        {
+          label: 'Reset layout of function',
+          icon: 'i-mdi-auto-fix',
+          action: () => emit('resetLayout', fn?.nodes.map((n) => n.id) ?? []),
+        },
+      ];
+    }
+  }
+}
+
+const menuEntries = computed<MenuEntry[]>(() =>
+  menu.value ? targetEntries(menu.value.target, menu.value) : []
+);
+
+// ----------------------------------------------------------- lifecycle
+
+onMounted(() => {
+  const v = new GraphView(canvas.value as HTMLCanvasElement, {
+    editable: props.editable,
+    theme: canvasTheme.value,
+  });
+  view.value = v;
+  if (props.initialCamera) {
+    v.setCamera(props.initialCamera);
+  }
+
+  v.on('selectionChange', ({ nodeIds }) => {
+    selection.value = nodeIds;
+    emit('selectionChange', nodeIds);
+  });
+  v.on('hoverChange', ({ nodeId, pin }) => {
+    if (nodeId !== hover.value?.nodeId) {
+      emit('hoverChange', nodeId);
+    }
+
+    hover.value = nodeId ? { nodeId, pin } : null;
+    scheduleTooltip();
+  });
+  v.on('layoutChange', ({ patch }) => emit('layoutChange', patch));
+  v.on('op', (op) => emit('op', op));
+  v.on('activate', ({ nodeId }) => emit('activate', nodeId));
+  v.on('cameraChange', (camera) => {
+    hideTooltip();
+    emit('cameraChange', camera);
+  });
+  v.on('editLiteral', async (event) => {
+    hideTooltip();
+    literal.value = event;
+    literalValue.value = event.value;
+    await nextTick();
+    literalInput.value?.focus();
+    literalInput.value?.select();
+  });
+  v.on('editComment', async (event) => {
+    hideTooltip();
+    closeMenu();
+    commentEdit.value = event;
+    commentValue.value = event.value;
+    await nextTick();
+    commentInput.value?.focus();
+    commentInput.value?.select();
+  });
+  v.on('contextMenu', (event) => {
+    if (event.from && !props.editable) {
+      return;
+    }
+
+    openMenu(event);
+  });
+
+  if (props.doc) {
+    v.setDocument(props.doc, props.positions);
+  }
+
+  v.setProblems(severities.value);
+});
+
+const severities = computed(() => {
+  const result = new Map<string, ProblemSeverity>();
+  for (const [id, list] of props.problems ?? []) {
+    const severity = worstSeverity(list);
+    if (severity) {
+      result.set(id, severity);
+    }
+  }
+
+  return result;
+});
+
+watch(severities, (value) => view.value?.setProblems(value));
+watch(canvasTheme, (value) => view.value?.setTheme(value));
+
+onBeforeUnmount(() => {
+  clearTimeout(tooltipTimer);
+  view.value?.destroy();
+});
+
+watch(
+  () => [props.doc, props.positions] as const,
+  ([doc, positions]) => {
+    if (doc) {
+      view.value?.setDocument(doc, positions);
+      selection.value = view.value?.getSelection() ?? [];
+    }
+  }
+);
+
+watch(
+  () => props.editable,
+  (editable) => view.value?.setEditable(editable)
+);
+
+function commitLiteral(): void {
+  const current = literal.value;
+  literal.value = null;
+  if (current && literalValue.value !== current.value) {
+    emit('op', {
+      type: 'setLiteral',
+      node: current.node,
+      pin: current.pin,
+      value: literalValue.value,
+    });
+  }
+
+  canvas.value?.focus();
+}
+
+function cancelLiteral(): void {
+  literal.value = null;
+  canvas.value?.focus();
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  const command = event.ctrlKey || event.metaKey;
+  const key = event.key.toLowerCase();
+  if (event.target !== canvas.value) {
+    return;
+  }
+
+  if (command && key === 'z') {
+    event.preventDefault();
+    if (event.shiftKey) {
+      emit('redo');
+    } else {
+      emit('undo');
+    }
+  } else if (command && key === 'y') {
+    event.preventDefault();
+    emit('redo');
+  } else if (command && key === 'f') {
+    event.preventDefault();
+    void openSearch();
+  } else if (event.key === 'F12' && selection.value.length === 1) {
+    event.preventDefault();
+    emit('goToDefinition', selection.value[0] ?? '');
+  } else if (
+    key === 'c' &&
+    !command &&
+    !event.altKey &&
+    !event.shiftKey &&
+    selection.value.length > 0
+  ) {
+    // Like UE: C puts a comment box around the selection.
+    event.preventDefault();
+    createCommentBox(selection.value, { x: pointer.x, y: pointer.y });
+  } else if (event.key === 'ContextMenu' || (event.shiftKey && key === 'f10')) {
+    // Keyboard access to the context menu of the selection.
+    event.preventDefault();
+    const rect = canvas.value?.getBoundingClientRect();
+    const first = selection.value[0];
+    openMenu({
+      world: { x: 0, y: 0 },
+      client: { x: (rect?.left ?? 0) + 40, y: (rect?.top ?? 0) + 40 },
+      target: first ? { kind: 'node', nodeId: first } : { kind: 'background' },
+    });
+  }
+}
+
+function onPointerMove(event: PointerEvent): void {
+  pointer.x = event.clientX;
+  pointer.y = event.clientY;
+}
+
+defineExpose({
+  sizeOf: (node: GraphNode) =>
+    view.value?.sizeOf(node) ?? { width: 160, height: 60 },
+  spaceAbove: (node: GraphNode) => view.value?.spaceAbove(node) ?? 0,
+  setHighlight: (ids: string[]) => view.value?.setHighlight(ids),
+  setSelection: (ids: string[]) => {
+    view.value?.setSelection(ids);
+    selection.value = view.value?.getSelection() ?? [];
+  },
+  /** Selects nodes, notifies listeners and centers them. */
+  selectNodes,
+  revealNodes: (ids: string[]) => view.value?.revealNodes(ids),
+  frameAll: () => view.value?.frameAll(),
+  frameSelection: () => view.value?.frameSelection(),
+  selectAll: () => view.value?.selectAll(),
+  selectFunction: (fnId: string) => {
+    view.value?.selectFunction(fnId);
+    view.value?.frameSelection();
+  },
+  editLiteral: (node: string, pin: string) =>
+    view.value?.editLiteral(node, pin),
+  editComment: (target: CommentTarget) => view.value?.editComment(target),
+  getPositions: () => view.value?.getPositions() ?? {},
+  openSearch,
+  focus: () => canvas.value?.focus(),
+});
+</script>
+
+<template>
+  <div
+    class="relative h-full w-full overflow-hidden"
+    @keydown="onKeydown"
+    @pointermove="onPointerMove"
+    @pointerdown="hideTooltip"
+    @wheel.passive="hideTooltip"
+  >
+    <canvas
+      ref="canvas"
+      data-testid="graph-canvas"
+      aria-label="Node graph. Press Shift+F10 for actions, Ctrl+F to search."
+      class="block h-full w-full"
+    />
+
+    <GraphSearch
+      v-if="searchOpen"
+      ref="search"
+      :doc="doc"
+      :text="text"
+      @select="(id) => selectNodes([id])"
+      @matches="(ids) => view?.setHighlight(ids)"
+      @close="closeSearch"
+    />
+
+    <NodeTooltip
+      v-if="tooltip"
+      :index="index"
+      :text="text"
+      :node-id="tooltip.nodeId"
+      :pin-id="tooltip.pin"
+      :problems="problems?.get(tooltip.nodeId)"
+      :x="tooltip.x"
+      :y="tooltip.y"
+    />
+
+    <input
+      v-if="literal"
+      ref="literalInput"
+      v-model="literalValue"
+      class="fixed z-20 rounded border border-amber-500 bg-zinc-900 px-2 font-mono text-xs text-zinc-100 outline-none"
+      :style="{
+        left: `${literal.rect.x}px`,
+        top: `${literal.rect.y}px`,
+        width: `${Math.max(literal.rect.width, 140)}px`,
+        height: `${Math.max(literal.rect.height, 22)}px`,
+      }"
+      @keydown.enter.prevent="commitLiteral"
+      @keydown.escape.prevent="cancelLiteral"
+      @blur="commitLiteral"
+    />
+
+    <template v-if="commentEdit">
+      <textarea
+        v-if="commentEdit.target.kind === 'node'"
+        ref="commentInput"
+        v-model="commentValue"
+        class="fixed z-20 resize-none rounded border border-amber-500 bg-zinc-100 px-2 py-1 text-xs text-zinc-900 shadow-xl outline-none"
+        :style="{
+          left: `${commentEdit.rect.x}px`,
+          top: `${commentEdit.rect.y}px`,
+          width: `${Math.max(commentEdit.rect.width, 240)}px`,
+          height: `${Math.max(commentEdit.rect.height, 64)}px`,
+        }"
+        placeholder="Comment (Shift+Enter for a new line, empty to remove)"
+        aria-label="Node comment"
+        @keydown="onCommentKeydown"
+        @blur="commitComment"
+      />
+      <input
+        v-else
+        ref="commentInput"
+        v-model="commentValue"
+        class="fixed z-20 rounded border border-amber-500 bg-zinc-900 px-2 text-sm font-semibold text-zinc-100 outline-none"
+        :style="{
+          left: `${commentEdit.rect.x}px`,
+          top: `${commentEdit.rect.y}px`,
+          width: `${Math.max(commentEdit.rect.width, 160)}px`,
+          height: `${Math.max(commentEdit.rect.height, 24)}px`,
+        }"
+        placeholder="Comment box title"
+        aria-label="Comment box title"
+        @keydown="onCommentKeydown"
+        @blur="commitComment"
+      />
+    </template>
+
+    <template v-if="menu">
+      <form
+        v-if="prompt"
+        class="fixed z-40 w-72 rounded-lg border border-zinc-700 bg-zinc-900/98 p-2 shadow-2xl"
+        :style="{ left: `${menu.client.x}px`, top: `${menu.client.y}px` }"
+        @submit.prevent="commitPrompt"
+      >
+        <label class="mb-1 block text-xs text-zinc-400">
+          {{ prompt.label }}
+        </label>
+        <input
+          ref="promptInput"
+          v-model="prompt.value"
+          class="input font-mono"
+          :placeholder="prompt.placeholder"
+          @keydown.escape="closeMenu"
+          @blur="closeMenu"
+        />
+      </form>
+      <ActionMenu
+        v-else-if="menu.from || menu.target.kind === 'background'"
+        :x="menu.client.x"
+        :y="menu.client.y"
+        :title="actionTitle(menu)"
+        :entries="actionEntries(menu)"
+        :suggest="(query) => (menu ? suggestActions(menu, query) : [])"
+        :context-toggle="Boolean(menu.from)"
+        @close="prompt || closeMenu()"
+      />
+      <ContextMenu
+        v-else-if="menuEntries.length > 0"
+        :x="menu.client.x"
+        :y="menu.client.y"
+        :entries="menuEntries"
+        label="Graph actions"
+        @close="prompt || closeMenu()"
+      />
+    </template>
+  </div>
+</template>

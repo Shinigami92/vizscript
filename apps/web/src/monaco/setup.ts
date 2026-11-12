@@ -1,0 +1,83 @@
+import type { ColorScheme } from '@vizscript/core';
+import * as monaco from 'monaco-editor';
+import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
+import TsWorker from 'monaco-editor/language/typescript/ts.worker?worker';
+import { registerGDScript } from './gdscript';
+
+declare global {
+  interface Window {
+    MonacoEnvironment?: monaco.Environment;
+  }
+}
+
+self.MonacoEnvironment = {
+  getWorker(_workerId: string, label: string): Worker {
+    if (label === 'typescript' || label === 'javascript') {
+      return new TsWorker();
+    }
+
+    return new EditorWorker();
+  },
+};
+
+const ts = monaco.typescript;
+for (const defaults of [ts.typescriptDefaults, ts.javascriptDefaults]) {
+  defaults.setCompilerOptions({
+    target: ts.ScriptTarget.ESNext,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeJs,
+    allowNonTsExtensions: true,
+    allowJs: true,
+    strict: true,
+    jsx: ts.JsxEmit.Preserve,
+    esModuleInterop: true,
+  });
+  defaults.setDiagnosticsOptions({
+    noSemanticValidation: false,
+    noSyntaxValidation: false,
+    // Imports of other repository files cannot be resolved in the browser,
+    // and type definitions of Node.js and test runners are not loaded.
+    diagnosticCodesToIgnore: [2307, 2580, 2582, 2591, 2592, 2593, 2792, 7016],
+  });
+}
+
+registerGDScript(monaco);
+
+monaco.editor.defineTheme('vizscript-dark', {
+  base: 'vs-dark',
+  inherit: true,
+  rules: [
+    { token: 'annotation', foreground: 'ffb373' },
+    { token: 'comment.doc', foreground: '6a9955', fontStyle: 'italic' },
+    { token: 'entity.name.function', foreground: 'dcdcaa' },
+    { token: 'variable.predefined', foreground: '63c259' },
+  ],
+  colors: {
+    'editor.background': '#161618',
+    'editor.lineHighlightBackground': '#1f1f23',
+    'editorGutter.background': '#161618',
+  },
+});
+
+monaco.editor.defineTheme('vizscript-light', {
+  base: 'vs',
+  inherit: true,
+  rules: [
+    { token: 'annotation', foreground: 'b05a00' },
+    { token: 'comment.doc', foreground: '008000', fontStyle: 'italic' },
+    { token: 'entity.name.function', foreground: '795e26' },
+    { token: 'variable.predefined', foreground: '267f2f' },
+  ],
+  colors: {
+    'editor.background': '#fafafa',
+    'editor.lineHighlightBackground': '#f0f0f2',
+    'editorGutter.background': '#fafafa',
+  },
+});
+
+/** The Monaco theme of a color scheme. */
+export function monacoTheme(scheme: ColorScheme): string {
+  return scheme === 'light' ? 'vizscript-light' : 'vizscript-dark';
+}
+
+export { monaco };

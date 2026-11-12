@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#161618" />
+    <title>vizscript</title>
+    <script>
+      // Apply the stored color scheme before the first paint (see use-theme.ts).
+      try {
+        const stored = localStorage.getItem('vizscript:color-scheme');
+        const light =
+          stored === 'light' ||
+          (stored !== 'dark' &&
+            matchMedia('(prefers-color-scheme: light)').matches);
+        document.documentElement.className = light ? 'light' : 'dark';
+      } catch {}
+    </script>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100 antialiased">
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
