@@ -39,7 +39,7 @@ import {
   referenceName,
   uniqueName,
 } from '@vizscript/core';
-import { useEventListener } from '@vueuse/core';
+import { useEventListener, usePreferredReducedMotion } from '@vueuse/core';
 import {
   computed,
   nextTick,
@@ -107,6 +107,10 @@ const emit = defineEmits<{
 
 const { show } = useToasts();
 const { scheme } = useTheme();
+/** Eased camera and node moves, unless the user asked for less motion. */
+const reducedMotion = usePreferredReducedMotion();
+const motion = computed(() => reducedMotion.value !== 'reduce');
+
 const canvasTheme = computed(() =>
   scheme.value === 'light' ? LIGHT_THEME : DARK_THEME
 );
@@ -2532,6 +2536,7 @@ onMounted(() => {
   const v = new GraphView(canvas.value as HTMLCanvasElement, {
     editable: props.editable,
     theme: canvasTheme.value,
+    motion: motion.value,
   });
   view.value = v;
   if (props.initialCamera) {
@@ -2606,6 +2611,7 @@ const severities = computed(() => {
 
 watch(severities, (value) => view.value?.setProblems(value));
 watch(canvasTheme, (value) => view.value?.setTheme(value));
+watch(motion, (value) => view.value?.setMotion(value));
 
 onBeforeUnmount(() => {
   clearTimeout(tooltipTimer);
