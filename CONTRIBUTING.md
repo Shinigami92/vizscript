@@ -162,7 +162,7 @@ set -a && . ./.env && set +a && pnpm exec vitest run   # includes API e2e tests
 - **Snapshots:** graph lowering uses readable snapshots (`summarizeGraph`). `pnpm preflight` updates them; review the diff.
 - **Parser changes:** run the corpus checks against a real project, e.g. `GD_CORPUS=/path/to/godot/project pnpm exec vitest run packages/lang-gdscript` (and `PY_CORPUS=… packages/lang-python`). They fail on any diagnostic.
 - **Naming UI parts:** important containers have a `data-ui` name (`workspace-toolbar`, `view-graph`, `details-panel`, …); search the inspector for `data-ui` to find them. New panels, toolbars, menus and dialogs get one too.
-- **UI changes:** check them in the running app, especially the playground, in light and dark mode. The repository's `.mcp.json` sets up the Playwright MCP for AI agents.
+- **UI changes:** check them in the running app, especially the playground, in light and dark mode. The repository's `.mcp.json` sets up the Playwright MCP for AI agents. The Claude Code skill `/viz-user-test <playground URL or sample>` (`.claude/skills/viz-user-test`) acts like a user: it rebuilds a sample by hand in the graph, then edits it at random, and writes its findings to `local/`.
 
 ## Commits and pull requests
 
