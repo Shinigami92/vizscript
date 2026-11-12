@@ -340,6 +340,44 @@ function withoutDoubleBlankLines(text: string, result: OpResult): OpResult {
   );
 }
 
+/**
+ * Comment boxes whose nodes are all deleted go too (their `#region` lines
+ * would stay behind as plain comments).
+ */
+function withEmptiedBoxes(
+  text: string,
+  doc: GraphDocument,
+  ids: ReadonlyArray<string>,
+  result: OpResult
+): OpResult {
+  if (!result.ok) {
+    return result;
+  }
+
+  const deleted = new Set(ids);
+  const markers: TextEdit[] = [];
+  for (const fn of doc.functions) {
+    for (const box of fn.comments ?? []) {
+      if (box.nodes.length > 0 && box.nodes.every((id) => deleted.has(id))) {
+        const removed = deleteCommentBox(text, doc, box.id);
+        if (removed.ok) {
+          markers.push(...removed.edits);
+        }
+      }
+    }
+  }
+
+  // A marker line next to a removed statement: keep the edits apart.
+  const edits = [...result.edits];
+  for (const marker of markers) {
+    if (!edits.some((e) => e.start < marker.end && marker.start < e.end)) {
+      edits.push(marker);
+    }
+  }
+
+  return succeeded(edits);
+}
+
 /** Longest run of blank lines between two lines of a text. */
 function longestBlankRun(text: string): number {
   let longest = 0;
@@ -1938,7 +1976,15 @@ export function applyTextOp(
     }
 
     case 'deleteNodes': {
-      return tidyBlankLines(text, deleteNodes(text, doc, op.nodeIds, syntax));
+      return tidyBlankLines(
+        text,
+        withEmptiedBoxes(
+          text,
+          doc,
+          op.nodeIds,
+          deleteNodes(text, doc, op.nodeIds, syntax)
+        )
+      );
     }
 
     case 'setLiteral': {

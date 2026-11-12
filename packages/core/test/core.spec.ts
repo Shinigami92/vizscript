@@ -164,6 +164,41 @@ describe('layoutDocument', () => {
     expect(positions.entry).toEqual(auto.entry);
   });
 
+  it('keeps a Return on the row it ends instead of wrapping it', () => {
+    const ids = ['e', 'a', 'b', 'c'];
+    const nodes: GraphNode[] = [
+      { ...node('e', 'impure', [execOut]), kind: 'entry' },
+      node('a', 'impure', [execIn, execOut]),
+      node('b', 'impure', [execIn, execOut]),
+      { ...node('c', 'impure', [execIn]), kind: 'return' },
+    ];
+    const doc: GraphDocument = {
+      language: 'test',
+      diagnostics: [],
+      functions: [
+        {
+          id: 'fn:f',
+          name: 'f',
+          range: { start: 0, end: 0 },
+          nodes,
+          edges: ids
+            .slice(1)
+            .map((id, i) =>
+              createEdge(
+                'exec',
+                { node: ids[i] ?? '', pin: 'then' },
+                { node: id, pin: 'exec' }
+              )
+            ),
+        },
+      ],
+    };
+    const positions = layoutDocument(doc, { sizeOf, maxRowWidth: 200 });
+    // `b` wraps to a new row; the Return after it stays next to it.
+    expect(positions.c?.y).toBe(positions.b?.y);
+    expect(positions.c?.x ?? 0).toBeGreaterThan(positions.b?.x ?? 0);
+  });
+
   it('moves a function down when another one grew into it', () => {
     const doc: GraphDocument = {
       language: 'test',

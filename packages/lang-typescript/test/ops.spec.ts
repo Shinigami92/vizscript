@@ -462,6 +462,19 @@ describe('deleting and restoring a return', () => {
     ).toBe('const a = 1;\n\nconst b = 2;\nlog(a);\n');
   });
 
+  it('removes a comment box whose nodes are all deleted', () => {
+    const text =
+      'function f() {\n  // #region Box\n  a();\n  b();\n  // #endregion\n  c();\n}\n';
+    const doc = parseTypeScript(text);
+    const ids = doc.functions
+      .flatMap((fn) => fn.nodes)
+      .filter((n) => n.title === 'a' || n.title === 'b')
+      .map((n) => n.id);
+    expect(apply(text, { type: 'deleteNodes', nodeIds: ids })).toBe(
+      'function f() {\n  c();\n}\n'
+    );
+  });
+
   it('keeps a call argument as its own statement when disconnected', () => {
     const text = 'foo(bar(1), 2);\n';
     const doc = parseTypeScript(text);

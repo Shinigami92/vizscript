@@ -433,7 +433,12 @@ function layoutFunction(
       cx: number,
       cy: number
     ): { right: number; bottom: number } => {
-      if (cx - rowStart > maxRowWidth && !positions.has(child)) {
+      // A node that ends the flow (Return, throw …) stays with its row:
+      // alone on a new row its wires would cross the whole function.
+      const ends = !index.nodes
+        .get(child)
+        ?.pins.some((p) => p.kind === 'exec' && p.direction === 'out');
+      if (cx - rowStart > maxRowWidth && !positions.has(child) && !ends) {
         return placeExec(
           child,
           rowStart,
