@@ -384,6 +384,7 @@ function deleteSelection(): void {
         v-if="shownSymbol"
         :symbol="shownSymbol"
         :description="descriptionOf(shownSymbol)"
+        :symbols="doc?.symbols ?? []"
         :event="isEvent(shownSymbol)"
         :text="docText ?? text"
         :uses="shownUses"
@@ -404,6 +405,7 @@ function deleteSelection(): void {
           <SymbolDetails
             :symbol="shownNodeSymbol"
             :description="descriptionOf(shownNodeSymbol)"
+            :symbols="doc?.symbols ?? []"
             :text="docText ?? text"
             :uses="0"
             :editable="editable"

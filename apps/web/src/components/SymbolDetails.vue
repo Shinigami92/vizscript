@@ -6,13 +6,14 @@ import type {
   TypeSystemInfo,
   ValueKind,
 } from '@vizscript/core';
-import { pinColor } from '@vizscript/core';
+import { fieldValue, pinColor } from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
 import { lineColumn, snippet } from '../graph/source';
 import { SYMBOL_ICONS, symbolLabel, symbolType } from '../graph/symbols';
 import DetailsSection from './DetailsSection.vue';
 import TypePicker from './TypePicker.vue';
+import ValueFields from './ValueFields.vue';
 
 /** Details of a symbol selected in "My Script" (UE: the Details panel). */
 const props = defineProps<{
@@ -41,6 +42,8 @@ const props = defineProps<{
   description?: { nodeId: string; text: string };
   /** Runs on its own (engine callback, signal handler): name is fixed. */
   event?: boolean;
+  /** Symbols of the file (enum members for value choices). */
+  symbols?: ReadonlyArray<ScriptSymbol>;
 }>();
 
 const emit = defineEmits<{
@@ -196,6 +199,28 @@ function commitValue(): void {
     symbol: props.symbol.id,
     value: next === '' && valueKind.value !== 'string' ? null : next,
     kind: valueKind.value,
+  });
+}
+
+/** Vector, color and enum values get fields (`ValueFields`). */
+const fields = computed(() =>
+  isVariable.value
+    ? fieldValue(
+        valueCode.value,
+        props.symbol.type?.text ?? String(props.symbol.dataType),
+        props.types,
+        props.symbols ?? [],
+        props.text
+      )
+    : undefined
+);
+
+function setExpression(written: string): void {
+  emit('op', {
+    type: 'setSymbolValue',
+    symbol: props.symbol.id,
+    value: written,
+    kind: 'expression',
   });
 }
 
@@ -645,6 +670,13 @@ function setModifier(modifier: string, enabled: boolean): void {
                 valueCode || 'no value'
               }}</span>
             </label>
+            <ValueFields
+              v-else-if="fields"
+              :value="fields"
+              :editable="editable"
+              :label="`Value of ${symbol.name}`"
+              @set="setExpression"
+            />
             <input
               v-else
               :key="`${symbol.id}:${valueKind}`"
