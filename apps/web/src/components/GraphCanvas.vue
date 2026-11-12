@@ -23,6 +23,7 @@ import type {
   Point,
   Positions,
   ScriptSymbol,
+  TypeSystemInfo,
 } from '@vizscript/core';
 import { isTypeCompatible, qualifiedName } from '@vizscript/core';
 import {
@@ -66,6 +67,8 @@ const props = defineProps<{
   problems?: ReadonlyMap<string, ReadonlyArray<Problem>>;
   /** Names imported into the file (offered in the action menu). */
   imports?: ReadonlyArray<string>;
+  /** Operators and values of the language (action menu). */
+  types?: TypeSystemInfo | null;
 }>();
 
 const emit = defineEmits<{
@@ -319,6 +322,132 @@ function memberAccess(
   return `${language === 'typescript' ? 'this' : 'self'}.${symbol.name}`;
 }
 
+/**
+ * Where new code for a point of the graph goes: the end of the function
+ * whose frame contains it (else the module). `undefined` in a GDScript
+ * file's top level, which is its class body.
+ */
+function placeAt(
+  world: Point
+):
+  | { fnId: string; anchor: { after: PinRef } | { before: PinRef } }
+  | undefined {
+  const v = view.value;
+  const doc = props.doc;
+  if (!v || !doc) {
+    return undefined;
+  }
+
+  const top = topLevelGraph(doc, props.text);
+  const fnId = v.functionAt(world) ?? top?.id;
+  const anchor = fnId ? endOfFunction(doc, fnId) : undefined;
+  if (!fnId || !anchor || (doc.language === 'gdscript' && fnId === top?.id)) {
+    return undefined;
+  }
+
+  return { fnId, anchor };
+}
+
+// ------------------------------------------- operators and value nodes
+
+/** Fills `$1`, `$2` … of an expression template (`first` goes into `$1`). */
+function fillTemplate(template: string, first?: string): string {
+  const placeholder = props.types?.placeholder ?? 'undefined';
+  return template.replaceAll(/\$(\d)/g, (_, n: string) =>
+    n === '1' && first !== undefined ? first : placeholder
+  );
+}
+
+const EXPRESSION_ICONS: Record<string, string> = {
+  Math: 'i-mdi-calculator-variant-outline text-emerald-400',
+  Comparison: 'i-mdi-scale-balance text-red-300',
+  Logic: 'i-mdi-gate-and text-red-300',
+  Text: 'i-mdi-format-text text-pink-400',
+  Values: 'i-mdi-numeric text-zinc-400',
+};
+
+/**
+ * Operator and value actions (UE: `+`, Make Literal String …) for a wire
+ * dropped from a data pin, or for empty space (`from` undefined).
+ */
+function expressionActions(state: MenuState): ActionEntry[] {
+  const expressions = props.types?.expressions ?? [];
+  const source = state.from;
+  const found = source ? pinOf(source) : undefined;
+  return expressions.flatMap((expression): ActionEntry[] => {
+    const base = {
+      label: expression.label,
+      category: expression.category,
+      icon: EXPRESSION_ICONS[expression.category],
+      keywords: `${expression.keywords ?? ''} ${expression.template}`,
+      hint: fillTemplate(expression.template, '·').replaceAll(
+        props.types?.placeholder ?? 'undefined',
+        '·'
+      ),
+    };
+
+    if (source && found?.pin.direction === 'out') {
+      // The dragged value goes into the first input.
+      if (!expression.template.includes('$1')) {
+        return [];
+      }
+
+      return [
+        {
+          ...base,
+          action: () =>
+            emitOp({
+              type: 'useValue',
+              pin: source,
+              expression: fillTemplate(expression.template, '$value'),
+              position: { ...state.world },
+            }),
+        },
+      ];
+    }
+
+    if (source && found) {
+      // Into an input: replaces its value.
+      return [
+        {
+          ...base,
+          fits: isTypeCompatible(expression.result ?? 'any', found.pin.type),
+          action: () =>
+            emitOp({
+              type: 'setInput',
+              pin: source,
+              expression: fillTemplate(expression.template),
+            }),
+        },
+      ];
+    }
+
+    // Empty space: a lone value at the end of the function under it.
+    return [
+      {
+        ...base,
+        action: () => {
+          const place = placeAt(state.world);
+          if (!place) {
+            show('Add it inside a function.');
+            return;
+          }
+
+          emitOp({
+            type: 'addNode',
+            template: {
+              type: 'value',
+              expression: fillTemplate(expression.template),
+            },
+            ...place.anchor,
+            position: { ...state.world },
+          });
+        },
+      },
+    ];
+  });
+}
+
 function onDrop(event: DragEvent): void {
   const id = event.dataTransfer?.getData(SYMBOL_DRAG_MIME);
   const v = view.value;
@@ -334,14 +463,13 @@ function onDrop(event: DragEvent): void {
   }
 
   const world = v.worldAt(event.clientX, event.clientY);
-  const top = topLevelGraph(doc, props.text);
-  const fnId = v.functionAt(world) ?? top?.id;
-  const anchor = fnId ? endOfFunction(doc, fnId) : undefined;
-  // A GDScript file's top level is its class body: no statements there.
-  if (!fnId || !anchor || (doc.language === 'gdscript' && fnId === top?.id)) {
+  const place = placeAt(world);
+  if (!place) {
     show('Drop it into a function.');
     return;
   }
+
+  const { fnId, anchor } = place;
 
   const owner = doc.symbols?.find(
     (s) => s.fnId === fnId && (s.kind === 'function' || s.kind === 'method')
@@ -606,6 +734,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
   if (!state.from) {
     return [
       ...(props.editable ? addNodeActions(state, true) : []),
+      ...(props.editable ? expressionActions(state) : []),
       {
         label: 'Find…',
         category: 'Graph',
@@ -684,6 +813,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
                 }),
             },
           ]),
+      ...expressionActions(state),
     ];
   }
 
@@ -707,6 +837,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
       action: () =>
         emitOp({ type: 'setInput', pin: source, expression: `${callee}()` }),
     })),
+    ...expressionActions(state),
     ...(extract.type === undefined || extract.type === 'item'
       ? extract.disabled
         ? []

@@ -481,10 +481,14 @@ async function reparse(): Promise<void> {
       .flatMap((f) => f.nodes)
       .filter((n) => !known.has(n.id));
     // The node asked for (also a pure one, e.g. a lone Get), else the first
-    // new statement.
+    // new statement, else the root of a new expression (output not wired).
+    const used = new Set(
+      next.functions.flatMap((f) => f.edges.map((e) => e.from.node))
+    );
     const added =
       (matches && fresh.find(matches)) ??
-      fresh.find((n) => n.purity === 'impure');
+      fresh.find((n) => n.purity === 'impure') ??
+      fresh.find((n) => !used.has(n.id));
     if (added) {
       pinned.value = { ...pinned.value, [added.id]: world };
       void persist({ [added.id]: world });
@@ -992,6 +996,7 @@ async function onOp(op: GraphOp): Promise<void> {
   if (
     (op.type === 'addNode' ||
       op.type === 'callWith' ||
+      op.type === 'useValue' ||
       op.type === 'promote' ||
       op.type === 'extract') &&
     op.position
@@ -1326,6 +1331,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           :definition-of="describeDefinition"
           :problems="nodeProblems"
           :imports="importedNames"
+          :types="typeSystem"
           @selection-change="onSelectionChange"
           @hover-change="onHoverChange"
           @layout-change="onLayoutChange"

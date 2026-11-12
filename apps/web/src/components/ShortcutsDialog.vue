@@ -78,6 +78,10 @@ const GROUPS: ReadonlyArray<{
         input: 'Right-click a call → Add argument pin',
       },
       {
+        action: 'Add an operator or value',
+        input: 'Drag a wire into empty space and type (+, ==, join, text …)',
+      },
+      {
         action: 'Reorder statements',
         input: "Drag an exec output onto another node's exec input",
       },
