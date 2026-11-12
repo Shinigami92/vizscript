@@ -1,4 +1,5 @@
 import { withImplicitSelf } from './display';
+import { NODE_METRICS } from './geometry';
 import type {
   FunctionGraph,
   GraphDocument,
@@ -418,7 +419,12 @@ function layoutFunction(
     let right = nx + s.width;
     maxBottom = Math.max(maxBottom, bottom);
 
-    let dataTop = y + 56;
+    // Below the exec row, so the incoming exec wire passes above the inputs
+    // (a subtitle makes the header, and the exec pin, lower).
+    let dataTop =
+      y +
+      56 +
+      (index.nodes.get(id)?.subtitle ? NODE_METRICS.subtitleHeight : 0);
     for (const input of inputs) {
       const b = placeData(input, nx - gapX * 0.6, dataTop);
       bottom = Math.max(bottom, b);
