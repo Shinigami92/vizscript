@@ -193,6 +193,12 @@ importers:
 
   packages/core: {}
 
+  packages/lang-gdscript:
+    dependencies:
+      '@vizscript/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/lang-typescript:
     dependencies:
       '@babel/parser':
