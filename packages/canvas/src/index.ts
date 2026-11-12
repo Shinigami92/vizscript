@@ -8,7 +8,7 @@ export type {
   ContextTarget,
   GraphViewEvents,
   GraphViewOptions,
-} from './graph-view';
+} from './graph-view-types';
 export { GraphView } from './graph-view';
 export * from './selection';
 export { SpatialIndex } from './spatial-index';
