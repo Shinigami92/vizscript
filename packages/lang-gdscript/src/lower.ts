@@ -22,6 +22,7 @@ import {
   isArrayType,
   lineEnd,
   lineIndent,
+  linkSymbolGraphs,
   markUnusedValue,
   truncate,
 } from '@vizscript/core';
@@ -36,6 +37,7 @@ import type {
   VarDecl,
 } from './ast';
 import { parseGDScript } from './parser';
+import { gdscriptSymbols } from './symbols';
 
 export const LANGUAGE_ID = 'gdscript';
 
@@ -1571,7 +1573,9 @@ export function parseGDScriptDocument(
       range: { start: d.start, end: d.end },
       severity: 'error',
     })),
+    symbols: gdscriptSymbols(script.body, text),
   };
   attachComments(doc, text, comments);
+  linkSymbolGraphs(doc);
   return doc;
 }

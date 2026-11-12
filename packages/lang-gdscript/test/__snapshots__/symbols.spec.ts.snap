@@ -1,0 +1,20 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`gdscriptSymbols > lists the declarations of the fixture 1`] = `
+"signal fired(target: Node3D)
+enum State ~State
+constant RANGE: float = … [const]
+variable fire_rate ~number = … [@export var]
+variable damage: int = … [@export_range var]
+variable barrel: Node3D = … [@onready var]
+variable state = … [var]
+variable ammo: int = … [var property]
+function _ready(): void → _ready
+function _process(delta: float): void → _process
+local _process::target = … [var]
+local _process::enemy: Node3D
+function _nearest_enemy(): Node3D → _nearest_enemy
+local _nearest_enemy::best: Node3D = … [var]
+local _nearest_enemy::best_distance = … [var]
+function _shoot(): void → _shoot"
+`;
