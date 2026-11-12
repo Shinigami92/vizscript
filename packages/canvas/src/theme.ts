@@ -17,6 +17,8 @@ export interface Theme {
   nodeSubtext: string;
   compactVariable: string;
   compactPure: string;
+  /** Small text on compact nodes (`const` under `SET`). */
+  compactSubtext: string;
   /** Alpha (hex) at the right end of the header gradient. */
   headerFade: string;
   exec: string;
@@ -64,6 +66,7 @@ export const DARK_THEME: Theme = {
   nodeSubtext: '#a8a8b0',
   compactVariable: '#26262b',
   compactPure: '#1f2a1a',
+  compactSubtext: '#a1a1aa',
   headerFade: '55',
   exec: execColor('dark'),
   pinLabel: '#d4d4d8',
@@ -106,6 +109,7 @@ export const LIGHT_THEME: Theme = {
   nodeSubtext: 'rgba(255, 255, 255, 0.72)',
   compactVariable: '#e4e4e7',
   compactPure: '#e2edd9',
+  compactSubtext: '#71717a',
   headerFade: 'aa',
   exec: execColor('light'),
   pinLabel: '#27272a',

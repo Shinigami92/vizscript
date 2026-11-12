@@ -3,6 +3,7 @@ import type {
   GraphEdge,
   GraphNode,
   GraphOp,
+  HeaderIcon,
   LayoutPatch,
   LiteralKind,
   MeasureText,
@@ -15,14 +16,20 @@ import type {
   TextStyle,
 } from '@vizscript/core';
 import {
+  compactTitle,
   computeNodeGeometry,
   extractReroutes,
+  headerIcon,
+  ICON_SPACE,
   isArrayType,
+  isCompact,
+  isLatent,
   isTypeCompatible,
   literalWidth,
   NODE_METRICS,
   pinColor,
   pinKey,
+  pinLabel,
   reroutePatch,
 } from '@vizscript/core';
 import type { WireShape } from './bezier';
@@ -920,8 +927,8 @@ export class GraphView {
       return null;
     }
 
-    const label =
-      ns.node.compact || !pin.name ? 0 : this.measure(pin.name, 'label');
+    const text = pinLabel(ns.node, pin);
+    const label = text ? this.measure(text, 'label') : 0;
     const x =
       ns.x +
       pg.x +
@@ -2232,7 +2239,8 @@ export class GraphView {
     const { ctx, theme } = this;
     const { node, geom } = ns;
     const lod = this.camera.zoom < 0.4;
-    const r = node.compact
+    const compact = isCompact(node);
+    const r = compact
       ? Math.min(geom.height / 2, 14)
       : NODE_METRICS.cornerRadius;
     const id = node.id;
@@ -2243,15 +2251,21 @@ export class GraphView {
     // Body
     ctx.beginPath();
     ctx.roundRect(ns.x, ns.y, geom.width, geom.height, r);
-    ctx.fillStyle = node.compact
-      ? node.category === 'variable'
-        ? theme.compactVariable
-        : theme.compactPure
-      : theme.nodeBody;
+    if (compact) {
+      ctx.fillStyle =
+        node.category === 'variable'
+          ? theme.compactVariable
+          : node.purity === 'pure'
+            ? theme.compactPure
+            : theme.nodeBody;
+    } else {
+      ctx.fillStyle = theme.nodeBody;
+    }
+
     ctx.fill();
 
     // Header
-    if (!node.compact) {
+    if (!compact) {
       ctx.save();
       ctx.beginPath();
       ctx.roundRect(ns.x, ns.y, geom.width, geom.headerHeight, [r, r, 0, 0]);
@@ -2298,7 +2312,7 @@ export class GraphView {
 
     // Title
     ctx.textBaseline = 'middle';
-    if (node.compact) {
+    if (compact) {
       ctx.font = this.font('compact');
       ctx.fillStyle = theme.nodeText;
       ctx.textAlign = 'center';
@@ -2306,19 +2320,43 @@ export class GraphView {
         geom.leftColumn > 0 ? geom.leftColumn + 4 : NODE_METRICS.paddingX;
       const right =
         geom.rightColumn > 0 ? geom.rightColumn + 4 : NODE_METRICS.paddingX;
-      ctx.fillText(
-        node.title,
-        ns.x + (left + geom.width - right) / 2,
-        ns.y + geom.height / 2
-      );
+      const centerX = ns.x + (left + geom.width - right) / 2;
+      // A setter shows `SET` and, small below, how it declares (`const`).
+      const sub = node.subtitle && !lod ? node.subtitle : '';
+      const centerY = ns.y + geom.height / 2 - (sub ? 6 : 0);
+      ctx.fillText(compactTitle(node), centerX, centerY);
+      if (sub) {
+        ctx.font = this.font('subtitle');
+        ctx.fillStyle = theme.compactSubtext;
+        ctx.fillText(sub, centerX, centerY + 14);
+      }
     } else {
+      const icon = lod ? undefined : headerIcon(node);
+      const titleY = ns.y + NODE_METRICS.headerHeight / 2 + 1;
+      if (icon) {
+        this.drawHeaderIcon(
+          icon,
+          ns.x + NODE_METRICS.paddingX + 6,
+          titleY,
+          theme.nodeTitle
+        );
+      }
+
+      if (isLatent(node) && !lod) {
+        this.drawClock(
+          ns.x + geom.width - NODE_METRICS.paddingX - 6,
+          titleY,
+          theme.nodeTitle
+        );
+      }
+
       ctx.font = this.font('title');
       ctx.fillStyle = theme.nodeTitle;
       ctx.textAlign = 'left';
       ctx.fillText(
         node.title,
-        ns.x + NODE_METRICS.paddingX,
-        ns.y + NODE_METRICS.headerHeight / 2 + 1
+        ns.x + NODE_METRICS.paddingX + (icon ? ICON_SPACE : 0),
+        titleY
       );
       if (node.subtitle && !lod) {
         ctx.font = this.font('subtitle');
@@ -2335,6 +2373,92 @@ export class GraphView {
     for (const pg of geom.pins.values()) {
       this.drawPin(ns, pg, lod);
     }
+  }
+
+  /**
+   * Header icons like UE's: ƒ for functions, a diamond for events, a fork
+   * for branches, a circular arrow for loops (12 px, centered on `x`, `y`).
+   */
+  private drawHeaderIcon(
+    icon: HeaderIcon,
+    x: number,
+    y: number,
+    color: string
+  ): void {
+    const { ctx } = this;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    switch (icon) {
+      case 'function':
+      case 'unknown': {
+        ctx.font = `italic 600 15px Georgia, "Times New Roman", serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(icon === 'function' ? 'ƒ' : '?', x, y + 1);
+        break;
+      }
+
+      case 'event': {
+        ctx.beginPath();
+        ctx.moveTo(x, y - 6);
+        ctx.lineTo(x + 6, y);
+        ctx.lineTo(x, y + 6);
+        ctx.lineTo(x - 6, y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+
+      case 'branch': {
+        ctx.beginPath();
+        ctx.moveTo(x - 6, y);
+        ctx.lineTo(x - 1, y);
+        ctx.moveTo(x - 1, y);
+        ctx.lineTo(x + 5, y - 5);
+        ctx.moveTo(x - 1, y);
+        ctx.lineTo(x + 5, y + 5);
+        ctx.stroke();
+        break;
+      }
+
+      case 'loop': {
+        ctx.beginPath();
+        ctx.arc(x, y, 5, Math.PI * 0.15, Math.PI * 1.75);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x + 5.5, y - 5);
+        ctx.lineTo(x + 5, y - 1);
+        ctx.lineTo(x + 1.5, y - 2.5);
+        ctx.stroke();
+        break;
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /** UE's clock on latent nodes (`await`). */
+  private drawClock(x: number, y: number, color: string): void {
+    const { ctx } = this;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y - 3.5);
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 2.5, y + 1.5);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawPin(ns: NodeState, pg: PinGeometry, lod: boolean): void {
@@ -2389,12 +2513,13 @@ export class GraphView {
       pg.side === 'left'
         ? p.x + NODE_METRICS.pinRadius + NODE_METRICS.pinLabelGap
         : p.x - NODE_METRICS.pinRadius - NODE_METRICS.pinLabelGap;
-    if (pin.name && !ns.node.compact) {
+    const label = pinLabel(ns.node, pin);
+    if (label) {
       ctx.font = this.font('label');
       ctx.fillStyle = theme.pinLabel;
       ctx.textAlign = pg.side === 'left' ? 'left' : 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText(pin.name, labelX, p.y);
+      ctx.fillText(label, labelX, p.y);
     }
 
     const lr = this.literalRect(ns, pg);
