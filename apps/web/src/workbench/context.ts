@@ -20,6 +20,7 @@ export const WORKBENCH: InjectionKey<WorkbenchContext> = Symbol('workbench');
 
 export const VIEW_ICONS: Record<ViewId, string> = {
   explorer: 'i-mdi-file-tree-outline',
+  script: 'i-mdi-format-list-bulleted-type',
   code: 'i-mdi-code-tags',
   graph: 'i-mdi-graph-outline',
   preview: 'i-mdi-eye-outline',

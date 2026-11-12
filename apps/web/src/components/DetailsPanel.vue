@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import type { GraphDocument, GraphNode, GraphOp, Pin } from '@vizscript/core';
+import type {
+  GraphDocument,
+  GraphNode,
+  GraphOp,
+  Pin,
+  ScriptSymbol,
+  SourceRange,
+} from '@vizscript/core';
 import { CATEGORY_COLORS } from '@vizscript/core';
-import { useStorage } from '@vueuse/core';
 import { computed } from 'vue';
 import { indexDocument, pinPeers } from '../graph/doc-index';
 import { lineColumn, snippet } from '../graph/source';
 import PinIcon from './PinIcon.vue';
+import SymbolDetails from './SymbolDetails.vue';
 
 const props = defineProps<{
   doc: GraphDocument | null;
@@ -14,20 +21,22 @@ const props = defineProps<{
   editable: boolean;
   /** Show a close button (the workbench tab has one on desktop). */
   closable?: boolean;
+  /** Symbol selected in "My Script" (shown instead of nodes). */
+  symbol?: ScriptSymbol | null;
+  /** Number of nodes using the symbol. */
+  symbolUses?: number;
 }>();
 
 const emit = defineEmits<{
   select: [ids: string[]];
   selectFunction: [fnId: string];
   activate: [id: string];
+  reveal: [range: SourceRange];
+  openSymbol: [id: string];
   op: [op: GraphOp];
   close: [];
 }>();
 
-const tab = useStorage<'details' | 'outline'>(
-  'vizscript:details-tab',
-  'details'
-);
 const index = computed(() => indexDocument(props.doc));
 
 const selected = computed(() =>
@@ -64,116 +73,6 @@ const stats = computed(() => {
   };
 });
 
-const currentFn = computed(() => selected.value[0]?.fn.id);
-
-interface ExportItem {
-  name: string;
-  kind: string;
-  /** Node to select, or the function to show. */
-  nodeId?: string;
-  fnId?: string;
-}
-
-/** The module's public interface: exported values, functions and re-exports. */
-const exportsList = computed<ExportItem[]>(() => {
-  const items: ExportItem[] = [];
-  for (const fn of props.doc?.functions ?? []) {
-    for (const node of fn.nodes) {
-      if (node.kind === 'entry' && node.subtitle?.startsWith('export')) {
-        items.push({ name: fn.name, kind: 'function', fnId: fn.id });
-      } else if (
-        node.kind === 'setVar' &&
-        node.subtitle?.startsWith('export') &&
-        node.title.startsWith('Set ')
-      ) {
-        items.push({
-          name: node.title.slice(4),
-          kind: 'variable',
-          nodeId: node.id,
-        });
-      } else if (node.kind === 'export') {
-        const named = node.pins.filter(
-          (p) => p.kind === 'data' && p.direction === 'in' && p.name
-        );
-        if (node.title === 'Export' && named.length > 0) {
-          for (const pin of named) {
-            items.push({ name: pin.name, kind: 'value', nodeId: node.id });
-          }
-        } else {
-          items.push({
-            name:
-              node.title === 'Export default'
-                ? 'default'
-                : (node.subtitle ?? node.title),
-            kind:
-              node.title === 'Export default' ? 'export default' : 're-export',
-            nodeId: node.id,
-          });
-        }
-      }
-    }
-  }
-
-  return items;
-});
-
-function openExport(item: ExportItem): void {
-  if (item.fnId) {
-    emit('selectFunction', item.fnId);
-  } else if (item.nodeId) {
-    emit('select', [item.nodeId]);
-  }
-}
-
-/** Declared variables per function (`const`/`let`/`var` set nodes). */
-const variables = computed(() => {
-  const result: Array<{
-    name: string;
-    fnId: string;
-    fnName: string;
-    declaration: string;
-  }> = [];
-  for (const fn of props.doc?.functions ?? []) {
-    const seen = new Set<string>();
-    for (const node of fn.nodes) {
-      // Subtitles like `const`, `let`, `var` or `@export var: int`.
-      const declaration = node.subtitle?.match(/\b(const|let|var)\b/)?.[1];
-      if (
-        node.kind === 'setVar' &&
-        declaration &&
-        node.title.startsWith('Set ')
-      ) {
-        const name = node.title.slice(4);
-        if (!seen.has(name)) {
-          seen.add(name);
-          result.push({
-            name,
-            fnId: fn.id,
-            fnName: fn.name,
-            declaration,
-          });
-        }
-      }
-    }
-  }
-
-  return result;
-});
-
-function selectVariable(fnId: string, name: string): void {
-  const fn = props.doc?.functions.find((f) => f.id === fnId);
-  const escaped = name.replaceAll(/[$.*+?^()[\]{}|\\]/g, String.raw`\$&`);
-  const pattern = new RegExp(String.raw`^(?:Set )?${escaped}(?![\w$])`);
-  const ids =
-    fn?.nodes
-      .filter(
-        (n) =>
-          (n.kind === 'getVar' || n.kind === 'setVar') && pattern.test(n.title)
-      )
-      .map((n) => n.id) ?? [];
-  emit('select', ids);
-}
-
 function pinLabel(pin: Pin): string {
   return pin.name || (pin.kind === 'exec' ? 'Exec' : 'Value');
 }
@@ -197,13 +96,6 @@ function commitComment(node: GraphNode, event: Event): void {
   }
 }
 
-/** Comment boxes (code regions) of the document, for the outline. */
-const commentBoxes = computed(() =>
-  (props.doc?.functions ?? []).flatMap((fn) =>
-    (fn.comments ?? []).map((box) => ({ box, fn }))
-  )
-);
-
 function deleteSelection(): void {
   emit('op', { type: 'deleteNodes', nodeIds: [...props.selection] });
 }
@@ -215,27 +107,12 @@ function deleteSelection(): void {
     aria-label="Details"
   >
     <div
-      class="flex h-9 shrink-0 items-center gap-1 border-b border-zinc-800 px-1.5"
+      v-if="closable"
+      class="flex h-9 shrink-0 items-center justify-end border-b border-zinc-800 px-1.5"
     >
       <button
-        v-for="option in ['details', 'outline'] as const"
-        :key="option"
         type="button"
-        class="rounded px-2.5 py-1 text-xs capitalize"
-        :class="
-          tab === option
-            ? 'bg-zinc-800 text-zinc-50'
-            : 'text-zinc-400 hover:text-zinc-200'
-        "
-        :aria-pressed="tab === option"
-        @click="tab = option"
-      >
-        {{ option }}
-      </button>
-      <button
-        v-if="closable"
-        type="button"
-        class="btn-ghost ml-auto px-1.5"
+        class="btn-ghost px-1.5"
         title="Hide panel"
         @click="emit('close')"
       >
@@ -244,79 +121,14 @@ function deleteSelection(): void {
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto">
-      <!-- Outline: functions and variables (like UE's "My Blueprint") -->
-      <template v-if="tab === 'outline'">
-        <section class="section">
-          <h3 class="section-title">Functions</h3>
-          <button
-            v-for="fn in doc?.functions ?? []"
-            :key="fn.id"
-            type="button"
-            class="row"
-            :class="{ 'bg-zinc-800/70': fn.id === currentFn }"
-            @click="emit('selectFunction', fn.id)"
-          >
-            <span class="i-mdi-function text-red-400" />
-            <span class="truncate">{{ fn.name }}</span>
-            <span class="ml-auto text-xs text-zinc-500">{{
-              fn.nodes.length
-            }}</span>
-          </button>
-        </section>
-        <section v-if="exportsList.length > 0" class="section">
-          <h3 class="section-title">Exports</h3>
-          <button
-            v-for="(item, i) in exportsList"
-            :key="`${item.kind}:${item.name}:${i}`"
-            type="button"
-            class="row"
-            @click="openExport(item)"
-          >
-            <span class="i-mdi-export-variant text-purple-400" />
-            <span class="truncate font-mono text-xs">{{ item.name }}</span>
-            <span class="ml-auto text-xs text-zinc-500">{{ item.kind }}</span>
-          </button>
-        </section>
-        <section v-if="commentBoxes.length > 0" class="section">
-          <h3 class="section-title">Comment boxes</h3>
-          <button
-            v-for="{ box, fn } in commentBoxes"
-            :key="box.id"
-            type="button"
-            class="row"
-            :title="`Select the ${box.nodes.length} nodes of this comment box`"
-            @click="emit('select', [...box.nodes])"
-          >
-            <span class="i-mdi-comment-multiple-outline text-zinc-400" />
-            <span class="truncate text-xs">{{ box.title || 'Comment' }}</span>
-            <span class="ml-auto truncate text-xs text-zinc-500">{{
-              fn.name
-            }}</span>
-          </button>
-        </section>
-        <section class="section">
-          <h3 class="section-title">Variables</h3>
-          <p v-if="variables.length === 0" class="px-3 text-xs text-zinc-500">
-            No variable declarations.
-          </p>
-          <button
-            v-for="variable in variables"
-            :key="`${variable.fnId}:${variable.name}`"
-            type="button"
-            class="row"
-            :title="`Select all nodes using ${variable.name}`"
-            @click="selectVariable(variable.fnId, variable.name)"
-          >
-            <span
-              class="inline-block size-2 shrink-0 rounded-full bg-sky-400"
-            />
-            <span class="truncate font-mono text-xs">{{ variable.name }}</span>
-            <span class="ml-auto truncate text-xs text-zinc-500"
-              >{{ variable.declaration }} · {{ variable.fnName }}</span
-            >
-          </button>
-        </section>
-      </template>
+      <SymbolDetails
+        v-if="symbol"
+        :symbol="symbol"
+        :text="text"
+        :uses="symbolUses ?? 0"
+        @reveal="(range) => emit('reveal', range)"
+        @open="emit('openSymbol', symbol.id)"
+      />
 
       <!-- Details of the selection -->
       <template v-else-if="single">
@@ -507,8 +319,8 @@ function deleteSelection(): void {
 
       <template v-else>
         <p class="px-3 py-4 text-xs text-zinc-500">
-          Select a node to see its details. Use the Outline tab to jump to a
-          function or variable.
+          Select a node to see its details. Select a function or variable in My
+          Script to see its type, inputs and uses.
         </p>
         <section class="section">
           <h3 class="section-title">File</h3>

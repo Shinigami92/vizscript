@@ -31,7 +31,7 @@ describe('normalizeLayout', () => {
       },
       hidden: ['graph', 'graph', 42],
     });
-    expect(l.zones.left.views).toEqual(['code', 'explorer']);
+    expect(l.zones.left.views).toEqual(['code', 'script', 'explorer']);
     expect(l.zones.left.size).toBe(720);
     expect(l.hidden).toEqual(['graph', 'problems']);
     // Every view exactly once.
@@ -54,6 +54,22 @@ describe('normalizeLayout', () => {
     expect(isViewVisible(old, 'problems', all)).toBe(false);
   });
 
+  it('stacks "My Script" above the explorer of older layouts', () => {
+    const old = normalizeLayout({
+      zones: {
+        left: { views: ['explorer'] },
+        center: { views: ['code', 'graph', 'preview'], split: true },
+        right: { views: ['details'] },
+        bottom: { views: ['problems'] },
+      },
+      hidden: ['problems'],
+    });
+    expect(old.zones.left.views).toEqual(['script', 'explorer']);
+    expect(old.zones.left.split).toBe(true);
+    expect(isViewVisible(old, 'explorer', all)).toBe(true);
+    expect(isViewVisible(old, 'script', all)).toBe(true);
+  });
+
   it('keeps every preset valid', () => {
     for (const preset of PRESETS) {
       const l = preset.create();
@@ -68,7 +84,7 @@ describe('layout operations', () => {
     let l = setViewHidden(defaultLayout(), 'explorer', true);
     l = moveView(l, 'explorer', 'right', 0);
     expect(placement(l)).toMatchObject({
-      left: [],
+      left: ['script'],
       right: ['explorer', 'details'],
     });
     expect(l.hidden).not.toContain('explorer');
@@ -82,7 +98,8 @@ describe('layout operations', () => {
   });
 
   it('tracks which views are visible', () => {
-    let l = moveView(defaultLayout(), 'details', 'left');
+    const tabs = PRESETS.find((p) => p.id === 'single-sidebar')?.create();
+    let l = moveView(tabs ?? defaultLayout(), 'details', 'left');
     expect(l.zones.left.split).toBe(false);
     expect(isViewVisible(l, 'details', all)).toBe(true);
     expect(isViewVisible(l, 'explorer', all)).toBe(false);

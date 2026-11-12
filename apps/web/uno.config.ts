@@ -54,6 +54,13 @@ export default defineConfig({
     presetIcons({ scale: 1.2, extraProperties: { display: 'inline-block' } }),
   ],
   transformers: [transformerDirectives()],
+  // Icon class maps live in .ts files too (view and symbol icons).
+  content: {
+    pipeline: {
+      include: [/\.(?:vue|ts|html)(?:$|\?)/],
+      exclude: [/node_modules/, /\.d\.ts$/],
+    },
+  },
   preflights: [
     {
       getCSS: ({ theme }) =>

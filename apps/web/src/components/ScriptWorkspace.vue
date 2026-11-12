@@ -22,6 +22,7 @@ import {
   findNodeAtOffset,
   isRerouteKey,
   layoutDocument,
+  qualifiedName,
   reconcilePositions,
   reconcileReroutes,
   renamedNodes,
@@ -53,6 +54,7 @@ import type { Problem } from '../graph/problems';
 import { problemsByNode } from '../graph/problems';
 import { VIEW_PARAM } from '../graph/share';
 import { shortcut } from '../graph/source';
+import { symbolNodes } from '../graph/symbols';
 import type { FileLinkSource } from '../monaco/file-links';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
@@ -61,6 +63,7 @@ import type { MenuEntry } from './ContextMenu.vue';
 import ContextMenu from './ContextMenu.vue';
 import DetailsPanel from './DetailsPanel.vue';
 import GraphCanvas from './GraphCanvas.vue';
+import MyScriptPanel from './MyScriptPanel.vue';
 import ProblemsPanel from './ProblemsPanel.vue';
 import ShareLink from './ShareLink.vue';
 
@@ -715,6 +718,10 @@ function rangesOf(ids: ReadonlyArray<string>): SourceRange[] {
 
 function onSelectionChange(ids: string[]): void {
   selection.value = ids;
+  if (ids.length > 0) {
+    selectedSymbolId.value = null;
+  }
+
   const ranges = rangesOf(ids);
   editor.value?.setSelectedRanges(ranges);
   const first = ranges[0];
@@ -724,7 +731,84 @@ function onSelectionChange(ids: string[]): void {
   }
 }
 
-/** Selects nodes from outside the canvas (details panel, outline). */
+// ------------------------------------------------------- My Script
+
+/** Symbol selected in "My Script"; Details shows it instead of nodes. */
+const selectedSymbolId = ref<string | null>(null);
+const selectedSymbol = computed(
+  () => doc.value?.symbols?.find((s) => s.id === selectedSymbolId.value) ?? null
+);
+/** Nodes using the selected symbol, highlighted like UE does. */
+const symbolUses = computed(() =>
+  selectedSymbol.value ? symbolNodes(doc.value, selectedSymbol.value) : []
+);
+watch(symbolUses, (ids) => canvas.value?.setHighlight(ids));
+
+/** Function whose local variables "My Script" lists. */
+const currentFunction = computed<string | null>(() => {
+  const symbol = selectedSymbol.value;
+  if (symbol?.kind === 'local') {
+    return symbol.scope;
+  }
+
+  if (symbol?.kind === 'function' || symbol?.kind === 'method') {
+    return qualifiedName(symbol);
+  }
+
+  const first = selection.value[0];
+  const fn = first
+    ? doc.value?.functions.find((f) => f.nodes.some((n) => n.id === first))
+    : undefined;
+  const owner = fn
+    ? doc.value?.symbols?.find((s) => s.fnId === fn.id && s.kind !== 'class')
+    : undefined;
+  return owner ? qualifiedName(owner) : null;
+});
+
+function selectSymbol(id: string): void {
+  canvas.value?.setSelection([]);
+  selection.value = [];
+  selectedSymbolId.value = id;
+  const symbol = selectedSymbol.value;
+  if (symbol) {
+    editor.value?.setSelectedRanges([symbol.range]);
+    if (codeVisible.value) {
+      editor.value?.reveal({
+        start: symbol.range.start,
+        end: symbol.range.start,
+      });
+    }
+  }
+}
+
+/** Double-click in "My Script": show the symbol in the graph. */
+function openSymbol(id: string): void {
+  const symbol = doc.value?.symbols?.find((s) => s.id === id);
+  if (!symbol) {
+    return;
+  }
+
+  if (symbol.fnId) {
+    selectFunction(symbol.fnId);
+    return;
+  }
+
+  const uses = symbolNodes(doc.value, symbol);
+  if (uses.length > 0) {
+    selectNodes(uses);
+  }
+}
+
+async function revealRange(range: SourceRange): Promise<void> {
+  if (!codeVisible.value) {
+    workbench.show('code');
+    await nextTick();
+  }
+
+  editor.value?.reveal(range, true);
+}
+
+/** Selects nodes from outside the canvas (details panel, My Script). */
 function selectNodes(ids: string[]): void {
   canvas.value?.selectNodes(ids);
 }
@@ -1162,6 +1246,19 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
       />
     </WorkbenchView>
 
+    <WorkbenchView v-if="visualizable" id="script">
+      <MyScriptPanel
+        :doc="doc"
+        :text="text"
+        :selected-symbol="selectedSymbol?.id ?? null"
+        :current-function="currentFunction"
+        @select-symbol="selectSymbol"
+        @open-symbol="openSymbol"
+        @select-function="selectFunction"
+        @select="selectNodes"
+      />
+    </WorkbenchView>
+
     <WorkbenchView v-if="visualizable" id="details">
       <DetailsPanel
         class="h-full"
@@ -1170,9 +1267,13 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :selection="selection"
         :editable="editable"
         :closable="isMobile"
+        :symbol="selection.length === 0 ? selectedSymbol : null"
+        :symbol-uses="symbolUses.length"
         @select="selectNodes"
         @select-function="selectFunction"
         @activate="onActivate"
+        @reveal="revealRange"
+        @open-symbol="openSymbol"
         @op="onOp"
         @close="workbench.hide('details')"
       />

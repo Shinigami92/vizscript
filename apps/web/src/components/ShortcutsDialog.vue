@@ -31,6 +31,11 @@ const GROUPS: ReadonlyArray<{
       },
       { action: 'Jump to code', input: 'Double-click a node' },
       {
+        action: 'Show a function or variable',
+        input:
+          'Click it in My Script (uses are highlighted), double-click to select them',
+      },
+      {
         action: 'Go to definition',
         input: '{F12} on a call or variable node',
       },

@@ -23,7 +23,8 @@ Editing the graph edits the code: every change becomes a minimal text edit, so f
 - **Go to file and definition.** Ctrl/Cmd + click an import to open that file, or press `F12` on a node to jump to its definition, like in VS Code.
 - **Local folders.** Open a project folder from your computer, without uploading anything. In Chrome and Edge, changes are saved back into the folder (⌘S / Ctrl+S) and the folder is remembered; other browsers open it read-only.
 - **Shared layouts.** A file you open for the first time is laid out automatically. Once you rearrange it, the layout, including reroute points, is shared with everyone who opens the file on that branch.
-- **A workbench like VS Code's.** Explorer, Code, Graph, Details and Problems views can be moved, split, resized and hidden; preset layouts are one click away. Light and dark mode follow your system or your choice.
+- **My Script**, like UE's "My Blueprint": the file's functions, variables, local variables, types and signals with their types (in the language's own syntax). Select one to see its inputs, output and uses; double-click to show it in the graph.
+- **A workbench like VS Code's.** Explorer, My Script, Code, Graph, Details and Problems views can be moved, split, resized and hidden; preset layouts are one click away. Light and dark mode follow your system or your choice.
 - **Links keep the view.** The graph's position and zoom are part of the URL, so a shared link shows exactly what you saw.
 - **Markdown preview** with GitHub-flavoured Markdown, highlighted code blocks and links that open repository files inside vizscript.
 

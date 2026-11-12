@@ -9,6 +9,7 @@
 
 export const VIEW_IDS = [
   'explorer',
+  'script',
   'code',
   'graph',
   'preview',
@@ -42,6 +43,7 @@ export interface WorkbenchLayout {
 
 export const VIEW_TITLES: Record<ViewId, string> = {
   explorer: 'Explorer',
+  script: 'My Script',
   code: 'Code',
   graph: 'Graph',
   preview: 'Preview',
@@ -103,6 +105,15 @@ function layout(
   });
 }
 
+/** "My Script" stacked above the explorer. */
+function sidebar(): ZoneState {
+  return zone(['script', 'explorer'], {
+    size: SIZE_LIMITS.left.initial,
+    split: true,
+    weights: { explorer: 0.5, script: 0.5 },
+  });
+}
+
 export interface LayoutPreset {
   id: string;
   name: string;
@@ -117,7 +128,7 @@ export const PRESETS: ReadonlyArray<LayoutPreset> = [
     description: 'Explorer left, code and graph side by side, details right',
     create: () =>
       layout({
-        left: zone(['explorer'], { size: SIZE_LIMITS.left.initial }),
+        left: sidebar(),
         center: zone(['code', 'graph', 'preview'], {
           split: true,
           weights: { code: 0.42, graph: 0.58, preview: 0.58 },
@@ -136,7 +147,7 @@ export const PRESETS: ReadonlyArray<LayoutPreset> = [
           split: true,
           weights: { code: 0.42, graph: 0.58, preview: 0.58 },
         }),
-        right: zone(['explorer'], { size: SIZE_LIMITS.left.initial }),
+        right: sidebar(),
       }),
   },
   {
@@ -145,7 +156,8 @@ export const PRESETS: ReadonlyArray<LayoutPreset> = [
     description: 'Explorer and details as tabs in the left sidebar',
     create: () =>
       layout({
-        left: zone(['explorer', 'details'], {
+        left: zone(['script', 'explorer', 'details'], {
+          active: 'explorer',
           size: SIZE_LIMITS.right.initial,
         }),
         center: zone(['code', 'graph', 'preview'], {
@@ -160,7 +172,7 @@ export const PRESETS: ReadonlyArray<LayoutPreset> = [
     description: 'Graph in the main area, code in the bottom panel',
     create: () =>
       layout({
-        left: zone(['explorer'], { size: SIZE_LIMITS.left.initial }),
+        left: sidebar(),
         center: zone(['graph', 'preview'], { split: true }),
         right: zone(['details'], { size: SIZE_LIMITS.right.initial }),
         bottom: zone(['code'], { size: SIZE_LIMITS.bottom.initial }),
@@ -172,7 +184,7 @@ export const PRESETS: ReadonlyArray<LayoutPreset> = [
     description: 'Code in the main area, graph in the bottom panel',
     create: () =>
       layout({
-        left: zone(['explorer'], { size: SIZE_LIMITS.left.initial }),
+        left: sidebar(),
         center: zone(['code'], { split: true }),
         right: zone(['details'], { size: SIZE_LIMITS.right.initial }),
         bottom: zone(['graph', 'preview'], { size: 360, split: true }),
@@ -185,11 +197,11 @@ export const PRESETS: ReadonlyArray<LayoutPreset> = [
     create: () =>
       layout(
         {
-          left: zone(['explorer'], { size: SIZE_LIMITS.left.initial }),
+          left: sidebar(),
           center: zone(['graph', 'preview', 'code'], { split: true }),
           right: zone(['details'], { size: SIZE_LIMITS.right.initial }),
         },
-        ['explorer', 'code', 'details']
+        ['explorer', 'script', 'code', 'details']
       ),
   },
 ];
@@ -276,6 +288,7 @@ export function normalizeLayout(input: unknown): WorkbenchLayout {
   // Views missing from the stored layout go where the default puts them.
   const fallback: Record<ViewId, ZoneId> = {
     explorer: 'left',
+    script: 'left',
     code: 'center',
     graph: 'center',
     preview: 'center',
@@ -288,7 +301,18 @@ export function normalizeLayout(input: unknown): WorkbenchLayout {
   for (const view of VIEW_IDS) {
     if (!seen.has(view)) {
       const target = zones[fallback[view]];
-      target.views.push(view);
+      // A new sidebar view is stacked with a single one instead of hiding
+      // behind it as a tab; "My Script" goes above the explorer.
+      if (fallback[view] !== 'center' && target.views.length === 1) {
+        target.split = true;
+      }
+
+      const explorer = target.views.indexOf('explorer');
+      if (view === 'script' && explorer !== -1) {
+        target.views.splice(explorer, 0, view);
+      } else {
+        target.views.push(view);
+      }
       if (HIDDEN_BY_DEFAULT.includes(view)) {
         if (!hidden.includes(view)) {
           hidden.push(view);

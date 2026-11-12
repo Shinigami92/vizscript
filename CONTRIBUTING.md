@@ -93,6 +93,7 @@ Graph changes are `GraphOp`s. Each backend turns them into minimal text edits on
 
 ### Comments, problems and references
 
+- **Symbols** list what a file declares, like UE's "My Blueprint": functions and methods with their parameters and return type, module and class variables, locals, classes, types, enums and GDScript signals. Each backend collects them from its AST in `symbols.ts`; types stay in the language's own syntax (`TypeRef.text`) next to a pin type for colors. The "My Script" panel and the Details panel show them.
 - **Comments** are attached in core (`attachComments`). Backends only report the ranges of all comments their parser saw. A comment directly above a statement becomes the node's comment; regions become comment boxes. Comments are never stored in the layout.
 - **Problems** come from the editor's markers: Monaco's TypeScript worker for TS/JS, plus parser diagnostics set as markers for the other languages. `problemsByNode` maps them to nodes.
 - **File references** come from the optional `LanguageBackend.references()`. Backends report candidate paths and `resolveModuleReference` picks the first one that exists in the repository. Supported:
@@ -117,6 +118,7 @@ Repositories are keyed by the provider's numeric id, so layouts survive renames.
 
 - **Languages:** implement `LanguageBackend` (`parse` + `applyOp`, optionally `references`) and register it in `apps/web/src/graph/registry.ts`, plus the extension in `languages.ts` and a Monaco grammar if Monaco lacks one.
   - `parse` lowers the AST to the graph IR and attaches edit metadata (`StatementMeta`, `InsertPoint`, … in `@vizscript/core`). Shared graph building lives in `GraphBuilderBase`; backends add the AST walk.
+  - `parse` also fills `symbols` (see `summarizeSymbols` for snapshot tests) and calls `linkSymbolGraphs`.
   - `applyOp` is usually just `applyTextOp(text, doc, op, SYNTAX)`. A `StatementSyntax` describes placeholders, declarations, quoting, comments and templates.
   - Parsers must run in the browser worker. Python uses `@lezer/python` (pure JS, error tolerant); GDScript has a small hand-written parser.
 - **Source providers:** implement `ScmProvider` in `apps/api/src/scm/` and add it to the `SCM_PROVIDERS` factory.

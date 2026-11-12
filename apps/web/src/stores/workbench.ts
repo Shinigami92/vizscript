@@ -163,8 +163,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   function show_(view: ViewId): void {
     if (isMobile.value) {
-      if (view === 'problems') {
-        // Phones show problems on the graph only.
+      if (view === 'problems' || view === 'script') {
+        // Phones show problems on the graph only and have no "My Script".
         return;
       }
 
