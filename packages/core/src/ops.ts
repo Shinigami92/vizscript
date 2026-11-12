@@ -147,6 +147,12 @@ export type GraphOp =
   | { type: 'setReturnType'; symbol: string; typeText: string | null }
   /** Adds a placeholder argument to a call (UE: "Add pin"). */
   | { type: 'addArgument'; node: string }
+  /**
+   * Moves all data wires of `from` to `to` (UE: Ctrl+drag a pin): the
+   * inputs an output fed take the other output, or an input's wire goes
+   * to another input.
+   */
+  | { type: 'moveWires'; from: PinRef; to: PinRef }
   /** Another op that uses a name of another file, plus its import. */
   | { type: 'withImport'; import: ImportRequest; op: GraphOp };
 

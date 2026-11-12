@@ -607,6 +607,84 @@ function referenceOutput(
   return 'This output cannot be referenced.';
 }
 
+/**
+ * Edits of several ops on the same text as one: identical edits once (two
+ * wires may need the same new variable), overlapping ones fail.
+ */
+function mergeEdits(results: ReadonlyArray<OpResult>): OpResult {
+  const edits = new Map<string, TextEdit>();
+  for (const result of results) {
+    if (!result.ok) {
+      return result;
+    }
+
+    for (const edit of result.edits) {
+      edits.set(`${edit.start}:${edit.end}:${edit.text}`, edit);
+    }
+  }
+
+  const sorted = [...edits.values()].toSorted(
+    (a, b) => a.start - b.start || a.end - b.end
+  );
+  for (const [i, edit] of sorted.entries()) {
+    const next = sorted[i + 1];
+    if (next && next.start < edit.end) {
+      return failed('These wires cannot be moved together.');
+    }
+  }
+
+  return succeeded(sorted);
+}
+
+function moveWires(
+  text: string,
+  doc: GraphDocument,
+  from: PinRef,
+  to: PinRef,
+  syntax: StatementSyntax
+): OpResult {
+  const fromPin = findPin(findNode(doc, from.node), from.pin);
+  const toPin = findPin(findNode(doc, to.node), to.pin);
+  if (!fromPin || !toPin) {
+    return failed('Unknown pin.');
+  }
+
+  if (fromPin.kind !== 'data' || toPin.kind !== 'data') {
+    return failed('Only data wires can be moved together.');
+  }
+
+  if (fromPin.direction !== toPin.direction) {
+    return failed('Wires move to a pin of the same side.');
+  }
+
+  const fn = doc.functions.find((f) => f.id === functionOf(doc, from.node));
+  const edges = (fn?.edges ?? []).filter(
+    (e) =>
+      e.kind === 'data' &&
+      (fromPin.direction === 'out'
+        ? e.from.node === from.node && e.from.pin === from.pin
+        : e.to.node === from.node && e.to.pin === from.pin)
+  );
+  if (edges.length === 0) {
+    return failed('This pin has no wires to move.');
+  }
+
+  if (fromPin.direction === 'out') {
+    // Every input the old output fed takes the new one.
+    return mergeEdits(
+      edges.map((e) => connectData(text, doc, to, e.to, syntax))
+    );
+  }
+
+  // An input's wire goes to another input; the old one becomes empty.
+  return mergeEdits(
+    edges.flatMap((e) => [
+      connectData(text, doc, e.from, to, syntax),
+      disconnect(text, doc, from, syntax),
+    ])
+  );
+}
+
 function connectData(
   text: string,
   doc: GraphDocument,
@@ -1509,6 +1587,10 @@ export function applyTextOp(
 
     case 'disconnect': {
       return disconnect(text, doc, op.pin, syntax);
+    }
+
+    case 'moveWires': {
+      return moveWires(text, doc, op.from, op.to, syntax);
     }
 
     case 'addNode': {
