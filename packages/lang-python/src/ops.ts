@@ -145,6 +145,10 @@ export const PYTHON_SYNTAX: StatementSyntax = {
       case 'return': {
         return 'return';
       }
+
+      case 'value': {
+        return template.expression.trim() || undefined;
+      }
     }
   },
 };

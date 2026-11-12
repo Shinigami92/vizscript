@@ -17,7 +17,12 @@ export type NodeTemplate =
     }
   | { type: 'setVar'; name: string; declaration: 'const' | 'let' | 'none' }
   | { type: 'branch' }
-  | { type: 'return' };
+  | { type: 'return' }
+  /**
+   * A value on its own (UE: a lone Get node). It shows as unconnected
+   * nodes until it is wired into an input.
+   */
+  | { type: 'value'; expression: string };
 
 /**
  * Language-agnostic graph edit operations. Each language backend translates

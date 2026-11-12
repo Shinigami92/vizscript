@@ -1,7 +1,7 @@
 import type { GraphOp } from '@vizscript/core';
 import { applyTextEdits } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { applyGDScriptOp } from '../src';
+import { applyGDScriptOp, parseGDScriptDocument } from '../src';
 
 function apply(text: string, op: GraphOp): string {
   const result = applyGDScriptOp(text, op, 'test.gd');
@@ -49,5 +49,24 @@ describe('gdscript signatures', () => {
         typeText: 'bool',
       })
     ).toContain('func hit(amount: int) -> bool:');
+  });
+});
+
+describe('gdscript lone values and signal calls', () => {
+  it('adds them after a statement', () => {
+    const text = 'signal hit(amount: int)\n\nfunc f() -> void:\n\tprint(1)\n';
+    const doc = parseGDScriptDocument(text, 't.gd');
+    const print = doc.functions
+      .flatMap((fn) => fn.nodes)
+      .find((n) => n.title === 'print');
+    expect(
+      apply(text, {
+        type: 'addNode',
+        template: { type: 'call', callee: 'hit.emit', args: ['null'] },
+        after: { node: print?.id ?? '', pin: 'then' },
+      })
+    ).toBe(
+      'signal hit(amount: int)\n\nfunc f() -> void:\n\tprint(1)\n\thit.emit(null)\n'
+    );
   });
 });

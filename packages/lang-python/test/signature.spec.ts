@@ -58,3 +58,14 @@ describe('python signatures', () => {
     ).toContain('def price(value) -> int:');
   });
 });
+
+describe('python lone values', () => {
+  it('appends a value statement', () => {
+    expect(
+      apply('x = 1\n', {
+        type: 'addNode',
+        template: { type: 'value', expression: 'x' },
+      })
+    ).toBe('x = 1\nx\n');
+  });
+});

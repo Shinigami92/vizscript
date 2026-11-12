@@ -659,6 +659,32 @@ export class GraphView {
     this.zoomBy(zoom / this.camera.zoom);
   }
 
+  /** World point under a client (viewport) position, e.g. of a drop. */
+  public worldAt(clientX: number, clientY: number): Point {
+    const rect = this.canvas.getBoundingClientRect();
+    return screenToWorld(this.camera, {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    });
+  }
+
+  /** The function whose frame contains a world point (innermost). */
+  public functionAt(world: Point): string | undefined {
+    this.updateFrames();
+    return this.frames
+      .filter(
+        (f) =>
+          f.kind === 'function' &&
+          f.bounds !== null &&
+          rectContains(f.bounds, world)
+      )
+      .toSorted(
+        (a, b) =>
+          (a.bounds?.width ?? 0) * (a.bounds?.height ?? 0) -
+          (b.bounds?.width ?? 0) * (b.bounds?.height ?? 0)
+      )[0]?.fnId;
+  }
+
   public frameAll(): void {
     const bounds = this.boundsOf([...this.nodes.keys()]);
     if (bounds) {

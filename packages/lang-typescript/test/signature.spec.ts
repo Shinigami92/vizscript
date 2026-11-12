@@ -1,7 +1,7 @@
 import type { GraphOp } from '@vizscript/core';
 import { applyTextEdits } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { applyTypeScriptOp } from '../src';
+import { applyTypeScriptOp, parseTypeScript } from '../src';
 
 function apply(text: string, op: GraphOp): string {
   const result = applyTypeScriptOp(text, op, 'test.ts');
@@ -125,5 +125,35 @@ describe('function signatures', () => {
         index: 0,
       })
     ).toBe('class A {\n  run() {}\n  go() { this.run(); }\n}\n');
+  });
+});
+
+describe('lone values (UE: a Get node on its own)', () => {
+  it('adds a value statement that shows as unconnected nodes', () => {
+    const text = 'function f(a: number) {\n  run();\n}\n';
+    const result = applyTypeScriptOp(
+      text,
+      {
+        type: 'addNode',
+        template: { type: 'value', expression: 'a' },
+        after: {
+          node:
+            parseTypeScript(text, 't.ts')
+              .functions.find((fn) => fn.name === 'f')
+              ?.nodes.find((n) => n.title === 'run')?.id ?? '',
+          pin: 'then',
+        },
+      },
+      't.ts'
+    );
+    expect(result.ok && applyTextEdits(text, result.edits)).toBe(
+      'function f(a: number) {\n  run();\n  a;\n}\n'
+    );
+    expect(
+      apply('const o = 1;\n', {
+        type: 'addNode',
+        template: { type: 'value', expression: '{ a: o }' },
+      })
+    ).toBe('const o = 1;\n({ a: o });\n');
   });
 });

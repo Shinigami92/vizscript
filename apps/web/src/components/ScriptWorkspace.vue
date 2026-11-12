@@ -161,6 +161,13 @@ function templateMatcher(template: NodeTemplate): (node: GraphNode) => boolean {
     case 'return': {
       return (n) => n.kind === 'return';
     }
+
+    case 'value': {
+      const expression = template.expression.trim();
+      return (n) =>
+        n.purity === 'pure' &&
+        (n.title === expression || n.title === expression.split('.').at(-1));
+    }
   }
 }
 
@@ -470,8 +477,12 @@ async function reparse(): Promise<void> {
     pendingPlacement = null;
     const fresh = next.functions
       .flatMap((f) => f.nodes)
-      .filter((n) => !known.has(n.id) && n.purity === 'impure');
-    const added = (matches && fresh.find(matches)) ?? fresh[0];
+      .filter((n) => !known.has(n.id));
+    // The node asked for (also a pure one, e.g. a lone Get), else the first
+    // new statement.
+    const added =
+      (matches && fresh.find(matches)) ??
+      fresh.find((n) => n.purity === 'impure');
     if (added) {
       pinned.value = { ...pinned.value, [added.id]: world };
       void persist({ [added.id]: world });

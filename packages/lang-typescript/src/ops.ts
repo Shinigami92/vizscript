@@ -180,6 +180,16 @@ function quoteString(value: string, quote: string): string {
   return `${quote}${escaped}${quote}`;
 }
 
+/**
+ * An expression as a statement: `{ a: 1 }` or `function () {}` at the
+ * start of a statement would be a block or a declaration.
+ */
+function expressionStatement(expression: string): string {
+  return /^(?:\{|function\b|class\b|let\s*\[)/.test(expression)
+    ? `(${expression});`
+    : `${expression};`;
+}
+
 export const TYPESCRIPT_SYNTAX: StatementSyntax = {
   placeholder: 'undefined',
   emptyBody: '{}',
@@ -193,12 +203,7 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
     ),
   appendToFile: true,
   statementEnd: ';',
-  // `{ a: 1 }` or `function () {}` at the start of a statement would be a
-  // block or a declaration.
-  expressionStatement: (expression) =>
-    /^(?:\{|function\b|class\b|let\s*\[)/.test(expression)
-      ? `(${expression});`
-      : `${expression};`,
+  expressionStatement,
   comment: {
     line: '//',
     region: (title) => (title ? `// #region ${title}` : '// #region'),
@@ -230,6 +235,11 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
 
       case 'return': {
         return 'return;';
+      }
+
+      case 'value': {
+        const expression = template.expression.trim();
+        return expression ? expressionStatement(expression) : undefined;
       }
     }
   },
