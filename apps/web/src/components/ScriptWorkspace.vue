@@ -14,6 +14,7 @@ import type {
   NodeTemplate,
   Point,
   Positions,
+  ScriptSymbol,
   SourceRange,
   TypeSystemInfo,
 } from '@vizscript/core';
@@ -769,6 +770,62 @@ watch(doc, (next) => {
   }
 });
 
+/**
+ * The variable of a single selected Get / Set node, like UE shows the
+ * variable's details for its nodes. Locals of the node's function come
+ * first, `self.x` / `this.x` are members of the method's class.
+ */
+const nodeSymbol = computed(() => {
+  const d = doc.value;
+  const id = selection.value.length === 1 ? selection.value[0] : undefined;
+  const node = d && id ? findNode(d, id) : undefined;
+  if (
+    !d?.symbols ||
+    !node ||
+    (node.kind !== 'getVar' && node.kind !== 'setVar')
+  ) {
+    return null;
+  }
+
+  let name =
+    node.kind === 'setVar' ? node.title.replace(/^Set /, '') : node.title;
+  const member = /^(?:self|this)\./.test(name);
+  name = name.replace(/^(?:self|this)\./, '');
+  if (!/^#?[A-Za-z_$][\w$]*$/.test(name)) {
+    return null;
+  }
+
+  const fn = d.functions.find((f) => f.nodes.includes(node));
+  const owner = fn
+    ? d.symbols.find((s) => s.fnId === fn.id && s.kind !== 'class')
+    : undefined;
+  const isVariable = (s: ScriptSymbol): boolean =>
+    s.name === name &&
+    (s.kind === 'variable' || s.kind === 'constant' || s.kind === 'local');
+  const local =
+    !member && owner
+      ? d.symbols.find(
+          (s) =>
+            isVariable(s) &&
+            s.kind === 'local' &&
+            s.scope === qualifiedName(owner)
+        )
+      : undefined;
+  const classScope = owner?.kind === 'method' ? owner.scope : '';
+  return (
+    local ??
+    (member
+      ? d.symbols.find(
+          (s) => isVariable(s) && s.kind !== 'local' && s.scope === classScope
+        )
+      : undefined) ??
+    d.symbols.find(
+      (s) => isVariable(s) && s.kind !== 'local' && s.scope === ''
+    ) ??
+    null
+  );
+});
+
 /** Nodes using the selected symbol, highlighted like UE does. */
 const symbolUses = computed(() =>
   selectedSymbol.value ? symbolNodes(doc.value, selectedSymbol.value) : []
@@ -1318,6 +1375,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :editable="editable"
         :closable="isMobile"
         :symbol="selection.length === 0 ? selectedSymbol : null"
+        :node-symbol="nodeSymbol"
         :symbol-uses="symbolUses.length"
         :types="typeSystem"
         :doc-text="docText"

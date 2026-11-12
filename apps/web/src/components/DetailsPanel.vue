@@ -30,6 +30,8 @@ const props = defineProps<{
   types?: TypeSystemInfo | null;
   /** The text `doc` was parsed from (symbol ranges point into it). */
   docText?: string;
+  /** Variable of a selected Get / Set node, shown above the node. */
+  nodeSymbol?: ScriptSymbol | null;
 }>();
 
 const emit = defineEmits<{
@@ -148,6 +150,21 @@ function deleteSelection(): void {
 
       <!-- Details of the selection -->
       <template v-else-if="single">
+        <template v-if="nodeSymbol">
+          <SymbolDetails
+            :symbol="nodeSymbol"
+            :text="docText ?? text"
+            :uses="0"
+            :editable="editable"
+            :types="types ?? null"
+            :declared="declaredTypes"
+            :language="doc?.language ?? ''"
+            compact
+            @reveal="(range) => emit('reveal', range)"
+            @op="(op) => emit('op', op)"
+          />
+          <h3 class="section-title border-b border-zinc-800/80 pt-3">Node</h3>
+        </template>
         <div
           class="border-b border-zinc-800 px-3 py-2.5"
           :style="{

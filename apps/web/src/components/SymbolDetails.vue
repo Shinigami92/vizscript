@@ -25,6 +25,11 @@ const props = defineProps<{
   /** Types declared in the file, for the type picker. */
   declared: ReadonlyArray<string>;
   language: string;
+  /**
+   * Shown above the details of a selected variable node (UE shows the
+   * variable when its Get / Set node is selected): no source, no uses.
+   */
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -358,7 +363,9 @@ function setModifier(modifier: string, enabled: boolean): void {
             Line {{ location.line }}, column {{ location.column }}
           </button>
         </dd>
-        <template v-if="symbol.kind !== 'type' && symbol.kind !== 'enum'">
+        <template
+          v-if="!compact && symbol.kind !== 'type' && symbol.kind !== 'enum'"
+        >
           <dt class="text-zinc-500">Used by</dt>
           <dd class="text-zinc-300">
             {{ uses }} node{{ uses === 1 ? '' : 's' }}
@@ -417,14 +424,14 @@ function setModifier(modifier: string, enabled: boolean): void {
       </div>
     </section>
 
-    <section class="section">
+    <section v-if="!compact" class="section">
       <h3 class="section-title">Source</h3>
       <pre
         class="mx-3 overflow-x-auto rounded bg-zinc-900 p-2 font-mono text-[11px] leading-snug text-zinc-300"
         >{{ source }}</pre>
     </section>
 
-    <div v-if="symbol.fnId" class="px-3 py-3">
+    <div v-if="symbol.fnId && !compact" class="px-3 py-3">
       <button
         type="button"
         class="btn-ghost w-full justify-center border border-zinc-800"
