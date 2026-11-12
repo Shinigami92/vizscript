@@ -2,6 +2,12 @@
 
 Guidance for AI agents and contributors working in this repository.
 
+## Documentation
+
+- **README.md** is the overview and showcase for users: what vizscript does, how to try it, the graph controls.
+- **CONTRIBUTING.md** holds everything technical: setup, architecture, persistence, scripts, verifying changes, commit rules.
+- Update the matching file when a change affects it.
+
 ## Layout
 
 pnpm workspace with apps in `apps/*` and libraries in `packages/*`.
