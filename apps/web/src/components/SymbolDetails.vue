@@ -124,6 +124,23 @@ const importedText = computed(() => {
 const isVariable = computed(() =>
   ['variable', 'constant', 'local'].includes(props.symbol.kind)
 );
+/** A field of a class that takes no default value (Rust struct fields). */
+const isValuelessField = computed(
+  () =>
+    props.types?.noFieldValues === true &&
+    props.symbol.kind === 'variable' &&
+    (props.symbols ?? []).some(
+      (s) =>
+        s.kind === 'class' &&
+        (s.scope ? `${s.scope}.${s.name}` : s.name) === props.symbol.scope
+    )
+);
+/** The language needs a type here: no "No type" choice (Rust). */
+const typeRequired = computed(
+  () =>
+    props.types?.requiredType !== undefined &&
+    (props.symbol.kind === 'variable' || props.symbol.kind === 'constant')
+);
 
 function code(range: SourceRange | undefined): string {
   return range ? props.text.slice(range.start, range.end) : '';
@@ -739,6 +756,7 @@ function setModifier(modifier: string, enabled: boolean): void {
               :types="types"
               :declared="declared"
               :editable="editable"
+              :required="typeRequired"
               @change="setType"
             />
             <span
@@ -769,7 +787,7 @@ function setModifier(modifier: string, enabled: boolean): void {
             </button>
           </dd>
         </template>
-        <template v-if="isVariable">
+        <template v-if="isVariable && !isValuelessField">
           <dt class="pt-1 text-zinc-500">
             {{ symbol.kind === 'local' ? 'Value' : 'Default value' }}
           </dt>
@@ -1184,6 +1202,7 @@ function setModifier(modifier: string, enabled: boolean): void {
               :types="typeInfo"
               :declared="declared"
               :editable="true"
+              :required="typeInfo.requiredType !== undefined"
               @change="(typeText) => setParameterType(index, typeText)"
             />
             <input

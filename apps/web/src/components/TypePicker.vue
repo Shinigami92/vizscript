@@ -23,6 +23,8 @@ const props = defineProps<{
   /** Types declared in the file (classes, interfaces, enums). */
   declared: ReadonlyArray<string>;
   editable: boolean;
+  /** The language needs a type here: no "No type" choice. */
+  required?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -280,7 +282,7 @@ function color(dataType: DataType): string {
         </div>
 
         <div class="min-h-0 flex-1 overflow-y-auto py-1">
-          <button type="button" class="option" @click="clear">
+          <button v-if="!required" type="button" class="option" @click="clear">
             <span class="size-2 shrink-0 rounded-full bg-zinc-600" />
             <span class="text-zinc-400 italic">No type (inferred)</span>
           </button>
@@ -323,7 +325,7 @@ function color(dataType: DataType): string {
           <input
             v-model="custom"
             class="input py-1 font-mono text-xs"
-            placeholder="Any type, e.g. string | number"
+            placeholder="Any type, as written in code"
             aria-label="Custom type"
             spellcheck="false"
           />
