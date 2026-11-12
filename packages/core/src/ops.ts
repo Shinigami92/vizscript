@@ -230,6 +230,11 @@ export interface TypeSystemInfo {
    * UE's Slider Range); `args` are the default arguments.
    */
   exportHints?: Array<{ name: string; args?: string }>;
+  /**
+   * Prefix that makes a name private by convention (`_` in Python and
+   * GDScript); Details offers it as UE's "Private" switch.
+   */
+  privatePrefix?: string;
   /** Modifiers the Details panel offers per kind of symbol. */
   modifiers: Partial<
     Record<

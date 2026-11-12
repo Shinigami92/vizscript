@@ -250,6 +250,7 @@ export const PYTHON_TYPES: TypeSystemInfo = {
   ],
   containerDefaults: { array: '[]', map: '{}', set: 'set()' },
   // Python has no declaration keywords; constants are UPPER_CASE names.
+  privatePrefix: '_',
   modifiers: {
     function: { flags: ['async'] },
     method: { flags: ['async'] },
