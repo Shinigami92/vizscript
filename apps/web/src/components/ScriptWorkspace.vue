@@ -160,6 +160,8 @@ let pendingPlacement: {
   known: Set<string>;
   /** Prefers the node the user asked for over helper nodes of the edit. */
   matches?: (node: GraphNode) => boolean;
+  /** Select all new nodes afterwards (pasted nodes, like UE). */
+  select?: boolean;
 } | null = null;
 
 /** Recognizes the node an `addNode` op creates (by kind and name). */
@@ -186,6 +188,11 @@ function templateMatcher(template: NodeTemplate): (node: GraphNode) => boolean {
       return (n) =>
         n.purity === 'pure' &&
         (n.title === expression || n.title === expression.split('.').at(-1));
+    }
+
+    case 'code': {
+      // Pasted statements: the first one goes where the paste happened.
+      return (n) => n.purity === 'impure';
     }
   }
 }
@@ -820,8 +827,9 @@ async function reparse(): Promise<void> {
       }
     : pinned.value;
 
+  let selectAfter: string[] | undefined;
   if (pendingPlacement) {
-    const { world, known, matches } = pendingPlacement;
+    const { world, known, matches, select } = pendingPlacement;
     pendingPlacement = null;
     const fresh = next.functions
       .flatMap((f) => f.nodes)
@@ -838,6 +846,10 @@ async function reparse(): Promise<void> {
     if (added) {
       pinned.value = { ...pinned.value, [added.id]: world };
       void persist({ [added.id]: world });
+    }
+
+    if (select && fresh.length > 0) {
+      selectAfter = fresh.map((n) => n.id);
     }
   }
 
@@ -864,6 +876,12 @@ async function reparse(): Promise<void> {
     if (kept.join() !== selection.value.join()) {
       onSelectionChange(kept);
     }
+  }
+
+  if (selectAfter) {
+    await nextTick();
+    canvas.value?.setSelection(selectAfter);
+    onSelectionChange(selectAfter);
   }
 }
 
@@ -1363,6 +1381,7 @@ async function onOp(op: GraphOp): Promise<void> {
         placed.type === 'addNode'
           ? templateMatcher(placed.template)
           : undefined,
+      select: placed.type === 'addNode' && placed.template.type === 'code',
     };
   }
 

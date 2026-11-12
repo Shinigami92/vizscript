@@ -159,6 +159,57 @@ function insertText(point: InsertPoint, snippet: string): TextEdit {
   return { start: point.at, end: point.at, text };
 }
 
+/** Leading whitespace of a line. */
+function leadingSpace(line: string): string {
+  return line.match(/^[ \t]*/)?.[0] ?? '';
+}
+
+/**
+ * Code moved to another place: its lines lose their common indentation,
+ * keep their nesting in the file's indent unit, and all but the first get
+ * `indent` (the first line goes where the insert point puts it).
+ */
+export function reindentCode(
+  code: string,
+  indent: string,
+  unit: string
+): string {
+  const lines = code
+    .replaceAll('\r\n', '\n')
+    .replace(/^(?:[ \t]*\n)+/, '')
+    .trimEnd()
+    .split('\n');
+  const filled = lines.filter((line) => line.trim() !== '');
+  const common = Math.min(...filled.map((line) => leadingSpace(line).length));
+  const sourceUnit = detectIndentUnit(lines.join('\n'));
+  return lines
+    .map((line, i) => {
+      if (line.trim() === '') {
+        return '';
+      }
+
+      const relative = leadingSpace(line).slice(
+        Number.isFinite(common) ? common : 0
+      );
+      const levels = relative.split(sourceUnit).length - 1;
+      const rest = relative.slice(levels * sourceUnit.length);
+      return `${i === 0 ? '' : indent}${unit.repeat(levels)}${rest}${line.trimStart()}`;
+    })
+    .join('\n');
+}
+
+/** A template's code: pasted code as is, the others from the language. */
+function templateSnippet(
+  syntax: StatementSyntax,
+  template: NodeTemplate,
+  indent: string,
+  unit: string
+): string | undefined {
+  return template.type === 'code'
+    ? reindentCode(template.code, indent, unit)
+    : syntax.template(template, indent, unit);
+}
+
 /** Indentation step of a file: a tab, or the smallest space indent. */
 export function detectIndentUnit(text: string): string {
   let smallest = Number.POSITIVE_INFINITY;
@@ -1019,7 +1070,7 @@ function addNode(
     }
 
     const trailing = text.length > 0 && !text.endsWith('\n') ? '\n' : '';
-    const snippet = syntax.template(template, '', unit);
+    const snippet = templateSnippet(syntax, template, '', unit);
     if (!snippet) {
       return failed('Invalid name.');
     }
@@ -1029,7 +1080,7 @@ function addNode(
     ]);
   }
 
-  const snippet = syntax.template(template, insert.indent, unit);
+  const snippet = templateSnippet(syntax, template, insert.indent, unit);
   if (!snippet) {
     return failed('Invalid name.');
   }
@@ -1066,7 +1117,7 @@ function afterNestedCall(
     return failed('Code cannot be inserted inside this line.');
   }
 
-  const snippet = syntax.template(template, indent, unit);
+  const snippet = templateSnippet(syntax, template, indent, unit);
   if (!snippet) {
     return failed('Invalid name.');
   }
@@ -1295,7 +1346,8 @@ function afterValue(
     return failed('There is no place for code after this value.');
   }
 
-  const snippet = syntax.template(
+  const snippet = templateSnippet(
+    syntax,
     template(reference.text),
     insert.indent,
     detectIndentUnit(text)

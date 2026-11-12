@@ -56,3 +56,24 @@ describe('moving wires (Ctrl+drag)', () => {
     ).toThrow('Only data wires can be moved together.');
   });
 });
+
+describe('pasting code', () => {
+  it('re-indents pasted statements to where they go', () => {
+    const text = 'function f() {\n  start();\n}\n';
+    const call = parseTypeScript(text, 't.ts')
+      .functions.find((fn) => fn.name === 'f')
+      ?.nodes.find((n) => n.kind === 'call');
+    expect(
+      apply(text, {
+        type: 'addNode',
+        template: {
+          type: 'code',
+          code: '\n    if (ready) {\n        go();\n    }\n    done();\n',
+        },
+        after: { node: call?.id ?? '', pin: 'then' },
+      })
+    ).toBe(
+      'function f() {\n  start();\n  if (ready) {\n    go();\n  }\n  done();\n}\n'
+    );
+  });
+});

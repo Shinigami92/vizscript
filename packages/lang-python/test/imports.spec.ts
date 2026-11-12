@@ -174,3 +174,24 @@ describe('standard library', () => {
     );
   });
 });
+
+describe('pasting code', () => {
+  it('re-indents pasted blocks with the file’s indentation', () => {
+    const text = 'def f():\n    start()\n';
+    const call = parsePythonDocument(text, 't.py')
+      .functions.find((fn) => fn.name === 'f')
+      ?.nodes.find((n) => n.kind === 'call');
+    const result = applyPythonOp(
+      text,
+      {
+        type: 'addNode',
+        template: { type: 'code', code: 'if ready:\n\tgo()\ndone()' },
+        after: { node: call?.id ?? '', pin: 'then' },
+      },
+      't.py'
+    );
+    expect(result.ok && applyTextEdits(text, result.edits)).toBe(
+      'def f():\n    start()\n    if ready:\n        go()\n    done()\n'
+    );
+  });
+});

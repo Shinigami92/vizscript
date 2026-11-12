@@ -23,7 +23,12 @@ export type NodeTemplate =
    * A value on its own (UE: a lone Get node). It shows as unconnected
    * nodes until it is wired into an input.
    */
-  | { type: 'value'; expression: string };
+  | { type: 'value'; expression: string }
+  /**
+   * Statements as source text (pasted or duplicated nodes), re-indented to
+   * where they go.
+   */
+  | { type: 'code'; code: string };
 
 /**
  * Language-agnostic graph edit operations. Each language backend translates
