@@ -353,6 +353,7 @@ const DECLARATIONS: DeclarationSyntax = {
   blankLines: 2,
   bracedClasses: false,
   header: /^(?:import\b|from\s+\S+\s+import\b|#!|#.*coding[:=])/,
+  typeDeclaration: (name, unit) => `class ${name}:\n${unit}pass`,
   fn: (name, unit, method) =>
     `def ${name}(${method ? 'self' : ''}):\n${unit}pass`,
   variable: (name) => `${name} = None`,

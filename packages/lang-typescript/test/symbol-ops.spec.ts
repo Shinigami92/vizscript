@@ -200,3 +200,23 @@ describe('deleting symbols', () => {
     ).toBe('a is declared together with b; change it in the code.');
   });
 });
+
+describe('adding types', () => {
+  it('adds an interface after the imports and types', () => {
+    expect(
+      apply("import { a } from './a';\n\nconst x = 1;\n", {
+        type: 'addType',
+        name: 'Item',
+      })
+    ).toBe("import { a } from './a';\n\ninterface Item {\n}\n\nconst x = 1;\n");
+    expect(
+      apply('interface A {\n}\n\nconst x = 1;\n', {
+        type: 'addType',
+        name: 'B',
+      })
+    ).toBe('interface A {\n}\n\ninterface B {\n}\n\nconst x = 1;\n');
+    expect(apply('const x = 1;\n', { type: 'addType', name: 'C' })).toBe(
+      'interface C {\n}\n\nconst x = 1;\n'
+    );
+  });
+});

@@ -109,3 +109,11 @@ describe('gdscript symbol ops', () => {
     ).toContain('signal hit(amount: int)\n\nvar health := 10\n');
   });
 });
+
+describe('adding types', () => {
+  it('adds an inner class below extends', () => {
+    expect(
+      apply('extends Node\n\n\nvar x = 1\n', { type: 'addType', name: 'Item' })
+    ).toBe('extends Node\n\n\nclass Item:\n\tpass\n\n\nvar x = 1\n');
+  });
+});

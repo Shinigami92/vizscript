@@ -33,6 +33,8 @@ export interface DeclarationSyntax {
   ) => string;
   /** A new signal (GDScript). */
   signal?: (name: string) => string;
+  /** A new empty type (`interface X {}`, `class X:`); none: no `+`. */
+  typeDeclaration?: (name: string, unit: string) => string;
   /** Types and modifiers offered by the Details panel. */
   typeSystem: TypeSystemInfo;
   /** Error message for an invalid type annotation. */
@@ -513,6 +515,60 @@ export function insertImport(
 
   const next = text.trimStart() === '' ? '' : '\n';
   return { start: 0, end: 0, text: `${line}\n${next}` };
+}
+
+/**
+ * A new type of the file: after its last type, else below the imports or
+ * the header (`extends`, a docstring), else at the start.
+ */
+export function addType(
+  text: string,
+  doc: GraphDocument,
+  name: string,
+  unit: string,
+  syntax: DeclarationSyntax
+): OpResult {
+  const declare = syntax.typeDeclaration;
+  if (!declare) {
+    return failed('Types cannot be added in this language.');
+  }
+
+  const error = checkName(doc, syntax, '', name);
+  if (error) {
+    return failed(error);
+  }
+
+  const block = declare(name, unit);
+  const blank = Math.max(1, syntax.blankLines);
+  const topLevel = (doc.symbols ?? []).filter(
+    (s) =>
+      s.scope === '' &&
+      lineIndent(text, (s.declarationRange ?? s.range).start) === ''
+  );
+  const after =
+    topLevel
+      .filter(
+        (s) => s.kind === 'type' || s.kind === 'class' || s.kind === 'enum'
+      )
+      .at(-1) ?? topLevel.filter((s) => s.kind === 'import').at(-1);
+  if (after) {
+    return succeeded([
+      insertAfterLine(
+        text,
+        (after.declarationRange ?? after.range).end - 1,
+        block,
+        blank
+      ),
+    ]);
+  }
+
+  const header = headerEnd(text, syntax);
+  if (header !== undefined) {
+    return succeeded([insertAfterLine(text, header, block, blank)]);
+  }
+
+  const rest = text.trim() === '' ? '' : '\n'.repeat(blank);
+  return succeeded([{ start: 0, end: 0, text: `${block}\n${rest}` }]);
 }
 
 /**

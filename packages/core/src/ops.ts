@@ -55,6 +55,8 @@ export type GraphOp =
   | { type: 'setLiteral'; node: string; pin: string; value: string }
   | { type: 'connect'; from: PinRef; to: PinRef }
   | { type: 'disconnect'; pin: PinRef }
+  /** The operator of an assignment: `=`, `+=`, `-=` … (not of declarations). */
+  | { type: 'setAssignOperator'; node: string; operator: string }
   /** Breaks every data wire of a node (UE: "Break Node Link(s)"). */
   | { type: 'disconnectNode'; node: string }
   /**
@@ -118,6 +120,8 @@ export type GraphOp =
     }
   /** Adds a signal (GDScript). */
   | { type: 'addSignal'; name: string }
+  /** Adds an empty type to the file (interface, class). */
+  | { type: 'addType'; name: string }
   /** Renames a symbol and its uses in the file. */
   | { type: 'renameSymbol'; symbol: string; name: string }
   /** Removes the declaration of a symbol (its uses stay). */

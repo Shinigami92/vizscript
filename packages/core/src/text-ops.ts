@@ -43,6 +43,7 @@ import {
   addFunction,
   addImport,
   addSignal,
+  addType,
   addVariable,
   checkName,
   deleteSymbol,
@@ -1269,6 +1270,50 @@ function disconnectNode(
     : failed('Nothing to disconnect.');
 }
 
+/** Operators an assignment may use. */
+export const ASSIGN_OPERATORS: ReadonlyArray<string> = [
+  '=',
+  '+=',
+  '-=',
+  '*=',
+  '/=',
+  '%=',
+];
+
+/** `x = v` ↔ `x += v`: the operator of an assignment (Set node). */
+function setAssignOperator(
+  text: string,
+  doc: GraphDocument,
+  nodeId: string,
+  operator: string
+): OpResult {
+  const node = findNode(doc, nodeId);
+  const target =
+    node?.kind === 'setVar' && node.title.startsWith('Set ')
+      ? node.title.slice(4)
+      : undefined;
+  if (!node || !target || node.meta?.declares !== undefined) {
+    return failed('Only assignments have an operator.');
+  }
+
+  if (!ASSIGN_OPERATORS.includes(operator)) {
+    return failed(`Unknown operator ${operator}.`);
+  }
+
+  const at = node.range.start + target.length;
+  const current = text
+    .slice(at)
+    .match(/^(\s*)((?:\*\*|\?\?|&&|\|\||<<|>>>|>>|[-+*/%&|^])?=)(?!=)/);
+  if (text.slice(node.range.start, at) !== target || !current) {
+    return failed('Cannot find the operator of this assignment.');
+  }
+
+  const start = at + (current[1] ?? '').length;
+  return succeeded([
+    { start, end: start + (current[2] ?? '').length, text: operator },
+  ]);
+}
+
 /** `name`, `this.name`, `ns.fn`. */
 const NAME_PATH = /^[A-Za-z_$#][\w$]*(?:\.[A-Za-z_$#][\w$]*)*$/;
 
@@ -1752,6 +1797,7 @@ function applySymbolOp(
         | 'addFunction'
         | 'addVariable'
         | 'addSignal'
+        | 'addType'
         | 'renameSymbol'
         | 'deleteSymbol'
         | 'setSymbolType'
@@ -1773,7 +1819,8 @@ function applySymbolOp(
     return failed('This language cannot add or rename declarations yet.');
   }
 
-  const unit = /\S/.test(text)
+  // The file's indentation, or the language's while nothing is indented.
+  const unit = /^[ \t]+\S/m.test(text)
     ? detectIndentUnit(text)
     : declarations.defaultIndent;
   switch (op.type) {
@@ -1799,6 +1846,10 @@ function applySymbolOp(
 
     case 'addSignal': {
       return addSignal(text, doc, op.name, declarations);
+    }
+
+    case 'addType': {
+      return addType(text, doc, op.name, unit, declarations);
     }
 
     case 'renameSymbol': {
@@ -2011,6 +2062,10 @@ export function applyTextOp(
 
     case 'disconnectNode': {
       return disconnectNode(text, doc, op.node, syntax);
+    }
+
+    case 'setAssignOperator': {
+      return setAssignOperator(text, doc, op.node, op.operator);
     }
 
     case 'replaceReference': {

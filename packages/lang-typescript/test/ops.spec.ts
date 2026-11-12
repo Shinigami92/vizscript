@@ -475,6 +475,26 @@ describe('deleting and restoring a return', () => {
     );
   });
 
+  it('changes the operator of an assignment', () => {
+    const text = 'let total = 0;\ntotal = total + 1;\ntotal += 2;\n';
+    const doc = parseTypeScript(text);
+    const sets = doc.functions
+      .flatMap((fn) => fn.nodes)
+      .filter((n) => n.title === 'Set total');
+    const [declaration, plain, compound] = sets;
+    const set = (id: string, operator: string): string =>
+      apply(text, { type: 'setAssignOperator', node: id, operator });
+    expect(set(plain?.id ?? '', '-=')).toContain('\ntotal -= total + 1;');
+    expect(set(compound?.id ?? '', '=')).toContain('\ntotal = 2;');
+    expect(
+      applyTypeScriptOp(text, {
+        type: 'setAssignOperator',
+        node: declaration?.id ?? '',
+        operator: '+=',
+      }).ok
+    ).toBe(false);
+  });
+
   it('keeps a call argument as its own statement when disconnected', () => {
     const text = 'foo(bar(1), 2);\n';
     const doc = parseTypeScript(text);

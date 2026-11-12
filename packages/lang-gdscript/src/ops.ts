@@ -457,6 +457,7 @@ const DECLARATIONS: DeclarationSyntax = {
   blankLines: 2,
   bracedClasses: false,
   header: /^(?:@tool\b|@icon\b|@static_unload\b|class_name\b|extends\b)/,
+  typeDeclaration: (name, unit) => `class ${name}:\n${unit}pass`,
   fn: (name, unit) => `func ${name}() -> void:\n${unit}pass`,
   variable: (name, { constant }) =>
     constant ? `const ${name} = null` : `var ${name}`,

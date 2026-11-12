@@ -563,6 +563,7 @@ function declarations(text: string, fileName?: string): DeclarationSyntax {
     blankLines: 1,
     bracedClasses: true,
     header: /^(?:import\b|['"]use strict['"]|#!)/,
+    typeDeclaration: (name) => `interface ${name} {\n}`,
     fn: (name, _unit, method) =>
       method ? `${name}() {\n}` : `function ${name}() {\n}`,
     variable: (name, { constant, member }) => {

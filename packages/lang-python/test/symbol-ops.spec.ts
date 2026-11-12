@@ -112,3 +112,11 @@ describe('python symbol ops', () => {
     ).toBe('def f():\n    pass\n\nf()\n');
   });
 });
+
+describe('adding types', () => {
+  it('adds a class below the imports', () => {
+    expect(
+      apply('import math\n\n\nx = 1\n', { type: 'addType', name: 'Item' })
+    ).toBe('import math\n\n\nclass Item:\n    pass\n\n\nx = 1\n');
+  });
+});
