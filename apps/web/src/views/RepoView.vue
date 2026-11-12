@@ -42,10 +42,13 @@ const loadingTree = ref(false);
 const loadingFile = ref(false);
 const fileError = ref<string | null>(null);
 
-const draftKey = computed(
-  () =>
-    `vizscript:draft:${provider.value}/${owner.value}/${repo.value}@${ref_.value}:${path.value}`
-);
+/** Local draft of a file's unsaved changes. */
+function draftKeyOf(filePath: string): string {
+  return `vizscript:draft:${provider.value}/${owner.value}/${repo.value}@${ref_.value}:${filePath}`;
+}
+
+/** Draft of the file on screen (not the one still loading). */
+const draftKey = computed(() => draftKeyOf(file.value?.path ?? path.value));
 const dirty = computed(
   () => file.value !== null && text.value !== file.value.content
 );
@@ -97,10 +100,19 @@ async function loadTree(): Promise<void> {
   }
 }
 
+let fileRequest = 0;
+
+/**
+ * Loads the file of the URL. The file on screen stays until the next one
+ * has arrived, so the workbench keeps its layout (no flash of the empty
+ * state between two files).
+ */
 async function loadFile(): Promise<void> {
-  file.value = null;
+  const request = ++fileRequest;
   fileError.value = null;
   if (!isFile.value) {
+    file.value = null;
+    loadingFile.value = false;
     return;
   }
 
@@ -113,10 +125,14 @@ async function loadFile(): Promise<void> {
       ref_.value,
       path.value
     );
+    if (request !== fileRequest) {
+      return;
+    }
+
     let initial = loaded.content;
     try {
       const draft = JSON.parse(
-        localStorage.getItem(draftKey.value) ?? 'null'
+        localStorage.getItem(draftKeyOf(loaded.path)) ?? 'null'
       ) as { sha: string; text: string } | null;
       if (draft?.sha === loaded.sha && draft.text !== loaded.content) {
         initial = draft.text;
@@ -126,12 +142,18 @@ async function loadFile(): Promise<void> {
       // ignore broken drafts
     }
 
+    // Both at once: the workspace of the new file gets the new text.
     text.value = initial;
     file.value = loaded;
   } catch (error) {
-    fileError.value = (error as Error).message;
+    if (request === fileRequest) {
+      file.value = null;
+      fileError.value = (error as Error).message;
+    }
   } finally {
-    loadingFile.value = false;
+    if (request === fileRequest) {
+      loadingFile.value = false;
+    }
   }
 }
 
@@ -259,9 +281,15 @@ function switchBranch(event: Event): void {
         </button>
         <span
           class="min-w-0 truncate font-mono text-xs text-zinc-300"
-          :title="file.path"
-          >{{ file.path }}</span
+          :title="loadingFile ? path : file.path"
+          >{{ loadingFile ? path : file.path }}</span
         >
+        <span
+          v-if="loadingFile"
+          class="i-mdi-loading shrink-0 animate-spin text-zinc-500"
+          role="status"
+          aria-label="Loading the file"
+        />
         <template v-if="dirty">
           <span
             class="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300"

@@ -52,11 +52,19 @@ const files = computed(
 const dirty = computed(
   () => saved.value !== null && text.value !== saved.value
 );
-const draftKey = computed(
-  () => `vizscript:draft:local/${id.value}:${path.value}`
-);
+/**
+ * Path of the file on screen. It changes only when the next file has been
+ * read, so the workbench keeps its layout while a file loads.
+ */
+const shown = ref<string | null>(null);
+
+function draftKeyOf(filePath: string): string {
+  return `vizscript:draft:local/${id.value}:${filePath}`;
+}
+
+const draftKey = computed(() => draftKeyOf(shown.value ?? ''));
 const layoutStore = computed(() =>
-  isFile.value ? localLayoutStore(`local/${id.value}:${path.value}`) : null
+  shown.value ? localLayoutStore(`local/${id.value}:${shown.value}`) : null
 );
 
 async function loadTree(): Promise<void> {
@@ -102,20 +110,30 @@ async function grant(): Promise<void> {
   }
 }
 
+let fileRequest = 0;
+
 async function loadFile(): Promise<void> {
-  saved.value = null;
+  const request = ++fileRequest;
   fileError.value = null;
   if (!project.value || !isFile.value) {
+    shown.value = null;
+    saved.value = null;
+    loadingFile.value = false;
     return;
   }
 
   loadingFile.value = true;
+  const next = path.value;
   try {
-    const content = await project.value.read(path.value);
+    const content = await project.value.read(next);
+    if (request !== fileRequest) {
+      return;
+    }
+
     let initial = content;
     try {
       const draft = JSON.parse(
-        localStorage.getItem(draftKey.value) ?? 'null'
+        localStorage.getItem(draftKeyOf(next)) ?? 'null'
       ) as { base: string; text: string } | null;
       if (draft?.base === content && draft.text !== content) {
         initial = draft.text;
@@ -125,12 +143,20 @@ async function loadFile(): Promise<void> {
       // ignore broken drafts
     }
 
+    // All at once: the workspace of the new file gets the new text.
     text.value = initial;
     saved.value = content;
+    shown.value = next;
   } catch (error) {
-    fileError.value = (error as Error).message;
+    if (request === fileRequest) {
+      shown.value = null;
+      saved.value = null;
+      fileError.value = (error as Error).message;
+    }
   } finally {
-    loadingFile.value = false;
+    if (request === fileRequest) {
+      loadingFile.value = false;
+    }
   }
 }
 
@@ -172,7 +198,7 @@ async function save(): Promise<void> {
   saving.value = true;
   const content = text.value;
   try {
-    await project.value.write(path.value, content);
+    await project.value.write(shown.value ?? path.value, content);
     saved.value = content;
     localStorage.removeItem(draftKey.value);
   } catch (error) {
@@ -210,12 +236,18 @@ useEventListener(
 // Pick up changes made outside (e.g. in another editor) when coming back,
 // unless there are unsaved changes here.
 useEventListener(window, 'focus', async () => {
-  if (!project.value || !isFile.value || dirty.value || saving.value) {
+  if (
+    !project.value ||
+    !shown.value ||
+    loadingFile.value ||
+    dirty.value ||
+    saving.value
+  ) {
     return;
   }
 
   try {
-    const content = await project.value.read(path.value);
+    const content = await project.value.read(shown.value ?? path.value);
     if (content !== saved.value) {
       text.value = content;
       saved.value = content;
@@ -272,12 +304,12 @@ function selectFile(next: string, symbol?: string): void {
     </WorkbenchView>
 
     <ScriptWorkspace
-      v-if="project && isFile && saved !== null"
-      :key="`${id}:${path}:${version}`"
+      v-if="project && shown !== null && saved !== null"
+      :key="`${id}:${shown}:${version}`"
       v-model:text="text"
-      :path="path"
+      :path="shown"
       :layout-store="layoutStore"
-      :state-key="`local/${id}:${path}`"
+      :state-key="`local/${id}:${shown}`"
       :files="files"
       hide-share
       @open="selectFile"
@@ -298,6 +330,12 @@ function selectFile(next: string, symbol?: string): void {
           :title="`${project.name}/${path}`"
           >{{ path }}</span
         >
+        <span
+          v-if="loadingFile"
+          class="i-mdi-loading shrink-0 animate-spin text-zinc-500"
+          role="status"
+          aria-label="Loading the file"
+        />
         <template v-if="dirty">
           <span
             class="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300"
