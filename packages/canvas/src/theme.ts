@@ -19,6 +19,10 @@ export interface Theme {
   compactPure: string;
   /** Small text on compact nodes (`const` under `SET`). */
   compactSubtext: string;
+  /** Large faded symbol of operator nodes (`*`, `==`). */
+  operatorGlyph: string;
+  /** Drop shadow under nodes. */
+  nodeShadow: string;
   /** Alpha (hex) at the right end of the header gradient. */
   headerFade: string;
   exec: string;
@@ -67,6 +71,8 @@ export const DARK_THEME: Theme = {
   compactVariable: '#26262b',
   compactPure: '#1f2a1a',
   compactSubtext: '#a1a1aa',
+  operatorGlyph: 'rgba(244, 244, 245, 0.55)',
+  nodeShadow: 'rgba(0, 0, 0, 0.55)',
   headerFade: '55',
   exec: execColor('dark'),
   pinLabel: '#d4d4d8',
@@ -110,6 +116,8 @@ export const LIGHT_THEME: Theme = {
   compactVariable: '#e4e4e7',
   compactPure: '#e2edd9',
   compactSubtext: '#71717a',
+  operatorGlyph: 'rgba(24, 24, 27, 0.45)',
+  nodeShadow: 'rgba(24, 24, 27, 0.18)',
   headerFade: 'aa',
   exec: execColor('light'),
   pinLabel: '#27272a',

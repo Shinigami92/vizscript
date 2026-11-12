@@ -26,6 +26,7 @@ import {
   isArrayType,
   isCompact,
   isLatent,
+  isOperatorGlyph,
   isTypeCompatible,
   literalWidth,
   NODE_METRICS,
@@ -33,6 +34,7 @@ import {
   pinKey,
   pinLabel,
   reroutePatch,
+  withImplicitSelf,
 } from '@vizscript/core';
 import type { WireShape } from './bezier';
 import {
@@ -454,7 +456,12 @@ export class GraphView {
     }
   }
 
-  public setDocument(doc: GraphDocument, positions: Positions): void {
+  public setDocument(source: GraphDocument, positions: Positions): void {
+    // Drawn with UE's implicit `self` (Target boxes instead of wires).
+    const doc = {
+      ...source,
+      functions: source.functions.map(withImplicitSelf),
+    };
     this.doc = doc;
     const previous = this.nodes;
     const now = performance.now();
@@ -962,6 +969,10 @@ export class GraphView {
 
       case 'compact': {
         return `600 14px ${family}`;
+      }
+
+      case 'glyph': {
+        return `700 26px ${family}`;
       }
     }
   }
@@ -1947,7 +1958,9 @@ export class GraphView {
       cursor =
         hit.type === 'pin' && this.editable
           ? 'crosshair'
-          : hit.type === 'literal' && this.editable
+          : hit.type === 'literal' &&
+              this.editable &&
+              hit.pg.pin.literal?.editable !== false
             ? hit.pg.pin.literal?.kind === 'boolean'
               ? 'pointer'
               : 'text'
@@ -2250,7 +2263,11 @@ export class GraphView {
       return;
     }
 
-    if (hit.type === 'literal' && this.editable) {
+    if (
+      hit.type === 'literal' &&
+      this.editable &&
+      hit.pg.pin.literal?.editable !== false
+    ) {
       // Checkboxes toggle on click instead.
       if (hit.pg.pin.literal?.kind !== 'boolean') {
         this.startLiteralEdit(hit.ns, hit.pg);
@@ -2928,7 +2945,15 @@ export class GraphView {
     this.drawBubble(ns, lod);
     this.drawProblemBanner(ns, lod);
 
-    // Body
+    // Body, with a soft drop shadow like UE's (not at overview zoom).
+    ctx.save();
+    if (!lod) {
+      const scale = this.camera.zoom * this.dpr;
+      ctx.shadowColor = theme.nodeShadow;
+      ctx.shadowBlur = 14 * scale;
+      ctx.shadowOffsetY = 3 * scale;
+    }
+
     ctx.beginPath();
     ctx.roundRect(ns.x, ns.y, geom.width, geom.height, r);
     if (compact) {
@@ -2943,6 +2968,7 @@ export class GraphView {
     }
 
     ctx.fill();
+    ctx.restore();
 
     // Header
     if (!compact) {
@@ -3004,6 +3030,11 @@ export class GraphView {
       // A setter shows `SET` and, small below, how it declares (`const`).
       const sub = node.subtitle && !lod ? node.subtitle : '';
       const centerY = ns.y + geom.height / 2 - (sub ? 6 : 0);
+      if (isOperatorGlyph(node)) {
+        ctx.font = this.font('glyph');
+        ctx.fillStyle = theme.operatorGlyph;
+      }
+
       ctx.fillText(compactTitle(node), centerX, centerY);
       if (sub) {
         ctx.font = this.font('subtitle');
