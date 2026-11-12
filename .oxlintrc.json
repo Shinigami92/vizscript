@@ -30,6 +30,10 @@
   ],
   "rules": {
     "curly": "error",
+    "max-lines": [
+      "error",
+      { "max": 1000, "skipBlankLines": false, "skipComments": false }
+    ],
     "eqeqeq": [
       "error",
       "always",
