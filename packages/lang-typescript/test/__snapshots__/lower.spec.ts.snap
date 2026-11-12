@@ -97,7 +97,7 @@ function Counter.increment
   #0 entry "Counter.increment" (method) [>then:▶ >param0:number]
   #1 setVar "Set this.count" (+=) [<exec:▶ >then:▶ <value:number >out:any]
   #2 getVar "this.count" [>value:any]
-  #3 return "Return" [<exec:▶ <value:any]
+  #3 return "Return" [<exec:▶ <value:number]
   --> #0.param0 -> #1.value
   ==> #0.then -> #1.exec
   --> #2.value -> #3.value

@@ -21,6 +21,7 @@ import {
   completeCallPins,
   functionIdCounter,
   GraphBuilderBase,
+  inferTypes,
   isArrayType,
   lineEnd,
   lineIndent,
@@ -1861,5 +1862,6 @@ export function parsePythonDocument(
     keywordArguments: true,
     imports: options.imports,
   });
+  inferTypes(doc);
   return doc;
 }

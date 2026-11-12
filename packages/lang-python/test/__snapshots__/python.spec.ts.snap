@@ -83,7 +83,7 @@ function checkout
   #31 operator "+" [<a:number=1 <b:number >value:number]
   #32 operator "*" [<a:any <b:number >value:any]
   #33 call "round" [<exec:▶ >then:▶ <arg0:any <arg1:number=2 >return:any]
-  #34 return "Return" [<exec:▶ <value:any]
+  #34 return "Return" [<exec:▶ <value:number]
   --> #0.param0 -> #1.source0
   --> #1.value -> #2.arg0
   ==> #0.then -> #2.exec
@@ -139,7 +139,7 @@ function Item.total
   #1 getVar "self.price" [>value:any]
   #2 getVar "self.quantity" [>value:any]
   #3 operator "*" [<a:any <b:any >value:any]
-  #4 return "Return" [<exec:▶ <value:any]
+  #4 return "Return" [<exec:▶ <value:number]
   --> #1.value -> #3.a
   --> #2.value -> #3.b
   --> #3.value -> #4.value

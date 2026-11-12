@@ -1,4 +1,5 @@
 export * from './call-pins';
+export * from './infer-types';
 export * from './collapse';
 export * from './comment-ops';
 export * from './comments';

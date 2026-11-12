@@ -21,6 +21,7 @@ import {
   completeCallPins,
   functionIdCounter,
   GraphBuilderBase,
+  inferTypes,
   isArrayType,
   lineEnd,
   lineIndent,
@@ -1592,5 +1593,6 @@ export function parseGDScriptDocument(
     placeholder: 'null',
     imports: options.imports,
   });
+  inferTypes(doc);
   return doc;
 }

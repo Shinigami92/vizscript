@@ -29,6 +29,7 @@ import {
   attachComments,
   completeCallPins,
   createEdge,
+  inferTypes,
   isArrayType,
   lineIndent,
   linkImports,
@@ -2351,5 +2352,6 @@ export function parseTypeScript(
     placeholder: 'undefined',
     imports: options.imports,
   });
+  inferTypes(doc);
   return doc;
 }

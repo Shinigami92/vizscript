@@ -141,4 +141,15 @@ describe('argument pins from signatures', () => {
     const pin = callNode(text, 'greet').pins.find((p) => p.id === 'arg1');
     expect(pin?.meta).toMatchObject({ defaultValue: '2' });
   });
+
+  it('types Return pins and untyped variables from the graph', () => {
+    const text =
+      'function g(p: string): string {\n  return;\n}\nconst t = g("x");\n';
+    const doc = parseTypeScript(text, 't.ts');
+    const ret = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'return');
+    expect(ret?.pins.find((p) => p.id === 'value')?.type).toBe('string');
+    expect(doc.symbols?.find((s) => s.name === 't')?.dataType).toBe('string');
+  });
 });
