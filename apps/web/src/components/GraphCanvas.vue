@@ -19,6 +19,7 @@ import type {
   GraphDocument,
   GraphNode,
   GraphOp,
+  InputPinMeta,
   LayoutPatch,
   NodeTemplate,
   Pin,
@@ -30,6 +31,7 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  ARG_PIN,
   getMeta,
   isTypeCompatible,
   qualifiedName,
@@ -861,6 +863,22 @@ function suggestName(pin: Pin): string {
   return words?.at(-1) ?? 'value';
 }
 
+/** UE's "Promote to variable": store an output's value in a new variable. */
+function promoteTo(
+  source: PinRef,
+  pin: Pin,
+  world: Point,
+  value = /^[A-Za-z_$][\w$]*$/.test(pin.name) ? pin.name : ''
+): void {
+  void ask({
+    label: 'Variable name',
+    placeholder: 'value',
+    value,
+    submit: (name) =>
+      emitOp({ type: 'promote', pin: source, name, position: { ...world } }),
+  });
+}
+
 /** "Extract to variable…": declare the input's value before its statement. */
 function extractEntry(source: PinRef, pin: Pin, world: Point): MenuEntry {
   return {
@@ -1212,22 +1230,12 @@ function actionEntries(state: MenuState): ActionEntry[] {
               icon: 'i-mdi-variable text-sky-400',
               keywords: 'promote const let',
               action: (query: string) =>
-                void ask({
-                  label: 'Variable name',
-                  placeholder: 'value',
-                  value: IDENTIFIER_PATH.test(query)
-                    ? query
-                    : pin.name && /^[A-Za-z_$][\w$]*$/.test(pin.name)
-                      ? pin.name
-                      : '',
-                  submit: (name) =>
-                    emitOp({
-                      type: 'promote',
-                      pin: source,
-                      name,
-                      position: { ...state.world },
-                    }),
-                }),
+                promoteTo(
+                  source,
+                  pin,
+                  state.world,
+                  IDENTIFIER_PATH.test(query) ? query : undefined
+                ),
             },
           ]),
       ...expressionActions(state),
@@ -1835,6 +1843,15 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
       const peers = edges.map((e) =>
         pin.direction === 'in' ? e.from.node : e.to.node
       );
+      const source = { ...toRaw(target.pin) };
+      const argument =
+        entry.node.kind === 'call' && pin.range && ARG_PIN.test(pin.id)
+          ? pin.range
+          : undefined;
+      const fallback = getMeta<InputPinMeta>(pin).defaultValue;
+      const current = pin.range
+        ? props.text.slice(pin.range.start, pin.range.end)
+        : undefined;
       return [
         {
           type: 'header',
@@ -1852,8 +1869,47 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
               },
             ]
           : []),
+        ...(argument &&
+        fallback !== undefined &&
+        edges.length === 0 &&
+        current !== fallback &&
+        props.editable
+          ? [
+              {
+                // UE's "Reset to default value": the last argument (or a
+                // keyword one) is left out, others get the default written.
+                label: `Reset to default (${fallback})`,
+                icon: 'i-mdi-restore',
+                action: () =>
+                  emitOp(
+                    pin.name.endsWith('=') ||
+                      !entry.node.pins.some(
+                        (p) =>
+                          ARG_PIN.test(p.id) &&
+                          p.range !== undefined &&
+                          p.range.start > argument.start
+                      )
+                      ? { type: 'removeArgument', pin: source }
+                      : { type: 'setInput', pin: source, expression: fallback }
+                  ),
+              },
+            ]
+          : []),
         ...(pin.kind === 'data' && pin.direction === 'in' && props.editable
-          ? [extractEntry({ ...target.pin }, pin, state.world)]
+          ? [extractEntry(source, pin, state.world)]
+          : []),
+        ...(pin.kind === 'data' &&
+        pin.direction === 'out' &&
+        entry.node.kind !== 'setVar' &&
+        entry.node.kind !== 'entry' &&
+        props.editable
+          ? [
+              {
+                label: 'Promote to variable…',
+                icon: 'i-mdi-variable text-sky-400',
+                action: () => promoteTo(source, pin, state.world),
+              },
+            ]
           : []),
         {
           label:
@@ -1873,12 +1929,40 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
                 disabled:
                   pin.kind === 'exec' ||
                   (pin.direction === 'in' ? !pin.range : edges.length === 0),
-                action: () =>
-                  emit('op', {
-                    type: 'disconnect',
-                    pin: { ...toRaw(target.pin) },
-                  }),
+                action: () => emit('op', { type: 'disconnect', pin: source }),
               },
+              // UE's "Break link to …": one wire of several.
+              ...(edges.length > 1
+                ? edges.map((edge) => {
+                    const peer = pin.direction === 'in' ? edge.from : edge.to;
+                    const node = index.value.nodes.get(peer.node)?.node;
+                    const name = node?.pins.find(
+                      (p) => p.id === peer.pin
+                    )?.name;
+                    return {
+                      label: `Break link to ${node?.title ?? 'node'}${name ? ` · ${name}` : ''}`,
+                      icon: 'i-mdi-link-variant-minus',
+                      disabled: edge.kind === 'exec',
+                      action: () =>
+                        emit('op', {
+                          type: 'disconnect',
+                          pin: { ...toRaw(edge.to) },
+                        }),
+                    };
+                  })
+                : []),
+              ...(argument
+                ? [
+                    {
+                      // UE's "Remove pin" (for added pins).
+                      label: 'Remove argument pin',
+                      icon: 'i-mdi-minus-circle-outline',
+                      danger: true,
+                      action: () =>
+                        emitOp({ type: 'removeArgument', pin: source }),
+                    },
+                  ]
+                : []),
             ]
           : []),
       ];
