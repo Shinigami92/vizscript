@@ -1,6 +1,13 @@
-import type { GraphOp, OpResult, StatementSyntax } from '@vizscript/core';
+import type {
+  DeclarationSyntax,
+  GraphOp,
+  OpResult,
+  StatementSyntax,
+} from '@vizscript/core';
 import { applyTextOp } from '@vizscript/core';
 import { parseGDScriptDocument } from './lower';
+import { parseGDScript } from './parser';
+import { renameGDScriptSymbol } from './rename';
 
 const IDENTIFIER = /^[A-Za-z_]\w*$/;
 
@@ -23,6 +30,35 @@ function quote(value: string, raw: string): string {
   return `${prefix}${q}${escaped}${q}`;
 }
 
+const KEYWORDS = new Set(
+  (
+    'if elif else for while match break continue pass return class ' +
+    'class_name extends is in as self signal func static const enum var ' +
+    'breakpoint preload await yield assert void true false null not and ' +
+    'or PI TAU INF NAN super'
+  ).split(' ')
+);
+
+const DECLARATIONS: DeclarationSyntax = {
+  identifier: /^[A-Za-z_]\w*$/,
+  keywords: KEYWORDS,
+  defaultIndent: '\t',
+  blankLines: 2,
+  bracedClasses: false,
+  header: /^(?:@tool\b|@icon\b|@static_unload\b|class_name\b|extends\b)/,
+  fn: (name, unit) => `func ${name}() -> void:\n${unit}pass`,
+  variable: (name, { constant }) =>
+    constant ? `const ${name} = null` : `var ${name}`,
+  signal: (name) => `signal ${name}`,
+  rename: (text, doc, symbol, name) =>
+    renameGDScriptSymbol(
+      parseGDScript(text).script.body,
+      doc.symbols ?? [],
+      symbol,
+      name
+    ),
+};
+
 export const GDSCRIPT_SYNTAX: StatementSyntax = {
   placeholder: 'null',
   emptyBody: 'pass',
@@ -32,6 +68,7 @@ export const GDSCRIPT_SYNTAX: StatementSyntax = {
   declarePrefix: (name) => `var ${name} = `,
   quote: (value, literal) => quote(value, literal.raw),
   appendToFile: false,
+  declarations: DECLARATIONS,
   comment: {
     line: '#',
     region: (title) => (title ? `#region ${title}` : '#region'),
