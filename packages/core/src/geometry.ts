@@ -33,6 +33,8 @@ export const NODE_METRICS = {
   /** Distance of pin markers from the node edge. */
   pinInset: 10,
   literalHeight: 18,
+  /** Boolean values are a checkbox, like UE's. */
+  checkboxSize: 14,
 } as const;
 
 export interface PinGeometry {
@@ -145,6 +147,10 @@ function sortPins(pins: ReadonlyArray<Pin>): Pin[] {
 export function literalWidth(pin: Pin, measure: MeasureText): number {
   if (!pin.literal) {
     return 0;
+  }
+
+  if (pin.literal.kind === 'boolean') {
+    return NODE_METRICS.checkboxSize;
   }
 
   return Math.min(
