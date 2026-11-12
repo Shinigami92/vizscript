@@ -60,6 +60,7 @@ packages/
   lang-typescript/  JS/TS backend: Babel AST → graph
   lang-gdscript/    GDScript backend: own error-tolerant parser → graph
   lang-python/      Python backend: Lezer syntax tree → graph
+  lang-rust/        Rust backend: Lezer syntax tree → graph
   canvas/           Framework-agnostic Canvas2D renderer and interaction controller
   workbench/        Workbench layout model: views, zones, presets, validation
   api-contract/     Types shared by web and api
@@ -129,6 +130,7 @@ Graph changes are `GraphOp`s. Each backend turns them into minimal text edits on
   - TypeScript/JavaScript: relative imports, exports, `require()`, `import()` and `new URL(…, import.meta.url)` (`./x.js` finds `./x.ts`, folders find `index.ts`).
   - GDScript: `"res://…"` paths and relative `preload()` / `load()` paths.
   - Python: modules next to the file, in the repository root or relative (`from .utils import x`).
+  - Rust: `mod x;` (`x.rs`, `x/mod.rs`) and `use crate::…` / `self::` / `super::` paths; `crate::` starts in the `src` folder next to the nearest `Cargo.toml`.
 
 ### Persistence
 
@@ -150,7 +152,8 @@ Repositories are keyed by the provider's numeric id, so layouts survive renames.
   - `parse` lowers the AST to the graph IR and attaches edit metadata (`StatementMeta`, `InsertPoint`, … in `@vizscript/core`). Shared graph building lives in `GraphBuilderBase`; backends add the AST walk.
   - `parse` also fills `symbols` (see `summarizeSymbols` for snapshot tests) and calls `linkSymbolGraphs`.
   - `applyOp` is usually just `applyTextOp(text, doc, op, SYNTAX)`. A `StatementSyntax` describes placeholders, declarations, quoting, comments and templates.
-  - Parsers must run in the browser worker. Python uses `@lezer/python` (pure JS, error tolerant); GDScript has a small hand-written parser.
+  - Parsers must run in the browser worker. Python and Rust use `@lezer/python` / `@lezer/rust` (pure JS, error tolerant); GDScript has a small hand-written parser.
+  - Rust specifics (`lang-rust`): a block's last expression is the function's value and becomes a Return node; macro arguments (`println!`, `format!`, `vec!` …) are parsed as expressions on their own; `if let` / `while let` and match arms get output pins for the names their pattern binds; methods go into the type's inherent `impl` block (a new one when there is none), fields into the struct; parameters have no defaults (`TypeSystemInfo.noParameterDefaults`); the placeholder is `todo!()`.
 - **Source providers:** implement `ScmProvider` in `apps/api/src/scm/` and add it to the `SCM_PROVIDERS` factory.
 - **Identity:** login goes through `AuthService.loginWithToken`. An OIDC login can reuse the same user, identity and credential tables.
 - **Local folders** (`apps/web/src/local/`) are read in the browser with the File System Access API, so nothing goes through the API. `LocalProject` hides whether a folder has a handle (Chrome, Edge: remembered, writable) or comes from `<input webkitdirectory>` (other browsers: read-only, this tab only). Listing skips `.git`, `node_modules` and the root `.gitignore` rules.
@@ -166,7 +169,7 @@ set -a && . ./.env && set +a && pnpm exec vitest run   # includes API e2e tests
 ```
 
 - **Snapshots:** graph lowering uses readable snapshots (`summarizeGraph`). `pnpm preflight` updates them; review the diff.
-- **Parser changes:** run the corpus checks against a real project, e.g. `GD_CORPUS=/path/to/godot/project pnpm exec vitest run packages/lang-gdscript` (and `PY_CORPUS=… packages/lang-python`). They fail on any diagnostic.
+- **Parser changes:** run the corpus checks against a real project, e.g. `GD_CORPUS=/path/to/godot/project pnpm exec vitest run packages/lang-gdscript` (and `PY_CORPUS=… packages/lang-python`, `RS_CORPUS=… packages/lang-rust`). They fail on any diagnostic.
 - **Naming UI parts:** important containers have a `data-ui` name (`workspace-toolbar`, `view-graph`, `details-panel`, …); search the inspector for `data-ui` to find them. New panels, toolbars, menus and dialogs get one too.
 - **UI changes:** check them in the running app, especially the playground, in light and dark mode. The repository's `.mcp.json` sets up the Playwright MCP for AI agents. The Claude Code skill `/viz-user-test <playground URL or sample>` (`.claude/skills/viz-user-test`) acts like a user: it rebuilds a sample by hand in the graph, then edits it at random, and writes its findings to `local/`.
 

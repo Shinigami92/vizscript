@@ -11,6 +11,7 @@ const SUPPORTED_EXTENSIONS = [
   '.gd',
   '.py',
   '.pyw',
+  '.rs',
 ];
 
 export function isVisualizable(path: string): boolean {
@@ -24,7 +25,7 @@ export function isVisualizable(path: string): boolean {
 /** Backend of a file: files of one language can import each other. */
 export function languageOf(
   path: string
-): 'typescript' | 'python' | 'gdscript' | undefined {
+): 'typescript' | 'python' | 'gdscript' | 'rust' | undefined {
   const lower = path.toLowerCase();
   if (!isVisualizable(path)) {
     return undefined;
@@ -34,9 +35,20 @@ export function languageOf(
     return 'gdscript';
   }
 
+  if (lower.endsWith('.rs')) {
+    return 'rust';
+  }
+
   return lower.endsWith('.py') || lower.endsWith('.pyw')
     ? 'python'
     : 'typescript';
+}
+
+/** Languages that name things in snake_case (Python, GDScript, Rust). */
+export function usesSnakeCase(language: string | undefined): boolean {
+  return (
+    language === 'python' || language === 'gdscript' || language === 'rust'
+  );
 }
 
 /** Monaco language id for a file path. */
@@ -96,6 +108,10 @@ export function fileIcon(path: string): string {
 
   if (path.endsWith('.gd')) {
     return 'i-mdi-robot-outline text-sky-300';
+  }
+
+  if (path.endsWith('.rs')) {
+    return 'i-mdi-language-rust text-amber-500';
   }
 
   if (/\.md$/i.test(path)) {

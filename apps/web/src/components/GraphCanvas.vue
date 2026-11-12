@@ -54,6 +54,7 @@ import {
 import { useTheme } from '../composables/use-theme';
 import { useToasts } from '../composables/use-toasts';
 import { indexDocument, pinEdges } from '../graph/doc-index';
+import { usesSnakeCase } from '../graph/languages';
 import type { Problem, ProblemSeverity } from '../graph/problems';
 import { worstSeverity } from '../graph/problems';
 import type { ExternalName } from '../graph/project-index';
@@ -1947,7 +1948,7 @@ function collapseToFunction(ids: ReadonlyArray<string>): void {
     return;
   }
 
-  const snake = doc.language === 'python' || doc.language === 'gdscript';
+  const snake = usesSnakeCase(doc.language);
   const positions = view.value?.getPositions() ?? {};
   const first = ids
     .map((id) => positions[id])

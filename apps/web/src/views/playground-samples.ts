@@ -188,6 +188,67 @@ if __name__ == "__main__":
 `,
   },
   {
+    name: 'cart.rs',
+    text: `use std::fmt;
+
+/// Tax added to every order.
+const TAX_RATE: f64 = 0.19;
+
+#[derive(Debug, Clone)]
+pub struct Item {
+    pub name: String,
+    pub price: f64,
+    pub quantity: u32,
+}
+
+impl Item {
+    pub fn new(name: &str, price: f64, quantity: u32) -> Self {
+        Self { name: name.to_string(), price, quantity }
+    }
+
+    pub fn total(&self) -> f64 {
+        self.price * self.quantity as f64
+    }
+}
+
+impl fmt::Display for Item {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} x{}", self.name, self.quantity)
+    }
+}
+
+/// Sum of all items including tax, rounded to cents.
+pub fn total_price(items: &[Item], discount: f64) -> f64 {
+    let mut total = 0.0;
+    for item in items {
+        // Out of stock items are not charged
+        if item.quantity == 0 {
+            continue;
+        }
+        total += item.total();
+    }
+    let discounted = total - total * discount;
+    (discounted * (1.0 + TAX_RATE) * 100.0).round() / 100.0
+}
+
+fn label(items: &[Item]) -> &'static str {
+    match items.len() {
+        0 => "empty",
+        1..=3 => "small",
+        _ => "big",
+    }
+}
+
+fn main() {
+    let cart = vec![Item::new("Keyboard", 89.9, 1), Item::new("Cable", 4.5, 3)];
+    if let Some(first) = cart.first() {
+        println!("First: {}", first);
+    }
+    println!("{} cart, total: {} EUR", label(&cart), total_price(&cart, 0.1));
+}
+`,
+  },
+  {
     name: 'notes.md',
     text: `# Release notes
 

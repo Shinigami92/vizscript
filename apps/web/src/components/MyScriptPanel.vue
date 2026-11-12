@@ -16,6 +16,7 @@ import {
   watch,
 } from 'vue';
 import { useTheme } from '../composables/use-theme';
+import { usesSnakeCase } from '../graph/languages';
 import {
   DRAGGABLE_KINDS,
   SYMBOL_DRAG_MIME,
@@ -84,10 +85,8 @@ interface Section {
   add?: AddKind;
 }
 
-/** snake_case for Python and GDScript, camelCase otherwise. */
-const snake = computed(
-  () => props.doc?.language === 'python' || props.doc?.language === 'gdscript'
-);
+/** snake_case for Python, GDScript and Rust, camelCase otherwise. */
+const snake = computed(() => usesSnakeCase(props.doc?.language));
 
 const BASE_NAMES: Record<AddKind, [string, string]> = {
   function: ['newFunction', 'new_function'],

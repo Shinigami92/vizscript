@@ -26,8 +26,8 @@ pnpm workspace with apps in `apps/*` and libraries in `packages/*`.
   - Use `import type`.
 - **File names:** kebab-case. Vue SFCs use PascalCase.
 - **Tests** live in `<package>/test/*.spec.ts`, not next to the source. Graph lowering uses readable snapshots (`summarizeGraph` from `@vizscript/core`).
-- **Corpus checks:** `GD_CORPUS=/path/to/godot/project pnpm exec vitest run packages/lang-gdscript` (and `PY_CORPUS=… packages/lang-python`) parse every `.gd` / `.py` file of a real project and fail on any diagnostic. Run them after parser changes.
-- **Python grammar gaps:** `@lezer/python` rejects a few valid constructs; `convert.ts` works around them (`isKnownGap`, `maskForParser`, same-length rewrites so offsets stay valid). Add a test when you add a workaround.
+- **Corpus checks:** `GD_CORPUS=/path/to/godot/project pnpm exec vitest run packages/lang-gdscript` (and `PY_CORPUS=… packages/lang-python`, `RS_CORPUS=… packages/lang-rust`) parse every `.gd` / `.py` / `.rs` file of a real project and fail on any diagnostic. Run them after parser changes.
+- **Grammar gaps:** `@lezer/python` rejects a few valid constructs; `convert.ts` works around them (`isKnownGap`, `maskForParser`, same-length rewrites so offsets stay valid). Add a test when you add a workaround. `@lezer/rust` fails on a reference right before a let chain (`= &x && let …`); `lang-rust`'s `maskForParser` blanks that `&`.
 - **Commits:** conventional commits (`feat:`, `fix:`, `chore:` …). PR titles are validated.
 - **TypeScript:** stays on 6.x until `vue-tsc` and the browser tooling support the TS 7 native compiler.
 

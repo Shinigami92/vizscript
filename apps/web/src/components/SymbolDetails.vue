@@ -9,6 +9,7 @@ import type {
 import { fieldValue, pinColor } from '@vizscript/core';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
+import { usesSnakeCase } from '../graph/languages';
 import { lineColumn, snippet } from '../graph/source';
 import { SYMBOL_ICONS, symbolLabel, symbolType } from '../graph/symbols';
 import DetailsSection from './DetailsSection.vue';
@@ -284,10 +285,7 @@ const editingSignature = computed(
 
 function addParameter(): void {
   const taken = new Set((props.symbol.params ?? []).map((p) => p.name));
-  const base =
-    props.language === 'python' || props.language === 'gdscript'
-      ? 'new_param'
-      : 'newParam';
+  const base = usesSnakeCase(props.language) ? 'new_param' : 'newParam';
   let name = base;
   for (let i = 2; taken.has(name); i++) {
     name = `${base}${i}`;
@@ -1189,6 +1187,7 @@ function setModifier(modifier: string, enabled: boolean): void {
               @change="(typeText) => setParameterType(index, typeText)"
             />
             <input
+              v-if="!typeInfo?.noParameterDefaults"
               class="input w-24 shrink-0 py-0.5 font-mono text-xs"
               :value="code(param.defaultRange)"
               placeholder="default"
