@@ -11,6 +11,7 @@ import { computed, ref, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
 import { lineColumn, snippet } from '../graph/source';
 import { SYMBOL_ICONS, symbolLabel, symbolType } from '../graph/symbols';
+import DetailsSection from './DetailsSection.vue';
 import TypePicker from './TypePicker.vue';
 
 /** Details of a symbol selected in "My Script" (UE: the Details panel). */
@@ -32,6 +33,11 @@ const props = defineProps<{
   compact?: boolean;
   /** File an import resolves to (`null`: not in the repository). */
   importPath?: string | null;
+  /**
+   * The description (doc comment above the declaration) and the node that
+   * carries it; missing when the declaration can't have one.
+   */
+  description?: { nodeId: string; text: string };
 }>();
 
 const emit = defineEmits<{
@@ -57,6 +63,44 @@ const source = computed(() =>
   )
 );
 const isImport = computed(() => props.symbol.kind === 'import');
+
+// ----------------------------------------------------------------- rename
+
+const renamable = computed(() => props.editable && !isImport.value);
+const nameDraft = ref(props.symbol.name);
+watch(
+  () => props.symbol.name,
+  (name) => {
+    nameDraft.value = name;
+  }
+);
+
+function commitDescription(event: Event): void {
+  const value = (event.target as HTMLTextAreaElement).value;
+  const description = props.description;
+  if (description && value.trim() !== description.text.trim()) {
+    emit('op', {
+      type: 'setComment',
+      node: description.nodeId,
+      text: value,
+      doc: true,
+    });
+  }
+}
+
+function commitRename(): void {
+  const name = nameDraft.value.trim();
+  // A failed rename (toast) leaves the field as it was.
+  nameDraft.value = props.symbol.name;
+  if (name && name !== props.symbol.name) {
+    emit('op', { type: 'renameSymbol', symbol: props.symbol.id, name });
+  }
+}
+
+function cancelRename(event: KeyboardEvent): void {
+  nameDraft.value = props.symbol.name;
+  (event.target as HTMLInputElement).blur();
+}
 /** What an import takes from its module, in words. */
 const importedText = computed(() => {
   const imported = props.symbol.imported;
@@ -295,8 +339,23 @@ function setModifier(modifier: string, enabled: boolean): void {
   <div data-ui="symbol-details">
     <div class="border-b border-zinc-800 px-3 py-2.5">
       <div class="flex items-center gap-2">
-        <span :class="SYMBOL_ICONS[symbol.importedKind ?? symbol.kind]" />
-        <span class="truncate font-semibold text-zinc-50">{{
+        <span
+          class="shrink-0"
+          :class="SYMBOL_ICONS[symbol.importedKind ?? symbol.kind]"
+        />
+        <!-- Like UE's name field: rename here (uses are renamed too). -->
+        <input
+          v-if="renamable"
+          v-model="nameDraft"
+          data-ui="symbol-name"
+          class="-mx-1 min-w-0 flex-1 truncate rounded bg-transparent px-1 font-semibold text-zinc-50 hover:bg-zinc-800 focus:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          :aria-label="`Name of ${symbol.name}`"
+          spellcheck="false"
+          @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
+          @keydown.escape.prevent="cancelRename($event)"
+          @change="commitRename"
+        />
+        <span v-else class="truncate font-semibold text-zinc-50">{{
           symbol.name
         }}</span>
       </div>
@@ -304,6 +363,24 @@ function setModifier(modifier: string, enabled: boolean): void {
         {{ symbolLabel(symbol)
         }}<template v-if="symbol.scope"> in {{ symbol.scope }}</template>
       </div>
+    </div>
+
+    <!-- UE's Description: the doc comment above the declaration. -->
+    <div
+      v-if="description && (editable || description.text)"
+      data-ui="symbol-description"
+      class="border-b border-zinc-800/80 px-3 py-2"
+    >
+      <textarea
+        :key="description.nodeId"
+        class="input min-h-12 resize-y text-xs"
+        :value="description.text"
+        :readonly="!editable"
+        placeholder="Description…"
+        :aria-label="`Description of ${symbol.name}`"
+        rows="2"
+        @change="commitDescription"
+      />
     </div>
 
     <section class="section">
@@ -510,9 +587,8 @@ function setModifier(modifier: string, enabled: boolean): void {
       </dl>
     </section>
 
-    <section v-if="symbol.params" class="section">
-      <div class="flex items-center pr-2">
-        <h3 class="section-title flex-1">Inputs</h3>
+    <DetailsSection v-if="symbol.params" id="symbol-inputs" title="Inputs">
+      <template #actions>
         <button
           v-if="editingSignature"
           type="button"
@@ -522,7 +598,7 @@ function setModifier(modifier: string, enabled: boolean): void {
         >
           <span class="i-mdi-plus" /> Input
         </button>
-      </div>
+      </template>
       <p v-if="symbol.params.length === 0" class="px-3 text-xs text-zinc-500">
         No inputs.
       </p>
@@ -627,17 +703,17 @@ function setModifier(modifier: string, enabled: boolean): void {
           >
         </div>
       </template>
-    </section>
+    </DetailsSection>
 
-    <section
+    <DetailsSection
       v-if="
         symbol.kind === 'function' ||
         symbol.kind === 'method' ||
         symbol.importedKind === 'function'
       "
-      class="section"
+      id="symbol-output"
+      title="Output"
     >
-      <h3 class="section-title">Output</h3>
       <div class="px-2 text-xs">
         <TypePicker
           v-if="editingSignature"
@@ -660,14 +736,13 @@ function setModifier(modifier: string, enabled: boolean): void {
           >
         </div>
       </div>
-    </section>
+    </DetailsSection>
 
-    <section v-if="!compact" class="section">
-      <h3 class="section-title">Source</h3>
+    <DetailsSection v-if="!compact" id="symbol-source" title="Source">
       <pre
         class="mx-3 overflow-x-auto rounded bg-zinc-900 p-2 font-mono text-[11px] leading-snug text-zinc-300"
         >{{ source }}</pre>
-    </section>
+    </DetailsSection>
 
     <div v-if="symbol.fnId && !compact" class="px-3 py-3">
       <button

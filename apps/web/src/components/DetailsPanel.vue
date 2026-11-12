@@ -8,10 +8,12 @@ import type {
   SourceRange,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { CATEGORY_COLORS } from '@vizscript/core';
+import type { StatementMeta } from '@vizscript/core';
+import { CATEGORY_COLORS, getMeta } from '@vizscript/core';
 import { computed } from 'vue';
 import { indexDocument, pinPeers } from '../graph/doc-index';
 import { lineColumn, snippet } from '../graph/source';
+import DetailsSection from './DetailsSection.vue';
 import PinIcon from './PinIcon.vue';
 import SymbolDetails from './SymbolDetails.vue';
 
@@ -112,6 +114,37 @@ function commitComment(node: GraphNode, event: Event): void {
   }
 }
 
+/**
+ * Where a symbol's description lives: the comment above its declaration,
+ * which is the comment of its entry node (functions, classes) or of its
+ * Set node (variables). `undefined`: no such node.
+ */
+function descriptionOf(
+  symbol: ScriptSymbol
+): { nodeId: string; text: string } | undefined {
+  const doc = props.doc;
+  if (!doc) {
+    return undefined;
+  }
+
+  let node: GraphNode | undefined;
+  if (symbol.fnId) {
+    node = doc.functions
+      .find((f) => f.id === symbol.fnId)
+      ?.nodes.find((n) => n.kind === 'entry');
+  } else if (['variable', 'constant', 'local'].includes(symbol.kind)) {
+    const at = symbol.range.start;
+    node = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => {
+        const stmt = getMeta<StatementMeta>(n).stmt ?? n.range;
+        return n.kind === 'setVar' && stmt.start <= at && at < stmt.end;
+      });
+  }
+
+  return node ? { nodeId: node.id, text: node.comment?.text ?? '' } : undefined;
+}
+
 function deleteSelection(): void {
   emit('op', { type: 'deleteNodes', nodeIds: [...props.selection] });
 }
@@ -141,6 +174,7 @@ function deleteSelection(): void {
       <SymbolDetails
         v-if="symbol"
         :symbol="symbol"
+        :description="descriptionOf(symbol)"
         :text="docText ?? text"
         :uses="symbolUses ?? 0"
         :editable="editable"
@@ -159,6 +193,7 @@ function deleteSelection(): void {
         <template v-if="nodeSymbol">
           <SymbolDetails
             :symbol="nodeSymbol"
+            :description="descriptionOf(nodeSymbol)"
             :text="docText ?? text"
             :uses="0"
             :editable="editable"
@@ -181,15 +216,13 @@ function deleteSelection(): void {
           <div v-if="single.node.subtitle" class="text-xs italic text-zinc-400">
             {{ single.node.subtitle }}
           </div>
-          <div class="mt-1.5 flex flex-wrap gap-1 text-[11px]">
-            <span class="badge">{{ single.node.kind }}</span>
-            <span class="badge">{{ single.node.purity }}</span>
-            <span class="badge">{{ single.node.category }}</span>
-          </div>
         </div>
 
-        <section v-if="single.node.comment || editable" class="section">
-          <h3 class="section-title">Comment</h3>
+        <DetailsSection
+          v-if="single.node.comment || editable"
+          id="node-comment"
+          title="Comment"
+        >
           <div class="px-3">
             <textarea
               :key="single.node.id"
@@ -202,10 +235,9 @@ function deleteSelection(): void {
               @change="commitComment(single.node, $event)"
             />
           </div>
-        </section>
+        </DetailsSection>
 
-        <section class="section">
-          <h3 class="section-title">General</h3>
+        <DetailsSection id="node-general" title="General">
           <dl class="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1 px-3 text-xs">
             <dt class="text-zinc-500">Function</dt>
             <dd class="truncate">
@@ -229,18 +261,14 @@ function deleteSelection(): void {
                 </button>
               </dd>
             </template>
-            <dt class="text-zinc-500">Node ID</dt>
-            <dd
-              class="truncate font-mono text-[11px] text-zinc-400"
-              :title="single.node.id"
-            >
-              {{ single.node.id }}
-            </dd>
           </dl>
-        </section>
+        </DetailsSection>
 
-        <section v-if="inputs.length > 0" class="section">
-          <h3 class="section-title">Inputs</h3>
+        <DetailsSection
+          v-if="inputs.length > 0"
+          id="node-inputs"
+          title="Inputs"
+        >
           <div v-for="pin in inputs" :key="pin.id" class="pin-row">
             <div class="flex items-center gap-1.5">
               <PinIcon :pin="pin" :size="9" />
@@ -279,10 +307,13 @@ function deleteSelection(): void {
               >{{ pinExpression(pin) }}</code
             >
           </div>
-        </section>
+        </DetailsSection>
 
-        <section v-if="outputs.length > 0" class="section">
-          <h3 class="section-title">Outputs</h3>
+        <DetailsSection
+          v-if="outputs.length > 0"
+          id="node-outputs"
+          title="Outputs"
+        >
           <div v-for="pin in outputs" :key="pin.id" class="pin-row">
             <div class="flex items-center gap-1.5">
               <PinIcon :pin="pin" :size="9" />
@@ -304,14 +335,30 @@ function deleteSelection(): void {
               >
             </button>
           </div>
-        </section>
+        </DetailsSection>
 
-        <section v-if="source" class="section">
-          <h3 class="section-title">Source</h3>
+        <DetailsSection v-if="source" id="node-source" title="Source">
           <pre
             class="mx-3 overflow-x-auto rounded bg-zinc-900 p-2 font-mono text-[11px] leading-snug text-zinc-300"
             >{{ source }}</pre>
-        </section>
+        </DetailsSection>
+
+        <DetailsSection id="node-advanced" title="Advanced" default-collapsed>
+          <dl class="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1 px-3 text-xs">
+            <dt class="text-zinc-500">Kind</dt>
+            <dd class="text-zinc-300">
+              {{ single.node.kind }} · {{ single.node.purity }} ·
+              {{ single.node.category }}
+            </dd>
+            <dt class="text-zinc-500">Node ID</dt>
+            <dd
+              class="truncate font-mono text-[11px] text-zinc-400"
+              :title="single.node.id"
+            >
+              {{ single.node.id }}
+            </dd>
+          </dl>
+        </DetailsSection>
 
         <div v-if="editable && single.node.kind !== 'entry'" class="px-3 py-3">
           <button
@@ -361,8 +408,7 @@ function deleteSelection(): void {
           Select a node to see its details. Select a function or variable in My
           Script to see its type, inputs and uses.
         </p>
-        <section class="section">
-          <h3 class="section-title">File</h3>
+        <DetailsSection id="file" title="File">
           <dl class="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1 px-3 text-xs">
             <dt class="text-zinc-500">Language</dt>
             <dd>{{ doc?.language ?? '—' }}</dd>
@@ -373,9 +419,12 @@ function deleteSelection(): void {
             <dt class="text-zinc-500">Wires</dt>
             <dd>{{ stats.wires }}</dd>
           </dl>
-        </section>
-        <section v-if="doc && doc.diagnostics.length > 0" class="section">
-          <h3 class="section-title">Problems</h3>
+        </DetailsSection>
+        <DetailsSection
+          v-if="doc && doc.diagnostics.length > 0"
+          id="file-problems"
+          title="Problems"
+        >
           <p
             v-for="(d, i) in doc.diagnostics"
             :key="i"
@@ -383,7 +432,7 @@ function deleteSelection(): void {
           >
             Line {{ lineColumn(text, d.range.start).line }}: {{ d.message }}
           </p>
-        </section>
+        </DetailsSection>
       </template>
     </div>
   </aside>
