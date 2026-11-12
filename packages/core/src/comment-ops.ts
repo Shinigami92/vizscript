@@ -114,7 +114,12 @@ export function setComment(
 
   let anchor: number;
   if (node.kind === 'entry') {
-    anchor = fn.range.start;
+    // Before `export`, `export default`, `async` … on the same line.
+    const lineBegin = text.lastIndexOf('\n', fn.range.start - 1) + 1;
+    const before = text.slice(lineBegin, fn.range.start);
+    anchor = /^\s*(?:[A-Za-z_$][\w$]*\s+)*$/.test(before)
+      ? lineBegin + (before.length - before.trimStart().length)
+      : fn.range.start;
   } else {
     const owner = owningStatement(node);
     if (!owner || owner.meta.locked) {

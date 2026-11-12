@@ -71,6 +71,22 @@ describe('comments', () => {
     );
   });
 
+  it('adds a doc comment above an exported function', () => {
+    const text = 'export function f(): void {}\n';
+    const doc = parseTypeScript(text);
+    const entry = doc.functions
+      .flatMap((fn) => fn.nodes)
+      .find((n) => n.kind === 'entry' && n.title === 'f');
+    expect(
+      apply(text, {
+        type: 'setComment',
+        node: entry?.id ?? '',
+        text: 'Does f.',
+        doc: true,
+      })
+    ).toBe('/**\n * Does f.\n */\nexport function f(): void {}\n');
+  });
+
   it('edits, adds and removes node comments', () => {
     const doc = parseTypeScript(SOURCE);
     const edited = apply(SOURCE, {
