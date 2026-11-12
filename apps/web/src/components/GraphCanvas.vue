@@ -727,6 +727,20 @@ const callables = computed(() => {
   return [...names].toSorted((a, b) => a.localeCompare(b));
 });
 
+/** Names of other files and libraries not offered as callables already. */
+const externalNames = computed(() => {
+  // Once per callee (a library may declare a name twice, e.g. as a type).
+  const known = new Set(callables.value);
+  return (props.externals ?? []).filter((e) => {
+    if (known.has(e.callee)) {
+      return false;
+    }
+
+    known.add(e.callee);
+    return true;
+  });
+});
+
 function suggestName(pin: Pin): string {
   if (/^[A-Za-z_$][\w$]*$/.test(pin.name)) {
     return pin.name;
@@ -772,7 +786,7 @@ function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
       icon: ICON_CALL,
       action: () => addNode({ type: 'call', callee }, state),
     })),
-    ...(props.externals ?? []).map((external): ActionEntry => ({
+    ...externalNames.value.map((external): ActionEntry => ({
       label: external.callee,
       category: 'Call function',
       icon: ICON_IMPORT,
@@ -875,7 +889,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
             position: { ...state.world },
           }),
       })),
-      ...(props.externals ?? [])
+      ...externalNames.value
         .filter((external) => external.kind === 'function')
         .map((external): ActionEntry => ({
           label: `${external.callee}(value)`,
@@ -944,9 +958,11 @@ function actionEntries(state: MenuState): ActionEntry[] {
       action: () =>
         emitOp({ type: 'setInput', pin: source, expression: `${callee}()` }),
     })),
-    ...(props.externals ?? []).map((external): ActionEntry => {
+    ...externalNames.value.map((external): ActionEntry => {
       const expression =
-        external.kind === 'function' ? `${external.callee}()` : external.name;
+        external.kind === 'function'
+          ? `${external.callee}()`
+          : external.expression;
       return {
         label: expression,
         category: external.kind === 'function' ? 'Call function' : 'Variables',

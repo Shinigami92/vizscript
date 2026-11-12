@@ -16,8 +16,10 @@ export interface ExternalName {
   where: string;
   /** Called (`fn()`, `Script.new()`) or read (`LIMIT`). */
   kind: 'function' | 'value';
-  /** What a call node calls (`fn`, `Bullet.new`). */
+  /** What a call node calls (`fn`, `Bullet.new`, `math.sqrt`). */
   callee: string;
+  /** The value as an input (`LIMIT`, `Bullet`, `math.pi`). */
+  expression: string;
   request: ImportRequest;
 }
 
@@ -101,13 +103,14 @@ export function externalNames(
   );
   const result: ExternalName[] = [];
   const add = (
-    entry: Omit<ExternalName, 'request' | 'where'>,
+    entry: Omit<ExternalName, 'request' | 'where' | 'expression'>,
     imported: string
   ): void => {
     if (!taken.has(entry.name) && /^[A-Za-z_$][\w$]*$/.test(entry.name)) {
       taken.add(entry.name);
       result.push({
         ...entry,
+        expression: entry.name,
         where: relativePath(from, entry.path),
         request: { path: entry.path, from, name: entry.name, imported, root },
       });
@@ -140,4 +143,61 @@ export function externalNames(
   }
 
   return result.toSorted((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Names of a library module for the action menu. Python uses the module
+ * (`import math` and `math.sqrt()`), TypeScript named imports (`import {
+ * computed } from 'vue'`).
+ */
+export function libraryNames(
+  module: string,
+  exports: ReadonlyArray<ScriptSymbol>,
+  style: 'module' | 'named',
+  from: string
+): ExternalName[] {
+  const result: ExternalName[] = [];
+  const binding = module.split('.')[0] ?? module;
+  for (const symbol of exports) {
+    const kind =
+      symbol.kind === 'function'
+        ? 'function'
+        : symbol.kind === 'variable' || symbol.kind === 'constant'
+          ? 'value'
+          : undefined;
+    if (!kind || symbol.modifiers.includes('export default')) {
+      continue;
+    }
+
+    const member = `${module}.${symbol.name}`;
+    result.push(
+      style === 'module'
+        ? {
+            name: binding,
+            path: module,
+            where: module,
+            kind,
+            callee: member,
+            expression: member,
+            request: { path: '', from, name: binding, imported: '*', module },
+          }
+        : {
+            name: symbol.name,
+            path: module,
+            where: module,
+            kind,
+            callee: symbol.name,
+            expression: symbol.name,
+            request: {
+              path: '',
+              from,
+              name: symbol.name,
+              imported: symbol.name,
+              module,
+            },
+          }
+    );
+  }
+
+  return result;
 }

@@ -335,7 +335,9 @@ function setModifier(modifier: string, enabled: boolean): void {
               >
                 {{ importPath }}
               </button>
-              <span v-else class="text-zinc-500">Not in this repository</span>
+              <span v-else class="text-zinc-500">{{
+                symbol.importedKind ? 'Library' : 'Not in this repository'
+              }}</span>
             </dd>
           </template>
         </template>

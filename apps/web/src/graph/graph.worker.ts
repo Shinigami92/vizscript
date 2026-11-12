@@ -35,6 +35,19 @@ function handle(request: WorkerRequest): WorkerResponse {
       };
     }
 
+    case 'library': {
+      return {
+        id: request.id,
+        ok: true,
+        library: {
+          modules: backend.libraries ?? [],
+          stub: request.module
+            ? (backend.library?.(request.module) ?? null)
+            : null,
+        },
+      };
+    }
+
     case 'applyOp': {
       return {
         id: request.id,

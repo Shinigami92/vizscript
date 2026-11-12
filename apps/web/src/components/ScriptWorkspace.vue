@@ -52,15 +52,19 @@ import { GraphClient } from '../graph/graph-client';
 import {
   isPreviewable,
   isVisualizable,
+  languageOf,
   monacoLanguage,
 } from '../graph/languages';
 import type { LayoutStore } from '../graph/layout-store';
+import { NpmTypes, packageName } from '../graph/npm-types';
 import type { Problem } from '../graph/problems';
 import { problemsByNode } from '../graph/problems';
+import type { ExternalName } from '../graph/project-index';
 import {
   candidateFiles,
   externalNames,
   godotRoot,
+  libraryNames,
 } from '../graph/project-index';
 import { VIEW_PARAM } from '../graph/share';
 import { shortcut } from '../graph/source';
@@ -368,29 +372,181 @@ async function indexProject(): Promise<void> {
   await Promise.all([worker(), worker(), worker(), worker()]);
 }
 
-const externals = computed(() =>
-  props.files
-    ? externalNames(
-        projectExports.value,
-        doc.value,
-        props.path,
-        godotRoot(props.files, props.path)
+/** Functions and values of libraries for the action menu. */
+const libraryExternals = shallowRef<ExternalName[]>([]);
+let librariesIndexed = false;
+
+/**
+ * Python: the standard-library modules the backend knows. TypeScript: the
+ * packages this file imports from (their other exports).
+ */
+async function indexLibraries(): Promise<void> {
+  if (librariesIndexed) {
+    return;
+  }
+
+  librariesIndexed = true;
+  const language = languageOf(props.path);
+  const modules =
+    language === 'python'
+      ? (await client.library(props.path)).modules
+      : (doc.value?.symbols ?? [])
+          .filter(
+            (s) =>
+              s.kind === 'import' &&
+              s.module !== undefined &&
+              packageName(s.module) === s.module
+          )
+          .map((s) => s.module ?? '');
+  const found: ExternalName[] = [];
+  for (const module of new Set(modules)) {
+    found.push(
+      ...libraryNames(
+        module,
+        await libraryExports(module),
+        language === 'python' ? 'module' : 'named',
+        props.path
       )
-    : []
-);
+    );
+    libraryExternals.value = [...found];
+  }
+}
+
+function onActionMenu(): void {
+  void indexProject();
+  void indexLibraries();
+}
+
+const externals = computed(() => {
+  const taken = new Set(
+    (doc.value?.symbols ?? []).filter((s) => s.scope === '').map((s) => s.name)
+  );
+  return [
+    ...(props.files
+      ? externalNames(
+          projectExports.value,
+          doc.value,
+          props.path,
+          godotRoot(props.files, props.path)
+        )
+      : []),
+    // Library names the file declares itself are left out; its imports of
+    // a whole module (`import math`) are fine.
+    ...libraryExternals.value.filter(
+      (e) =>
+        !taken.has(e.name) ||
+        doc.value?.symbols?.some(
+          (s) =>
+            s.kind === 'import' &&
+            s.name === e.name &&
+            s.imported === '*' &&
+            e.request.imported === '*'
+        )
+    ),
+  ];
+});
 
 /** Declarations of the imported names, sent along with every parse. */
 let importDeclarations: ImportedDeclaration[] = [];
 
+// ---------------------------------------------------------- libraries
+
+const npm = new NpmTypes((source, fileName) => client.parse(source, fileName));
+const libraryCache = new Map<string, Promise<ScriptSymbol[]>>();
+
+/**
+ * Version range of an npm package in the nearest `package.json`: `latest`
+ * when none lists it, `''` for packages of the repository (`workspace:`).
+ */
+async function packageRange(name: string): Promise<string> {
+  const files = props.files;
+  const read = props.readFile;
+  if (!files || !read) {
+    return 'latest';
+  }
+
+  const dirs = props.path.split('/').slice(0, -1);
+  for (;;) {
+    const manifest = [...dirs, 'package.json'].join('/');
+    if (files.has(manifest)) {
+      try {
+        const json = JSON.parse(await read(manifest)) as Record<
+          string,
+          Record<string, string> | undefined
+        >;
+        const range =
+          json.dependencies?.[name] ??
+          json.devDependencies?.[name] ??
+          json.peerDependencies?.[name];
+        if (range !== undefined) {
+          return /^(?:workspace|file|link|portal):/.test(range) ? '' : range;
+        }
+      } catch {
+        // not JSON: look further up
+      }
+    }
+
+    if (dirs.length === 0) {
+      return 'latest';
+    }
+
+    dirs.pop();
+  }
+}
+
+/**
+ * Exports of a library module: Python's standard library (stubs of the
+ * backend), npm packages (`.d.ts` files from jsDelivr).
+ */
+function libraryExports(module: string): Promise<ScriptSymbol[]> {
+  let exports = libraryCache.get(module);
+  if (!exports) {
+    exports = (async (): Promise<ScriptSymbol[]> => {
+      const language = languageOf(props.path);
+      if (language === 'python' && !module.startsWith('.')) {
+        const { stub } = await client.library(props.path, module);
+        return stub
+          ? exportedSymbols(
+              await client.parse(stub.text, stub.fileName),
+              stub.text
+            )
+          : [];
+      }
+
+      const name = packageName(module);
+      if (language === 'typescript' && name === module) {
+        const range = await packageRange(name);
+        return range === '' ? [] : npm.exportsOf(name, range);
+      }
+
+      return [];
+    })().catch(() => []);
+    libraryCache.set(module, exports);
+  }
+
+  return exports;
+}
+
 async function declarationOf(
   symbol: ScriptSymbol
 ): Promise<ImportedDeclaration | undefined> {
+  // A file of the repository, else a library.
   const target = importTarget(symbol);
-  if (!target) {
+  let exports: ScriptSymbol[];
+  let named: string | undefined;
+  if (target) {
+    exports = await exportsOf(target.path);
+    named = target.symbol;
+  } else if (symbol.module) {
+    exports = await libraryExports(symbol.module);
+    named =
+      symbol.imported === '*' || symbol.imported === 'default'
+        ? undefined
+        : symbol.imported;
+  } else {
     return undefined;
   }
 
-  const exports = await exportsOf(target.path);
   if (exports.length === 0) {
     return undefined;
   }
@@ -400,8 +556,8 @@ async function declarationOf(
     return declaration ? { name: symbol.name, declaration } : undefined;
   }
 
-  if (target.symbol) {
-    const declaration = exports.find((s) => s.name === target.symbol);
+  if (named) {
+    const declaration = exports.find((s) => s.name === named);
     return declaration ? { name: symbol.name, declaration } : undefined;
   }
 
@@ -412,10 +568,7 @@ async function declarationOf(
 /** Reads the imported files; parses again when their declarations change. */
 async function updateImports(seq: number): Promise<void> {
   const imports = (doc.value?.symbols ?? []).filter((s) => s.kind === 'import');
-  if (
-    !props.readFile ||
-    (imports.length === 0 && importDeclarations.length === 0)
-  ) {
+  if (imports.length === 0 && importDeclarations.length === 0) {
     return;
   }
 
@@ -693,6 +846,9 @@ async function reparse(): Promise<void> {
   relayout();
   if (props.files) {
     void updateReferences(seq);
+  } else {
+    // No repository (playground): libraries only.
+    void updateImports(seq);
   }
 
   void revealPendingSymbol();
@@ -1540,7 +1696,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           @layout-change="onLayoutChange"
           @reset-layout="resetLayout"
           @op="onOp"
-          @action-menu="indexProject"
+          @action-menu="onActionMenu"
           @activate="onActivate"
           @go-to-definition="goToDefinition"
           @camera-change="onCameraChange"

@@ -97,6 +97,23 @@ export class GraphClient {
     return response.ok && 'typeSystem' in response ? response.typeSystem : null;
   }
 
+  /**
+   * Library modules the language knows (Python's standard library), with
+   * the stub of `module` (declarations in the language itself).
+   */
+  public async library(
+    fileName: string,
+    module?: string
+  ): Promise<{
+    modules: ReadonlyArray<string>;
+    stub: { text: string; fileName: string } | null;
+  }> {
+    const response = await this.send({ type: 'library', fileName, module });
+    return response.ok && 'library' in response
+      ? response.library
+      : { modules: [], stub: null };
+  }
+
   public async applyOp(
     text: string,
     fileName: string,
