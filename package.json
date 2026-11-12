@@ -15,7 +15,7 @@
   },
   "type": "module",
   "scripts": {
-    "clean": "git clean -fdx --exclude .claude --exclude .env --exclude .mcp.json",
+    "clean": "git clean -fdx --exclude .claude --exclude .env --exclude .mcp.json --exclude local",
     "dev": "run-p dev:api dev:web",
     "dev:api": "pnpm --filter @vizscript/api run dev",
     "dev:web": "pnpm --filter @vizscript/web run dev",
