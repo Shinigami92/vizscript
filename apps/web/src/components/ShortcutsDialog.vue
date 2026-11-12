@@ -68,7 +68,12 @@ const GROUPS: ReadonlyArray<{
         action: 'Edit a value',
         input: 'Double-click an inline value, or use the Details panel',
       },
-      { action: 'Rewire', input: 'Drag from a pin to another pin' },
+      { action: 'Toggle a true / false value', input: 'Click its checkbox' },
+      {
+        action: 'Rewire',
+        input:
+          'Drag from a pin to another pin (a message tells why one doesn’t fit)',
+      },
       {
         action: 'Fill in an argument',
         input: 'Type into the pin of a call, or wire a value into it',

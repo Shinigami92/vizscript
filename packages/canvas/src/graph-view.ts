@@ -84,6 +84,11 @@ export type CommentTarget =
   | { kind: 'node'; nodeId: string }
   | { kind: 'box'; boxId: string };
 
+/** Whether a boolean value is true (`true`, Python's `True`). */
+function isChecked(value: string): boolean {
+  return value.trim().toLowerCase() === 'true';
+}
+
 export interface GraphViewEvents {
   selectionChange: { nodeIds: string[] };
   hoverChange: { nodeId: string | null; pin: string | null };
@@ -191,6 +196,10 @@ type Drag =
       from: { ns: NodeState; pg: PinGeometry };
       currentWorld: Point;
       target: { ns: NodeState; pg: PinGeometry } | null;
+      /** Why the pin under the cursor doesn't fit (UE's red ✕ message). */
+      problem: string | null;
+      /** The target input has a wire that the new one replaces. */
+      replaces: boolean;
     }
   | {
       type: 'pinch';
@@ -1162,27 +1171,38 @@ export class GraphView {
     return null;
   }
 
-  private canConnect(
+  /** Why two pins can't be wired, like UE's messages; `null` if they can. */
+  private connectProblem(
     a: { ns: NodeState; pg: PinGeometry },
     b: { ns: NodeState; pg: PinGeometry }
-  ): boolean {
-    if (a.ns === b.ns || a.ns.fnId !== b.ns.fnId) {
-      return false;
-    }
-
+  ): string | null {
     const pa = a.pg.pin;
     const pb = b.pg.pin;
-    if (pa.kind !== pb.kind || pa.direction === pb.direction) {
-      return false;
+    if (a.ns === b.ns) {
+      return 'Both pins are on the same node';
+    }
+
+    if (a.ns.fnId !== b.ns.fnId) {
+      return 'The pins are in different functions';
+    }
+
+    if (pa.kind !== pb.kind) {
+      return 'Exec and data pins don’t connect';
+    }
+
+    if (pa.direction === pb.direction) {
+      return pa.direction === 'in' ? 'Both are inputs' : 'Both are outputs';
     }
 
     if (pa.kind === 'data') {
       const out = pa.direction === 'out' ? pa : pb;
       const input = pa.direction === 'out' ? pb : pa;
-      return isTypeCompatible(out.type, input.type);
+      if (!isTypeCompatible(out.type, input.type)) {
+        return `${String(out.type)} is not compatible with ${String(input.type)}`;
+      }
     }
 
-    return true;
+    return null;
   }
 
   // ----------------------------------------------------------------- input
@@ -1280,8 +1300,25 @@ export class GraphView {
         from: { ns: hit.ns, pg: hit.pg },
         currentWorld: world,
         target: null,
+        problem: null,
+        replaces: false,
       };
       this.requestRender();
+      return;
+    }
+
+    // Like UE: a boolean value is a checkbox that toggles on click.
+    if (
+      hit?.type === 'literal' &&
+      this.editable &&
+      hit.pg.pin.literal?.kind === 'boolean'
+    ) {
+      this.emitter.emit('op', {
+        type: 'setLiteral',
+        node: hit.ns.node.id,
+        pin: hit.pg.pin.id,
+        value: isChecked(hit.pg.pin.literal.value) ? 'false' : 'true',
+      });
       return;
     }
 
@@ -1474,10 +1511,24 @@ export class GraphView {
         const world = this.toWorld(e);
         drag.currentWorld = world;
         const hit = this.hitTest(world);
+        const problem =
+          hit?.type === 'pin' && hit.pg !== drag.from.pg
+            ? this.connectProblem(drag.from, hit)
+            : null;
         drag.target =
-          hit?.type === 'pin' && this.canConnect(drag.from, hit)
+          hit?.type === 'pin' && hit.pg !== drag.from.pg && !problem
             ? { ns: hit.ns, pg: hit.pg }
             : null;
+        drag.problem = problem;
+        // A data input takes one wire: the new one replaces it.
+        const input =
+          drag.target?.pg.pin.direction === 'in' ? drag.target : drag.from;
+        drag.replaces =
+          drag.target !== null &&
+          input.pg.pin.kind === 'data' &&
+          this.connectedPins.has(
+            pinKey({ node: input.ns.node.id, pin: input.pg.pin.id })
+          );
         this.requestRender();
       }
     }
@@ -1507,7 +1558,9 @@ export class GraphView {
         hit.type === 'pin' && this.editable
           ? 'crosshair'
           : hit.type === 'literal' && this.editable
-            ? 'text'
+            ? hit.pg.pin.literal?.kind === 'boolean'
+              ? 'pointer'
+              : 'text'
             : 'move';
     }
 
@@ -1783,7 +1836,11 @@ export class GraphView {
     }
 
     if (hit.type === 'literal' && this.editable) {
-      this.startLiteralEdit(hit.ns, hit.pg);
+      // Checkboxes toggle on click instead.
+      if (hit.pg.pin.literal?.kind !== 'boolean') {
+        this.startLiteralEdit(hit.ns, hit.pg);
+      }
+
       return;
     }
 
@@ -2523,7 +2580,9 @@ export class GraphView {
     }
 
     const lr = this.literalRect(ns, pg);
-    if (lr && pin.literal) {
+    if (lr && pin.literal?.kind === 'boolean') {
+      this.drawCheckbox(lr, isChecked(pin.literal.value));
+    } else if (lr && pin.literal) {
       ctx.beginPath();
       ctx.roundRect(lr.x, lr.y, lr.width, lr.height, 4);
       ctx.fillStyle = theme.literalBackground;
@@ -2548,6 +2607,77 @@ export class GraphView {
     }
   }
 
+  /** UE's checkbox for boolean values. */
+  private drawCheckbox(rect: Rect, checked: boolean): void {
+    const { ctx, theme } = this;
+    const size = NODE_METRICS.checkboxSize;
+    const x = rect.x;
+    const y = rect.y + (rect.height - size) / 2;
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, 3);
+    ctx.fillStyle = theme.literalBackground;
+    ctx.fill();
+    ctx.strokeStyle = theme.pinLabel;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    if (checked) {
+      ctx.beginPath();
+      ctx.moveTo(x + 3, y + size / 2);
+      ctx.lineTo(x + size / 2 - 1, y + size - 4);
+      ctx.lineTo(x + size - 3, y + 3.5);
+      ctx.strokeStyle = theme.literalText;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
+  }
+
+  /**
+   * The message next to the cursor while a wire is dragged, like UE's: why
+   * the pin under it doesn't fit, or that the wire replaces another one.
+   * Drawn in screen space so it stays readable at any zoom.
+   */
+  private drawWireMessage(world: Point, text: string, ok: boolean): void {
+    const { ctx, theme } = this;
+    const at = worldToScreen(this.camera, world);
+    ctx.save();
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.font = `12px ${theme.fontFamily}`;
+    const icon = 14;
+    const width = ctx.measureText(text).width + icon + 22;
+    const x = Math.min(at.x + 16, this.width - width - 4);
+    const y = at.y + 18;
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, 24, 4);
+    ctx.fillStyle = theme.bubbleFill;
+    ctx.fill();
+    // ✓ or ✕
+    const cx = x + 8 + icon / 2;
+    const cy = y + 12;
+    ctx.beginPath();
+    if (ok) {
+      ctx.moveTo(cx - 5, cy);
+      ctx.lineTo(cx - 1.5, cy + 4);
+      ctx.lineTo(cx + 5, cy - 4);
+    } else {
+      ctx.moveTo(cx - 4, cy - 4);
+      ctx.lineTo(cx + 4, cy + 4);
+      ctx.moveTo(cx + 4, cy - 4);
+      ctx.lineTo(cx - 4, cy + 4);
+    }
+
+    ctx.strokeStyle = ok ? '#16a34a' : theme.errorBanner;
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    ctx.fillStyle = theme.bubbleText;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + icon + 14, cy + 0.5);
+    ctx.restore();
+  }
+
   private drawOverlay(): void {
     const { ctx, theme } = this;
     const drag = this.drag;
@@ -2570,6 +2700,15 @@ export class GraphView {
           : drag.currentWorld,
         drag.target !== null
       );
+      if (drag.problem) {
+        this.drawWireMessage(drag.currentWorld, drag.problem, false);
+      } else if (drag.replaces) {
+        this.drawWireMessage(
+          drag.currentWorld,
+          'Replaces the current wire',
+          true
+        );
+      }
     } else if (this.pendingWire) {
       this.drawLooseWire(this.pendingWire.from, this.pendingWire.world, false);
     }
