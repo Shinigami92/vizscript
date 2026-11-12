@@ -1,0 +1,14 @@
+{
+  "name": "@vizscript/workbench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Framework-agnostic workbench layout model (zones, views, presets)",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "ts-check": "tsc"
+  }
+}

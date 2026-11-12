@@ -230,6 +230,8 @@ importers:
         specifier: 8.1.0
         version: 8.1.0
 
+  packages/workbench: {}
+
 packages:
 
   '@babel/helper-string-parser@7.29.13':
