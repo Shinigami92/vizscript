@@ -312,3 +312,24 @@ describe('export groups and hints', () => {
     );
   });
 });
+
+describe('flow-control nodes', () => {
+  it('writes match and while in GDScript', () => {
+    const text = 'extends Node\n\n\nfunc f() -> void:\n\tstart()\n';
+    const call = parseGDScriptDocument(text, 't.gd')
+      .functions.find((fn) => fn.name === 'f')
+      ?.nodes.find((n) => n.kind === 'call');
+    const result = applyGDScriptOp(
+      text,
+      {
+        type: 'addNode',
+        template: { type: 'flow', flow: 'switch' },
+        after: { node: call?.id ?? '', pin: 'then' },
+      },
+      't.gd'
+    );
+    expect(result.ok && applyTextEdits(text, result.edits)).toBe(
+      'extends Node\n\n\nfunc f() -> void:\n\tstart()\n\tmatch null:\n\t\t_:\n\t\t\tpass\n'
+    );
+  });
+});

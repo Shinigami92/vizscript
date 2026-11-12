@@ -251,6 +251,16 @@ export const PYTHON_TYPES: TypeSystemInfo = {
   containerDefaults: { array: '[]', map: '{}', set: 'set()' },
   // Python has no declaration keywords; constants are UPPER_CASE names.
   privatePrefix: '_',
+  flow: [
+    'forEach',
+    'forRange',
+    'while',
+    'switch',
+    'try',
+    'throw',
+    'break',
+    'continue',
+  ],
   modifiers: {
     function: { flags: ['async'] },
     method: { flags: ['async'] },
@@ -356,6 +366,19 @@ export const PYTHON_SYNTAX: StatementSyntax = {
   booleans: { true: 'True', false: 'False' },
   template: (template, indent, unit) => {
     switch (template.type) {
+      case 'flow': {
+        return {
+          forEach: `for item in []:\n${indent}${unit}pass`,
+          forRange: `for i in range(10):\n${indent}${unit}pass`,
+          while: `while False:\n${indent}${unit}pass`,
+          switch: `match None:\n${indent}${unit}case _:\n${indent}${unit}${unit}pass`,
+          try: `try:\n${indent}${unit}pass\n${indent}except Exception as error:\n${indent}${unit}pass`,
+          throw: 'raise Exception()',
+          break: 'break',
+          continue: 'continue',
+        }[template.flow];
+      }
+
       case 'call': {
         const callee = template.callee.trim();
         return /^[A-Za-z_][\w.]*$/.test(callee)

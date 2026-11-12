@@ -6,6 +6,7 @@ import {
   parseCameraParam,
 } from '@vizscript/canvas';
 import type {
+  FlowTemplate,
   GraphDocument,
   GraphNode,
   GraphOp,
@@ -204,6 +205,22 @@ function templateMatcher(template: NodeTemplate): (node: GraphNode) => boolean {
     case 'code': {
       // Pasted statements: the first one goes where the paste happened.
       return (n) => n.purity === 'impure';
+    }
+
+    case 'flow': {
+      // A counting `for` is a loop in TypeScript, a for-each elsewhere.
+      const kinds: Record<FlowTemplate, ReadonlyArray<string>> = {
+        forEach: ['forEach'],
+        forRange: ['forEach', 'loop'],
+        while: ['loop'],
+        switch: ['switch'],
+        try: ['try'],
+        throw: ['throw'],
+        break: ['break'],
+        continue: ['continue'],
+      };
+      const wanted = kinds[template.flow];
+      return (n) => wanted.includes(n.kind);
     }
   }
 }

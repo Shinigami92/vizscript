@@ -9,6 +9,20 @@ export interface TextEdit {
   text: string;
 }
 
+/**
+ * Flow-control nodes of the action menu (UE: For Each Loop, For Loop,
+ * While Loop, Switch …), written in each language's own syntax.
+ */
+export type FlowTemplate =
+  | 'forEach'
+  | 'forRange'
+  | 'while'
+  | 'switch'
+  | 'try'
+  | 'throw'
+  | 'break'
+  | 'continue';
+
 export type NodeTemplate =
   | {
       type: 'call';
@@ -24,6 +38,8 @@ export type NodeTemplate =
    * nodes until it is wired into an input.
    */
   | { type: 'value'; expression: string }
+  /** A loop, switch, try … with placeholders (`for (const item of [])`). */
+  | { type: 'flow'; flow: FlowTemplate }
   /**
    * Statements as source text (pasted or duplicated nodes), re-indented to
    * where they go.
@@ -241,6 +257,8 @@ export interface TypeSystemInfo {
     vectors?: Record<string, string[]>;
     color?: string;
   };
+  /** Flow-control nodes the language has (GDScript has no `try`). */
+  flow?: FlowTemplate[];
   /**
    * Class fields can be constructor parameters (UE's "Expose on Spawn"),
    * switched with the `constructor` modifier.

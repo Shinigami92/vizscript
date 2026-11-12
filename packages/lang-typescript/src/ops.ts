@@ -231,6 +231,16 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
   ],
   containerDefaults: { array: '[]', map: 'new Map()', set: 'new Set()' },
   exposeOnSpawn: true,
+  flow: [
+    'forEach',
+    'forRange',
+    'while',
+    'switch',
+    'try',
+    'throw',
+    'break',
+    'continue',
+  ],
   modifiers: {
     variable: { keywords: KINDS, flags: ['export'] },
     constant: { keywords: KINDS, flags: ['export'] },
@@ -600,8 +610,21 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
     endRegion: '// #endregion',
     doc: 'block',
   },
-  template: (template, indent) => {
+  template: (template, indent, unit) => {
     switch (template.type) {
+      case 'flow': {
+        return {
+          forEach: `for (const item of []) {\n${indent}}`,
+          forRange: `for (let i = 0; i < 10; i++) {\n${indent}}`,
+          while: `while (false) {\n${indent}}`,
+          switch: `switch (undefined) {\n${indent}${unit}case 0:\n${indent}${unit}${unit}break;\n${indent}${unit}default:\n${indent}${unit}${unit}break;\n${indent}}`,
+          try: `try {\n${indent}} catch (error) {\n${indent}}`,
+          throw: 'throw new Error();',
+          break: 'break;',
+          continue: 'continue;',
+        }[template.flow];
+      }
+
       case 'call': {
         const callee = template.callee.trim();
         return /^[\w$.]+$/.test(callee)

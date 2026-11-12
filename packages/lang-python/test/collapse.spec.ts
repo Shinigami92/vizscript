@@ -102,3 +102,33 @@ describe('function settings', () => {
     );
   });
 });
+
+describe('flow-control nodes', () => {
+  it('writes loops, match and try in Python', () => {
+    const text = 'def f():\n    start()\n';
+    const call = parsePythonDocument(text, 't.py')
+      .functions.find((fn) => fn.name === 'f')
+      ?.nodes.find((n) => n.kind === 'call');
+    const add = (flow: 'forEach' | 'switch' | 'try'): string => {
+      const result = applyPythonOp(
+        text,
+        {
+          type: 'addNode',
+          template: { type: 'flow', flow },
+          after: { node: call?.id ?? '', pin: 'then' },
+        },
+        't.py'
+      );
+      return result.ok ? applyTextEdits(text, result.edits) : result.error;
+    };
+    expect(add('forEach')).toBe(
+      'def f():\n    start()\n    for item in []:\n        pass\n'
+    );
+    expect(add('switch')).toBe(
+      'def f():\n    start()\n    match None:\n        case _:\n            pass\n'
+    );
+    expect(add('try')).toBe(
+      'def f():\n    start()\n    try:\n        pass\n    except Exception as error:\n        pass\n'
+    );
+  });
+});

@@ -1,5 +1,6 @@
 import type {
   DeclarationSyntax,
+  FlowTemplate,
   GraphDocument,
   GraphOp,
   OpResult,
@@ -265,6 +266,7 @@ export const GDSCRIPT_TYPES: TypeSystemInfo = {
   containerDefaults: { array: '[]', map: '{}' },
   privatePrefix: '_',
   symbolGroups: true,
+  flow: ['forEach', 'forRange', 'while', 'switch', 'break', 'continue'],
   valueEditors: {
     vectors: {
       Vector2: ['x', 'y'],
@@ -472,6 +474,19 @@ export const GDSCRIPT_SYNTAX: StatementSyntax = {
   },
   template: (template, indent, unit) => {
     switch (template.type) {
+      case 'flow': {
+        // GDScript has no try / throw.
+        const flow: Partial<Record<FlowTemplate, string>> = {
+          forEach: `for item in []:\n${indent}${unit}pass`,
+          forRange: `for i in range(10):\n${indent}${unit}pass`,
+          while: `while false:\n${indent}${unit}pass`,
+          switch: `match null:\n${indent}${unit}_:\n${indent}${unit}${unit}pass`,
+          break: 'break',
+          continue: 'continue',
+        };
+        return flow[template.flow];
+      }
+
       case 'call': {
         const callee = template.callee.trim();
         return /^[\w.$%/]+$/.test(callee)
