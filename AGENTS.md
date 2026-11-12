@@ -24,6 +24,11 @@ pnpm workspace with apps in `apps/*` and libraries in `packages/*`.
 - **Commits:** conventional commits (`feat:`, `fix:`, `chore:` …). PR titles are validated.
 - **TypeScript:** stays on 6.x until `vue-tsc` and the browser tooling support the TS 7 native compiler.
 
+## Working files
+
+- **`tmp/`** (git-ignored) is for scratch files: scripts, logs, intermediate output. Use it instead of the system temp folder.
+- **`local/`** (git-ignored) is for files worth keeping but not committing, e.g. Markdown drafts to copy from.
+
 ## Architecture rules
 
 - **Language-agnostic code** stays in `@vizscript/core`. Renderer, layout and persistence must never import a language backend.

@@ -9,3 +9,7 @@ coverage/
 *.tsbuildinfo
 .playwright-mcp/
 .vite/
+
+# Not committed: reusable drafts and notes (local/), scratch files (tmp/)
+/local/
+/tmp/

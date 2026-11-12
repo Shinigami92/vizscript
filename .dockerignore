@@ -7,3 +7,5 @@
 !.env.example
 .playwright-mcp
 .claude
+local
+tmp
