@@ -1,4 +1,5 @@
 import type {
+  CallSite,
   OpResult,
   ScriptSymbol,
   SourceRange,
@@ -442,4 +443,92 @@ export function renamePythonSymbol(
   }
 
   return { ok: true, edits };
+}
+
+/**
+ * Calls of a function (by name) or a method (`self.name(…)`,
+ * `Class.name(…)`) in the same file. Calls with `*args` are left alone.
+ */
+export function pythonCallSites(
+  body: ReadonlyArray<Stmt>,
+  text: string,
+  symbols: ReadonlyArray<ScriptSymbol>,
+  symbol: ScriptSymbol
+): CallSite[] {
+  const owner =
+    symbol.kind === 'method'
+      ? symbols.find(
+          (s) =>
+            (s.kind === 'class' || s.kind === 'enum') &&
+            qualifiedName(s) === symbol.scope
+        )
+      : undefined;
+  const { occurrences } = resolveModule(body, text);
+  const uses = new Set(
+    owner
+      ? []
+      : occurrences
+          .filter((o) => o.name === symbol.name && o.scope?.kind === 'module')
+          .map((o) => o.range.start)
+  );
+
+  const sites: CallSite[] = [];
+  const walk = (node: unknown, selves: ReadonlySet<string>): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        walk(item, selves);
+      }
+
+      return;
+    }
+
+    if (!isObject(node)) {
+      return;
+    }
+
+    if (node.type === 'Call') {
+      const callee = node.callee as AnyNode;
+      const object = callee.object as AnyNode | undefined;
+      const matches = owner
+        ? callee.type === 'Attribute' &&
+          callee.name === symbol.name &&
+          object?.type === 'Name' &&
+          (selves.has(object.name as string) || object.name === owner.name)
+        : callee.type === 'Name' && uses.has(callee.start as number);
+      const args = node.args as AnyNode[];
+      if (matches && !args.some((a) => a.star)) {
+        sites.push({
+          open: text.indexOf('(', callee.end as number) + 1,
+          close: (node.end as number) - 1,
+          args: args
+            .filter((a) => !a.keyword)
+            .map((a) => ({ start: a.start as number, end: a.end as number })),
+          keywords: args
+            .filter((a) => a.keyword)
+            .map((a) => ({
+              name: a.keyword as string,
+              range: { start: a.start as number, end: a.end as number },
+            })),
+        });
+      }
+    }
+
+    let inner = selves;
+    if (node.type === 'FunctionDef' && owner) {
+      const def = node as unknown as FunctionDef;
+      const inClass =
+        def.start >= owner.range.start && def.end <= owner.range.end;
+      const first = def.params[0]?.name;
+      inner = inClass && first ? new Set([first]) : selves;
+    }
+
+    for (const [key, value] of Object.entries(node)) {
+      if (key !== 'type' && key !== 'start' && key !== 'end') {
+        walk(value, inner);
+      }
+    }
+  };
+
+  walk(body, new Set());
+  return sites;
 }

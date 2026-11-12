@@ -1,5 +1,10 @@
 import type * as t from '@babel/types';
-import type { OpResult, ScriptSymbol, TextEdit } from '@vizscript/core';
+import type {
+  CallSite,
+  OpResult,
+  ScriptSymbol,
+  TextEdit,
+} from '@vizscript/core';
 
 /** A name in the code and the declaration it resolves to. */
 interface Occurrence {
@@ -521,4 +526,83 @@ export function renameTypeScriptSymbol(
     return { start: o.start, end, text: name };
   });
   return { ok: true, edits };
+}
+
+/** Visits every node of a program. */
+function walk(node: Node, visit: (node: Node) => void): void {
+  visit(node);
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'loc' || key.endsWith('Comments')) {
+      continue;
+    }
+
+    for (const child of Array.isArray(value) ? value : [value]) {
+      if (isNode(child)) {
+        walk(child, visit);
+      }
+    }
+  }
+}
+
+/**
+ * Calls of a function (through its name) or a method (through
+ * `this.name(…)` inside its class) in the same file.
+ */
+export function typeScriptCallSites(
+  program: t.Program,
+  text: string,
+  symbols: ReadonlyArray<ScriptSymbol>,
+  symbol: ScriptSymbol
+): CallSite[] {
+  const cls =
+    symbol.kind === 'method'
+      ? symbols.find((s) => s.kind === 'class' && s.name === symbol.scope)
+      : undefined;
+  const uses = new Set(
+    symbol.kind === 'method'
+      ? []
+      : resolveNames(program)
+          .filter(
+            (o) =>
+              o.binding === symbol.nameRange.start && o.name === symbol.name
+          )
+          .map((o) => o.start)
+  );
+  const isCall = (callee: Node): boolean => {
+    if (callee.type === 'Identifier') {
+      return uses.has(callee.start ?? -1);
+    }
+
+    return (
+      cls !== undefined &&
+      (callee.type === 'MemberExpression' ||
+        callee.type === 'OptionalMemberExpression') &&
+      callee.object.type === 'ThisExpression' &&
+      !callee.computed &&
+      callee.property.type === 'Identifier' &&
+      callee.property.name === symbol.name &&
+      (callee.start ?? 0) >= cls.range.start &&
+      (callee.end ?? 0) <= cls.range.end
+    );
+  };
+
+  const sites: CallSite[] = [];
+  walk(program, (node) => {
+    if (
+      (node.type === 'CallExpression' ||
+        node.type === 'OptionalCallExpression') &&
+      isCall(node.callee)
+    ) {
+      const from = node.typeArguments?.end ?? node.callee.end ?? 0;
+      sites.push({
+        open: text.indexOf('(', from) + 1,
+        close: (node.end ?? 1) - 1,
+        args: node.arguments.map((arg) => ({
+          start: arg.start ?? 0,
+          end: arg.end ?? 0,
+        })),
+      });
+    }
+  });
+  return sites;
 }

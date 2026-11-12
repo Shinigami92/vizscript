@@ -9,7 +9,7 @@ import type {
 import { applyTextOp } from '@vizscript/core';
 import { parsePython, splitString } from './convert';
 import { parsePythonDocument } from './lower';
-import { renamePythonSymbol } from './rename';
+import { pythonCallSites, renamePythonSymbol } from './rename';
 
 const IDENTIFIER = /^[A-Za-z_]\w*$/;
 
@@ -75,6 +75,9 @@ const DECLARATIONS: DeclarationSyntax = {
   },
   string: (value) => JSON.stringify(value),
   booleans: { true: 'True', false: 'False' },
+  returnArrow: ' -> ',
+  callSites: (text, doc, symbol) =>
+    pythonCallSites(parsePython(text).body, text, doc.symbols ?? [], symbol),
   // `x = 1` needs its value; `x: int` alone is a declaration (not `self.x`).
   valueRequired: (symbol, typed) =>
     !typed || symbol.modifiers.some((m) => m.endsWith('.')),

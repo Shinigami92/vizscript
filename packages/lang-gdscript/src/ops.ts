@@ -10,7 +10,7 @@ import type {
 import { applyTextOp, removeModifier, replaceKeyword } from '@vizscript/core';
 import { parseGDScriptDocument } from './lower';
 import { parseGDScript } from './parser';
-import { renameGDScriptSymbol } from './rename';
+import { gdscriptCallSites, renameGDScriptSymbol } from './rename';
 
 const IDENTIFIER = /^[A-Za-z_]\w*$/;
 
@@ -148,6 +148,9 @@ const DECLARATIONS: DeclarationSyntax = {
   string: (value) => JSON.stringify(value),
   booleans: { true: 'true', false: 'false' },
   valueRequired: (symbol) => symbol.modifiers.includes('const'),
+  returnArrow: ' -> ',
+  callSites: (text, _doc, symbol) =>
+    gdscriptCallSites(parseGDScript(text).script.body, text, symbol),
   setModifier,
   identifier: /^[A-Za-z_]\w*$/,
   keywords: KEYWORDS,

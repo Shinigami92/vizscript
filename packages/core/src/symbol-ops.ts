@@ -1,6 +1,7 @@
 import type { CommentSyntax } from './comment-ops';
 import type { GraphDocument, SourceRange } from './ir';
 import type { OpResult, TextEdit, TypeSystemInfo, ValueKind } from './ops';
+import type { CallSite } from './signature-ops';
 import type { ScriptSymbol } from './symbols';
 import { qualifiedName } from './symbols';
 import { lineIndent, lineStart } from './text-utils';
@@ -41,6 +42,14 @@ export interface DeclarationSyntax {
   booleans: { true: string; false: string };
   /** Whether a variable cannot exist without a value (`const`, Python). */
   valueRequired: (symbol: ScriptSymbol, typed: boolean) => boolean;
+  /** Written between `)` and a return type (`: ` or ` -> `). */
+  returnArrow: string;
+  /** Calls of a function or method in the same file. */
+  callSites?: (
+    text: string,
+    doc: GraphDocument,
+    symbol: ScriptSymbol
+  ) => CallSite[];
   /** Turns a modifier of a declaration on or off. */
   setModifier: (
     text: string,

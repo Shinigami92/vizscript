@@ -12,6 +12,7 @@ export * from './ops';
 export * from './reconcile';
 export * from './reroute';
 export * from './search';
+export * from './signature-ops';
 export * from './summarize';
 export * from './symbol-ops';
 export * from './symbols';

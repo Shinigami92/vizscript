@@ -9,7 +9,7 @@ import type {
 } from '@vizscript/core';
 import { applyTextOp, removeModifier, replaceKeyword } from '@vizscript/core';
 import { parseFile, parseTypeScript } from './lower';
-import { renameTypeScriptSymbol } from './rename';
+import { renameTypeScriptSymbol, typeScriptCallSites } from './rename';
 
 const KEYWORDS = new Set(
   (
@@ -132,6 +132,14 @@ function declarations(text: string, fileName?: string): DeclarationSyntax {
     string: (value) => quoteString(value, quoteOf(text)),
     booleans: { true: 'true', false: 'false' },
     valueRequired: (symbol) => symbol.modifiers.includes('const'),
+    returnArrow: ': ',
+    callSites: (source, doc, symbol) =>
+      typeScriptCallSites(
+        parseFile(source, fileName).program,
+        source,
+        doc.symbols ?? [],
+        symbol
+      ),
     setModifier,
     identifier: /^[A-Za-z_$][\w$]*$/,
     keywords: KEYWORDS,

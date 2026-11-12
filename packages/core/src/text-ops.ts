@@ -24,6 +24,15 @@ import type {
 } from './ir';
 import type { GraphOp, NodeTemplate, OpResult, TextEdit } from './ops';
 import { findNode } from './reconcile';
+import {
+  addParameter,
+  moveParameter,
+  removeParameter,
+  renameParameter,
+  setParameterType,
+  setParameterValue,
+  setReturnType,
+} from './signature-ops';
 import type { DeclarationSyntax } from './symbol-ops';
 import {
   addFunction,
@@ -1098,7 +1107,14 @@ function applySymbolOp(
         | 'deleteSymbol'
         | 'setSymbolType'
         | 'setSymbolValue'
-        | 'setModifier';
+        | 'setModifier'
+        | 'addParameter'
+        | 'removeParameter'
+        | 'moveParameter'
+        | 'renameParameter'
+        | 'setParameterType'
+        | 'setParameterValue'
+        | 'setReturnType';
     }
   >,
   syntax: StatementSyntax
@@ -1160,6 +1176,65 @@ function applySymbolOp(
         op.kind,
         declarations
       );
+    }
+
+    case 'addParameter': {
+      return addParameter(
+        text,
+        doc,
+        op.symbol,
+        op.name,
+        op.typeText,
+        op.argument,
+        syntax.placeholder,
+        declarations
+      );
+    }
+
+    case 'removeParameter': {
+      return removeParameter(text, doc, op.symbol, op.index, declarations);
+    }
+
+    case 'moveParameter': {
+      return moveParameter(text, doc, op.symbol, op.from, op.to, declarations);
+    }
+
+    case 'renameParameter': {
+      return renameParameter(
+        text,
+        doc,
+        op.symbol,
+        op.index,
+        op.name,
+        declarations
+      );
+    }
+
+    case 'setParameterType': {
+      return setParameterType(
+        text,
+        doc,
+        op.symbol,
+        op.index,
+        op.typeText,
+        declarations
+      );
+    }
+
+    case 'setParameterValue': {
+      return setParameterValue(
+        text,
+        doc,
+        op.symbol,
+        op.index,
+        op.value,
+        op.kind,
+        declarations
+      );
+    }
+
+    case 'setReturnType': {
+      return setReturnType(text, doc, op.symbol, op.typeText, declarations);
     }
 
     case 'setModifier': {

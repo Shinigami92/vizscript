@@ -1,4 +1,5 @@
 import type {
+  CallSite,
   OpResult,
   ScriptSymbol,
   SourceRange,
@@ -368,4 +369,71 @@ export function renameGDScriptSymbol(
 
   replace(symbol.nameRange);
   return { ok: true, edits };
+}
+
+/**
+ * Calls of a function in the same file: by name inside its class, or as
+ * `self.name(…)`.
+ */
+export function gdscriptCallSites(
+  body: ReadonlyArray<Stmt>,
+  text: string,
+  symbol: ScriptSymbol
+): CallSite[] {
+  const resolver = new Resolver();
+  const script: Scope = { kind: 'script', name: '', locals: new Set() };
+  resolver.members(body, script);
+  resolver.statements(body, script);
+  const uses = new Set(
+    resolver.occurrences
+      .filter(
+        (o) =>
+          o.name === symbol.name &&
+          (o.scope ?? o.member)?.kind !== 'function' &&
+          (o.scope ?? o.member)?.name === symbol.scope
+      )
+      .map((o) => o.range.start)
+  );
+
+  const sites: CallSite[] = [];
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        walk(item);
+      }
+
+      return;
+    }
+
+    if (!isObject(node)) {
+      return;
+    }
+
+    const expr = node as unknown as Expr;
+    if (expr.type === 'Call') {
+      const callee = expr.callee;
+      const start =
+        callee.type === 'Identifier'
+          ? callee.start
+          : callee.type === 'Attribute' && callee.object.type === 'Self'
+            ? callee.nameSpan.start
+            : -1;
+      if (uses.has(start)) {
+        sites.push({
+          open: text.indexOf('(', callee.end) + 1,
+          close: expr.end - 1,
+          args: expr.args.map((a) => ({ start: a.start, end: a.end })),
+        });
+      }
+    }
+
+    for (const [key, value] of Object.entries(node)) {
+      if (key !== 'type' && key !== 'start' && key !== 'end') {
+        walk(value);
+      }
+    }
+  };
+
+  walk(body);
+  return sites;
 }

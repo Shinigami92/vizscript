@@ -102,7 +102,38 @@ export type GraphOp =
       symbol: string;
       modifier: string;
       enabled: boolean;
-    };
+    }
+  /**
+   * Adds an input to a function (UE: Inputs `+`). Same-file calls get
+   * `argument` (or the language's placeholder) for it.
+   */
+  | {
+      type: 'addParameter';
+      symbol: string;
+      name: string;
+      typeText?: string;
+      argument?: string;
+    }
+  /** Removes an input and its argument from same-file calls. */
+  | { type: 'removeParameter'; symbol: string; index: number }
+  /** Moves an input, and the arguments of same-file calls with it. */
+  | { type: 'moveParameter'; symbol: string; from: number; to: number }
+  | { type: 'renameParameter'; symbol: string; index: number; name: string }
+  | {
+      type: 'setParameterType';
+      symbol: string;
+      index: number;
+      typeText: string | null;
+    }
+  | {
+      type: 'setParameterValue';
+      symbol: string;
+      index: number;
+      value: string | null;
+      kind: ValueKind;
+    }
+  /** Sets (or with `null` removes) the declared return type. */
+  | { type: 'setReturnType'; symbol: string; typeText: string | null };
 
 /** How a value typed in the Details panel is written. */
 export type ValueKind = 'string' | 'number' | 'bool' | 'expression';
