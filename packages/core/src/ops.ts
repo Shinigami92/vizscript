@@ -50,6 +50,11 @@ export type GraphOp =
   | { type: 'promote'; pin: PinRef; name: string; position?: Point }
   /** Adds a call that receives the value of a data output. */
   | { type: 'callWith'; pin: PinRef; callee: string; position?: Point }
+  /**
+   * Uses the value of a data output in a new expression (`$value` marks it),
+   * e.g. `$value + undefined` for a `+` node (UE: drag from an output).
+   */
+  | { type: 'useValue'; pin: PinRef; expression: string; position?: Point }
   /** Sets the comment above a node's code (empty text removes it). */
   | { type: 'setComment'; node: string; text: string }
   /** Puts the statements of the nodes into a titled region. */
@@ -155,6 +160,19 @@ export interface TypeOption {
   defaultValue: string;
 }
 
+/** An operator or value node offered by the action menu. */
+export interface ExpressionTemplate {
+  label: string;
+  /** Menu group: `Math`, `Comparison`, `Logic`, `Text`, `Values`, … */
+  category: string;
+  /** Code with `$1`, `$2` … for its inputs, e.g. `$1 + $2`. */
+  template: string;
+  /** Pin type of the result (for the Context Sensitive filter). */
+  result?: DataType;
+  /** Extra words that find it (`add`, `plus`, `equals`). */
+  keywords?: string;
+}
+
 /**
  * Types of a language, as data (sent from the parser worker to the type
  * picker). Containers are templates with `T` (`T[]`, `list[T]`) and `K`/`V`.
@@ -167,6 +185,13 @@ export interface TypeSystemInfo {
   optional?: string;
   /** Values of new containers (`[]`, `new Map()`, `set()`). */
   containerDefaults?: { array?: string; map?: string; set?: string };
+  /** Value of an empty input (`undefined`, `None`, `null`). */
+  placeholder?: string;
+  /**
+   * Operators and values of the action menu (UE: `+`, Make Literal String,
+   * Select, Make Array …). `$1`, `$2` … are their inputs.
+   */
+  expressions?: ExpressionTemplate[];
   /** Modifiers the Details panel offers per kind of symbol. */
   modifiers: Partial<
     Record<

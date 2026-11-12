@@ -66,9 +66,18 @@ export function arrayOfAll(elements: ReadonlyArray<DataType>): DataType {
     : 'array';
 }
 
-/** Whether a value of type `value` refines the declared pin type `pin`. */
+/**
+ * Whether a value of type `value` refines the declared pin type `pin`.
+ * Empty values (`undefined`, `null`, `None`) don't: such an input is unset
+ * and takes any wire.
+ */
 export function refinesType(pin: DataType, value: DataType): boolean {
-  if (value === 'any' || value === pin) {
+  if (
+    value === 'any' ||
+    value === pin ||
+    value === 'void' ||
+    value === 'null'
+  ) {
     return false;
   }
 

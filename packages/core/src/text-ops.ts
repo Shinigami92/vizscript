@@ -358,24 +358,66 @@ const VALUE_WORDS = new Set([
   'Infinity',
 ]);
 
+/** Globals of the supported languages that typed code often starts with. */
+const KNOWN_GLOBALS = new Set([
+  'Math',
+  'JSON',
+  'console',
+  'String',
+  'Number',
+  'Boolean',
+  'Array',
+  'Object',
+  'Date',
+  'Promise',
+  'globalThis',
+  'window',
+  'document',
+  'this',
+  'self',
+  'len',
+  'str',
+  'int',
+  'float',
+  'bool',
+  'list',
+  'dict',
+  'range',
+  'print',
+  'Vector2',
+  'Vector3',
+  'Color',
+]);
+
 /**
- * Whether a typed value is code (a number, a variable, an expression)
- * rather than text: `42`, `user`, `a + 1`, `"x"` but not `Jane User`.
+ * Whether a typed value is code rather than text: a number, a quoted
+ * string, `[…]` / `{…}` / `(…)`, or something that starts with a name the
+ * script knows (`user`, `count + 1`, `greet(user)`, `Math.max(a, b)`).
+ * `Jane User`, `Hello, ` or `Hello!` are text.
  */
 export function looksLikeCode(value: string, doc: GraphDocument): boolean {
   if (/^[-+]?(?:\d[\d_]*(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i.test(value)) {
     return true;
   }
 
-  if (VALUE_WORDS.has(value) || /[()[\]{}"'`.+\-*/%=<>!&|?:,$@#]/.test(value)) {
+  if (VALUE_WORDS.has(value) || /^["'`[{(]/.test(value)) {
     return true;
   }
 
-  // A single name is code only when the script declares it.
-  return (
-    /^[A-Za-z_]\w*$/.test(value) &&
-    (doc.symbols ?? []).some((s) => s.name === value)
-  );
+  const leading = value.match(/^-?([A-Za-z_$][\w$]*)/)?.[1];
+  if (!leading) {
+    return false;
+  }
+
+  const known = new Set<string>(KNOWN_GLOBALS);
+  for (const symbol of doc.symbols ?? []) {
+    known.add(symbol.name);
+    for (const param of symbol.params ?? []) {
+      known.add(param.name);
+    }
+  }
+
+  return known.has(leading);
 }
 
 /** Source of a value typed into a pin that has no code yet. */
@@ -1116,10 +1158,43 @@ function callWith(
   callee: string,
   syntax: StatementSyntax
 ): OpResult {
+  return afterValue(text, doc, ref, syntax, (value) => ({
+    type: 'call',
+    callee,
+    args: [value],
+  }));
+}
+
+/**
+ * Uses a value in a new expression of its own (UE: dragging from an output
+ * to a `+` node): `$value` in the expression becomes the value. It shows as
+ * unconnected nodes until its result is wired into an input.
+ */
+function useValue(
+  text: string,
+  doc: GraphDocument,
+  ref: PinRef,
+  expression: string,
+  syntax: StatementSyntax
+): OpResult {
+  return afterValue(text, doc, ref, syntax, (value) => ({
+    type: 'value',
+    expression: expression.replaceAll('$value', value),
+  }));
+}
+
+/** A new statement right after a value exists, made from the value. */
+function afterValue(
+  text: string,
+  doc: GraphDocument,
+  ref: PinRef,
+  syntax: StatementSyntax,
+  template: (value: string) => NodeTemplate
+): OpResult {
   const node = findNode(doc, ref.node);
   const pin = findPin(node, ref.pin);
   if (!node || !pin || pin.kind !== 'data' || pin.direction !== 'out') {
-    return failed('Only values can be passed to a function.');
+    return failed('Only values can be used here.');
   }
 
   const reference = referenceOutput(text, doc, ref, syntax);
@@ -1129,7 +1204,7 @@ function callWith(
 
   let insert: InsertPoint | undefined;
   if (node.kind === 'entry') {
-    // Parameters: call at the start of the function body.
+    // Parameters: at the start of the function body.
     const then = node.pins.find((p) => p.kind === 'exec');
     insert = then ? getMeta<ExecOutPinMeta>(then).insert : undefined;
   } else {
@@ -1138,25 +1213,21 @@ function callWith(
   }
 
   if (!insert) {
-    return failed('There is no place for a call after this value.');
+    return failed('There is no place for code after this value.');
   }
 
   const snippet = syntax.template(
-    { type: 'call', callee, args: [reference.text] },
+    template(reference.text),
     insert.indent,
     detectIndentUnit(text)
   );
   if (!snippet) {
-    return failed('Invalid function name.');
+    return failed('Invalid name.');
   }
 
   return succeeded([...reference.edits, insertText(insert, snippet)]);
 }
 
-/**
- * Turns a graph operation into minimal text edits, using the statement and
- * pin metadata produced by a backend's lowering (see `edit-meta.ts`).
- */
 /**
  * Adds an argument to a call (UE: "Add pin"): a placeholder that shows as
  * a new input pin to wire or fill in.
@@ -1392,6 +1463,10 @@ function addLocal(
   );
 }
 
+/**
+ * Turns a graph operation into minimal text edits, using the statement and
+ * pin metadata produced by a backend's lowering (see `edit-meta.ts`).
+ */
 export function applyTextOp(
   text: string,
   doc: GraphDocument,
@@ -1462,6 +1537,10 @@ export function applyTextOp(
 
     case 'deleteCommentBox': {
       return deleteCommentBox(text, doc, op.box);
+    }
+
+    case 'useValue': {
+      return useValue(text, doc, op.pin, op.expression, syntax);
     }
 
     case 'addArgument': {
