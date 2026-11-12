@@ -102,13 +102,14 @@ Graph changes are `GraphOp`s. Each backend turns them into minimal text edits on
 
 ### Persistence
 
-| Data                              | Where                                                                |
-| --------------------------------- | -------------------------------------------------------------------- |
-| Node positions and reroute points | `file_layouts`, per repository, branch and file, shared by all users |
-| Workbench layout                  | `user_preferences` (key `workbench.layout`), cached in the browser   |
-| Recently opened projects          | `recent_projects`, the newest 20 per user                            |
-| Unsaved code edits                | Local draft in the browser                                           |
-| Camera, color scheme              | URL (`?view=x,y,zoom`) and browser storage                           |
+| Data                              | Where                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------- |
+| Node positions and reroute points | `file_layouts`, per repository, branch and file, shared by all users                        |
+| Workbench layout                  | `user_preferences` (key `workbench.layout`), cached in the browser                          |
+| Recently opened projects          | `recent_projects`, the newest 20 per user                                                   |
+| Unsaved code edits                | Local draft in the browser                                                                  |
+| Local folders                     | Handles in IndexedDB (`vizscript` → `folders`), their layouts and drafts in browser storage |
+| Camera, color scheme              | URL (`?view=x,y,zoom`) and browser storage                                                  |
 
 Repositories are keyed by the provider's numeric id, so layouts survive renames. The playground uses browser storage only.
 
@@ -120,6 +121,7 @@ Repositories are keyed by the provider's numeric id, so layouts survive renames.
   - Parsers must run in the browser worker. Python uses `@lezer/python` (pure JS, error tolerant); GDScript has a small hand-written parser.
 - **Source providers:** implement `ScmProvider` in `apps/api/src/scm/` and add it to the `SCM_PROVIDERS` factory.
 - **Identity:** login goes through `AuthService.loginWithToken`. An OIDC login can reuse the same user, identity and credential tables.
+- **Local folders** (`apps/web/src/local/`) are read in the browser with the File System Access API, so nothing goes through the API. `LocalProject` hides whether a folder has a handle (Chrome, Edge: remembered, writable) or comes from `<input webkitdirectory>` (other browsers: read-only, this tab only). Listing skips `.git`, `node_modules` and the root `.gitignore` rules.
 - **Layout storage:** the web app talks to a `LayoutStore` interface, with an API-backed and a `localStorage` implementation.
 
 ## Verifying a change

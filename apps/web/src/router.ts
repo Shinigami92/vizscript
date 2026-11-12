@@ -24,6 +24,17 @@ export const router = createRouter({
       meta: { fullscreen: true },
     },
     {
+      path: '/local',
+      name: 'local-folders',
+      component: () => import('./views/LocalFoldersView.vue'),
+    },
+    {
+      path: '/local/:id/:path(.*)*',
+      name: 'local',
+      component: () => import('./views/LocalProjectView.vue'),
+      meta: { fullscreen: true },
+    },
+    {
       path: '/repos',
       name: 'repos',
       component: () => import('./views/ReposView.vue'),

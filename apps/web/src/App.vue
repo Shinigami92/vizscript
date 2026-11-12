@@ -73,6 +73,12 @@ async function logout(): Promise<void> {
           >Repositories</RouterLink
         >
         <RouterLink
+          to="/local"
+          class="btn-ghost px-2"
+          active-class="!text-zinc-50"
+          >Local</RouterLink
+        >
+        <RouterLink
           to="/playground"
           class="btn-ghost px-2"
           active-class="!text-zinc-50"

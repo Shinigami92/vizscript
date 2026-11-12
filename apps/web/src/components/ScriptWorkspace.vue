@@ -79,6 +79,8 @@ const props = defineProps<{
   stateKey: string;
   /** Paths of the repository's files: imports of them open on Cmd+click. */
   files?: ReadonlySet<string>;
+  /** Hide the share button (e.g. local folders, which have no shareable URL). */
+  hideShare?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -987,7 +989,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
             <span class="i-mdi-dock-right" />
           </button>
         </template>
-        <ShareLink />
+        <ShareLink v-if="!hideShare" />
         <button
           type="button"
           class="btn-ghost actions-toggle px-2"

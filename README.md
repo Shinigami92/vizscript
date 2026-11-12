@@ -21,6 +21,7 @@ Editing the graph edits the code: every change becomes a minimal text edit, so f
 - **Comments from the code.** A comment above a statement becomes a bubble over its node; a region (`// #region Title` in TypeScript, `#region` in GDScript, `# region` in Python) becomes a comment box around its nodes. Editing them in the graph rewrites the comment.
 - **Problems like Compiler Results.** Nodes with an error or warning get a red **ERROR!** or yellow **WARNING!** banner, and a Problems panel lists them all (Shift + Ctrl/Cmd + M). TypeScript and JavaScript are type-checked; GDScript and Python report syntax errors.
 - **Go to file and definition.** Ctrl/Cmd + click an import to open that file, or press `F12` on a node to jump to its definition, like in VS Code.
+- **Local folders.** Open a project folder from your computer, without uploading anything. In Chrome and Edge, changes are saved back into the folder (⌘S / Ctrl+S) and the folder is remembered; other browsers open it read-only.
 - **Shared layouts.** A file you open for the first time is laid out automatically. Once you rearrange it, the layout, including reroute points, is shared with everyone who opens the file on that branch.
 - **A workbench like VS Code's.** Explorer, Code, Graph, Details and Problems views can be moved, split, resized and hidden; preset layouts are one click away. Light and dark mode follow your system or your choice.
 - **Links keep the view.** The graph's position and zoom are part of the URL, so a shared link shows exactly what you saw.
@@ -35,6 +36,7 @@ APP_SECRET=$(openssl rand -base64 48) docker compose up --build
 ```
 
 - The **playground** (`/playground`) works without signing in and comes with samples in every supported language.
+- **Local** opens a folder from your computer, also without signing in.
 - To browse your repositories, sign in with a GitHub [fine-grained token](https://github.com/settings/personal-access-tokens/new) that has read access to _Contents_ and _Metadata_.
 
 To run it from source or to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -49,7 +51,7 @@ On phones the viewer is read-only: you can switch between code and graph, pan an
 
 - Commit graph edits back to the repository
 - Sign-in through Keycloak with GitHub as identity provider
-- GitLab and local folder providers
+- GitLab provider
 - More languages (C#, Rust, Go, C++, Ruby, …)
 - Real type information for pins in all typed languages (e.g. through the TypeScript language service)
 - Collapsing nodes to functions, comment boxes and reroute nodes
