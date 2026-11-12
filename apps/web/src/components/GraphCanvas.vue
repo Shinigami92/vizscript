@@ -35,6 +35,7 @@ import {
   getMeta,
   isTypeCompatible,
   qualifiedName,
+  referenceName,
   uniqueName,
 } from '@vizscript/core';
 import { useEventListener } from '@vueuse/core';
@@ -56,10 +57,11 @@ import type { Problem, ProblemSeverity } from '../graph/problems';
 import { worstSeverity } from '../graph/problems';
 import type { ExternalName } from '../graph/project-index';
 import { signature } from '../graph/project-index';
-import { isMac, shortcut, snippet } from '../graph/source';
+import { isMac, shortcut } from '../graph/source';
 import {
   endOfFunction,
   SYMBOL_DRAG_MIME,
+  symbolNodes,
   topLevelGraph,
 } from '../graph/symbols';
 import type { ActionEntry } from './ActionMenu.vue';
@@ -275,11 +277,14 @@ interface Prompt {
 }
 
 const prompt = ref<Prompt | null>(null);
+/** The node whose variable or function "Replace with…" picks. */
+const replacing = ref<string | null>(null);
 const promptInput = useTemplateRef<HTMLInputElement>('promptInput');
 
 function openMenu(state: MenuState): void {
   hideTooltip();
   prompt.value = null;
+  replacing.value = null;
   menu.value = state;
   if (props.editable) {
     emit('actionMenu');
@@ -289,6 +294,7 @@ function openMenu(state: MenuState): void {
 function closeMenu(): void {
   menu.value = null;
   prompt.value = null;
+  replacing.value = null;
   view.value?.clearPendingWire();
 }
 
@@ -1430,25 +1436,173 @@ function actionTitle(state: MenuState): string {
     : `Actions providing ${String(found.pin.type)}`;
 }
 
-async function copyCode(ids: ReadonlyArray<string>): Promise<void> {
-  const parts = ids
-    .map((id) => index.value.nodes.get(id)?.node)
-    .filter(
-      (n): n is GraphNode => n !== undefined && n.range.end > n.range.start
-    )
-    .toSorted((a, b) => a.range.start - b.range.start)
-    .map((n) => snippet(props.text, n.range, Number.POSITIVE_INFINITY));
-  if (parts.length === 0) {
+/** Copies the code of nodes (like Ctrl+C); false when there is none. */
+async function copyCode(ids: ReadonlyArray<string>): Promise<boolean> {
+  const { code } = selectionCode(ids);
+  if (!code) {
     show('These nodes have no source code to copy.');
-    return;
+    return false;
   }
 
   try {
-    await navigator.clipboard.writeText(parts.join('\n'));
-    show('Code copied to the clipboard.');
+    await navigator.clipboard.writeText(code);
+    return true;
   } catch {
     show('The clipboard is not available.', 'error');
+    return false;
   }
+}
+
+async function cutNodes(ids: ReadonlyArray<string>): Promise<void> {
+  if (await copyCode(ids)) {
+    emitOp({ type: 'deleteNodes', nodeIds: [...ids] });
+  }
+}
+
+/** "Paste": after the node when it is a statement, else at the point. */
+async function pasteFromClipboard(
+  world: Point,
+  nodeId?: string
+): Promise<void> {
+  let code = '';
+  try {
+    code = await navigator.clipboard.readText();
+  } catch {
+    show('The clipboard is not available.', 'error');
+    return;
+  }
+
+  if (!code.trim()) {
+    show('The clipboard is empty.');
+    return;
+  }
+
+  const node = nodeId ? index.value.nodes.get(nodeId)?.node : undefined;
+  pasteCode(
+    code,
+    world,
+    node?.purity === 'impure' ? continuation(node) : undefined
+  );
+}
+
+/**
+ * UE's "Find References": selects every Get / Set of the node's variable
+ * or every call of its function (the Details panel lists them).
+ */
+function findReferences(nodeId: string): void {
+  const doc = props.doc;
+  const entry = index.value.nodes.get(nodeId);
+  const name = entry ? referenceName(entry.node) : undefined;
+  if (!doc || !entry || !name) {
+    return;
+  }
+
+  const bare = name.replace(/^(?:this|self)\./, '');
+  const isCall = entry.node.kind === 'call';
+  const kinds = isCall
+    ? ['function', 'method', 'import']
+    : ['variable', 'constant', 'local', 'import'];
+  const candidates = (doc.symbols ?? []).filter(
+    (s) => s.name === bare && kinds.includes(s.kind)
+  );
+  const owner = doc.symbols?.find(
+    (s) => s.fnId === entry.fn.id && s.kind !== 'class'
+  );
+  const symbol =
+    candidates.find(
+      (s) => s.kind === 'local' && owner && s.scope === qualifiedName(owner)
+    ) ?? candidates.find((s) => s.kind !== 'local');
+  const found = symbol
+    ? symbolNodes(doc, symbol)
+    : doc.functions
+        .flatMap((f) => f.nodes)
+        .filter((n) => referenceName(n) === name)
+        .map((n) => n.id);
+  const ids = found.includes(nodeId) ? found : [nodeId, ...found];
+  selectNodes(ids);
+  show(
+    `${ids.length} ${ids.length === 1 ? 'reference' : 'references'} of ${name}`
+  );
+}
+
+/** "Replace with…": other variables for a Get / Set, functions for a call. */
+function replaceEntries(nodeId: string): ActionEntry[] {
+  const entry = index.value.nodes.get(nodeId);
+  const current = entry ? referenceName(entry.node) : undefined;
+  if (!entry || !current) {
+    return [];
+  }
+
+  const replace = (name: string): GraphOp => ({
+    type: 'replaceReference',
+    node: nodeId,
+    name,
+  });
+  if (entry.node.kind === 'call') {
+    return [
+      ...callables.value
+        .filter((callee) => callee !== current)
+        .map((callee): ActionEntry => ({
+          label: callee,
+          category: 'Functions',
+          icon: ICON_CALL,
+          keywords: callee,
+          action: () => emitOp(replace(callee)),
+        })),
+      ...externalNames.value
+        .filter((e) => e.kind === 'function' && e.callee !== current)
+        .map((external): ActionEntry => ({
+          label: external.callee,
+          category: 'Functions',
+          icon: ICON_IMPORT,
+          hint: external.where,
+          keywords: `${external.callee} ${external.path} import`,
+          action: () => emitOp(withImport(external, replace(external.callee))),
+        })),
+    ];
+  }
+
+  const isSet = entry.node.kind === 'setVar';
+  const pin = entry.node.pins.find(
+    (p) => p.kind === 'data' && p.direction === (isSet ? 'in' : 'out')
+  );
+  return scopeVariables(entry.fn.id)
+    .filter((v) => v.expression !== current && !(isSet && v.constant))
+    .map((variable): ActionEntry => ({
+      label: variable.expression,
+      category: 'Variables',
+      icon: isSet ? ICON_SET : ICON_VARIABLE,
+      hint: variable.type,
+      keywords: variable.expression,
+      ...(pin
+        ? {
+            fits: isSet
+              ? isTypeCompatible(pin.type, variable.dataType)
+              : isTypeCompatible(variable.dataType, pin.type),
+          }
+        : {}),
+      action: () => emitOp(replace(variable.expression)),
+    }));
+}
+
+function replaceTitle(nodeId: string): string {
+  const node = index.value.nodes.get(nodeId)?.node;
+  return `Replace ${node ? (referenceName(node) ?? node.title) : ''} with`;
+}
+
+function replaceSuggest(nodeId: string, query: string): ActionEntry[] {
+  const name = query.trim();
+  return /^[A-Za-z_$#][\w$]*(?:\.[A-Za-z_$#][\w$]*)*$/.test(name)
+    ? [
+        {
+          label: `Replace with ${name}`,
+          category: 'Typed',
+          icon: 'i-mdi-swap-horizontal',
+          action: () =>
+            emitOp({ type: 'replaceReference', node: nodeId, name }),
+        },
+      ]
+    : [];
 }
 
 // --------------------------------------------- copy, cut, paste, duplicate
@@ -1694,6 +1848,8 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
       const deletable = ids.some(
         (id) => index.value.nodes.get(id)?.node.kind !== 'entry'
       );
+      const reference =
+        ids.length === 1 && first ? referenceName(first.node) : undefined;
       return [
         {
           type: 'header',
@@ -1716,12 +1872,72 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
               },
             ]
           : []),
+        ...(props.editable
+          ? [
+              {
+                label: 'Cut',
+                icon: 'i-mdi-content-cut',
+                shortcut: shortcut('X'),
+                disabled: !deletable,
+                action: () => void cutNodes(ids),
+              },
+            ]
+          : []),
         {
-          label: ids.length > 1 ? 'Copy code of nodes' : 'Copy code',
+          label: 'Copy',
           icon: 'i-mdi-content-copy',
           shortcut: shortcut('C'),
-          action: () => void copyCode(ids),
+          action: () =>
+            void copyCode(ids).then(
+              (copied) => copied && show('Code copied to the clipboard.')
+            ),
         },
+        ...(props.editable
+          ? [
+              {
+                label: 'Paste',
+                icon: 'i-mdi-content-paste',
+                shortcut: shortcut('V'),
+                action: () =>
+                  void pasteFromClipboard(
+                    state.world,
+                    ids.length === 1 ? target.nodeId : undefined
+                  ),
+              },
+              {
+                label: 'Duplicate',
+                icon: 'i-mdi-content-duplicate',
+                shortcut: shortcut('D'),
+                action: () => duplicateSelection(),
+              },
+              { type: 'separator' as const },
+            ]
+          : []),
+        ...(reference
+          ? [
+              {
+                // UE's "Find References".
+                label: `Find references of ${reference}`,
+                icon: 'i-mdi-magnify-scan',
+                action: () => findReferences(target.nodeId),
+              },
+            ]
+          : []),
+        ...(reference && props.editable
+          ? [
+              {
+                // UE's "Replace References" / "Replace with".
+                label:
+                  first?.node.kind === 'call'
+                    ? 'Replace function…'
+                    : 'Replace variable…',
+                icon: 'i-mdi-swap-horizontal',
+                action: () => {
+                  replacing.value = target.nodeId;
+                },
+              },
+            ]
+          : []),
         ...(props.editable
           ? [
               {
@@ -1729,12 +1945,6 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
                 label: 'Collapse to function…',
                 icon: 'i-mdi-function-variant',
                 action: () => collapseToFunction(ids),
-              },
-              {
-                label: 'Duplicate',
-                icon: 'i-mdi-content-duplicate',
-                shortcut: shortcut('D'),
-                action: () => duplicateSelection(),
               },
             ]
           : []),
@@ -1746,6 +1956,23 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
                 icon: 'i-mdi-plus-circle-outline',
                 action: () =>
                   emitOp({ type: 'addArgument', node: target.nodeId }),
+              },
+            ]
+          : []),
+        ...(props.editable && ids.length === 1
+          ? [
+              {
+                // UE's "Break Node Link(s)".
+                label: 'Break node links',
+                icon: 'i-mdi-link-variant-off',
+                disabled: !first?.fn.edges.some(
+                  (e) =>
+                    e.kind === 'data' &&
+                    (e.from.node === target.nodeId ||
+                      e.to.node === target.nodeId)
+                ),
+                action: () =>
+                  emitOp({ type: 'disconnectNode', node: target.nodeId }),
               },
             ]
           : []),
@@ -2505,6 +2732,18 @@ defineExpose({
         />
       </form>
       <ActionMenu
+        v-else-if="replacing"
+        :x="menu.client.x"
+        :y="menu.client.y"
+        :title="replaceTitle(replacing)"
+        :entries="replaceEntries(replacing)"
+        :suggest="
+          (query) => (replacing ? replaceSuggest(replacing, query) : [])
+        "
+        context-toggle
+        @close="closeMenu()"
+      />
+      <ActionMenu
         v-else-if="menu.from || menu.target.kind === 'background'"
         :x="menu.client.x"
         :y="menu.client.y"
@@ -2520,7 +2759,7 @@ defineExpose({
         :y="menu.client.y"
         :entries="menuEntries"
         label="Graph actions"
-        @close="prompt || closeMenu()"
+        @close="prompt || replacing || closeMenu()"
       />
     </template>
     <ContextMenu
