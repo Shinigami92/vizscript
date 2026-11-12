@@ -22,6 +22,7 @@ import {
   isArrayType,
   lineEnd,
   lineIndent,
+  linkSymbolGraphs,
   markUnusedValue,
   truncate,
 } from '@vizscript/core';
@@ -36,6 +37,7 @@ import type {
   Stmt,
 } from './ast';
 import { parsePython } from './convert';
+import { pythonSymbols } from './symbols';
 
 export const LANGUAGE_ID = 'python';
 
@@ -1843,7 +1845,9 @@ export function parsePythonDocument(
       range: { start: d.start, end: d.end },
       severity: 'error',
     })),
+    symbols: pythonSymbols(body, text),
   };
   attachComments(doc, text, comments);
+  linkSymbolGraphs(doc);
   return doc;
 }

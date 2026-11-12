@@ -1,0 +1,17 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`pythonSymbols > lists the declarations of the fixture 1`] = `
+"constant TAX ~number = …
+class Item ~Item [@dataclass] → Item
+variable Item::name: str
+variable Item::price: float
+variable Item::quantity: int = …
+method Item::total(): float → Item.total
+function load(path: str): list[Item] → load
+local load::fh
+local load::data = …
+function checkout(items: list[Item], coupon: str | None = …): float [async] → checkout
+local checkout::subtotal = …
+local checkout::item
+local checkout::log ~object = …"
+`;
