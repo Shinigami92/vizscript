@@ -162,11 +162,18 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
 
       <div data-ui="editor-area" class="flex min-w-0 flex-1 flex-col">
         <!-- Editor tabs (open files) go here, between the sidebars. -->
-        <div
-          id="workbench-editor-tabs"
-          data-ui="editor-tabs-slot"
-          class="min-w-0 shrink-0"
-        />
+        <div data-ui="editor-bar" class="editor-bar">
+          <div
+            id="workbench-editor-tabs"
+            data-ui="editor-tabs-slot"
+            class="min-w-0 flex-1"
+          />
+          <div
+            id="workbench-editor-actions"
+            data-ui="editor-actions"
+            class="flex shrink-0 items-center"
+          />
+        </div>
         <WorkbenchZone
           v-if="shown.center.length > 0"
           zone="center"
@@ -241,11 +248,18 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
 
     <!-- Phones: one view at a time, explorer and details as overlays. -->
     <div v-else data-ui="workbench-phone" class="flex min-h-0 flex-1 flex-col">
-      <div
-        id="workbench-editor-tabs"
-        data-ui="editor-tabs-slot"
-        class="min-w-0 shrink-0"
-      />
+      <div data-ui="editor-bar" class="editor-bar">
+        <div
+          id="workbench-editor-tabs"
+          data-ui="editor-tabs-slot"
+          class="min-w-0 flex-1"
+        />
+        <div
+          id="workbench-editor-actions"
+          data-ui="editor-actions"
+          class="flex shrink-0 items-center"
+        />
+      </div>
       <div class="relative min-h-0 flex-1">
         <div
           :key="store.mobileMainView"
@@ -298,3 +312,17 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
     <div ref="parking" class="hidden" aria-hidden="true" />
   </div>
 </template>
+
+<style scoped>
+/* Like VS Code's editor title: open files left, their actions right. */
+.editor-bar {
+  @apply flex h-9 min-w-0 shrink-0 border-b border-zinc-800 bg-zinc-950;
+}
+
+/* Nothing to show (no tabs, no file): no empty bar. */
+.editor-bar:not(
+  :has([data-ui='file-tabs'], [data-ui='editor-actions-content'])
+) {
+  display: none;
+}
+</style>

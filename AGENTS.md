@@ -38,7 +38,7 @@ pnpm workspace with apps in `apps/*` and libraries in `packages/*`.
 
 ## Naming UI parts
 
-Important containers of the web app carry a `data-ui="kebab-name"` attribute (e.g. `app-header`, `workspace-toolbar`, `file-tabs`, `zone-left`, `view-graph`, `my-script-functions`, `details-panel`, `status-bar`), so they can be found in the browser's inspector and named in conversations and tests. Give new panels, toolbars, menus and dialogs one; keep existing names stable.
+Important containers of the web app carry a `data-ui="kebab-name"` attribute (e.g. `app-header`, `workspace-toolbar`, `editor-bar` (`file-tabs` + `editor-actions`), `zone-left`, `view-graph`, `my-script-functions`, `details-panel`, `status-bar`), so they can be found in the browser's inspector and named in conversations and tests. Give new panels, toolbars, menus and dialogs one; keep existing names stable.
 
 ## Architecture rules
 

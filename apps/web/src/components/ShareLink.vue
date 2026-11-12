@@ -45,7 +45,7 @@ async function copy(): Promise<void> {
   <div data-ui="share-link" class="relative">
     <button
       type="button"
-      class="btn-ghost share-toggle px-2"
+      class="btn-ghost share-toggle px-1.5 py-1"
       title="Share link"
       aria-label="Share link"
       aria-haspopup="dialog"

@@ -1140,6 +1140,30 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
     >
       <slot name="toolbar" />
       <div class="ml-auto flex items-center gap-2">
+        <button
+          v-if="graphVisible"
+          type="button"
+          class="btn-ghost px-2"
+          :class="{
+            'bg-zinc-800 text-zinc-100': workbench.isVisible('details'),
+          }"
+          title="Details panel"
+          aria-label="Details panel"
+          :aria-pressed="workbench.isVisible('details')"
+          @click="workbench.toggle('details')"
+        >
+          <span class="i-mdi-dock-right" />
+        </button>
+        <LayoutMenu v-if="!isMobile" />
+      </div>
+    </div>
+
+    <!-- File actions sit right of the editor tabs, like VS Code's. -->
+    <Teleport :key="String(isMobile)" defer to="#workbench-editor-actions">
+      <div
+        data-ui="editor-actions-content"
+        class="flex items-center gap-1 px-1"
+      >
         <div
           v-if="editable"
           class="flex items-center"
@@ -1148,7 +1172,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         >
           <button
             type="button"
-            class="btn-ghost px-2"
+            class="btn-ghost px-1.5 py-1"
             :title="`Undo (${shortcut('Z')})`"
             aria-label="Undo"
             :disabled="!canUndo"
@@ -1158,7 +1182,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           </button>
           <button
             type="button"
-            class="btn-ghost px-2"
+            class="btn-ghost px-1.5 py-1"
             :title="`Redo (${shortcut('Z', true)})`"
             aria-label="Redo"
             :disabled="!canRedo"
@@ -1167,56 +1191,21 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
             <span class="i-mdi-redo" />
           </button>
         </div>
-        <template v-if="graphVisible">
-          <button
-            type="button"
-            class="btn-ghost px-2"
-            :title="`Find in graph (${shortcut('F')})`"
-            aria-label="Find in graph"
-            @click="canvas?.openSearch()"
-          >
-            <span class="i-mdi-magnify" />
-          </button>
-          <button
-            type="button"
-            class="btn-ghost px-2"
-            :class="{
-              'bg-zinc-800 text-zinc-100': workbench.isVisible('details'),
-            }"
-            title="Details panel"
-            aria-label="Details panel"
-            :aria-pressed="workbench.isVisible('details')"
-            @click="workbench.toggle('details')"
-          >
-            <span class="i-mdi-dock-right" />
-          </button>
-        </template>
-        <ShareLink v-if="!hideShare" />
         <button
+          v-if="graphVisible"
           type="button"
-          class="btn-ghost actions-toggle px-2"
-          title="Actions"
-          aria-label="Actions"
-          aria-haspopup="menu"
-          :aria-expanded="actionsMenu !== null"
-          @click="toggleActions"
+          class="btn-ghost px-1.5 py-1"
+          :title="`Find in graph (${shortcut('F')})`"
+          aria-label="Find in graph"
+          @click="canvas?.openSearch()"
         >
-          <span class="i-mdi-dots-vertical" />
+          <span class="i-mdi-magnify" />
         </button>
-        <ContextMenu
-          v-if="actionsMenu"
-          :x="actionsMenu.x"
-          :y="actionsMenu.y"
-          :entries="actionEntries"
-          :ignore="['.actions-toggle']"
-          label="Actions"
-          @close="actionsMenu = null"
-        />
-        <LayoutMenu v-if="!isMobile" />
         <div
           v-if="visualizable || previewable"
           class="flex rounded-md border border-zinc-800 p-0.5 text-xs"
           role="tablist"
+          aria-label="Code and graph"
         >
           <button
             v-for="option in (isMobile
@@ -1225,7 +1214,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
             :key="option"
             type="button"
             role="tab"
-            class="rounded px-2.5 py-1 capitalize"
+            class="rounded px-2 py-0.5 capitalize"
             :class="
               mode === option
                 ? 'bg-zinc-700 text-zinc-50'
@@ -1237,8 +1226,29 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
             {{ option === 'viz' && previewable ? 'preview' : option }}
           </button>
         </div>
+        <ShareLink v-if="!hideShare" />
+        <button
+          type="button"
+          class="btn-ghost actions-toggle px-1.5 py-1"
+          title="More actions"
+          aria-label="More actions"
+          aria-haspopup="menu"
+          :aria-expanded="actionsMenu !== null"
+          @click="toggleActions"
+        >
+          <span class="i-mdi-dots-horizontal" />
+        </button>
+        <ContextMenu
+          v-if="actionsMenu"
+          :x="actionsMenu.x"
+          :y="actionsMenu.y"
+          :entries="actionEntries"
+          :ignore="['.actions-toggle']"
+          label="Actions"
+          @close="actionsMenu = null"
+        />
       </div>
-    </div>
+    </Teleport>
 
     <!-- The status bar is rendered by the Workbench after this toolbar. -->
     <Teleport defer to="#workbench-status">
