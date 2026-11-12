@@ -174,6 +174,8 @@ export type GraphOp =
   | { type: 'setReturnType'; symbol: string; typeText: string | null }
   /** Adds a placeholder argument to a call (UE: "Add pin"). */
   | { type: 'addArgument'; node: string }
+  /** Removes an argument of a call with its comma (UE: "Remove pin"). */
+  | { type: 'removeArgument'; pin: PinRef }
   /**
    * Moves all data wires of `from` to `to` (UE: Ctrl+drag a pin): the
    * inputs an output fed take the other output, or an input's wire goes

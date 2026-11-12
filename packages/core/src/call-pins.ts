@@ -21,7 +21,8 @@ export interface CallPinOptions {
   imports?: ReadonlyArray<ImportedDeclaration>;
 }
 
-const ARG_PIN = /^arg\d+$/;
+/** Pins of the arguments written in a call (`arg0`, `arg1`, …). */
+export const ARG_PIN = /^arg\d+$/;
 
 /** Offset of the `)` that closes a call node's arguments. */
 export function callClose(text: string, node: GraphNode): number | undefined {
@@ -47,6 +48,13 @@ function literalKind(param: SymbolParam): LiteralKind {
       return 'undefined';
     }
   }
+}
+
+/** The default value of a parameter as code, or `''`. */
+function defaultOf(text: string, param: SymbolParam): string {
+  return param.defaultRange
+    ? text.slice(param.defaultRange.start, param.defaultRange.end)
+    : (param.defaultText ?? '');
 }
 
 /**
@@ -177,6 +185,17 @@ export function completeCallPins(
           !p.name.endsWith('=') && p.name !== '...' && !p.name.startsWith('*')
       );
 
+      // Given arguments know their parameter's default ("Reset to default").
+      for (const pin of args) {
+        const param = pin.name.endsWith('=')
+          ? params.find((p) => `${p.name}=` === pin.name)
+          : params[positional.indexOf(pin)];
+        const value = param && !param.rest ? defaultOf(text, param) : '';
+        if (value !== '') {
+          pin.meta = { ...pin.meta, defaultValue: value };
+        }
+      }
+
       // Types of the given arguments come from the parameters.
       for (const [index, pin] of positional.entries()) {
         const param = params[index];
@@ -223,9 +242,7 @@ export function completeCallPins(
           insertPrefix: prefix,
           optional: true,
         };
-        const defaultText = param.defaultRange
-          ? text.slice(param.defaultRange.start, param.defaultRange.end)
-          : (param.defaultText ?? '');
+        const defaultText = defaultOf(text, param);
         added.push({
           id: `param:${param.name}`,
           name: param.name,

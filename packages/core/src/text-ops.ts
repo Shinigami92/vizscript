@@ -1,4 +1,4 @@
-import { callClose } from './call-pins';
+import { ARG_PIN, callClose } from './call-pins';
 import { collapseToFunction } from './collapse';
 import type { CommentSyntax } from './comment-ops';
 import {
@@ -44,6 +44,7 @@ import {
   addVariable,
   checkName,
   deleteSymbol,
+  removeListItem,
   renameSymbol,
   setModifier,
   setSymbolType,
@@ -1392,6 +1393,31 @@ function addArgument(
   ]);
 }
 
+/** `...`, `*`, `**` or `name=` written before an argument's value. */
+const ARG_PREFIX = /(?<=[(,]\s*)(?:\.\.\.|\*{1,2}|[A-Za-z_]\w*\s*=(?!=))\s*$/;
+
+/** Removes an argument of a call with its comma (UE: "Remove pin"). */
+function removeArgument(
+  text: string,
+  doc: GraphDocument,
+  ref: PinRef
+): OpResult {
+  const node = findNode(doc, ref.node);
+  const pin = findPin(node, ref.pin);
+  if (node?.kind !== 'call' || !pin?.range || !ARG_PIN.test(pin.id)) {
+    return failed('Only arguments written in a call can be removed.');
+  }
+
+  const prefix = text.slice(0, pin.range.start).match(ARG_PREFIX)?.[0] ?? '';
+  return succeeded([
+    removeListItem(
+      text,
+      { start: pin.range.start - prefix.length, end: pin.range.end },
+      true
+    ),
+  ]);
+}
+
 /** Ops of "My Script": add, rename and delete declarations. */
 function applySymbolOp(
   text: string,
@@ -1731,6 +1757,10 @@ export function applyTextOp(
 
     case 'addArgument': {
       return addArgument(text, doc, op.node, syntax);
+    }
+
+    case 'removeArgument': {
+      return removeArgument(text, doc, op.pin);
     }
 
     default: {

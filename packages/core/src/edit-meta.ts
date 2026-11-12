@@ -70,6 +70,8 @@ export interface InputPinMeta {
   property?: SourceRange;
   /** The property is written as a shorthand (`{ length }`). */
   shorthand?: boolean;
+  /** Default value of the argument's parameter, as code. */
+  defaultValue?: string;
 }
 
 export interface ExecOutPinMeta {

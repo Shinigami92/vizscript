@@ -23,6 +23,13 @@ function callNode(text: string, title: string): GraphNode {
   return node;
 }
 
+function removeArg(text: string, title: string, pin: string): string {
+  return apply(text, {
+    type: 'removeArgument',
+    pin: { node: callNode(text, title).id, pin },
+  });
+}
+
 const TEXT = [
   'function greet(person: string, times = 2, loud?: boolean): string {',
   '  return person;',
@@ -120,5 +127,18 @@ describe('argument pins from signatures', () => {
         node: callNode('run();\n', 'run').id,
       })
     ).toBe('run(undefined);\n');
+  });
+
+  it('removes argument pins with their comma', () => {
+    expect(removeArg('f(a, b, c);\n', 'f', 'arg1')).toBe('f(a, c);\n');
+    expect(removeArg('f(a, b);\n', 'f', 'arg1')).toBe('f(a);\n');
+    expect(removeArg('f(a);\n', 'f', 'arg0')).toBe('f();\n');
+    expect(removeArg('f(a, ...rest);\n', 'f', 'arg1')).toBe('f(a);\n');
+  });
+
+  it('knows the default value of given arguments', () => {
+    const text = TEXT.replace('greet();', 'greet(user, 5);');
+    const pin = callNode(text, 'greet').pins.find((p) => p.id === 'arg1');
+    expect(pin?.meta).toMatchObject({ defaultValue: '2' });
   });
 });

@@ -90,4 +90,32 @@ describe('python argument pins', () => {
       })
     ).toContain('greet("a", loud=True)');
   });
+
+  it('removes keyword and star arguments with their name', () => {
+    const text =
+      'def greet(name, times=2):\n    pass\n\n\ngreet("a", times=3)\n';
+    const call = parsePythonDocument(text, 't.py')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'call');
+    expect(call?.pins.find((p) => p.id === 'arg1')?.meta).toMatchObject({
+      defaultValue: '2',
+    });
+    expect(
+      apply(text, {
+        type: 'removeArgument',
+        pin: { node: call?.id ?? '', pin: 'arg1' },
+      })
+    ).toContain('greet("a")\n');
+
+    const star = 'f(a, *rest)\n';
+    const node = parsePythonDocument(star, 't.py')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'call');
+    expect(
+      apply(star, {
+        type: 'removeArgument',
+        pin: { node: node?.id ?? '', pin: 'arg1' },
+      })
+    ).toBe('f(a)\n');
+  });
 });
