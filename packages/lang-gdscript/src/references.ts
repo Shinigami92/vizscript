@@ -1,7 +1,7 @@
 import type { ModuleReference } from '@vizscript/core';
 import type { Token } from './lexer';
 import { tokenize } from './lexer';
-import { stringLiteral } from './parser';
+import { stringLiteral } from './string-literal';
 
 /** Functions whose first argument is a resource path. */
 const LOADERS = new Set(['preload', 'load']);

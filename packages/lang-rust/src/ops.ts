@@ -21,10 +21,11 @@ import {
   replaceKeyword,
 } from '@vizscript/core';
 import type { ImplItem, Item, StructItem } from './ast';
-import { parseRust, splitString } from './convert';
+import { parseRust } from './convert';
 import { addRustImport } from './imports';
 import { parseRustDocument } from './lower';
 import { renameRustSymbol, rustCallSites } from './rename';
+import { splitString } from './string-literal';
 
 const IDENTIFIER = /^(?:r#)?[A-Za-z_]\w*$/;
 

@@ -4,7 +4,8 @@ import { applyGDScriptOp, GDSCRIPT_TYPES } from './ops';
 import { gdscriptReferences } from './references';
 
 export type * from './ast';
-export { dataTypeOf, parseGDScriptDocument } from './lower';
+export { dataTypeOf } from './data-type';
+export { parseGDScriptDocument } from './lower';
 export { applyGDScriptOp, GDSCRIPT_SYNTAX } from './ops';
 export { parseGDScript } from './parser';
 export { gdscriptReferences } from './references';

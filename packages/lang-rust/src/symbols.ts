@@ -17,7 +17,7 @@ import type {
   Span,
   Stmt,
 } from './ast';
-import { dataTypeOf } from './lower';
+import { dataTypeOf } from './data-type';
 
 function spanRange(span: Span): SourceRange {
   return { start: span.start, end: span.end };

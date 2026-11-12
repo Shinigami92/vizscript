@@ -15,8 +15,8 @@ import type {
   TypeRef,
   VarDecl,
 } from './ast';
+import { dataTypeOf } from './data-type';
 import { assignGroups } from './groups';
-import { dataTypeOf } from './lower';
 
 function spanRange(span: Span): SourceRange {
   return { start: span.start, end: span.end };
