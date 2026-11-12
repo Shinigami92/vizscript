@@ -301,7 +301,16 @@ function setReturnType(typeText: string | null): void {
 /** Keywords and switches the language offers for this kind of symbol. */
 const modifierOptions = computed(() => {
   const modifiers = props.types?.modifiers;
-  if (!modifiers || !isVariable.value) {
+  if (!modifiers) {
+    return undefined;
+  }
+
+  // Functions like UE's access specifier and flags (`export`, `async`).
+  if (props.symbol.kind === 'function' || props.symbol.kind === 'method') {
+    return modifiers[props.symbol.kind];
+  }
+
+  if (!isVariable.value) {
     return undefined;
   }
 
@@ -322,8 +331,29 @@ const modifierOptions = computed(() => {
 });
 
 function hasModifier(modifier: string): boolean {
-  return props.symbol.modifiers.includes(modifier);
+  return (
+    props.symbol.modifiers.includes(modifier) ||
+    (modifier === 'export' && props.symbol.modifiers.includes('export default'))
+  );
 }
+
+/** Modifiers the Details can't switch (decorators, `declare`, …). */
+const otherModifiers = computed(() => {
+  const options = modifierOptions.value;
+  const known = new Set([
+    ...(options?.keywords ?? []),
+    ...(options?.access ?? []),
+    ...(options?.flags ?? []),
+    ...(options?.flags?.includes('export') ? ['export default'] : []),
+  ]);
+  return props.symbol.modifiers.filter((m) => !known.has(m));
+});
+
+/** The access level written, else the default (the first, `public`). */
+const access = computed(() => {
+  const levels = modifierOptions.value?.access ?? [];
+  return levels.find((a) => props.symbol.modifiers.includes(a)) ?? levels[0];
+});
 
 function setModifier(modifier: string, enabled: boolean): void {
   emit('op', {
@@ -522,6 +552,27 @@ function setModifier(modifier: string, enabled: boolean): void {
             </button>
           </dd>
         </template>
+        <template v-if="modifierOptions?.access">
+          <dt class="pt-1 text-zinc-500">Access</dt>
+          <dd class="flex flex-wrap gap-1" role="group" aria-label="Access">
+            <button
+              v-for="level in modifierOptions.access"
+              :key="level"
+              type="button"
+              class="rounded px-2 py-0.5 font-mono"
+              :class="
+                access === level
+                  ? 'bg-zinc-700 text-zinc-50'
+                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+              "
+              :aria-pressed="access === level"
+              :disabled="!editable"
+              @click="access !== level && setModifier(level, true)"
+            >
+              {{ level }}
+            </button>
+          </dd>
+        </template>
         <template v-if="modifierOptions?.flags">
           <dt class="pt-0.5 text-zinc-500">Modifiers</dt>
           <dd class="flex flex-wrap gap-x-3 gap-y-1">
@@ -547,13 +598,13 @@ function setModifier(modifier: string, enabled: boolean): void {
           <dt class="text-zinc-500">Extends</dt>
           <dd class="truncate font-mono text-zinc-200">{{ symbol.extends }}</dd>
         </template>
-        <template
-          v-if="symbol.modifiers.length > 0 && !modifierOptions && !isImport"
-        >
-          <dt class="text-zinc-500">Modifiers</dt>
+        <template v-if="otherModifiers.length > 0 && !isImport">
+          <dt class="text-zinc-500">
+            {{ modifierOptions ? 'Also' : 'Modifiers' }}
+          </dt>
           <dd class="flex flex-wrap gap-1">
             <span
-              v-for="modifier in symbol.modifiers"
+              v-for="modifier in otherModifiers"
               :key="modifier"
               class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-[11px] text-zinc-300"
               >{{ modifier }}</span

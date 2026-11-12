@@ -45,6 +45,7 @@ const emit = defineEmits<{
   reveal: [range: SourceRange];
   openSymbol: [id: string];
   openImport: [id: string];
+  selectSymbol: [id: string];
   op: [op: GraphOp];
   close: [];
 }>();
@@ -143,6 +144,39 @@ function descriptionOf(
   }
 
   return node ? { nodeId: node.id, text: node.comment?.text ?? '' } : undefined;
+}
+
+function setSetting(setting: string, value: string): void {
+  emit('op', { type: 'setScriptSetting', setting, value });
+}
+
+/** Module variables with their values as code (UE's Class Defaults). */
+const defaults = computed(() => {
+  const code = props.docText ?? props.text;
+  return (props.doc?.symbols ?? [])
+    .filter(
+      (s) =>
+        s.scope === '' &&
+        (s.kind === 'variable' || s.kind === 'constant') &&
+        s.defaultRange
+    )
+    .map((symbol) => ({
+      symbol,
+      value: symbol.defaultRange
+        ? code.slice(symbol.defaultRange.start, symbol.defaultRange.end)
+        : '',
+    }));
+});
+
+function setDefault(symbol: ScriptSymbol, before: string, value: string): void {
+  if (value.trim() && value.trim() !== before.trim()) {
+    emit('op', {
+      type: 'setSymbolValue',
+      symbol: symbol.id,
+      value: value.trim(),
+      kind: 'expression',
+    });
+  }
 }
 
 function deleteSelection(): void {
@@ -408,6 +442,96 @@ function deleteSelection(): void {
           Select a node to see its details. Select a function or variable in My
           Script to see its type, inputs and uses.
         </p>
+        <!-- UE's Class Settings: settings of the whole script. -->
+        <DetailsSection
+          v-if="doc?.settings && doc.settings.length > 0"
+          id="script-settings"
+          title="Script"
+        >
+          <dl
+            class="grid grid-cols-[6.5rem_1fr] items-center gap-x-2 gap-y-1.5 px-3 text-xs"
+          >
+            <template v-for="setting in doc.settings" :key="setting.id">
+              <dt class="text-zinc-500">{{ setting.label }}</dt>
+              <dd>
+                <input
+                  v-if="setting.kind === 'flag'"
+                  type="checkbox"
+                  class="accent-amber-500"
+                  :checked="setting.value === 'true'"
+                  :disabled="!editable"
+                  :aria-label="setting.label"
+                  @change="
+                    setSetting(
+                      setting.id,
+                      String(($event.target as HTMLInputElement).checked)
+                    )
+                  "
+                />
+                <input
+                  v-else
+                  :key="`${setting.id}:${setting.value}`"
+                  class="input py-1 font-mono text-xs"
+                  :value="setting.value"
+                  :placeholder="setting.placeholder"
+                  :readonly="!editable"
+                  :aria-label="setting.label"
+                  spellcheck="false"
+                  @keydown.enter="($event.target as HTMLInputElement).blur()"
+                  @change="
+                    setSetting(
+                      setting.id,
+                      ($event.target as HTMLInputElement).value
+                    )
+                  "
+                />
+              </dd>
+            </template>
+          </dl>
+        </DetailsSection>
+
+        <!-- UE's Class Defaults: the values of all variables in one place. -->
+        <DetailsSection
+          v-if="defaults.length > 0"
+          id="script-defaults"
+          title="Defaults"
+        >
+          <dl
+            class="grid grid-cols-[6.5rem_1fr] items-center gap-x-2 gap-y-1.5 px-3 text-xs"
+          >
+            <template v-for="variable in defaults" :key="variable.symbol.id">
+              <dt class="min-w-0">
+                <button
+                  type="button"
+                  class="link block max-w-full truncate font-mono"
+                  :title="`Show ${variable.symbol.name}`"
+                  @click="emit('selectSymbol', variable.symbol.id)"
+                >
+                  {{ variable.symbol.name }}
+                </button>
+              </dt>
+              <dd>
+                <input
+                  :key="`${variable.symbol.id}:${variable.value}`"
+                  class="input py-1 font-mono text-xs"
+                  :value="variable.value"
+                  :readonly="!editable"
+                  :aria-label="`Default value of ${variable.symbol.name}`"
+                  spellcheck="false"
+                  @keydown.enter="($event.target as HTMLInputElement).blur()"
+                  @change="
+                    setDefault(
+                      variable.symbol,
+                      variable.value,
+                      ($event.target as HTMLInputElement).value
+                    )
+                  "
+                />
+              </dd>
+            </template>
+          </dl>
+        </DetailsSection>
+
         <DetailsSection id="file" title="File">
           <dl class="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1 px-3 text-xs">
             <dt class="text-zinc-500">Language</dt>

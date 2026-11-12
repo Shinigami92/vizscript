@@ -1818,6 +1818,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         @reveal="revealRange"
         @open-symbol="openSymbol"
         @open-import="openImport"
+        @select-symbol="selectSymbol"
         @op="onScriptOp"
         @close="workbench.hide('details')"
       />
