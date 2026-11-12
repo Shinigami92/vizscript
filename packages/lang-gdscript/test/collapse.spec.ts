@@ -185,3 +185,17 @@ describe('export hints', () => {
     );
   });
 });
+
+describe('enum members', () => {
+  it('lists the members of named enums', () => {
+    const doc = parseGDScriptDocument(
+      'extends Node\n\nenum State { IDLE, RUN = 2, JUMP } # states\n',
+      't.gd'
+    );
+    expect(doc.symbols?.find((s) => s.kind === 'enum')?.members).toEqual([
+      'IDLE',
+      'RUN',
+      'JUMP',
+    ]);
+  });
+});

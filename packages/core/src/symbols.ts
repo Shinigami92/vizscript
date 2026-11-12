@@ -87,6 +87,8 @@ export interface ScriptSymbol {
   imported?: string;
   /** Kind of the imported declaration, once its file was read. */
   importedKind?: SymbolKind;
+  /** Members of an enum (`IDLE`, `RUN`), for value choices. */
+  members?: string[];
 }
 
 /** Qualified name of a symbol, e.g. `Item.total`. */

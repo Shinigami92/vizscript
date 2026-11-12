@@ -22,3 +22,4 @@ export * from './symbols';
 export * from './text-ops';
 export * from './text-utils';
 export * from './types';
+export * from './value-fields';

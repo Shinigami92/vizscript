@@ -293,6 +293,14 @@ class SymbolCollector {
               range: spanRange(stmt),
               nameRange: this.nameAfter('enum', stmt.name, stmt),
               dataType: stmt.name,
+              // `enum State { IDLE, RUN = 2 }`: names before `=` / `,`.
+              members: [
+                ...(this.text
+                  .slice(stmt.start, stmt.end)
+                  .match(/\{([\s\S]*)\}/)?.[1]
+                  ?.replaceAll(/#.*$/gm, '')
+                  .matchAll(/([A-Za-z_]\w*)\s*(?:=[^,]*)?(?:,|$)/g) ?? []),
+              ].map((m) => m[1] ?? ''),
             });
           }
 

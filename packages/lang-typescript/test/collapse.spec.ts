@@ -191,3 +191,13 @@ describe('function settings', () => {
     );
   });
 });
+
+describe('enum members', () => {
+  it('lists the members of enums', () => {
+    const doc = parseTypeScript("enum Mode { Light, Dark = 'dark' }\n", 't.ts');
+    expect(doc.symbols?.find((s) => s.kind === 'enum')?.members).toEqual([
+      'Light',
+      'Dark',
+    ]);
+  });
+});

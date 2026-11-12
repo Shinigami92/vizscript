@@ -502,6 +502,9 @@ class SymbolCollector {
           nameRange: nameRangeOf(node.id),
           dataType: node.id.name,
           modifiers: [...modifiers, ...(node.const ? ['const'] : [])],
+          members: node.body.members.map((m) =>
+            m.id.type === 'Identifier' ? m.id.name : m.id.value
+          ),
         });
         break;
       }

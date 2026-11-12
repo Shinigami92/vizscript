@@ -263,6 +263,17 @@ export const GDSCRIPT_TYPES: TypeSystemInfo = {
   ],
   containerDefaults: { array: '[]', map: '{}' },
   privatePrefix: '_',
+  valueEditors: {
+    vectors: {
+      Vector2: ['x', 'y'],
+      Vector2i: ['x', 'y'],
+      Vector3: ['x', 'y', 'z'],
+      Vector3i: ['x', 'y', 'z'],
+      Vector4: ['x', 'y', 'z', 'w'],
+      Vector4i: ['x', 'y', 'z', 'w'],
+    },
+    color: 'Color',
+  },
   exportHints: [
     { name: '@export' },
     { name: '@export_range', args: '0, 100, 1' },

@@ -231,6 +231,15 @@ export interface TypeSystemInfo {
    */
   exportHints?: Array<{ name: string; args?: string }>;
   /**
+   * Values the Details panel edits with fields instead of code: vector
+   * constructors with their components (`Vector2(x, y)`), and the color
+   * constructor (`Color(r, g, b, a)`), like UE's vector and color fields.
+   */
+  valueEditors?: {
+    vectors?: Record<string, string[]>;
+    color?: string;
+  };
+  /**
    * Prefix that makes a name private by convention (`_` in Python and
    * GDScript); Details offers it as UE's "Private" switch.
    */
