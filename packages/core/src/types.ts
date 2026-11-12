@@ -96,6 +96,7 @@ export function pinColor(type: DataType, scheme: ColorScheme = 'dark'): string {
 
 export const CATEGORY_COLORS: Record<NodeCategory, string> = {
   event: '#8c1c1c',
+  entry: '#6c2d8c',
   function: '#1d5a96',
   pure: '#4c7a2c',
   flow: '#5a5a5a',

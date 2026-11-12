@@ -55,6 +55,85 @@ export interface NodeGeometry {
   pins: Map<string, PinGeometry>;
 }
 
+/**
+ * Drawn without a header: getters and operators (`node.compact`) and
+ * setters, like UE's compact SET node.
+ */
+export function isCompact(node: GraphNode): boolean {
+  return node.compact === true || node.kind === 'setVar';
+}
+
+function isSetter(node: GraphNode): boolean {
+  return node.kind === 'setVar' && node.title.startsWith('Set ');
+}
+
+/** Text in the middle of a compact node (`SET` for setters). */
+export function compactTitle(node: GraphNode): string {
+  return isSetter(node) ? 'SET' : node.title;
+}
+
+/**
+ * The label drawn next to a pin. Compact nodes show none, except the
+ * value input of a setter: the variable's name, like UE's SET node.
+ */
+export function pinLabel(node: GraphNode, pin: Pin): string {
+  if (!isCompact(node)) {
+    return pin.name;
+  }
+
+  return isSetter(node) && pin.direction === 'in' && pin.kind === 'data'
+    ? node.title.slice('Set '.length)
+    : '';
+}
+
+/** Icon before a node's title, like UE's function and event icons. */
+export type HeaderIcon = 'function' | 'event' | 'branch' | 'loop' | 'unknown';
+
+export function headerIcon(node: GraphNode): HeaderIcon | undefined {
+  if (isCompact(node)) {
+    return undefined;
+  }
+
+  switch (node.category) {
+    case 'event': {
+      return 'event';
+    }
+
+    case 'entry':
+    case 'function':
+    case 'pure':
+    case 'return': {
+      return 'function';
+    }
+
+    case 'flow': {
+      if (node.kind === 'forEach' || node.kind === 'loop') {
+        return 'loop';
+      }
+
+      return node.kind === 'branch' || node.kind === 'switch'
+        ? 'branch'
+        : undefined;
+    }
+
+    case 'unknown': {
+      return 'unknown';
+    }
+
+    default: {
+      return undefined;
+    }
+  }
+}
+
+/** Latent nodes (`await`) show a clock at the right of the header. */
+export function isLatent(node: GraphNode): boolean {
+  return node.category === 'latent' && !isCompact(node);
+}
+
+/** Space of a header icon (icon and gap). */
+export const ICON_SPACE = 18;
+
 function sortPins(pins: ReadonlyArray<Pin>): Pin[] {
   // Exec pins first, then data pins, each keeping their declared order.
   return [
@@ -76,11 +155,12 @@ export function literalWidth(pin: Pin, measure: MeasureText): number {
 }
 
 function pinColumnWidth(
+  node: GraphNode,
   pin: Pin,
-  measure: MeasureText,
-  hideLabels: boolean
+  measure: MeasureText
 ): number {
-  const label = hideLabels || !pin.name ? 0 : measure(pin.name, 'label');
+  const text = pinLabel(node, pin);
+  const label = text ? measure(text, 'label') : 0;
   const literal = literalWidth(pin, measure);
   return (
     NODE_METRICS.pinRadius * 2 +
@@ -96,8 +176,8 @@ export function computeNodeGeometry(
 ): NodeGeometry {
   const left = sortPins(node.pins.filter((p) => p.direction === 'in'));
   const right = sortPins(node.pins.filter((p) => p.direction === 'out'));
-  const rows = Math.max(left.length, right.length, node.compact ? 1 : 0);
-  const compact = node.compact === true;
+  const compact = isCompact(node);
+  const rows = Math.max(left.length, right.length, compact ? 1 : 0);
 
   const headerHeight = compact
     ? 0
@@ -106,17 +186,20 @@ export function computeNodeGeometry(
 
   const leftWidth = Math.max(
     0,
-    ...left.map((p) => pinColumnWidth(p, measure, compact))
+    ...left.map((p) => pinColumnWidth(node, p, measure))
   );
   const rightWidth = Math.max(
     0,
-    ...right.map((p) => pinColumnWidth(p, measure, compact))
+    ...right.map((p) => pinColumnWidth(node, p, measure))
   );
 
   let width: number;
   let height: number;
   if (compact) {
-    const titleWidth = measure(node.title, 'compact');
+    const titleWidth = Math.max(
+      measure(compactTitle(node), 'compact'),
+      node.subtitle ? measure(node.subtitle, 'subtitle') : 0
+    );
     width =
       leftWidth +
       rightWidth +
@@ -126,8 +209,10 @@ export function computeNodeGeometry(
     height =
       rows * NODE_METRICS.rowHeight + NODE_METRICS.compactPaddingY * 2 - 4;
   } else {
+    const icons =
+      (headerIcon(node) ? ICON_SPACE : 0) + (isLatent(node) ? ICON_SPACE : 0);
     const titleWidth = Math.max(
-      measure(node.title, 'title'),
+      measure(node.title, 'title') + icons,
       node.subtitle ? measure(node.subtitle, 'subtitle') : 0
     );
     width = Math.max(

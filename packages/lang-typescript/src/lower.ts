@@ -543,7 +543,8 @@ class FnGraphBuilder {
       kind: 'entry',
       title: this.name,
       subtitle,
-      category: 'event',
+      // Like UE: functions start purple, the module's code runs like an event.
+      category: fn.type === 'Program' ? 'event' : 'entry',
       purity: 'impure',
       range: entryRange,
       pins: entryPins,

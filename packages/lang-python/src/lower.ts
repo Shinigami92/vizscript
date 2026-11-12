@@ -403,7 +403,8 @@ class FnGraphBuilder extends GraphBuilderBase {
       kind: 'entry',
       title: name,
       subtitle,
-      category: 'event',
+      // Like UE's purple function entry; the module runs like an event.
+      category: 'entry',
       purity: 'impure',
       range: { start: fn.start, end: fn.body.start },
       pins: entryPins,

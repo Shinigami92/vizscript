@@ -105,6 +105,8 @@ export type NodeKind =
 /** Controls the visual style (header color / shape) of a node. */
 export type NodeCategory =
   | 'event'
+  /** Start of a function (UE: the purple function entry node). */
+  | 'entry'
   | 'function'
   | 'pure'
   | 'flow'

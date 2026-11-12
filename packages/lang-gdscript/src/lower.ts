@@ -345,6 +345,10 @@ class FnGraphBuilder extends GraphBuilderBase {
       range = rangeOf(fn);
       entryPins.push(this.execOut('then', '', this.blockInsert(fn.body)));
       const shortName = source.name.split('.').at(-1) ?? source.name;
+      // Engine callbacks and signal handlers (`_on_button_pressed`) are
+      // events, like UE's red event nodes; other functions start purple.
+      const event =
+        VIRTUAL_METHODS.has(shortName) || shortName.startsWith('_on_');
       const subtitle = VIRTUAL_METHODS.has(shortName)
         ? 'event'
         : `${fn.isStatic ? 'static ' : ''}${source.kind}`;
@@ -352,7 +356,7 @@ class FnGraphBuilder extends GraphBuilderBase {
         kind: 'entry',
         title: source.name,
         subtitle,
-        category: 'event',
+        category: event ? 'event' : 'entry',
         purity: 'impure',
         range: { start: fn.start, end: fn.body.start },
         pins: entryPins,
