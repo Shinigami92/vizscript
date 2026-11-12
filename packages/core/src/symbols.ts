@@ -40,6 +40,14 @@ export interface SymbolParam {
 }
 
 /** A declaration of the script (UE: an entry of "My Blueprint"). */
+/** A field or method of an interface or object type. */
+export interface SymbolField {
+  name: string;
+  type?: TypeRef;
+  dataType: DataType;
+  method?: boolean;
+}
+
 export interface ScriptSymbol {
   /** `kind:qualified.name`, unique within the document. */
   id: string;
@@ -89,6 +97,8 @@ export interface ScriptSymbol {
   importedKind?: SymbolKind;
   /** Members of an enum (`IDLE`, `RUN`), for value choices. */
   members?: string[];
+  /** Fields and methods of an interface / object type (`price: number`). */
+  fields?: SymbolField[];
   /**
    * Category of a variable (UE's Category): GDScript's `@export_group`, with
    * a subgroup as `Group/Subgroup`.

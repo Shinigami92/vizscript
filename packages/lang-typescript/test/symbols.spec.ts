@@ -56,3 +56,24 @@ describe('typeScriptSymbols', () => {
     `);
   });
 });
+
+describe('type fields', () => {
+  it('lists the fields and methods of interfaces and object types', () => {
+    const doc = parseTypeScript(
+      'interface Item {\n  name: string;\n  price: number;\n  total(): number;\n}\ntype Point = { x: number; y: number };\n',
+      't.ts'
+    );
+    const fields = (name: string): string[] =>
+      doc.symbols
+        ?.find((s) => s.name === name)
+        ?.fields?.map(
+          (f) => `${f.name}:${f.dataType}${f.method ? '()' : ''}`
+        ) ?? [];
+    expect(fields('Item')).toEqual([
+      'name:string',
+      'price:number',
+      'total:function()',
+    ]);
+    expect(fields('Point')).toEqual(['x:number', 'y:number']);
+  });
+});

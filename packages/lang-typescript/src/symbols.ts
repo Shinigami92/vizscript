@@ -4,6 +4,7 @@ import type {
   Reexport,
   ScriptSymbol,
   SourceRange,
+  SymbolField,
   SymbolKind,
   SymbolParam,
   TypeRef,
@@ -161,6 +162,35 @@ class SymbolCollector {
     }
 
     this.symbols.push({ ...symbol, id, modifiers: symbol.modifiers ?? [] });
+  }
+
+  /** Fields and methods of an interface or object type literal. */
+  private fields(members: ReadonlyArray<t.TSTypeElement>): SymbolField[] {
+    return members.flatMap((member): SymbolField[] => {
+      if (
+        (member.type !== 'TSPropertySignature' &&
+          member.type !== 'TSMethodSignature') ||
+        member.key.type !== 'Identifier' ||
+        member.computed
+      ) {
+        return [];
+      }
+
+      if (member.type === 'TSMethodSignature') {
+        return [{ name: member.key.name, dataType: 'function', method: true }];
+      }
+
+      const type = this.typeRef(member.typeAnnotation);
+      return [
+        {
+          name: member.key.name,
+          ...(type ? { type } : {}),
+          dataType: member.typeAnnotation
+            ? typeFromAnnotation(member.typeAnnotation)
+            : 'any',
+        },
+      ];
+    });
   }
 
   private param(node: t.Node): SymbolParam {
@@ -521,6 +551,13 @@ class SymbolCollector {
 
       case 'TSInterfaceDeclaration':
       case 'TSTypeAliasDeclaration': {
+        const body =
+          node.type === 'TSInterfaceDeclaration'
+            ? node.body.body
+            : node.typeAnnotation.type === 'TSTypeLiteral'
+              ? node.typeAnnotation.members
+              : [];
+        const fields = this.fields(body);
         this.add({
           kind: 'type',
           name: node.id.name,
@@ -532,6 +569,7 @@ class SymbolCollector {
             ...modifiers,
             node.type === 'TSInterfaceDeclaration' ? 'interface' : 'type',
           ],
+          ...(fields.length > 0 ? { fields } : {}),
         });
         break;
       }
