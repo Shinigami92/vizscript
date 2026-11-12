@@ -134,11 +134,42 @@ function clear(): void {
   emit('change', null, undefined);
 }
 
+/**
+ * Default value of a type typed by hand: like a picked one when it is a
+ * basic type (`number`) or a container of anything (`Item[]`, `list[Item]`).
+ */
+function customDefault(type: string): string | undefined {
+  const primitive = props.types.primitives.find((p) => p.name === type);
+  if (primitive) {
+    return primitive.defaultValue;
+  }
+
+  for (const kind of ['array', 'set'] as const) {
+    const template = props.types[kind];
+    const at = template?.lastIndexOf('T') ?? -1;
+    if (!template || at < 0) {
+      continue;
+    }
+
+    const before = template.slice(0, at);
+    const after = template.slice(at + 1);
+    if (
+      type.length > before.length + after.length &&
+      type.startsWith(before) &&
+      type.endsWith(after)
+    ) {
+      return props.types.containerDefaults?.[kind];
+    }
+  }
+
+  return undefined;
+}
+
 function applyCustom(): void {
   const type = custom.value.trim();
   if (type) {
     open.value = false;
-    emit('change', type, undefined);
+    emit('change', type, customDefault(type));
   }
 }
 

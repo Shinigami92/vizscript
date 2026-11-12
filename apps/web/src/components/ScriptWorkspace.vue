@@ -811,22 +811,20 @@ function allNodeIds(d: GraphDocument | null): Set<string> {
   return new Set(d?.functions.flatMap((f) => f.nodes.map((n) => n.id)) ?? []);
 }
 
+const layoutOptions = {
+  sizeOf: (node: GraphNode) =>
+    canvas.value?.sizeOf(node) ?? { width: 160, height: 60 },
+  spaceAbove: (node: GraphNode) => canvas.value?.spaceAbove(node) ?? 0,
+  commentBoxTop: COMMENT_BOX_TOP,
+};
+
 function relayout(): void {
   if (!doc.value) {
     return;
   }
 
   positions.value = {
-    ...layoutDocument(
-      doc.value,
-      {
-        sizeOf: (node: GraphNode) =>
-          canvas.value?.sizeOf(node) ?? { width: 160, height: 60 },
-        spaceAbove: (node: GraphNode) => canvas.value?.spaceAbove(node) ?? 0,
-        commentBoxTop: COMMENT_BOX_TOP,
-      },
-      pinned.value
-    ),
+    ...layoutDocument(doc.value, layoutOptions, pinned.value),
     ...rerouteEntries(pinned.value),
     ...boxColorEntries(pinned.value),
   };
@@ -914,8 +912,25 @@ async function reparse(): Promise<void> {
       fresh.find((n) => n.purity === 'impure') ??
       fresh.find((n) => !used.has(n.id));
     if (added) {
-      pinned.value = { ...pinned.value, [added.id]: world };
-      void persist({ [added.id]: world });
+      // The other new nodes of the edit (a hoisted call, the parts of an
+      // expression) keep their place relative to it, as the auto layout
+      // arranges them, instead of landing next to old neighbors.
+      const auto = layoutDocument(next, layoutOptions, {});
+      const origin = auto[added.id];
+      const placed: Positions = { [added.id]: world };
+      for (const node of origin ? fresh : []) {
+        const p = auto[node.id];
+        // Old nodes whose text changed kept their place (reconciled above).
+        if (node.id !== added.id && p && origin && !pinned.value[node.id]) {
+          placed[node.id] = {
+            x: world.x + p.x - origin.x,
+            y: world.y + p.y - origin.y,
+          };
+        }
+      }
+
+      pinned.value = { ...pinned.value, ...placed };
+      void persist(placed);
     }
 
     if (select === 'fresh' && fresh.length > 0) {
@@ -1433,10 +1448,13 @@ const currentFunction = computed<string | null>(() => {
     return qualifiedName(symbol);
   }
 
+  // The selected node's function, else the one open on its own.
   const first = selection.value[0];
   const fn = first
     ? doc.value?.functions.find((f) => f.nodes.some((n) => n.id === first))
-    : undefined;
+    : focusFn.value
+      ? doc.value?.functions.find((f) => f.id === focusFn.value)
+      : undefined;
   const owner = fn
     ? doc.value?.symbols?.find((s) => s.fnId === fn.id && s.kind !== 'class')
     : undefined;

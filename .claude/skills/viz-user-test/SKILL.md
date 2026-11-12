@@ -117,7 +117,7 @@ Sections:
 Then summarize the most important findings for the user and ask whether to fix them. **Don't change code in this skill.** Finally:
 
 - Reset the playground so it isn't left in an edited state.
-- Set the viewport back to the size remembered in step 2 (`browser_resize`), also when the run stopped early.
+- Set the viewport back to the size remembered in step 2 (`browser_resize`), also when the run stopped early. If that size was already 1733×1009 (left over from an earlier run), use Playwright's default instead: **1280×720**.
 
 ## Tips (learned the hard way)
 

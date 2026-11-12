@@ -175,12 +175,23 @@ const valueKind = computed<ValueKind>(() => {
   return 'expression';
 });
 
+/** `undefined`, `null`, `None`: shown as an empty field, typing replaces it. */
+const PLACEHOLDER_VALUES: ReadonlySet<string> = new Set([
+  'undefined',
+  'null',
+  'None',
+]);
+const placeholderValue = computed(() =>
+  PLACEHOLDER_VALUES.has(valueCode.value.trim()) ? valueCode.value.trim() : ''
+);
+
 const draft = ref('');
 watch(
   [valueCode, valueKind],
   () => {
-    draft.value =
-      valueKind.value === 'string'
+    draft.value = placeholderValue.value
+      ? ''
+      : valueKind.value === 'string'
         ? (stringValue(valueCode.value) ?? '')
         : valueCode.value;
   },
@@ -188,8 +199,9 @@ watch(
 );
 
 function commitValue(): void {
-  const current =
-    valueKind.value === 'string'
+  const current = placeholderValue.value
+    ? ''
+    : valueKind.value === 'string'
       ? stringValue(valueCode.value)
       : valueCode.value;
   // `v-model` on a number field gives a number.
@@ -798,7 +810,10 @@ function setModifier(modifier: string, enabled: boolean): void {
               class="input py-0.5 text-xs"
               :class="valueKind === 'string' ? '' : 'font-mono'"
               :type="valueKind === 'number' ? 'number' : 'text'"
-              :placeholder="valueKind === 'string' ? 'Text' : 'No value'"
+              :placeholder="
+                placeholderValue ||
+                (valueKind === 'string' ? 'Text' : 'No value')
+              "
               :aria-label="`Value of ${symbol.name}`"
               spellcheck="false"
               @keydown.enter.prevent="commitValue"
