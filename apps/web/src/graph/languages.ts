@@ -21,6 +21,24 @@ export function isVisualizable(path: string): boolean {
   );
 }
 
+/** Backend of a file: files of one language can import each other. */
+export function languageOf(
+  path: string
+): 'typescript' | 'python' | 'gdscript' | undefined {
+  const lower = path.toLowerCase();
+  if (!isVisualizable(path)) {
+    return undefined;
+  }
+
+  if (lower.endsWith('.gd')) {
+    return 'gdscript';
+  }
+
+  return lower.endsWith('.py') || lower.endsWith('.pyw')
+    ? 'python'
+    : 'typescript';
+}
+
 /** Monaco language id for a file path. */
 export function monacoLanguage(path: string): string {
   const lower = path.toLowerCase();

@@ -42,6 +42,7 @@ import { useToasts } from '../composables/use-toasts';
 import { indexDocument, pinEdges } from '../graph/doc-index';
 import type { Problem, ProblemSeverity } from '../graph/problems';
 import { worstSeverity } from '../graph/problems';
+import type { ExternalName } from '../graph/project-index';
 import { isMac, shortcut, snippet } from '../graph/source';
 import {
   endOfFunction,
@@ -69,6 +70,8 @@ const props = defineProps<{
   imports?: ReadonlyArray<string>;
   /** Operators and values of the language (action menu). */
   types?: TypeSystemInfo | null;
+  /** Names of other files; using one adds its import. */
+  externals?: ReadonlyArray<ExternalName>;
 }>();
 
 const emit = defineEmits<{
@@ -83,6 +86,8 @@ const emit = defineEmits<{
   resetLayout: [ids: string[]];
   undo: [];
   redo: [];
+  /** The action menu opened (names of other files can be looked up). */
+  actionMenu: [];
 }>();
 
 const { show } = useToasts();
@@ -259,6 +264,9 @@ function openMenu(state: MenuState): void {
   hideTooltip();
   prompt.value = null;
   menu.value = state;
+  if (props.editable) {
+    emit('actionMenu');
+  }
 }
 
 function closeMenu(): void {
@@ -605,7 +613,18 @@ function pinOf(pinRef: PinRef): { node: GraphNode; pin: Pin } | undefined {
   return node && pin ? { node, pin } : undefined;
 }
 
-function addNode(template: NodeTemplate, state: MenuState | null): void {
+/** An op using a name of another file, with that name's import. */
+function withImport(external: ExternalName, op: GraphOp): GraphOp {
+  return { type: 'withImport', import: { ...external.request }, op };
+}
+
+const ICON_IMPORT = 'i-mdi-file-import-outline text-sky-400';
+
+function addNode(
+  template: NodeTemplate,
+  state: MenuState | null,
+  wrap?: (op: GraphOp) => GraphOp
+): void {
   const current = toRaw(state);
   if (!current) {
     closeMenu();
@@ -617,13 +636,23 @@ function addNode(template: NodeTemplate, state: MenuState | null): void {
     from?.pin.kind === 'exec' && current.from
       ? { ...toRaw(current.from) }
       : undefined;
-  emitOp({
-    type: 'addNode',
-    template,
-    after: from?.pin.direction === 'out' ? anchor : undefined,
-    before: from?.pin.direction === 'in' ? anchor : undefined,
-    position: { ...current.world },
-  });
+  // Without an exec pin: at the end of the function under the cursor.
+  const place = anchor ? undefined : placeAt(current.world);
+  const op: GraphOp = place
+    ? {
+        type: 'addNode',
+        template,
+        ...place.anchor,
+        position: { ...current.world },
+      }
+    : {
+        type: 'addNode',
+        template,
+        after: from?.pin.direction === 'out' ? anchor : undefined,
+        before: from?.pin.direction === 'in' ? anchor : undefined,
+        position: { ...current.world },
+      };
+  emitOp(wrap ? wrap(op) : op);
 }
 
 interface Variable {
@@ -743,6 +772,17 @@ function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
       icon: ICON_CALL,
       action: () => addNode({ type: 'call', callee }, state),
     })),
+    ...(props.externals ?? []).map((external): ActionEntry => ({
+      label: external.callee,
+      category: 'Call function',
+      icon: ICON_IMPORT,
+      hint: external.where,
+      keywords: `${external.path} import`,
+      action: () =>
+        addNode({ type: 'call', callee: external.callee }, state, (op) =>
+          withImport(external, op)
+        ),
+    })),
     {
       label: 'Branch (if)',
       category: 'Flow control',
@@ -835,6 +875,24 @@ function actionEntries(state: MenuState): ActionEntry[] {
             position: { ...state.world },
           }),
       })),
+      ...(props.externals ?? [])
+        .filter((external) => external.kind === 'function')
+        .map((external): ActionEntry => ({
+          label: `${external.callee}(value)`,
+          category: 'Call function with this value',
+          icon: ICON_IMPORT,
+          hint: external.where,
+          keywords: `${external.callee} ${external.path} import`,
+          action: () =>
+            emitOp(
+              withImport(external, {
+                type: 'callWith',
+                pin: source,
+                callee: external.callee,
+                position: { ...state.world },
+              })
+            ),
+        })),
       ...(named
         ? []
         : [
@@ -886,6 +944,21 @@ function actionEntries(state: MenuState): ActionEntry[] {
       action: () =>
         emitOp({ type: 'setInput', pin: source, expression: `${callee}()` }),
     })),
+    ...(props.externals ?? []).map((external): ActionEntry => {
+      const expression =
+        external.kind === 'function' ? `${external.callee}()` : external.name;
+      return {
+        label: expression,
+        category: external.kind === 'function' ? 'Call function' : 'Variables',
+        icon: ICON_IMPORT,
+        hint: external.where,
+        keywords: `${external.name} ${external.path} import`,
+        action: () =>
+          emitOp(
+            withImport(external, { type: 'setInput', pin: source, expression })
+          ),
+      };
+    }),
     ...expressionActions(state),
     ...(extract.type === undefined || extract.type === 'item'
       ? extract.disabled

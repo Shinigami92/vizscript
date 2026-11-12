@@ -57,6 +57,11 @@ import {
 import type { LayoutStore } from '../graph/layout-store';
 import type { Problem } from '../graph/problems';
 import { problemsByNode } from '../graph/problems';
+import {
+  candidateFiles,
+  externalNames,
+  godotRoot,
+} from '../graph/project-index';
 import { VIEW_PARAM } from '../graph/share';
 import { shortcut } from '../graph/source';
 import { symbolNodes } from '../graph/symbols';
@@ -327,6 +332,52 @@ function exportsOf(path: string): Promise<ScriptSymbol[]> {
 
   return exports;
 }
+
+// ------------------------------------------------------- project index
+
+/** Exports of the repository's files of this language (action menu). */
+const projectExports = shallowRef<ReadonlyMap<string, ScriptSymbol[]>>(
+  new Map()
+);
+let indexing = false;
+/** Files read for the index: nearest folders first. */
+const INDEX_LIMIT = 150;
+
+/**
+ * Reads the exports of other files the first time the action menu opens,
+ * so it can offer their functions (using one adds the import).
+ */
+async function indexProject(): Promise<void> {
+  const files = props.files;
+  if (indexing || !files || !props.readFile) {
+    return;
+  }
+
+  indexing = true;
+  const queue = candidateFiles(files, props.path, INDEX_LIMIT);
+  const found = new Map<string, ScriptSymbol[]>();
+  const worker = async (): Promise<void> => {
+    for (let path = queue.shift(); path; path = queue.shift()) {
+      const exports = await exportsOf(path);
+      if (exports.length > 0) {
+        found.set(path, exports);
+        projectExports.value = new Map(found);
+      }
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+}
+
+const externals = computed(() =>
+  props.files
+    ? externalNames(
+        projectExports.value,
+        doc.value,
+        props.path,
+        godotRoot(props.files, props.path)
+      )
+    : []
+);
 
 /** Declarations of the imported names, sent along with every parse. */
 let importDeclarations: ImportedDeclaration[] = [];
@@ -1140,18 +1191,22 @@ async function onOp(op: GraphOp): Promise<void> {
   }
 
   // New nodes go where the wire was dropped or the menu was opened.
+  const placed = op.type === 'withImport' ? op.op : op;
   if (
-    (op.type === 'addNode' ||
-      op.type === 'callWith' ||
-      op.type === 'useValue' ||
-      op.type === 'promote' ||
-      op.type === 'extract') &&
-    op.position
+    (placed.type === 'addNode' ||
+      placed.type === 'callWith' ||
+      placed.type === 'useValue' ||
+      placed.type === 'promote' ||
+      placed.type === 'extract') &&
+    placed.position
   ) {
     pendingPlacement = {
-      world: op.position,
+      world: placed.position,
       known: allNodeIds(doc.value),
-      matches: op.type === 'addNode' ? templateMatcher(op.template) : undefined,
+      matches:
+        placed.type === 'addNode'
+          ? templateMatcher(placed.template)
+          : undefined,
     };
   }
 
@@ -1478,12 +1533,14 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           :definition-of="describeDefinition"
           :problems="nodeProblems"
           :imports="importedNames"
+          :externals="externals"
           :types="typeSystem"
           @selection-change="onSelectionChange"
           @hover-change="onHoverChange"
           @layout-change="onLayoutChange"
           @reset-layout="resetLayout"
           @op="onOp"
+          @action-menu="indexProject"
           @activate="onActivate"
           @go-to-definition="goToDefinition"
           @camera-change="onCameraChange"
