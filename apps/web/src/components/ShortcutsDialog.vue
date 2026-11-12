@@ -70,6 +70,14 @@ const GROUPS: ReadonlyArray<{
       },
       { action: 'Rewire', input: 'Drag from a pin to another pin' },
       {
+        action: 'Fill in an argument',
+        input: 'Type into the pin of a call, or wire a value into it',
+      },
+      {
+        action: 'Add an argument pin',
+        input: 'Right-click a call → Add argument pin',
+      },
+      {
         action: 'Reorder statements',
         input: "Drag an exec output onto another node's exec input",
       },

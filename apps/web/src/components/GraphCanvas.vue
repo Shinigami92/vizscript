@@ -291,12 +291,6 @@ const dropMenu = ref<{ x: number; y: number; entries: MenuEntry[] } | null>(
   null
 );
 
-const PLACEHOLDERS: Record<string, string> = {
-  typescript: 'undefined',
-  python: 'None',
-  gdscript: 'null',
-};
-
 function onDragOver(event: DragEvent): void {
   if (props.editable && event.dataTransfer?.types.includes(SYMBOL_DRAG_MIME)) {
     event.preventDefault();
@@ -352,7 +346,6 @@ function onDrop(event: DragEvent): void {
   const owner = doc.symbols?.find(
     (s) => s.fnId === fnId && (s.kind === 'function' || s.kind === 'method')
   );
-  const placeholder = PLACEHOLDERS[doc.language] ?? 'null';
   const add = (template: NodeTemplate): void =>
     emitOp({ type: 'addNode', template, ...anchor, position: world });
 
@@ -370,11 +363,9 @@ function onDrop(event: DragEvent): void {
       return;
     }
 
-    // Like a new call node: required inputs get a placeholder.
-    const args = (symbol.params ?? [])
-      .filter((p) => !p.defaultRange && !p.rest)
-      .map(() => placeholder);
-    add({ type: 'call', callee, args });
+    // Like a new call node: its inputs show as pins (from the signature)
+    // that fill in the arguments when they get a value or a wire.
+    add({ type: 'call', callee });
     return;
   }
 
@@ -909,6 +900,17 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
           icon: 'i-mdi-content-copy',
           action: () => void copyCode(ids),
         },
+        ...(props.editable && ids.length === 1 && first?.node.kind === 'call'
+          ? [
+              {
+                // UE's "Add pin": one more argument to wire or fill in.
+                label: 'Add argument pin',
+                icon: 'i-mdi-plus-circle-outline',
+                action: () =>
+                  emitOp({ type: 'addArgument', node: target.nodeId }),
+              },
+            ]
+          : []),
         { type: 'separator' },
         {
           label: 'Zoom to selection',
