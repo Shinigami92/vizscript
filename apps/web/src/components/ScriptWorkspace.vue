@@ -936,37 +936,6 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
     >
       <slot name="toolbar" />
       <div class="ml-auto flex items-center gap-2">
-        <button
-          type="button"
-          class="btn-ghost shrink-0 gap-1.5 px-2 text-xs"
-          :class="
-            problemCounts.errors > 0
-              ? 'text-red-300'
-              : problemCounts.warnings > 0
-                ? 'text-amber-300'
-                : 'text-zinc-500'
-          "
-          :title="`Problems (${shortcut('M', true)})`"
-          :aria-label="`${problemCounts.errors} errors, ${problemCounts.warnings} warnings. Toggle problems`"
-          :aria-pressed="workbench.isVisible('problems')"
-          @click="workbench.toggle('problems')"
-        >
-          <span class="i-mdi-close-circle-outline" />{{ problemCounts.errors }}
-          <span class="i-mdi-alert-outline" />{{ problemCounts.warnings }}
-        </button>
-        <span
-          v-if="layoutStore && saving !== 'idle'"
-          class="hidden text-xs sm:inline"
-          :class="saving === 'error' ? 'text-red-400' : 'text-zinc-500'"
-        >
-          {{
-            saving === 'saving'
-              ? 'Saving layout…'
-              : saving === 'saved'
-                ? 'Layout saved'
-                : 'Layout not saved'
-          }}
-        </span>
         <div
           v-if="editable"
           class="flex items-center"
@@ -1075,6 +1044,51 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         </div>
       </div>
     </div>
+
+    <!-- The status bar is rendered by the Workbench after this toolbar. -->
+    <Teleport defer to="#workbench-status">
+      <button
+        type="button"
+        class="flex h-full items-center gap-1 rounded-sm px-1.5 hover:bg-zinc-800 hover:text-zinc-100"
+        :class="
+          problemCounts.errors > 0
+            ? 'text-red-300'
+            : problemCounts.warnings > 0
+              ? 'text-amber-300'
+              : ''
+        "
+        :title="`Problems (${shortcut('M', true)})`"
+        :aria-label="`${problemCounts.errors} errors, ${problemCounts.warnings} warnings. Toggle problems`"
+        :aria-pressed="workbench.isVisible('problems')"
+        @click="workbench.toggle('problems')"
+      >
+        <span class="i-mdi-close-circle-outline" />{{ problemCounts.errors }}
+        <span class="i-mdi-alert-outline ml-1" />{{ problemCounts.warnings }}
+      </button>
+      <span
+        v-if="layoutStore && saving !== 'idle'"
+        class="ml-auto flex items-center gap-1 px-1.5"
+        :class="saving === 'error' ? 'text-red-400' : ''"
+        role="status"
+      >
+        <span
+          :class="
+            saving === 'saving'
+              ? 'i-mdi-loading animate-spin'
+              : saving === 'saved'
+                ? 'i-mdi-check'
+                : 'i-mdi-alert-circle-outline'
+          "
+        />
+        {{
+          saving === 'saving'
+            ? 'Saving layout…'
+            : saving === 'saved'
+              ? 'Layout saved'
+              : 'Layout not saved'
+        }}
+      </span>
+    </Teleport>
 
     <WorkbenchView id="code">
       <CodeEditor

@@ -51,7 +51,7 @@ APP_SECRET=$(openssl rand -base64 48) docker compose up --build   # http://local
 | Add a node                   | Drag a wire out of any pin and release it on empty space (actions depend on the pin), or right-click |
 | Add a reroute point          | Double-click a wire; Alt + click a reroute point removes it                                          |
 | Disconnect                   | Alt + click a pin                                                                                    |
-| Problems panel               | Shift + Ctrl/Cmd + M, or the error / warning counter in the toolbar                                  |
+| Problems panel               | Shift + Ctrl/Cmd + M, or the error / warning counter in the status bar                               |
 | Delete                       | `Delete` / `Backspace`                                                                               |
 | Undo / redo                  | Toolbar buttons, Ctrl/Cmd + Z, Ctrl/Cmd + Shift + Z                                                  |
 | Comment a node               | Double-click its comment bubble, or right-click → Add comment                                        |
