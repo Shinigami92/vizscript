@@ -44,11 +44,11 @@ To run it from source or to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 | Action                       | Input                                                                                                |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------- |
 | Pan                          | Right or middle drag, Space + drag, or two-finger scroll                                             |
-| Zoom                         | Mouse wheel, Ctrl + scroll, or pinch                                                                 |
+| Zoom                         | Mouse wheel, Ctrl + scroll, pinch, or the zoom controls in the graph's corner                        |
 | Select / multi-select        | Click, Shift + click (add), Ctrl/Cmd + click (toggle), drag a marquee                                |
 | Select a whole function      | Click its frame title                                                                                |
 | Move                         | Drag a node; all selected nodes (and reroute points) move together                                   |
-| Frame selection / everything | `F` / `Home`                                                                                         |
+| Zoom to selection / fit all  | `F` / `Home`                                                                                         |
 | Find nodes                   | Ctrl/Cmd + F, then Enter / Shift + Enter to step through the results                                 |
 | Context menu                 | Right-click a node, pin, wire, reroute point, frame title or empty space                             |
 | Jump to code                 | Double-click a node                                                                                  |

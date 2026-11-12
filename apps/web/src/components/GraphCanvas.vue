@@ -5,7 +5,13 @@ import type {
   ContextTarget,
   GraphViewEvents,
 } from '@vizscript/canvas';
-import { DARK_THEME, GraphView, LIGHT_THEME } from '@vizscript/canvas';
+import {
+  DARK_THEME,
+  GraphView,
+  LIGHT_THEME,
+  MAX_ZOOM,
+  MIN_ZOOM,
+} from '@vizscript/canvas';
 import type {
   GraphDocument,
   GraphNode,
@@ -75,6 +81,9 @@ const { scheme } = useTheme();
 const canvasTheme = computed(() =>
   scheme.value === 'light' ? LIGHT_THEME : DARK_THEME
 );
+/** Zoom of the camera, for the zoom controls. */
+const zoom = ref(1);
+const ZOOM_STEP = 1.25;
 const canvas = useTemplateRef<HTMLCanvasElement>('canvas');
 const view = shallowRef<GraphView>();
 const index = computed(() => indexDocument(props.doc));
@@ -475,7 +484,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
         action: () => v?.selectAll(),
       },
       {
-        label: 'Frame all',
+        label: 'Zoom to fit all',
         category: 'Graph',
         icon: 'i-mdi-fit-to-screen-outline',
         hint: 'Home',
@@ -756,7 +765,7 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
         },
         { type: 'separator' },
         {
-          label: 'Frame selection',
+          label: 'Zoom to selection',
           icon: 'i-mdi-image-filter-center-focus',
           shortcut: 'F',
           action: () => v.frameSelection(),
@@ -1038,6 +1047,7 @@ onMounted(() => {
   view.value = v;
   if (props.initialCamera) {
     v.setCamera(props.initialCamera);
+    zoom.value = props.initialCamera.zoom;
   }
 
   v.on('selectionChange', ({ nodeIds }) => {
@@ -1056,6 +1066,7 @@ onMounted(() => {
   v.on('op', (op) => emit('op', op));
   v.on('activate', ({ nodeId }) => emit('activate', nodeId));
   v.on('cameraChange', (camera) => {
+    zoom.value = camera.zoom;
     hideTooltip();
     emit('cameraChange', camera);
   });
@@ -1239,6 +1250,52 @@ defineExpose({
       aria-label="Node graph. Press Shift+F10 for actions, Ctrl+F to search."
       class="block h-full w-full"
     />
+
+    <!-- Zoom controls: they only change the view of the graph. -->
+    <div
+      class="absolute right-3 bottom-3 z-10 flex items-center rounded-md border border-zinc-800 bg-zinc-900/90 text-zinc-300 shadow-lg backdrop-blur"
+      role="group"
+      aria-label="Zoom"
+    >
+      <button
+        type="button"
+        class="flex h-7 w-7 items-center justify-center rounded-l-md hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-40"
+        title="Zoom out"
+        aria-label="Zoom out"
+        :disabled="zoom <= MIN_ZOOM + 1e-3"
+        @click="view?.zoomBy(1 / ZOOM_STEP)"
+      >
+        <span class="i-mdi-minus" />
+      </button>
+      <button
+        type="button"
+        class="h-7 min-w-12 px-1 text-xs tabular-nums hover:bg-zinc-800 hover:text-zinc-100"
+        title="Reset zoom to 100%"
+        aria-label="Reset zoom to 100%"
+        @click="view?.setZoom(1)"
+      >
+        {{ Math.round(zoom * 100) }}%
+      </button>
+      <button
+        type="button"
+        class="flex h-7 w-7 items-center justify-center hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-40"
+        title="Zoom in"
+        aria-label="Zoom in"
+        :disabled="zoom >= MAX_ZOOM - 1e-3"
+        @click="view?.zoomBy(ZOOM_STEP)"
+      >
+        <span class="i-mdi-plus" />
+      </button>
+      <button
+        type="button"
+        class="flex h-7 w-7 items-center justify-center rounded-r-md border-l border-zinc-800 hover:bg-zinc-800 hover:text-zinc-100"
+        title="Zoom to fit all nodes (Home)"
+        aria-label="Zoom to fit all nodes"
+        @click="view?.frameAll()"
+      >
+        <span class="i-mdi-fit-to-page-outline" />
+      </button>
+    </div>
 
     <GraphSearch
       v-if="searchOpen"

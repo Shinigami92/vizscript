@@ -882,13 +882,13 @@ const actionEntries = computed<MenuEntry[]>(() => {
             action: () => canvas.value?.selectAll(),
           },
           {
-            label: 'Frame selection',
+            label: 'Zoom to selection',
             icon: 'i-mdi-image-filter-center-focus',
             shortcut: 'F',
             action: () => canvas.value?.frameSelection(),
           },
           {
-            label: 'Frame all',
+            label: 'Zoom to fit all',
             icon: 'i-mdi-fit-to-screen-outline',
             shortcut: 'Home',
             action: () => canvas.value?.frameAll(),
@@ -972,15 +972,6 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
             @click="canvas?.openSearch()"
           >
             <span class="i-mdi-magnify" />
-          </button>
-          <button
-            type="button"
-            class="btn-ghost hidden px-2 sm:inline-flex"
-            title="Frame all (Home)"
-            aria-label="Frame all"
-            @click="canvas?.frameAll()"
-          >
-            <span class="i-mdi-fit-to-screen-outline" />
           </button>
           <button
             type="button"
@@ -1149,7 +1140,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         </div>
         <div
           v-if="!editable"
-          class="pointer-events-none absolute bottom-3 right-3 rounded bg-zinc-900/80 px-2 py-1 text-xs text-zinc-400"
+          class="pointer-events-none absolute top-3 right-3 rounded bg-zinc-900/80 px-2 py-1 text-xs text-zinc-400"
         >
           View only on small screens
         </div>

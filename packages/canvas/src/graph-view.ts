@@ -648,6 +648,17 @@ export class GraphView {
     });
   }
 
+  /** Zooms around the center of the view (`factor` > 1 zooms in). */
+  public zoomBy(factor: number): void {
+    const center = { x: this.width / 2, y: this.height / 2 };
+    this.setCameraInternal(zoomAt(this.camera, center, factor));
+  }
+
+  /** Sets the zoom level, keeping the center of the view in place. */
+  public setZoom(zoom: number): void {
+    this.zoomBy(zoom / this.camera.zoom);
+  }
+
   public frameAll(): void {
     const bounds = this.boundsOf([...this.nodes.keys()]);
     if (bounds) {
