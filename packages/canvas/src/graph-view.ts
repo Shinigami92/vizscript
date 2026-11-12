@@ -197,6 +197,10 @@ interface NodeState {
   bubble: BubbleLayout | null;
   /** The node slides to `tween.to`; `x` / `y` is where it is drawn now. */
   tween?: Tween<Point>;
+  /** Start of the fade-in of a node that an edit added. */
+  appear?: number;
+  /** Start of the outline pulse after a jump to the node. */
+  pulse?: number;
 }
 
 interface FrameState {
@@ -289,6 +293,8 @@ const DRAG_THRESHOLD = 3;
 /** Durations of eased camera and node moves, in ms. */
 const CAMERA_MOTION_MS = 250;
 const NODE_MOTION_MS = 200;
+const NODE_APPEAR_MS = 180;
+const NODE_PULSE_MS = 700;
 const KNOT_RADIUS = 6;
 
 /** Closer than half a pixel: not worth a slide. */
@@ -347,6 +353,8 @@ export class GraphView {
   private camera: Camera = { x: -40, y: -40, zoom: 1 };
   private motion: boolean;
   private cameraTween: Tween<Camera> | null = null;
+  /** Time of the frame being drawn (for fades and pulses). */
+  private frameTime = 0;
   private width = 0;
   private height = 0;
   private dpr = 1;
@@ -439,6 +447,10 @@ export class GraphView {
     if (!motion) {
       this.cameraTween = null;
       this.finishNodeMoves();
+      for (const ns of this.nodes.values()) {
+        ns.appear = undefined;
+        ns.pulse = undefined;
+      }
     }
   }
 
@@ -467,6 +479,7 @@ export class GraphView {
             : null,
         };
         this.continueMove(previous.get(node.id), ns, now);
+        ns.appear = previous.get(node.id)?.appear;
         this.nodes.set(node.id, ns);
       }
 
@@ -542,10 +555,53 @@ export class GraphView {
       this.hoverEdge = null;
     }
 
+    this.fadeInNewNodes(previous, now);
     this.rebuildIndex();
     if (!this.hasFramed && this.nodes.size > 0 && this.width > 0) {
       this.hasFramed = true;
       this.initialView();
+    }
+
+    this.requestRender();
+  }
+
+  /**
+   * Fades in nodes an edit added. Only when the document is the one shown
+   * before (some nodes stay), so opening another file just shows it.
+   */
+  private fadeInNewNodes(
+    previous: ReadonlyMap<string, NodeState>,
+    now: number
+  ): void {
+    if (!this.motion || previous.size === 0) {
+      return;
+    }
+
+    const added = [...this.nodes.keys()].filter((id) => !previous.has(id));
+    if (added.length === 0 || added.length === this.nodes.size) {
+      return;
+    }
+
+    for (const id of added) {
+      const ns = this.nodes.get(id);
+      if (ns) {
+        ns.appear = now;
+      }
+    }
+  }
+
+  /** Draws a short outline pulse around nodes, e.g. after jumping to them. */
+  public pulseNodes(ids: ReadonlyArray<string>): void {
+    if (!this.motion) {
+      return;
+    }
+
+    const now = performance.now();
+    for (const id of ids) {
+      const ns = this.nodes.get(id);
+      if (ns) {
+        ns.pulse = now;
+      }
     }
 
     this.requestRender();
@@ -1265,6 +1321,18 @@ export class GraphView {
       } else {
         running = true;
       }
+    }
+
+    for (const ns of this.nodes.values()) {
+      if (ns.appear !== undefined && now - ns.appear >= NODE_APPEAR_MS) {
+        ns.appear = undefined;
+      }
+
+      if (ns.pulse !== undefined && now - ns.pulse >= NODE_PULSE_MS) {
+        ns.pulse = undefined;
+      }
+
+      running ||= ns.appear !== undefined || ns.pulse !== undefined;
     }
 
     return running;
@@ -2442,7 +2510,8 @@ export class GraphView {
   }
 
   private render(): void {
-    const moving = this.stepMotion(performance.now());
+    this.frameTime = performance.now();
+    const moving = this.stepMotion(this.frameTime);
     if (moving) {
       this.requestRender();
     }
@@ -2482,12 +2551,12 @@ export class GraphView {
       if (this.selection.has(id)) {
         selected.push(ns);
       } else {
-        this.drawNode(ns);
+        this.drawNodeAnimated(ns);
       }
     }
 
     for (const ns of selected) {
-      this.drawNode(ns);
+      this.drawNodeAnimated(ns);
     }
 
     this.drawOverlay();
@@ -2805,6 +2874,45 @@ export class GraphView {
       highlighted || (this.selection.size === 0 && !this.hoverNode) ? 1 : 0.6;
     ctx.stroke();
     ctx.globalAlpha = 1;
+  }
+
+  /** A node, faded and grown in while it appears, then its pulse. */
+  private drawNodeAnimated(ns: NodeState): void {
+    const { ctx } = this;
+    if (ns.appear === undefined) {
+      this.drawNode(ns);
+    } else {
+      const k = easeOut((this.frameTime - ns.appear) / NODE_APPEAR_MS);
+      const cx = ns.x + ns.geom.width / 2;
+      const cy = ns.y + ns.geom.height / 2;
+      const scale = 0.94 + 0.06 * k;
+      ctx.save();
+      ctx.globalAlpha = k;
+      ctx.translate(cx, cy);
+      ctx.scale(scale, scale);
+      ctx.translate(-cx, -cy);
+      this.drawNode(ns);
+      ctx.restore();
+    }
+
+    if (ns.pulse !== undefined) {
+      const k = easeOut((this.frameTime - ns.pulse) / NODE_PULSE_MS);
+      const grow = 4 + 14 * k;
+      ctx.save();
+      ctx.globalAlpha = 1 - k;
+      ctx.beginPath();
+      ctx.roundRect(
+        ns.x - grow,
+        ns.y - grow,
+        ns.geom.width + grow * 2,
+        ns.geom.height + grow * 2,
+        NODE_METRICS.cornerRadius + grow
+      );
+      ctx.strokeStyle = this.theme.selection;
+      ctx.lineWidth = 2.5 / Math.max(this.camera.zoom, 0.4);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   private drawNode(ns: NodeState): void {
