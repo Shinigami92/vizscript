@@ -1,12 +1,14 @@
 import type {
+  DeclarationSyntax,
   GraphOp,
   OpResult,
   PinLiteral,
   StatementSyntax,
 } from '@vizscript/core';
 import { applyTextOp } from '@vizscript/core';
-import { splitString } from './convert';
+import { parsePython, splitString } from './convert';
 import { parsePythonDocument } from './lower';
+import { renamePythonSymbol } from './rename';
 
 const IDENTIFIER = /^[A-Za-z_]\w*$/;
 
@@ -32,6 +34,34 @@ function quote(value: string, literal: PinLiteral): string {
   return `${prefix}${quoteChar}${escaped}${quoteChar}`;
 }
 
+const KEYWORDS = new Set(
+  (
+    'False None True and as assert async await break class continue def ' +
+    'del elif else except finally for from global if import in is lambda ' +
+    'nonlocal not or pass raise return try while with yield'
+  ).split(' ')
+);
+
+const DECLARATIONS: DeclarationSyntax = {
+  identifier: /^[A-Za-z_]\w*$/,
+  keywords: KEYWORDS,
+  defaultIndent: '    ',
+  blankLines: 2,
+  bracedClasses: false,
+  header: /^(?:import\b|from\s+\S+\s+import\b|#!|#.*coding[:=])/,
+  fn: (name, unit, method) =>
+    `def ${name}(${method ? 'self' : ''}):\n${unit}pass`,
+  variable: (name) => `${name} = None`,
+  rename: (text, doc, symbol, name) =>
+    renamePythonSymbol(
+      parsePython(text).body,
+      text,
+      doc.symbols ?? [],
+      symbol,
+      name
+    ),
+};
+
 export const PYTHON_SYNTAX: StatementSyntax = {
   placeholder: 'None',
   emptyBody: 'pass',
@@ -41,6 +71,7 @@ export const PYTHON_SYNTAX: StatementSyntax = {
   declarePrefix: (name) => `${name} = `,
   quote,
   appendToFile: true,
+  declarations: DECLARATIONS,
   comment: {
     line: '#',
     region: (title) => (title ? `# region ${title}` : '# region'),
