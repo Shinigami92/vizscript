@@ -22,6 +22,11 @@ export interface StatementMeta {
    * placeholder (e.g. `pass`) behind.
    */
   sole?: boolean;
+  /**
+   * The value of a function that returns one (a Rust `match` / `if` as
+   * the last expression): removing it must leave the placeholder behind.
+   */
+  tail?: boolean;
   /** Part of a larger statement (e.g. an `elif`); cannot be moved or deleted. */
   locked?: boolean;
   /**
@@ -47,6 +52,11 @@ export interface OutputPinMeta {
   };
   /** Statement the value is computed in (for pure expressions). */
   scope?: SourceRange;
+  /**
+   * The value exists only inside this range: a name bound by a pattern or
+   * a loop (`if let Some(x) = …`), usable in its block only.
+   */
+  visibleIn?: SourceRange;
 }
 
 /** Metadata attached to data input pins. */

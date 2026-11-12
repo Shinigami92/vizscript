@@ -1,6 +1,7 @@
 import type { StatementMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import type {
+  DataType,
   FunctionGraph,
   GraphDocument,
   GraphNode,
@@ -105,8 +106,19 @@ function readsItself(node: GraphNode): boolean {
 
 interface Analysis {
   params: ExtractParam[];
-  output?: { name: string; declare?: string };
+  output?: ExtractOutput;
   isAsync: boolean;
+}
+
+/** The variable a collapsed selection returns. */
+interface ExtractOutput {
+  name: string;
+  /** Keyword of a variable declared inside the selection (`let`). */
+  declare?: string;
+  /** Declared type of the variable. */
+  type?: string;
+  /** Its pin type. */
+  dataType?: DataType;
 }
 
 function analyze(
@@ -194,7 +206,7 @@ function analyze(
   }
 
   // Output: a variable set inside and read after the selection.
-  const outputs = new Map<string, { declare?: string }>();
+  const outputs = new Map<string, Omit<ExtractOutput, 'name'>>();
   for (const node of inside) {
     const name = node.kind === 'setVar' ? variableName(node) : undefined;
     if (!name || !declared.has(name)) {
@@ -216,10 +228,15 @@ function analyze(
       const keyword = local?.modifiers.find((m) =>
         ['const', 'let', 'var'].includes(m)
       );
-      outputs.set(
-        name,
-        declaredInside(name) ? { declare: keyword ?? 'var' } : {}
-      );
+      const type = local?.type?.text ?? declared.get(name)?.type;
+      const dataType = node.pins.find(
+        (p) => p.direction === 'out' && p.kind === 'data'
+      )?.type;
+      outputs.set(name, {
+        ...(declaredInside(name) ? { declare: keyword ?? 'var' } : {}),
+        ...(type ? { type } : {}),
+        ...(dataType ? { dataType } : {}),
+      });
     }
   }
 
@@ -320,10 +337,19 @@ export function collapseToFunction(
       : []),
   ].join('\n');
   const isStatic = owner.modifiers.includes('static');
+  const output = analysis.output;
   const block = extract.fn(name, analysis.params, body, {
     method: cls !== undefined,
     isStatic,
     isAsync: analysis.isAsync,
+    ...(output
+      ? {
+          returns: {
+            ...(output.type ? { type: output.type } : {}),
+            dataType: output.dataType ?? 'any',
+          },
+        }
+      : {}),
   });
 
   const callee = cls ? extract.method(name, cls.name, isStatic) : name;
@@ -332,7 +358,14 @@ export function collapseToFunction(
     analysis.params.map((p) => p.name),
     {
       isAsync: analysis.isAsync,
-      ...(analysis.output ? { output: analysis.output } : {}),
+      ...(output
+        ? {
+            output: {
+              name: output.name,
+              ...(output.declare ? { declare: output.declare } : {}),
+            },
+          }
+        : {}),
     }
   );
   const replace: TextEdit = {

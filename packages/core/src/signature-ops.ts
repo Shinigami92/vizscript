@@ -189,7 +189,7 @@ export function addParameter(
     return failed(`"${name}" is not a valid name.`);
   }
 
-  const type = typeText?.trim();
+  const type = typeText?.trim() || syntax.typeSystem.requiredType;
   if (type) {
     const error = syntax.validType(type);
     if (error) {
@@ -395,10 +395,12 @@ export function setParameterType(
   syntax: DeclarationSyntax
 ): OpResult {
   return withParam(doc, id, index, (withVariable, param) =>
-    setSymbolType(text, withVariable, param.id, typeText, {
-      ...syntax,
-      valueRequired: () => false,
-    })
+    !typeText?.trim() && syntax.typeSystem.requiredType !== undefined
+      ? failed(`${param.name} needs a type.`)
+      : setSymbolType(text, withVariable, param.id, typeText, {
+          ...syntax,
+          valueRequired: () => false,
+        })
   );
 }
 

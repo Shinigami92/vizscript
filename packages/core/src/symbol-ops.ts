@@ -1,6 +1,6 @@
 import type { CommentSyntax } from './comment-ops';
 import type { ImportRequest } from './imports';
-import type { GraphDocument, SourceRange } from './ir';
+import type { DataType, GraphDocument, SourceRange } from './ir';
 import type { OpResult, TextEdit, TypeSystemInfo, ValueKind } from './ops';
 import type { CallSite } from './signature-ops';
 import type { ScriptSymbol } from './symbols';
@@ -112,7 +112,13 @@ export interface ExtractSyntax {
     name: string,
     params: ReadonlyArray<ExtractParam>,
     body: string,
-    options: { method: boolean; isStatic: boolean; isAsync: boolean }
+    options: {
+      method: boolean;
+      isStatic: boolean;
+      isAsync: boolean;
+      /** Type of the returned variable: as declared, and its pin type. */
+      returns?: { type?: string; dataType: DataType };
+    }
   ) => string;
   /** The statement that calls it, with the output stored if there is one. */
   call: (
@@ -702,7 +708,7 @@ export function deleteSymbol(
     return succeeded([{ start: range.start, end: range.end, text: '' }]);
   }
 
-  const start = leadingComments(text, range.start, comment);
+  let start = leadingComments(text, range.start, comment);
   let end = Math.min(lineEnd + 1, text.length);
 
   // Keep the blank lines of one side only (no doubled gap).
@@ -712,9 +718,12 @@ export function deleteSymbol(
     blankAbove++;
   }
 
-  // At the top of the file, all blank lines below go too.
+  // At the top of the file or a block, all blank lines below go too.
+  const opensBlock = /\{\s*$/.test(text.slice(0, start));
   const limit =
-    linesAbove.length === blankAbove ? Number.POSITIVE_INFINITY : blankAbove;
+    linesAbove.length === blankAbove || opensBlock
+      ? Number.POSITIVE_INFINITY
+      : blankAbove;
   for (
     let removed = 0;
     removed < limit &&
@@ -723,6 +732,13 @@ export function deleteSymbol(
     removed++
   ) {
     end = Math.min(lineEndOf(text, end) + 1, text.length);
+  }
+
+  // The last member of a block: its blank lines above go too.
+  if (!opensBlock && /^\s*\}/.test(text.slice(end))) {
+    for (let i = 0; i < blankAbove; i++) {
+      start = lineStart(text, start - 1);
+    }
   }
 
   // An indented block must keep a statement (Python, GDScript).
@@ -812,6 +828,10 @@ export function setSymbolType(
     return failed(symbol);
   }
 
+  if (!typeText?.trim() && needsType(symbol, syntax)) {
+    return failed(`${symbol.name} needs a type.`);
+  }
+
   const result = typeEdits(text, symbol, typeText, syntax);
   const current = symbol.defaultRange
     ? text.slice(symbol.defaultRange.start, symbol.defaultRange.end).trim()
@@ -819,6 +839,7 @@ export function setSymbolType(
   if (
     !result.ok ||
     !defaultValue ||
+    isValuelessField(doc, symbol, syntax) ||
     !typeText?.trim() ||
     (current !== undefined && !PLACEHOLDERS.has(current))
   ) {
@@ -844,6 +865,27 @@ export function setSymbolType(
 }
 
 const PLACEHOLDERS = new Set(['undefined', 'null', 'None']);
+
+/** A field of a class in a language whose fields take no value (Rust). */
+export function isValuelessField(
+  doc: GraphDocument,
+  symbol: ScriptSymbol,
+  syntax: DeclarationSyntax
+): boolean {
+  return (
+    syntax.typeSystem.noFieldValues === true &&
+    symbol.kind === 'variable' &&
+    classOf(doc, symbol.scope) !== undefined
+  );
+}
+
+/** Whether the language needs a type on the symbol (Rust, not locals). */
+function needsType(symbol: ScriptSymbol, syntax: DeclarationSyntax): boolean {
+  return (
+    syntax.typeSystem.requiredType !== undefined &&
+    (symbol.kind === 'variable' || symbol.kind === 'constant')
+  );
+}
 
 function typeEdits(
   text: string,
@@ -936,6 +978,12 @@ export function setSymbolValue(
   const symbol = typedSymbol(doc, id);
   if (typeof symbol === 'string') {
     return failed(symbol);
+  }
+
+  if (isValuelessField(doc, symbol, syntax)) {
+    return value === null
+      ? succeeded([])
+      : failed(`Fields of ${symbol.scope} cannot have a default value.`);
   }
 
   const from = symbol.type ? symbol.type.range.end : afterName(text, symbol);

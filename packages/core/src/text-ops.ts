@@ -86,6 +86,11 @@ export interface StatementSyntax {
   appendToFile: boolean;
   /** Boolean literals (default `true` / `false`). */
   booleans?: { true: string; false: string };
+  /**
+   * Writes a number typed into a pin; `previous` is the literal it replaces
+   * (Rust keeps a float a float: `1.0` → `2` writes `2.0`).
+   */
+  number?: (value: string, previous: string) => string;
   /** Comment and region markers. */
   comment: CommentSyntax;
   /** Ends an expression statement (`;` in TypeScript). */
@@ -243,6 +248,14 @@ function removeStatement(
       start: meta.stmt.start,
       end: meta.stmt.end,
       text: syntax.emptyBody,
+    };
+  }
+
+  if (meta.tail) {
+    return {
+      start: meta.stmt.start,
+      end: meta.stmt.end,
+      text: syntax.placeholder,
     };
   }
 
@@ -697,7 +710,7 @@ function setLiteral(
         return failed(`"${value}" is not a number.`);
       }
 
-      replacement = trimmed;
+      replacement = syntax.number?.(trimmed, literal.raw) ?? trimmed;
       break;
     }
 
@@ -897,6 +910,18 @@ function connectData(
 
   if (functionOf(doc, from.node) !== functionOf(doc, to.node)) {
     return failed('Values can only be wired within the same function.');
+  }
+
+  // A pattern or loop binding exists only inside its block.
+  const sourcePin = findPin(findNode(doc, from.node), from.pin);
+  const visibleIn = sourcePin
+    ? getMeta<OutputPinMeta>(sourcePin).visibleIn
+    : undefined;
+  const usedAt = targetPin.range?.start ?? target.range.start;
+  if (visibleIn && (usedAt < visibleIn.start || usedAt >= visibleIn.end)) {
+    return failed(
+      `${sourcePin?.name || 'This value'} only exists inside its block.`
+    );
   }
 
   const inlined = inlineIntoNextStatement(text, doc, from, target, targetPin);
@@ -1781,7 +1806,7 @@ function withReturnNode(
 
   const anchor = endOfFunction(doc, fn.id);
   const added = anchor
-    ? addNode(text, doc, { type: 'return' }, anchor, syntax)
+    ? addNode(text, doc, { type: 'return', value: true }, anchor, syntax)
     : undefined;
   return added?.ok ? succeeded([...result.edits, ...added.edits]) : result;
 }

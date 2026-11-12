@@ -32,7 +32,11 @@ export type NodeTemplate =
     }
   | { type: 'setVar'; name: string; declaration: 'const' | 'let' | 'none' }
   | { type: 'branch' }
-  | { type: 'return' }
+  /**
+   * `value`: the function returns something, so the statement needs a
+   * placeholder value where the language requires one (Rust).
+   */
+  | { type: 'return'; value?: boolean }
   /**
    * A value on its own (UE: a lone Get node). It shows as unconnected
    * nodes until it is wired into an input.
@@ -285,6 +289,13 @@ export interface TypeSystemInfo {
   };
   /** Parameters cannot have default values (Rust). */
   noParameterDefaults?: boolean;
+  /** Fields of a class cannot have default values (Rust struct fields). */
+  noFieldValues?: boolean;
+  /**
+   * Parameters and variables outside functions need a type (Rust); this
+   * one is written when none is given (`i32`).
+   */
+  requiredType?: string;
   /** Flow-control nodes the language has (GDScript has no `try`). */
   flow?: FlowTemplate[];
   /**
