@@ -75,14 +75,32 @@ function selectedStatements(
   return { start: first.start, end: last.end };
 }
 
+/** `x++`, `--x`: an update that reads and sets `x`. */
+const UPDATE = /^(?:\+\+|--)?([A-Za-z_$][\w$]*)(?:\+\+|--)?$/;
+
 function variableName(node: GraphNode): string | undefined {
   const name =
     node.kind === 'setVar' && node.title.startsWith('Set ')
       ? node.title.slice(4)
-      : node.kind === 'getVar'
-        ? node.title
-        : undefined;
+      : node.kind === 'setVar' && /^(?:\+\+|--)|(?:\+\+|--)$/.test(node.title)
+        ? UPDATE.exec(node.title)?.[1]
+        : node.kind === 'getVar'
+          ? node.title
+          : undefined;
   return name && IDENTIFIER.test(name) ? name : undefined;
+}
+
+/** `x += 1`, `x++`: the variable is read as well as set. */
+function readsItself(node: GraphNode): boolean {
+  if (node.kind !== 'setVar') {
+    return false;
+  }
+
+  const op = node.subtitle ?? '';
+  return (
+    (op.endsWith('=') && op !== '=' && op.length > 1) ||
+    /^(?:\+\+|--)|(?:\+\+|--)$/.test(node.title)
+  );
 }
 
 interface Analysis {
@@ -166,7 +184,10 @@ function analyze(
   }
 
   for (const node of inside) {
-    const name = node.kind === 'getVar' ? variableName(node) : undefined;
+    const name =
+      node.kind === 'getVar' || readsItself(node)
+        ? variableName(node)
+        : undefined;
     if (name && declared.has(name)) {
       use(name, node.range.start);
     }

@@ -231,4 +231,18 @@ describe('expose on spawn', () => {
       'class Ship {\n  constructor(id: string, public name = "x") {\n    use(id);\n  }\n}\n'
     );
   });
+
+  it('passes a variable that a compound assignment reads', () => {
+    const out = collapse(TOTAL, ['sum += '], 'addPrice');
+    expect(out).toContain('    sum = addPrice(sum, item);');
+    expect(out).toContain(
+      'function addPrice(sum, item) {\n  sum += item.price;\n  return sum;'
+    );
+    const update = collapse(
+      'function f() {\n  let n = 0;\n  n++;\n  return n;\n}\n',
+      ['n++'],
+      'bump'
+    );
+    expect(update).toContain('n = bump(n);');
+  });
 });
