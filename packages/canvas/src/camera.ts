@@ -39,6 +39,36 @@ export function zoomAt(camera: Camera, anchor: Point, factor: number): Camera {
   return { zoom, x: world.x - anchor.x / zoom, y: world.y - anchor.y / zoom };
 }
 
+/** Ease-out (cubic) for short UI animations: fast start, soft landing. */
+export function easeOut(t: number): number {
+  return 1 - (1 - Math.min(1, Math.max(0, t))) ** 3;
+}
+
+/**
+ * Camera between `from` (t = 0) and `to` (t = 1): the zoom changes
+ * geometrically and the center of the view moves in a straight line.
+ */
+export function lerpCamera(
+  from: Camera,
+  to: Camera,
+  t: number,
+  viewportWidth: number,
+  viewportHeight: number
+): Camera {
+  const zoom = from.zoom * (to.zoom / from.zoom) ** t;
+  const center = (camera: Camera): Point => ({
+    x: camera.x + viewportWidth / 2 / camera.zoom,
+    y: camera.y + viewportHeight / 2 / camera.zoom,
+  });
+  const a = center(from);
+  const b = center(to);
+  return {
+    zoom,
+    x: a.x + (b.x - a.x) * t - viewportWidth / 2 / zoom,
+    y: a.y + (b.y - a.y) * t - viewportHeight / 2 / zoom,
+  };
+}
+
 export function visibleWorldRect(
   camera: Camera,
   width: number,

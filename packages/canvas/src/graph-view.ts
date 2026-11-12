@@ -54,7 +54,9 @@ import {
 } from './bubble';
 import type { Camera, Rect } from './camera';
 import {
+  easeOut,
   fitCamera,
+  lerpCamera,
   normalizeRect,
   rectContains,
   rectsIntersect,
@@ -171,6 +173,18 @@ export interface GraphViewOptions {
   /** Allow graph edits (wiring, deleting, literal edits). */
   editable?: boolean;
   theme?: Theme;
+  /**
+   * Ease camera moves (fit, zoom to selection, reveal) and nodes that move
+   * because of an edit. Pass `false` for `prefers-reduced-motion: reduce`.
+   */
+  motion?: boolean;
+}
+
+/** A position change drawn as a short slide. */
+interface Tween<T> {
+  from: T;
+  to: T;
+  start: number;
 }
 
 interface NodeState {
@@ -181,6 +195,8 @@ interface NodeState {
   y: number;
   /** Comment bubble above the node. */
   bubble: BubbleLayout | null;
+  /** The node slides to `tween.to`; `x` / `y` is where it is drawn now. */
+  tween?: Tween<Point>;
 }
 
 interface FrameState {
@@ -270,7 +286,15 @@ const BANNER_GAP = 3;
 const COMMENT_PADDING = COMMENT_BOX_PADDING;
 const COMMENT_HEADER = COMMENT_BOX_HEADER;
 const DRAG_THRESHOLD = 3;
+/** Durations of eased camera and node moves, in ms. */
+const CAMERA_MOTION_MS = 250;
+const NODE_MOTION_MS = 200;
 const KNOT_RADIUS = 6;
+
+/** Closer than half a pixel: not worth a slide. */
+function samePoint(a: Point, b: Point): boolean {
+  return Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5;
+}
 
 function knotId(edgeId: string, index: number): string {
   return `${edgeId}\u0000${index}`;
@@ -321,6 +345,8 @@ export class GraphView {
   private framesDirty = true;
 
   private camera: Camera = { x: -40, y: -40, zoom: 1 };
+  private motion: boolean;
+  private cameraTween: Tween<Camera> | null = null;
   private width = 0;
   private height = 0;
   private dpr = 1;
@@ -350,6 +376,7 @@ export class GraphView {
     this.measureCtx = measureCtx;
     this.theme = options.theme ?? DARK_THEME;
     this.editable = options.editable ?? true;
+    this.motion = options.motion ?? false;
 
     canvas.tabIndex = 0;
     canvas.style.touchAction = 'none';
@@ -406,8 +433,19 @@ export class GraphView {
     this.editable = editable;
   }
 
+  /** Turns eased camera and node moves on or off (reduced motion). */
+  public setMotion(motion: boolean): void {
+    this.motion = motion;
+    if (!motion) {
+      this.cameraTween = null;
+      this.finishNodeMoves();
+    }
+  }
+
   public setDocument(doc: GraphDocument, positions: Positions): void {
     this.doc = doc;
+    const previous = this.nodes;
+    const now = performance.now();
     this.nodes = new Map();
     this.edges = [];
     this.edgesById = new Map();
@@ -418,7 +456,7 @@ export class GraphView {
     for (const fn of doc.functions) {
       for (const node of fn.nodes) {
         const p = positions[node.id] ?? { x: 0, y: 0 };
-        this.nodes.set(node.id, {
+        const ns: NodeState = {
           node,
           fnId: fn.id,
           geom: computeNodeGeometry(node, this.measure),
@@ -427,7 +465,9 @@ export class GraphView {
           bubble: bubbleText(node.comment)
             ? layoutBubble(bubbleText(node.comment), this.measure)
             : null,
-        });
+        };
+        this.continueMove(previous.get(node.id), ns, now);
+        this.nodes.set(node.id, ns);
       }
 
       for (const edge of fn.edges) {
@@ -528,7 +568,7 @@ export class GraphView {
   public getPositions(): Positions {
     const result: Positions = {};
     for (const [id, ns] of this.nodes) {
-      result[id] = { x: ns.x, y: ns.y };
+      result[id] = ns.tween ? { ...ns.tween.to } : { x: ns.x, y: ns.y };
     }
 
     return result;
@@ -566,7 +606,7 @@ export class GraphView {
   public frameSelection(): void {
     const bounds = this.boundsOf(this.selection);
     if (bounds) {
-      this.setCameraInternal(fitCamera(bounds, this.width, this.height, 80, 1));
+      this.moveCamera(fitCamera(bounds, this.width, this.height, 80, 1));
     } else {
       this.frameAll();
     }
@@ -581,7 +621,7 @@ export class GraphView {
 
     const zoom = Math.max(this.camera.zoom, 0.8);
     const fit = fitCamera(bounds, this.width, this.height, 80, zoom);
-    this.setCameraInternal(
+    this.moveCamera(
       fit.zoom < zoom * 0.99
         ? fit
         : {
@@ -695,11 +735,13 @@ export class GraphView {
     this.requestRender();
   }
 
+  /** The camera, or where an eased camera move ends. */
   public getCamera(): Camera {
-    return { ...this.camera };
+    return { ...(this.cameraTween?.to ?? this.camera) };
   }
 
   public setCamera(camera: Camera): void {
+    this.cameraTween = null;
     this.camera = { ...camera };
     this.hasFramed = true;
     this.requestRender();
@@ -732,12 +774,12 @@ export class GraphView {
   /** Zooms around the center of the view (`factor` > 1 zooms in). */
   public zoomBy(factor: number): void {
     const center = { x: this.width / 2, y: this.height / 2 };
-    this.setCameraInternal(zoomAt(this.camera, center, factor));
+    this.moveCamera(zoomAt(this.getCamera(), center, factor));
   }
 
   /** Sets the zoom level, keeping the center of the view in place. */
   public setZoom(zoom: number): void {
-    this.zoomBy(zoom / this.camera.zoom);
+    this.zoomBy(zoom / this.getCamera().zoom);
   }
 
   /** World point under a client (viewport) position, e.g. of a drop. */
@@ -777,7 +819,7 @@ export class GraphView {
   public frameAll(): void {
     const bounds = this.boundsOf([...this.nodes.keys()]);
     if (bounds) {
-      this.setCameraInternal(fitCamera(bounds, this.width, this.height, 48, 1));
+      this.moveCamera(fitCamera(bounds, this.width, this.height, 48, 1));
     }
   }
 
@@ -802,13 +844,13 @@ export class GraphView {
       bounds.width * this.camera.zoom < this.width - 80 &&
       bounds.height * this.camera.zoom < this.height - 80;
     if (fitsAtZoom) {
-      this.setCameraInternal({
+      this.moveCamera({
         zoom: this.camera.zoom,
         x: bounds.x + bounds.width / 2 - this.width / 2 / this.camera.zoom,
         y: bounds.y + bounds.height / 2 - this.height / 2 / this.camera.zoom,
       });
     } else {
-      this.setCameraInternal(
+      this.moveCamera(
         fitCamera(bounds, this.width, this.height, 48, this.camera.zoom)
       );
     }
@@ -905,15 +947,13 @@ export class GraphView {
       }
 
       const top = ns.bubble ? ns.bubble.height + BUBBLE_GAP : 0;
-      minX = Math.min(minX, ns.x);
-      minY = Math.min(minY, ns.y - top);
-      maxX = Math.max(
-        maxX,
-        ns.x + Math.max(ns.geom.width, ns.bubble?.width ?? 0)
-      );
+      const { x, y } = ns.tween?.to ?? ns;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y - top);
+      maxX = Math.max(maxX, x + Math.max(ns.geom.width, ns.bubble?.width ?? 0));
       maxY = Math.max(
         maxY,
-        ns.y +
+        y +
           ns.geom.height +
           (this.problems.has(id) ? BANNER_GAP + BANNER_HEIGHT : 0)
       );
@@ -1105,10 +1145,129 @@ export class GraphView {
     return 8 / this.camera.zoom;
   }
 
+  /** Sets the camera at once (panning, wheel, pinch), ending any easing. */
   private setCameraInternal(camera: Camera): void {
+    this.cameraTween = null;
     this.camera = camera;
     this.emitter.emit('cameraChange', { ...camera });
     this.requestRender();
+  }
+
+  /** Eases the camera to `camera` (fit, zoom to selection, reveal). */
+  private moveCamera(camera: Camera): void {
+    if (!this.motion || this.width === 0) {
+      this.setCameraInternal(camera);
+      return;
+    }
+
+    this.cameraTween = {
+      from: { ...this.camera },
+      to: camera,
+      start: performance.now(),
+    };
+    this.requestRender();
+  }
+
+  /**
+   * Lets a node that was already shown slide from where it is drawn to its
+   * new position. A slide to the same target keeps going.
+   */
+  private continueMove(
+    previous: NodeState | undefined,
+    ns: NodeState,
+    now: number
+  ): void {
+    if (!previous || !this.motion) {
+      return;
+    }
+
+    const to = { x: ns.x, y: ns.y };
+    if (previous.tween && samePoint(previous.tween.to, to)) {
+      ns.tween = previous.tween;
+    } else if (!samePoint(previous, to)) {
+      ns.tween = { from: { x: previous.x, y: previous.y }, to, start: now };
+    } else {
+      return;
+    }
+
+    ns.x = previous.x;
+    ns.y = previous.y;
+  }
+
+  /** Moves a node, sliding there when motion is on. */
+  private placeNode(ns: NodeState, to: Point): void {
+    if (this.motion) {
+      ns.tween = { from: { x: ns.x, y: ns.y }, to, start: performance.now() };
+      return;
+    }
+
+    ns.x = to.x;
+    ns.y = to.y;
+    this.index.insert(ns.node.id, this.nodeRect(ns));
+  }
+
+  /** Puts sliding nodes at their targets (before the user acts on them). */
+  private finishNodeMoves(): void {
+    let finished = false;
+    for (const ns of this.nodes.values()) {
+      if (ns.tween) {
+        ns.x = ns.tween.to.x;
+        ns.y = ns.tween.to.y;
+        ns.tween = undefined;
+        this.index.insert(ns.node.id, this.nodeRect(ns));
+        finished = true;
+      }
+    }
+
+    if (finished) {
+      this.framesDirty = true;
+      this.requestRender();
+    }
+  }
+
+  /** Advances eased moves; true while one is still running. */
+  private stepMotion(now: number): boolean {
+    let running = false;
+    const tween = this.cameraTween;
+    if (tween) {
+      const t = (now - tween.start) / CAMERA_MOTION_MS;
+      if (t >= 1) {
+        this.camera = tween.to;
+        this.cameraTween = null;
+      } else {
+        this.camera = lerpCamera(
+          tween.from,
+          tween.to,
+          easeOut(t),
+          this.width,
+          this.height
+        );
+        running = true;
+      }
+
+      this.emitter.emit('cameraChange', { ...this.camera });
+    }
+
+    for (const ns of this.nodes.values()) {
+      const move = ns.tween;
+      if (!move) {
+        continue;
+      }
+
+      const t = (now - move.start) / NODE_MOTION_MS;
+      const k = easeOut(t);
+      ns.x = move.from.x + (move.to.x - move.from.x) * k;
+      ns.y = move.from.y + (move.to.y - move.from.y) * k;
+      this.framesDirty = true;
+      if (t >= 1) {
+        ns.tween = undefined;
+        this.index.insert(ns.node.id, this.nodeRect(ns));
+      } else {
+        running = true;
+      }
+    }
+
+    return running;
   }
 
   private setSelectionInternal(selection: Set<string>): void {
@@ -1341,6 +1500,8 @@ export class GraphView {
   }
 
   private onPointerDown(e: PointerEvent): void {
+    this.cameraTween = null;
+    this.finishNodeMoves();
     this.canvas.focus({ preventScroll: true });
     this.canvas.setPointerCapture(e.pointerId);
     const client = this.clientPoint(e);
@@ -2056,6 +2217,7 @@ export class GraphView {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
+    this.finishNodeMoves();
     if (e.code === 'Space') {
       this.spaceDown = true;
       e.preventDefault();
@@ -2126,6 +2288,7 @@ export class GraphView {
    * change; the code stays the same.
    */
   public alignSelection(mode: AlignMode): void {
+    this.finishNodeMoves();
     const selected = [...this.selection]
       .map((id) => this.nodes.get(id))
       .filter((ns): ns is NodeState => ns !== undefined);
@@ -2220,9 +2383,7 @@ export class GraphView {
     const patch: LayoutPatch = {};
     for (const [ns, point] of moved) {
       if (point.x !== ns.x || point.y !== ns.y) {
-        ns.x = point.x;
-        ns.y = point.y;
-        this.index.insert(ns.node.id, this.nodeRect(ns));
+        this.placeNode(ns, point);
         patch[ns.node.id] = { ...point };
       }
     }
@@ -2281,6 +2442,11 @@ export class GraphView {
   }
 
   private render(): void {
+    const moving = this.stepMotion(performance.now());
+    if (moving) {
+      this.requestRender();
+    }
+
     const { ctx, camera, theme } = this;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = theme.background;

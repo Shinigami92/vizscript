@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   clickSelection,
   distanceToWire,
+  easeOut,
   fitCamera,
   formatCameraParam,
+  lerpCamera,
   marqueeSelection,
   parseCameraParam,
   screenToWorld,
@@ -62,6 +64,25 @@ describe('camera', () => {
       x: 250,
       y: 250,
     });
+  });
+
+  it('eases between two cameras', () => {
+    const from = { x: 0, y: 0, zoom: 1 };
+    const to = { x: 100, y: 50, zoom: 0.25 };
+    expect(lerpCamera(from, to, 0, 400, 200)).toEqual(from);
+    const end = lerpCamera(from, to, 1, 400, 200);
+    expect(end.x).toBeCloseTo(to.x);
+    expect(end.y).toBeCloseTo(to.y);
+    expect(end.zoom).toBeCloseTo(to.zoom);
+    // Halfway in zoom steps (geometric), not in zoom values.
+    expect(lerpCamera(from, to, 0.5, 400, 200).zoom).toBeCloseTo(0.5);
+  });
+
+  it('eases out', () => {
+    expect(easeOut(0)).toBe(0);
+    expect(easeOut(1)).toBe(1);
+    expect(easeOut(0.5)).toBeGreaterThan(0.5);
+    expect(easeOut(2)).toBe(1);
   });
 });
 
