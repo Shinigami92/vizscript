@@ -1,3 +1,5 @@
+import type { InputPinMeta } from './edit-meta';
+import { getMeta } from './edit-meta';
 import type { GraphNode, Pin } from './ir';
 
 export type TextStyle =
@@ -85,6 +87,21 @@ export function isOperatorGlyph(node: GraphNode): boolean {
     node.kind === 'operator' &&
     isCompact(node) &&
     /^[^\w\s]{1,3}$/.test(node.title)
+  );
+}
+
+/**
+ * UE's advanced pins: an argument the call leaves out, so its parameter's
+ * default applies (`print(x, end='\\n')` without `end`). The canvas folds
+ * them behind ▼.
+ */
+export function isAdvancedPin(pin: Pin): boolean {
+  return (
+    pin.direction === 'in' &&
+    pin.kind === 'data' &&
+    pin.range === undefined &&
+    getMeta<InputPinMeta>(pin).optional === true &&
+    (pin.literal?.value ?? '') !== ''
   );
 }
 
