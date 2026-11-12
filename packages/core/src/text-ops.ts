@@ -24,6 +24,16 @@ import type {
 } from './ir';
 import type { GraphOp, NodeTemplate, OpResult, TextEdit } from './ops';
 import { findNode } from './reconcile';
+import type { DeclarationSyntax } from './symbol-ops';
+import {
+  addFunction,
+  addSignal,
+  addVariable,
+  checkName,
+  deleteSymbol,
+  renameSymbol,
+} from './symbol-ops';
+import { qualifiedName } from './symbols';
 import { lineAwareRange, lineIndent, lineStart, reindent } from './text-utils';
 
 /**
@@ -65,6 +75,8 @@ export interface StatementSyntax {
    * `statementEnd` (TypeScript wraps `{ … }` in parentheses).
    */
   expressionStatement?: (expression: string) => string;
+  /** Adding, renaming and deleting symbols ("My Script"). */
+  declarations?: DeclarationSyntax;
 }
 
 /**
@@ -1029,6 +1041,107 @@ function callWith(
  * Turns a graph operation into minimal text edits, using the statement and
  * pin metadata produced by a backend's lowering (see `edit-meta.ts`).
  */
+/** Ops of "My Script": add, rename and delete declarations. */
+function applySymbolOp(
+  text: string,
+  doc: GraphDocument,
+  op: Extract<
+    GraphOp,
+    {
+      type:
+        | 'addFunction'
+        | 'addVariable'
+        | 'addSignal'
+        | 'renameSymbol'
+        | 'deleteSymbol';
+    }
+  >,
+  syntax: StatementSyntax
+): OpResult {
+  const declarations = syntax.declarations;
+  if (!declarations) {
+    return failed('This language cannot add or rename declarations yet.');
+  }
+
+  const unit = /\S/.test(text)
+    ? detectIndentUnit(text)
+    : declarations.defaultIndent;
+  switch (op.type) {
+    case 'addFunction': {
+      return addFunction(text, doc, op.scope, op.name, unit, declarations);
+    }
+
+    case 'addVariable': {
+      if (op.local) {
+        return addLocal(text, doc, op.scope, op.name, syntax);
+      }
+
+      return addVariable(
+        text,
+        doc,
+        op.scope,
+        op.name,
+        op.constant ?? false,
+        unit,
+        declarations
+      );
+    }
+
+    case 'addSignal': {
+      return addSignal(text, doc, op.name, declarations);
+    }
+
+    case 'renameSymbol': {
+      return renameSymbol(text, doc, op.symbol, op.name, declarations);
+    }
+
+    case 'deleteSymbol': {
+      return deleteSymbol(
+        text,
+        doc,
+        op.symbol,
+        syntax.comment,
+        syntax.emptyBody
+      );
+    }
+  }
+}
+
+/** A local variable: a declaration at the start of the function body. */
+function addLocal(
+  text: string,
+  doc: GraphDocument,
+  fnName: string,
+  name: string,
+  syntax: StatementSyntax
+): OpResult {
+  const declarations = syntax.declarations;
+  const fn = doc.symbols?.find(
+    (s) =>
+      (s.kind === 'function' || s.kind === 'method') &&
+      qualifiedName(s) === fnName
+  );
+  const entry = doc.functions
+    .find((f) => f.id === fn?.fnId)
+    ?.nodes.find((n) => n.kind === 'entry');
+  if (!fn || !entry || !declarations) {
+    return failed(`There is no function ${fnName}.`);
+  }
+
+  const error = checkName(doc, declarations, fnName, name);
+  if (error) {
+    return failed(error);
+  }
+
+  return addNode(
+    text,
+    doc,
+    { type: 'setVar', name, declaration: 'let' },
+    { after: { node: entry.id, pin: 'then' } },
+    syntax
+  );
+}
+
 export function applyTextOp(
   text: string,
   doc: GraphDocument,
@@ -1099,6 +1212,10 @@ export function applyTextOp(
 
     case 'deleteCommentBox': {
       return deleteCommentBox(text, doc, op.box);
+    }
+
+    default: {
+      return applySymbolOp(text, doc, op, syntax);
     }
   }
 }

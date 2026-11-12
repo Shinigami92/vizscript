@@ -46,6 +46,12 @@ export interface ScriptSymbol {
   scope: string;
   /** The whole declaration. */
   range: SourceRange;
+  /**
+   * The statement to delete with the symbol when it is more than `range`
+   * (`export const a = 1;` around the declarator `a = 1`). Symbols that
+   * share it were declared together (`let a, b;`).
+   */
+  declarationRange?: SourceRange;
   nameRange: SourceRange;
   /** Declared type of a variable; missing when untyped. */
   type?: TypeRef;

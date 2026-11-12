@@ -51,7 +51,26 @@ export type GraphOp =
   | { type: 'addCommentBox'; nodes: string[]; title: string }
   | { type: 'renameCommentBox'; box: string; title: string }
   /** Removes the region markers; the code inside stays. */
-  | { type: 'deleteCommentBox'; box: string };
+  | { type: 'deleteCommentBox'; box: string }
+  /** Adds an empty function to the module (`scope: ''`) or a class. */
+  | { type: 'addFunction'; scope: string; name: string }
+  /**
+   * Adds a variable to the module (`scope: ''`), a class, or (with
+   * `local`) the function whose qualified name is `scope`.
+   */
+  | {
+      type: 'addVariable';
+      scope: string;
+      name: string;
+      local?: boolean;
+      constant?: boolean;
+    }
+  /** Adds a signal (GDScript). */
+  | { type: 'addSignal'; name: string }
+  /** Renames a symbol and its uses in the file. */
+  | { type: 'renameSymbol'; symbol: string; name: string }
+  /** Removes the declaration of a symbol (its uses stay). */
+  | { type: 'deleteSymbol'; symbol: string };
 
 export type OpResult =
   | { ok: true; edits: TextEdit[] }
