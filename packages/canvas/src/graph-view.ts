@@ -747,6 +747,14 @@ export class GraphView {
     });
   }
 
+  /** No node, pin, reroute point or frame title at a world point. */
+  public isEmptyAt(world: Point): boolean {
+    return (
+      this.hitTest(world) === null &&
+      this.hitWire(world, this.wireTolerance()) === null
+    );
+  }
+
   /** The function whose frame contains a world point (innermost). */
   public functionAt(world: Point): string | undefined {
     this.updateFrames();
