@@ -13,6 +13,47 @@ export interface ImportedDeclaration {
   members?: ReadonlyArray<ScriptSymbol>;
 }
 
+/**
+ * A name of another repository file to import, so a node can use it. The
+ * backend writes the import in its own syntax (`import { a } from './x'`,
+ * `from x import a`, `const A = preload("res://a.gd")`).
+ */
+export interface ImportRequest {
+  /** Repository path of the file that declares the name. */
+  path: string;
+  /** Repository path of the file that gets the import. */
+  from: string;
+  /** Local name in the importing file. */
+  name: string;
+  /** Exported name, `default`, or `*` for the whole module or script. */
+  imported: string;
+  /** Project root for root paths (GDScript's `res://`), `''` for the repo. */
+  root?: string;
+}
+
+function dirname(path: string): string {
+  const index = path.lastIndexOf('/');
+  return index === -1 ? '' : path.slice(0, index);
+}
+
+/** `to` relative to the directory of `from`: `./x.ts`, `../a/x.ts`. */
+export function relativePath(from: string, to: string): string {
+  const fromParts = dirname(from).split('/').filter(Boolean);
+  const toParts = to.split('/');
+  let common = 0;
+  while (
+    common < fromParts.length &&
+    common < toParts.length - 1 &&
+    fromParts[common] === toParts[common]
+  ) {
+    common++;
+  }
+
+  const up = fromParts.length - common;
+  const rest = toParts.slice(common).join('/');
+  return up === 0 ? `./${rest}` : `${'../'.repeat(up)}${rest}`;
+}
+
 /** Context of a parse beyond the file itself. */
 export interface ParseOptions {
   imports?: ReadonlyArray<ImportedDeclaration>;

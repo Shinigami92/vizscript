@@ -1,4 +1,5 @@
 import type { CommentSyntax } from './comment-ops';
+import type { ImportRequest } from './imports';
 import type { GraphDocument, SourceRange } from './ir';
 import type { OpResult, TextEdit, TypeSystemInfo, ValueKind } from './ops';
 import type { CallSite } from './signature-ops';
@@ -67,6 +68,12 @@ export interface DeclarationSyntax {
     doc: GraphDocument,
     symbol: ScriptSymbol,
     name: string
+  ) => OpResult;
+  /** Edits that import a name of another file (see `addImport`). */
+  addImport?: (
+    text: string,
+    doc: GraphDocument,
+    request: ImportRequest
   ) => OpResult;
 }
 
@@ -380,6 +387,106 @@ export function addSignal(
       ? { start: 0, end: 0, text: `${line}\n\n` }
       : insertAfterLine(text, header, line, 1),
   ]);
+}
+
+// ---------------------------------------------------------------- imports
+
+/**
+ * Adds `name` to an import statement of `module` that lists names (`import
+ * { a } from './x'`, `from x import a`): `, name` or `, imported as name`.
+ */
+export function joinImport(
+  doc: GraphDocument,
+  module: string,
+  name: string,
+  imported: string
+): TextEdit | undefined {
+  const listed = (doc.symbols ?? []).filter(
+    (s) =>
+      s.kind === 'import' &&
+      s.module === module &&
+      s.imported !== '*' &&
+      s.imported !== 'default' &&
+      !s.modifiers.includes('type')
+  );
+  const statement = listed.at(-1)?.declarationRange;
+  const last = listed
+    .filter((s) => s.declarationRange?.start === statement?.start)
+    .reduce<ScriptSymbol | undefined>(
+      (a, b) => (a && a.range.end > b.range.end ? a : b),
+      undefined
+    );
+  if (!last) {
+    return undefined;
+  }
+
+  const item = imported === name ? name : `${imported} as ${name}`;
+  return { start: last.range.end, end: last.range.end, text: `, ${item}` };
+}
+
+/**
+ * Inserts an import line after the file's last top-level import, else after
+ * `fallback` (a Python docstring) or the header (`extends`), else on top.
+ */
+export function insertImport(
+  text: string,
+  doc: GraphDocument,
+  syntax: DeclarationSyntax,
+  line: string,
+  fallback?: number
+): TextEdit {
+  const last = (doc.symbols ?? [])
+    .filter(
+      (s) =>
+        s.kind === 'import' &&
+        lineIndent(text, (s.declarationRange ?? s.range).start) === ''
+    )
+    .at(-1);
+  if (last) {
+    return insertAfterLine(
+      text,
+      (last.declarationRange ?? last.range).end - 1,
+      line,
+      0
+    );
+  }
+
+  // The later of both: a Python docstring may follow a shebang line.
+  const header = Math.max(headerEnd(text, syntax) ?? -1, fallback ?? -1);
+  if (header >= 0) {
+    return insertAfterLine(text, header, line, 1);
+  }
+
+  const next = text.trimStart() === '' ? '' : '\n';
+  return { start: 0, end: 0, text: `${line}\n${next}` };
+}
+
+/**
+ * Imports a name of another file for a node that uses it. Nothing to do
+ * when the file imports it already; a name taken by something else fails.
+ */
+export function addImport(
+  text: string,
+  doc: GraphDocument,
+  request: ImportRequest,
+  syntax: DeclarationSyntax | undefined
+): OpResult {
+  const taken = (doc.symbols ?? []).find(
+    (s) => s.name === request.name && s.scope === '' && s.kind !== 'local'
+  );
+  if (taken) {
+    return taken.kind === 'import' &&
+      (taken.imported === request.imported ||
+        (taken.imported === '*' && request.imported === '*'))
+      ? succeeded([])
+      : failed(`${request.name} already exists in this file.`);
+  }
+
+  if (!syntax?.addImport) {
+    return failed('This language cannot add imports yet.');
+  }
+
+  return syntax.addImport(text, doc, request);
 }
 
 /** Comment lines directly above `offset` (they belong to the declaration). */

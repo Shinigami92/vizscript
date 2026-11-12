@@ -95,3 +95,49 @@ describe('declarations of imported files', () => {
     `);
   });
 });
+
+function useGreet(text: string, path: string, imported = 'greet'): string {
+  const doc = parsePythonDocument(text, 'app/main.py');
+  const entry = doc.functions
+    .find((f) => f.name === 'f')
+    ?.nodes.find((n) => n.kind === 'entry');
+  const result = applyPythonOp(
+    text,
+    {
+      type: 'withImport',
+      import: { path, from: 'app/main.py', name: 'greet', imported },
+      op: {
+        type: 'addNode',
+        template: { type: 'call', callee: 'greet' },
+        after: { node: entry?.id ?? '', pin: 'then' },
+      },
+    },
+    'app/main.py'
+  );
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+
+  return applyTextEdits(text, result.edits);
+}
+
+describe('adding imports', () => {
+  it('imports from a module next to the file, below the docstring', () => {
+    expect(
+      useGreet('"""Main."""\n\n\ndef f():\n    pass\n', 'app/util.py')
+    ).toBe(
+      '"""Main."""\n\nfrom util import greet\n\n\ndef f():\n    greet()\n    pass\n'
+    );
+  });
+
+  it('joins an import of the same module', () => {
+    expect(
+      useGreet(
+        'import os\nfrom lib.text import a\n\n\ndef f():\n    pass\n',
+        'lib/text.py'
+      )
+    ).toBe(
+      'import os\nfrom lib.text import a, greet\n\n\ndef f():\n    greet()\n    pass\n'
+    );
+  });
+});

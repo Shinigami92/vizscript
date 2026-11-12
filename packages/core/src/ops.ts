@@ -1,4 +1,4 @@
-import type { ParseOptions } from './imports';
+import type { ImportRequest, ParseOptions } from './imports';
 import type { DataType, GraphDocument, PinRef, Point } from './ir';
 import type { ModuleReference } from './module-refs';
 
@@ -146,7 +146,9 @@ export type GraphOp =
   /** Sets (or with `null` removes) the declared return type. */
   | { type: 'setReturnType'; symbol: string; typeText: string | null }
   /** Adds a placeholder argument to a call (UE: "Add pin"). */
-  | { type: 'addArgument'; node: string };
+  | { type: 'addArgument'; node: string }
+  /** Another op that uses a name of another file, plus its import. */
+  | { type: 'withImport'; import: ImportRequest; op: GraphOp };
 
 /** How a value typed in the Details panel is written. */
 export type ValueKind = 'string' | 'number' | 'bool' | 'expression';

@@ -164,3 +164,82 @@ describe('declarations of imported files', () => {
     );
   });
 });
+
+/** Calls `greet` at the start of `f`, importing it from `path`. */
+function useGreet(
+  text: string,
+  path = 'src/util.ts',
+  imported = 'greet'
+): string {
+  const doc = parseTypeScript(text, 'src/main.ts');
+  const entry = doc.functions
+    .find((f) => f.name === 'f')
+    ?.nodes.find((n) => n.kind === 'entry');
+  const result = applyTypeScriptOp(
+    text,
+    {
+      type: 'withImport',
+      import: { path, from: 'src/main.ts', name: 'greet', imported },
+      op: {
+        type: 'addNode',
+        template: { type: 'call', callee: 'greet' },
+        after: { node: entry?.id ?? '', pin: 'then' },
+      },
+    },
+    'src/main.ts'
+  );
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+
+  return applyTextEdits(text, result.edits);
+}
+
+describe('adding imports', () => {
+  it('adds an import on top', () => {
+    expect(useGreet('function f() {\n}\n')).toBe(
+      "import { greet } from './util';\n\nfunction f() {\n  greet();\n}\n"
+    );
+  });
+
+  it('joins an import of the same module', () => {
+    expect(
+      useGreet(
+        'import { a } from "./util";\nimport b from "./b";\n\nfunction f() {\n}\n'
+      )
+    ).toBe(
+      'import { a, greet } from "./util";\nimport b from "./b";\n\nfunction f() {\n  greet();\n}\n'
+    );
+  });
+
+  it('follows the file style of paths, quotes and semicolons', () => {
+    expect(
+      useGreet(
+        'import { b } from "./b.js"\n\nfunction f() {\n}\n',
+        'lib/greet/index.ts'
+      )
+    ).toBe(
+      'import { b } from "./b.js"\nimport { greet } from "../lib/greet/index.js"\n\nfunction f() {\n  greet();\n}\n'
+    );
+  });
+
+  it('imports default exports and directories', () => {
+    expect(
+      useGreet('function f() {\n}\n', 'src/greet/index.ts', 'default')
+    ).toBe("import greet from './greet';\n\nfunction f() {\n  greet();\n}\n");
+  });
+
+  it('keeps an existing import', () => {
+    expect(
+      useGreet("import { greet } from './util';\n\nfunction f() {\n}\n")
+    ).toBe(
+      "import { greet } from './util';\n\nfunction f() {\n  greet();\n}\n"
+    );
+  });
+
+  it('refuses a name that is taken', () => {
+    expect(() => useGreet('const greet = 1;\nfunction f() {\n}\n')).toThrow(
+      'greet already exists in this file.'
+    );
+  });
+});

@@ -9,6 +9,7 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import { applyTextOp, removeModifier, replaceKeyword } from '@vizscript/core';
+import { addGDScriptImport } from './add-import';
 import { parseGDScriptDocument } from './lower';
 import { parseGDScript } from './parser';
 import { gdscriptCallSites, renameGDScriptSymbol } from './rename';
@@ -346,6 +347,8 @@ const DECLARATIONS: DeclarationSyntax = {
   variable: (name, { constant }) =>
     constant ? `const ${name} = null` : `var ${name}`,
   signal: (name) => `signal ${name}`,
+  addImport: (text, doc, request) =>
+    addGDScriptImport(text, doc, request, DECLARATIONS),
   rename: (text, doc, symbol, name) =>
     renameGDScriptSymbol(
       parseGDScript(text).script.body,

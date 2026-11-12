@@ -1,7 +1,14 @@
 import type { SyntaxNode } from '@lezer/common';
 import { parser } from '@lezer/python';
-import type { ScriptSymbol, SourceRange } from '@vizscript/core';
-import { symbolId } from '@vizscript/core';
+import type {
+  DeclarationSyntax,
+  GraphDocument,
+  ImportRequest,
+  OpResult,
+  ScriptSymbol,
+  SourceRange,
+} from '@vizscript/core';
+import { insertImport, joinImport, symbolId } from '@vizscript/core';
 import { maskForParser } from './convert';
 
 function children(node: SyntaxNode): SyntaxNode[] {
@@ -134,4 +141,71 @@ export function pythonImports(text: string): ScriptSymbol[] {
     },
   });
   return symbols;
+}
+
+function dirname(path: string): string {
+  const index = path.lastIndexOf('/');
+  return index === -1 ? '' : path.slice(0, index);
+}
+
+/**
+ * Module name of `path`: just its name next to the importing file (scripts
+ * run from their folder), else the dotted path from the repository root.
+ */
+function moduleOf(request: ImportRequest): string {
+  const path = request.path.replace(/\.pyi?$/, '').replace(/\/__init__$/, '');
+  if (dirname(request.path) === dirname(request.from)) {
+    return path.split('/').at(-1) ?? path;
+  }
+
+  return path.replaceAll('/', '.');
+}
+
+/** End of a module docstring (imports go below it). */
+function docstringEnd(text: string): number | undefined {
+  const match = text.match(
+    /^(?:[ \t]*(?:#.*)?\n)*[ \t]*[rRuUbB]?("""[\s\S]*?"""|'''[\s\S]*?'''|"[^"\n]*"|'[^'\n]*')/
+  );
+  return match ? match[0].length - 1 : undefined;
+}
+
+/**
+ * `from module import name` (joined into an existing one of the module), or
+ * `import module` for a whole module, below the file's imports.
+ */
+export function addPythonImport(
+  text: string,
+  doc: GraphDocument,
+  request: ImportRequest,
+  syntax: DeclarationSyntax
+): OpResult {
+  const module = moduleOf(request);
+  const { name, imported } = request;
+  if (imported === '*') {
+    const last = module.split('.').at(-1);
+    const line = `import ${module}${last === name ? '' : ` as ${name}`}`;
+    return {
+      ok: true,
+      edits: [insertImport(text, doc, syntax, line, docstringEnd(text))],
+    };
+  }
+
+  const joined = joinImport(doc, module, name, imported);
+  if (joined) {
+    return { ok: true, edits: [joined] };
+  }
+
+  const item = imported === name ? name : `${imported} as ${name}`;
+  return {
+    ok: true,
+    edits: [
+      insertImport(
+        text,
+        doc,
+        syntax,
+        `from ${module} import ${item}`,
+        docstringEnd(text)
+      ),
+    ],
+  };
 }

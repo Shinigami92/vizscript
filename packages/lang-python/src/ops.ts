@@ -9,6 +9,7 @@ import type {
 } from '@vizscript/core';
 import { applyTextOp } from '@vizscript/core';
 import { parsePython, splitString } from './convert';
+import { addPythonImport } from './imports';
 import { parsePythonDocument } from './lower';
 import { pythonCallSites, renamePythonSymbol } from './rename';
 
@@ -285,6 +286,8 @@ const DECLARATIONS: DeclarationSyntax = {
   fn: (name, unit, method) =>
     `def ${name}(${method ? 'self' : ''}):\n${unit}pass`,
   variable: (name) => `${name} = None`,
+  addImport: (text, doc, request) =>
+    addPythonImport(text, doc, request, DECLARATIONS),
   rename: (text, doc, symbol, name) =>
     renamePythonSymbol(
       parsePython(text).body,

@@ -38,6 +38,7 @@ import {
 import type { DeclarationSyntax } from './symbol-ops';
 import {
   addFunction,
+  addImport,
   addSignal,
   addVariable,
   checkName,
@@ -1474,6 +1475,19 @@ export function applyTextOp(
   syntax: StatementSyntax
 ): OpResult {
   switch (op.type) {
+    case 'withImport': {
+      // One edit (one undo step): the import and what uses the name.
+      const imported = addImport(text, doc, op.import, syntax.declarations);
+      if (!imported.ok) {
+        return imported;
+      }
+
+      const used = applyTextOp(text, doc, op.op, syntax);
+      return used.ok
+        ? { ok: true, edits: [...imported.edits, ...used.edits] }
+        : used;
+    }
+
     case 'deleteNodes': {
       return deleteNodes(text, doc, op.nodeIds, syntax);
     }

@@ -9,6 +9,7 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import { applyTextOp, removeModifier, replaceKeyword } from '@vizscript/core';
+import { addTypeScriptImport } from './add-import';
 import { parseFile, parseTypeScript } from './lower';
 import { renameTypeScriptSymbol, typeScriptCallSites } from './rename';
 
@@ -295,7 +296,7 @@ function setModifier(
 /** Declarations of "My Script"; renames parse the file again. */
 function declarations(text: string, fileName?: string): DeclarationSyntax {
   const isJs = /\.[cm]?jsx?$/i.test(fileName ?? '');
-  return {
+  const syntax: DeclarationSyntax = {
     typeSystem: TYPESCRIPT_TYPES,
     validType: (type) => {
       if (isJs) {
@@ -339,6 +340,8 @@ function declarations(text: string, fileName?: string): DeclarationSyntax {
 
       return constant ? `const ${name} = undefined;` : `let ${name};`;
     },
+    addImport: (source, doc, request) =>
+      addTypeScriptImport(source, doc, request, syntax),
     rename: (source, doc, symbol, name) =>
       renameTypeScriptSymbol(
         parseFile(source, fileName).program,
@@ -347,6 +350,7 @@ function declarations(text: string, fileName?: string): DeclarationSyntax {
         name
       ),
   };
+  return syntax;
 }
 
 function quoteString(value: string, quote: string): string {
