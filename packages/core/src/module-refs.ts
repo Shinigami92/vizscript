@@ -126,13 +126,15 @@ export function findDefinition(
   const functions = doc?.functions ?? [];
   const fn =
     functions.find((f) => f.name === symbol) ??
-    functions.find((f) => f.name.endsWith(`.${symbol}`));
+    functions.find(
+      (f) => f.name.endsWith(`.${symbol}`) || f.name.endsWith(`::${symbol}`)
+    );
   if (fn) {
     return fn.range;
   }
 
   const declaration = new RegExp(
-    String.raw`^[ \t]*(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function\*?|class|const|let|var|interface|type|enum|namespace|def|func|signal|static\s+func)\s+(${escapeRegExp(symbol)})\b`,
+    String.raw`^[ \t]*(?:export\s+)?(?:pub(?:\([^)]*\))?\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:unsafe\s+)?(?:function\*?|class|const|let|var|interface|type|enum|namespace|def|func|signal|static\s+func|fn|struct|trait|static|mod|union)\s+(${escapeRegExp(symbol)})\b`,
     'm'
   );
   const match = text.match(declaration);

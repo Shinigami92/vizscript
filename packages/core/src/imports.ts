@@ -124,7 +124,7 @@ const MEMBER_KINDS = new Set([
 /**
  * What other files can import from a parsed file, by the rules of its
  * language: TypeScript's `export`s, Python's public module names (no `_`),
- * every member of a GDScript script.
+ * every member of a GDScript script, Rust's `pub` items.
  */
 export function exportedSymbols(
   doc: GraphDocument,
@@ -143,6 +143,10 @@ export function exportedSymbols(
 
         case 'gdscript': {
           return true;
+        }
+
+        case 'rust': {
+          return symbol.modifiers.some((m) => m.startsWith('pub'));
         }
 
         default: {

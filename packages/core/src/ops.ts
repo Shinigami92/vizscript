@@ -283,6 +283,8 @@ export interface TypeSystemInfo {
     vectors?: Record<string, string[]>;
     color?: string;
   };
+  /** Parameters cannot have default values (Rust). */
+  noParameterDefaults?: boolean;
   /** Flow-control nodes the language has (GDScript has no `try`). */
   flow?: FlowTemplate[];
   /**

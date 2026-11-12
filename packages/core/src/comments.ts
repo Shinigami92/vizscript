@@ -32,7 +32,10 @@ export function commentText(raw: string): { text: string; block: boolean } {
 
 const REGION = /^(#?\s*)(end)?region\b/;
 
-/** Region marker in a line comment: `// #region Title`, `#region`, `# region`. */
+/**
+ * Region marker in a line comment: `// #region Title`, `#region`, `# region`,
+ * `// region: Title`.
+ */
 export function parseRegionMarker(
   raw: string
 ): { end: boolean; title: string; titleOffset: number } | undefined {
@@ -47,7 +50,10 @@ export function parseRegionMarker(
     return undefined;
   }
 
-  const afterKeyword = prefix.length + match[0].length;
+  // rust-analyzer writes `// region: Title`.
+  const colon = raw.slice(prefix.length + match[0].length).match(/^\s*:/);
+  const afterKeyword =
+    prefix.length + match[0].length + (colon?.[0].length ?? 0);
   const rest = raw.slice(afterKeyword);
   const title = rest.trim();
   const titleOffset = title
