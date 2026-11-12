@@ -1,4 +1,5 @@
 export * from './call-pins';
+export * from './collapse';
 export * from './comment-ops';
 export * from './comments';
 export * from './edit-meta';

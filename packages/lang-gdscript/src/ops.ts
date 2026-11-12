@@ -347,6 +347,23 @@ const DECLARATIONS: DeclarationSyntax = {
   variable: (name, { constant }) =>
     constant ? `const ${name} = null` : `var ${name}`,
   signal: (name) => `signal ${name}`,
+  extract: {
+    fn: (name, params, body, { isStatic }) => {
+      const list = params
+        .map((p) => (p.type ? `${p.name}: ${p.type}` : p.name))
+        .join(', ');
+      return `${isStatic ? 'static ' : ''}func ${name}(${list}):\n${body}`;
+    },
+    call: (callee, args, { isAsync, output }) => {
+      const store = output
+        ? `${output.declare ? 'var ' : ''}${output.name} = `
+        : '';
+      return `${store}${isAsync ? 'await ' : ''}${callee}(${args.join(', ')})`;
+    },
+    returnValue: (name) => `return ${name}`,
+    // Functions of the script are called by name, inner classes by self.
+    method: (name, _className, isStatic) => (isStatic ? name : `self.${name}`),
+  },
   addImport: (text, doc, request) =>
     addGDScriptImport(text, doc, request, DECLARATIONS),
   rename: (text, doc, symbol, name) =>

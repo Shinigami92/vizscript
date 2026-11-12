@@ -158,6 +158,17 @@ export type GraphOp =
    * to another input.
    */
   | { type: 'moveWires'; from: PinRef; to: PinRef }
+  /**
+   * UE's "Collapse to Function": the statements of `nodes` become a new
+   * function `name`, called where they were.
+   */
+  | {
+      type: 'collapseToFunction';
+      nodes: string[];
+      name: string;
+      /** Where the call node goes (where the collapsed nodes were). */
+      position?: Point;
+    }
   /** Another op that uses a name of another file, plus its import. */
   | { type: 'withImport'; import: ImportRequest; op: GraphOp };
 

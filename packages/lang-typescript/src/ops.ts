@@ -340,6 +340,26 @@ function declarations(text: string, fileName?: string): DeclarationSyntax {
 
       return constant ? `const ${name} = undefined;` : `let ${name};`;
     },
+    extract: {
+      fn: (name, params, body, { method, isStatic, isAsync }) => {
+        const list = params
+          .map((p) => (p.type && !isJs ? `${p.name}: ${p.type}` : p.name))
+          .join(', ');
+        const head = method
+          ? `${isStatic ? 'static ' : ''}${isAsync ? 'async ' : ''}${name}`
+          : `${isAsync ? 'async ' : ''}function ${name}`;
+        return `${head}(${list}) {\n${body}\n}`;
+      },
+      call: (callee, args, { isAsync, output }) => {
+        const store = output
+          ? `${output.declare ? `${output.declare} ` : ''}${output.name} = `
+          : '';
+        return `${store}${isAsync ? 'await ' : ''}${callee}(${args.join(', ')});`;
+      },
+      returnValue: (name) => `return ${name};`,
+      method: (name, className, isStatic) =>
+        isStatic ? `${className}.${name}` : `this.${name}`,
+    },
     addImport: (source, doc, request) =>
       addTypeScriptImport(source, doc, request, syntax),
     rename: (source, doc, symbol, name) =>

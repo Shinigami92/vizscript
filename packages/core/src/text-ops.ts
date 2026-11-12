@@ -1,4 +1,5 @@
 import { callClose } from './call-pins';
+import { collapseToFunction } from './collapse';
 import type { CommentSyntax } from './comment-ops';
 import {
   addCommentBox,
@@ -1643,6 +1644,17 @@ export function applyTextOp(
 
     case 'moveWires': {
       return moveWires(text, doc, op.from, op.to, syntax);
+    }
+
+    case 'collapseToFunction': {
+      return collapseToFunction(
+        text,
+        doc,
+        op.nodes,
+        op.name,
+        detectIndentUnit(text),
+        syntax.declarations
+      );
     }
 
     case 'addNode': {

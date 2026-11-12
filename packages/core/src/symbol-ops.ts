@@ -69,12 +69,49 @@ export interface DeclarationSyntax {
     symbol: ScriptSymbol,
     name: string
   ) => OpResult;
+  /** How collapsed nodes become a function and its call (`collapse.ts`). */
+  extract?: ExtractSyntax;
   /** Edits that import a name of another file (see `addImport`). */
   addImport?: (
     text: string,
     doc: GraphDocument,
     request: ImportRequest
   ) => OpResult;
+}
+
+/** An input of a collapsed function. */
+export interface ExtractParam {
+  name: string;
+  /** Declared type of the variable it comes from. */
+  type?: string;
+}
+
+/** Language syntax for "Collapse to function". */
+export interface ExtractSyntax {
+  /**
+   * The new function: `body` is indented by one unit, the other lines of
+   * the result are not (like `fn`).
+   */
+  fn: (
+    name: string,
+    params: ReadonlyArray<ExtractParam>,
+    body: string,
+    options: { method: boolean; isStatic: boolean; isAsync: boolean }
+  ) => string;
+  /** The statement that calls it, with the output stored if there is one. */
+  call: (
+    callee: string,
+    args: ReadonlyArray<string>,
+    options: {
+      isAsync: boolean;
+      /** `declare`: the keyword of a new variable (`const`), else assign. */
+      output?: { name: string; declare?: string };
+    }
+  ) => string;
+  /** `return x` with the language's terminator. */
+  returnValue: (name: string) => string;
+  /** Callee of a method of the same class (`this.name`, `self.name`). */
+  method: (name: string, className: string, isStatic: boolean) => string;
 }
 
 function failed(error: string): OpResult {
@@ -183,7 +220,10 @@ function headerEnd(
   return end;
 }
 
-function classOf(doc: GraphDocument, scope: string): ScriptSymbol | undefined {
+export function classOf(
+  doc: GraphDocument,
+  scope: string
+): ScriptSymbol | undefined {
   return doc.symbols?.find(
     (s) => s.kind === 'class' && qualifiedName(s) === scope
   );
@@ -207,7 +247,7 @@ function memberIndent(
 }
 
 /** Inserts a member at the end of a class body. */
-function addToClass(
+export function addToClass(
   text: string,
   doc: GraphDocument,
   cls: ScriptSymbol,

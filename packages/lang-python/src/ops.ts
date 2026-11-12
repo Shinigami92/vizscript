@@ -286,6 +286,21 @@ const DECLARATIONS: DeclarationSyntax = {
   fn: (name, unit, method) =>
     `def ${name}(${method ? 'self' : ''}):\n${unit}pass`,
   variable: (name) => `${name} = None`,
+  extract: {
+    fn: (name, params, body, { method, isStatic, isAsync }) => {
+      const list = [
+        ...(method && !isStatic ? ['self'] : []),
+        ...params.map((p) => (p.type ? `${p.name}: ${p.type}` : p.name)),
+      ].join(', ');
+      const decorator = method && isStatic ? '@staticmethod\n' : '';
+      return `${decorator}${isAsync ? 'async ' : ''}def ${name}(${list}):\n${body}`;
+    },
+    call: (callee, args, { isAsync, output }) =>
+      `${output ? `${output.name} = ` : ''}${isAsync ? 'await ' : ''}${callee}(${args.join(', ')})`,
+    returnValue: (name) => `return ${name}`,
+    method: (name, className, isStatic) =>
+      isStatic ? `${className}.${name}` : `self.${name}`,
+  },
   addImport: (text, doc, request) =>
     addPythonImport(text, doc, request, DECLARATIONS),
   rename: (text, doc, symbol, name) =>
