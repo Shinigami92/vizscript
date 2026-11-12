@@ -260,7 +260,8 @@ class SymbolCollector {
     decl: t.VariableDeclaration,
     scope: string,
     local: boolean,
-    modifiers: string[]
+    modifiers: string[],
+    statement: SourceRange = rangeOf(decl)
   ): void {
     for (const declarator of decl.declarations) {
       if (declarator.id.type !== 'Identifier') {
@@ -295,6 +296,7 @@ class SymbolCollector {
           ? typeFromAnnotation(id.typeAnnotation)
           : inferType(init),
         ...(init ? { defaultRange: rangeOf(init) } : {}),
+        declarationRange: statement,
         modifiers: [...modifiers, decl.kind],
       });
     }
@@ -425,7 +427,7 @@ class SymbolCollector {
       }
 
       case 'VariableDeclaration': {
-        this.variables(node, '', false, modifiers);
+        this.variables(node, '', false, modifiers, range);
         break;
       }
 

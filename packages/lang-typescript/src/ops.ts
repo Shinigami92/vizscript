@@ -1,6 +1,50 @@
-import type { GraphOp, OpResult, StatementSyntax } from '@vizscript/core';
+import type {
+  DeclarationSyntax,
+  GraphOp,
+  OpResult,
+  StatementSyntax,
+} from '@vizscript/core';
 import { applyTextOp } from '@vizscript/core';
-import { parseTypeScript } from './lower';
+import { parseFile, parseTypeScript } from './lower';
+import { renameTypeScriptSymbol } from './rename';
+
+const KEYWORDS = new Set(
+  (
+    'break case catch class const continue debugger default delete do else ' +
+    'enum export extends false finally for function if import in instanceof ' +
+    'new null return super switch this throw true try typeof var void while ' +
+    'with let static yield await implements interface package private ' +
+    'protected public'
+  ).split(' ')
+);
+
+/** Declarations of "My Script"; renames parse the file again. */
+function declarations(fileName?: string): DeclarationSyntax {
+  return {
+    identifier: /^[A-Za-z_$][\w$]*$/,
+    keywords: KEYWORDS,
+    defaultIndent: '  ',
+    blankLines: 1,
+    bracedClasses: true,
+    header: /^(?:import\b|['"]use strict['"]|#!)/,
+    fn: (name, _unit, method) =>
+      method ? `${name}() {\n}` : `function ${name}() {\n}`,
+    variable: (name, { constant, member }) => {
+      if (member) {
+        return `${name} = undefined;`;
+      }
+
+      return constant ? `const ${name} = undefined;` : `let ${name};`;
+    },
+    rename: (text, doc, symbol, name) =>
+      renameTypeScriptSymbol(
+        parseFile(text, fileName).program,
+        doc.symbols ?? [],
+        symbol,
+        name
+      ),
+  };
+}
 
 function quoteString(value: string, quote: string): string {
   let escaped = value.replaceAll('\\', '\\\\');
@@ -76,10 +120,8 @@ export function applyTypeScriptOp(
   op: GraphOp,
   fileName?: string
 ): OpResult {
-  return applyTextOp(
-    text,
-    parseTypeScript(text, fileName),
-    op,
-    TYPESCRIPT_SYNTAX
-  );
+  return applyTextOp(text, parseTypeScript(text, fileName), op, {
+    ...TYPESCRIPT_SYNTAX,
+    declarations: declarations(fileName),
+  });
 }

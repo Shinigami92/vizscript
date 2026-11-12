@@ -2278,24 +2278,32 @@ function bindingNames(pattern: t.Node | null | undefined): string[] {
   }
 }
 
+/** Parses a file with Babel (TypeScript unless it is plain JavaScript). */
+export function parseFile(
+  text: string,
+  fileName = 'file.ts'
+): ReturnType<typeof parse> {
+  const isJsLike = /\.[cm]?jsx?$/i.test(fileName);
+  const isJsx = /\.[jt]sx$/i.test(fileName);
+  return parse(text, {
+    sourceType: 'unambiguous',
+    errorRecovery: true,
+    plugins: [
+      ...(isJsLike ? [] : [['typescript', {}] as ['typescript', object]]),
+      ...(isJsx || isJsLike ? ['jsx' as const] : []),
+    ],
+  });
+}
+
 export function parseTypeScript(
   text: string,
   fileName = 'file.ts'
 ): GraphDocument {
   const diagnostics: Diagnostic[] = [];
-  const isJsLike = /\.[cm]?jsx?$/i.test(fileName);
-  const isJsx = /\.[jt]sx$/i.test(fileName);
   let program: t.Program;
   let comments: SourceRange[] = [];
   try {
-    const file = parse(text, {
-      sourceType: 'unambiguous',
-      errorRecovery: true,
-      plugins: [
-        ...(isJsLike ? [] : [['typescript', {}] as ['typescript', object]]),
-        ...(isJsx || isJsLike ? ['jsx' as const] : []),
-      ],
-    });
+    const file = parseFile(text, fileName);
     program = file.program;
     comments = (file.comments ?? []).map((c) => ({
       start: c.start ?? 0,
