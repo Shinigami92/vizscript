@@ -66,7 +66,10 @@ async function forget(folder: RememberedFolder): Promise<void> {
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8">
+  <div
+    data-ui="local-folders-page"
+    class="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8"
+  >
     <div>
       <h1 class="text-xl font-semibold">Local folders</h1>
       <p class="text-sm text-zinc-400">

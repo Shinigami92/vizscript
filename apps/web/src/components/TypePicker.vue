@@ -162,7 +162,7 @@ function color(dataType: DataType): string {
 </script>
 
 <template>
-  <div ref="root" class="relative min-w-0">
+  <div ref="root" data-ui="type-picker" class="relative min-w-0">
     <button
       type="button"
       class="flex w-full min-w-0 items-center gap-1.5 rounded border border-transparent px-1.5 py-0.5 text-left font-mono"
@@ -198,6 +198,7 @@ function color(dataType: DataType): string {
       <div
         v-if="open"
         ref="popover"
+        data-ui="type-picker-popover"
         role="dialog"
         aria-label="Type"
         class="fixed z-50 flex max-h-96 flex-col rounded-lg border border-zinc-700 bg-zinc-900 text-xs shadow-2xl"

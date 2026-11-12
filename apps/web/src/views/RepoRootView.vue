@@ -32,7 +32,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-full items-center justify-center text-sm text-zinc-400">
+  <div
+    data-ui="repo-root-page"
+    class="flex h-full items-center justify-center text-sm text-zinc-400"
+  >
     <span v-if="error" class="text-red-300">{{ error }}</span>
     <span v-else
       ><span class="i-mdi-loading animate-spin" /> Opening repository…</span

@@ -155,7 +155,7 @@ function icon(row: Row): string {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col">
+  <div data-ui="file-tree" class="flex h-full min-h-0 flex-col">
     <div class="p-2">
       <input
         v-model="filter"

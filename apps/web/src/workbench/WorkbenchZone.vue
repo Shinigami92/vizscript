@@ -136,6 +136,7 @@ function resizeCells(index: number, delta: number): void {
 <template>
   <section
     ref="root"
+    :data-ui="`zone-${zone}`"
     class="relative flex min-h-0 min-w-0 flex-col bg-zinc-950"
     :aria-label="ZONE_LABELS[zone]"
   >

@@ -60,6 +60,7 @@ const entries = computed<MenuEntry[]>(() => [
 <template>
   <button
     type="button"
+    data-ui="layout-menu-toggle"
     class="btn-ghost layout-menu-toggle px-2"
     title="Layout: show, hide and arrange views"
     aria-label="Layout"

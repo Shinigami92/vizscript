@@ -18,7 +18,7 @@ const to = computed(() => context.target(props.id));
 
 <template>
   <Teleport v-if="context.ready.value && to" :to="to">
-    <div class="h-full w-full min-h-0 min-w-0">
+    <div :data-ui="`view-${id}`" class="h-full w-full min-h-0 min-w-0">
       <slot />
     </div>
   </Teleport>

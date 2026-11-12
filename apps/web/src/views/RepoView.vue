@@ -354,7 +354,7 @@ function switchBranch(event: Event): void {
 <template>
   <Workbench>
     <WorkbenchView id="explorer">
-      <div class="flex h-full min-h-0 flex-col">
+      <div data-ui="explorer" class="flex h-full min-h-0 flex-col">
         <div
           class="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-3 py-2"
         >
@@ -463,6 +463,7 @@ function switchBranch(event: Event): void {
 
     <template v-else>
       <div
+        data-ui="workspace-toolbar"
         class="flex h-10 shrink-0 items-center gap-2 border-b border-zinc-800 px-2"
       >
         <button

@@ -381,7 +381,7 @@ function selectFile(next: string, symbol?: string): void {
 <template>
   <Workbench>
     <WorkbenchView id="explorer">
-      <div class="flex h-full min-h-0 flex-col">
+      <div data-ui="explorer" class="flex h-full min-h-0 flex-col">
         <div
           class="flex shrink-0 items-center gap-2 border-b border-zinc-800 py-1.5 pr-1 pl-3"
         >
@@ -500,6 +500,7 @@ function selectFile(next: string, symbol?: string): void {
 
     <template v-else>
       <div
+        data-ui="workspace-toolbar"
         class="flex h-10 shrink-0 items-center gap-2 border-b border-zinc-800 px-2"
       >
         <button

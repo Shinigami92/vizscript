@@ -30,7 +30,10 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-md flex-col gap-6 px-4 py-12 sm:py-20">
+  <div
+    data-ui="login-page"
+    class="mx-auto flex max-w-md flex-col gap-6 px-4 py-12 sm:py-20"
+  >
     <div>
       <h1 class="text-2xl font-semibold">Sign in</h1>
       <p class="mt-2 text-sm text-zinc-400">

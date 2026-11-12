@@ -99,6 +99,7 @@ defineExpose({
 
 <template>
   <div
+    data-ui="graph-search"
     class="absolute right-3 top-3 z-20 flex w-[min(24rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900/97 shadow-2xl"
     role="search"
   >

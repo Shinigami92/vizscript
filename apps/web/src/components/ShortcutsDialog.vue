@@ -205,6 +205,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
 <template>
   <dialog
     ref="dialog"
+    data-ui="shortcuts-dialog"
     class="m-auto w-[min(640px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900 p-0 text-sm text-zinc-200 shadow-2xl backdrop:bg-black/50"
     aria-labelledby="shortcuts-title"
     @close="open = false"

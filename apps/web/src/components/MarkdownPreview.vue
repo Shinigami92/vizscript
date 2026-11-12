@@ -155,6 +155,7 @@ watch(
 <template>
   <div
     ref="root"
+    data-ui="markdown-preview"
     class="markdown-preview h-full overflow-y-auto bg-zinc-950"
     @click="onClick"
     @dblclick="onDoubleClick"

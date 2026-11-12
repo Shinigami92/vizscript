@@ -43,6 +43,7 @@ function onPointerUp(): void {
 
 <template>
   <div
+    data-ui="sash"
     role="separator"
     :aria-label="label"
     :aria-orientation="direction === 'col' ? 'vertical' : 'horizontal'"

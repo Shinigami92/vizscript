@@ -423,7 +423,10 @@ function addLabel(kind: AddKind, owner: string): string {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col bg-zinc-950 text-sm">
+  <div
+    data-ui="my-script"
+    class="flex h-full min-h-0 flex-col bg-zinc-950 text-sm"
+  >
     <div class="shrink-0 border-b border-zinc-800 p-2">
       <input
         v-model="query"
@@ -435,7 +438,7 @@ function addLabel(kind: AddKind, owner: string): string {
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto pb-2" role="tree">
-      <section v-if="graph" aria-label="Graphs">
+      <section v-if="graph" data-ui="my-script-graphs" aria-label="Graphs">
         <button
           type="button"
           class="section-title"
@@ -463,6 +466,7 @@ function addLabel(kind: AddKind, owner: string): string {
 
       <section
         v-for="section in sections"
+        :data-ui="`my-script-${section.id}`"
         :key="section.id"
         :aria-label="section.title"
       >
@@ -591,7 +595,11 @@ function addLabel(kind: AddKind, owner: string): string {
         </template>
       </section>
 
-      <section v-if="commentBoxes.length > 0" aria-label="Comment boxes">
+      <section
+        v-if="commentBoxes.length > 0"
+        data-ui="my-script-comment-boxes"
+        aria-label="Comment boxes"
+      >
         <button
           type="button"
           class="section-title"

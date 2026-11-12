@@ -41,6 +41,7 @@ const entries = computed<MenuEntry[]>(() => [
   <template v-if="recent.projects.length > 0">
     <button
       type="button"
+      data-ui="recent-menu-toggle"
       class="btn-ghost recent-toggle px-2"
       title="Recently opened"
       aria-label="Recently opened"

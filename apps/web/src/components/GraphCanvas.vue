@@ -1384,6 +1384,7 @@ defineExpose({
 
 <template>
   <div
+    data-ui="graph-canvas"
     class="relative h-full w-full overflow-hidden"
     @keydown="onKeydown"
     @pointermove="onPointerMove"
@@ -1402,6 +1403,7 @@ defineExpose({
     <!-- Zoom controls: they only change the view of the graph. -->
     <div
       class="absolute right-3 bottom-3 z-10 flex items-center rounded-md border border-zinc-800 bg-zinc-900/90 text-zinc-300 shadow-lg backdrop-blur"
+      data-ui="zoom-controls"
       role="group"
       aria-label="Zoom"
     >

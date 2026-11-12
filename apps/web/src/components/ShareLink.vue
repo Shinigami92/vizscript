@@ -42,7 +42,7 @@ async function copy(): Promise<void> {
 </script>
 
 <template>
-  <div class="relative">
+  <div data-ui="share-link" class="relative">
     <button
       type="button"
       class="btn-ghost share-toggle px-2"

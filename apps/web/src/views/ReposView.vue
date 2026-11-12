@@ -62,7 +62,10 @@ function openDirect(): void {
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8">
+  <div
+    data-ui="repos-page"
+    class="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8"
+  >
     <div>
       <h1 class="text-xl font-semibold">Repositories</h1>
       <p class="text-sm text-zinc-400">

@@ -146,6 +146,7 @@ function onDrop(event: DragEvent): void {
   <div
     v-if="tabs.length > 0"
     ref="strip"
+    data-ui="file-tabs"
     class="flex h-9 shrink-0 overflow-x-auto overflow-y-hidden border-b border-zinc-800 bg-zinc-950 [scrollbar-width:thin]"
     role="tablist"
     aria-label="Open files"
@@ -156,6 +157,7 @@ function onDrop(event: DragEvent): void {
       v-for="(tab, index) in tabs"
       :key="tab.path"
       :data-tab="tab.path"
+      data-ui="file-tab"
       role="tab"
       draggable="true"
       :aria-selected="tab.path === active"

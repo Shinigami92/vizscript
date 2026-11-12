@@ -134,12 +134,13 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col">
+  <div data-ui="workbench" class="flex h-full min-h-0 flex-col">
     <!-- Toolbars and the content of the views (teleported into place). -->
     <slot />
 
     <div
       v-if="!store.isMobile"
+      data-ui="workbench-areas"
       class="relative flex min-h-0 flex-1"
       @dragover.prevent
       @drop.prevent="store.dragging = null"
@@ -159,9 +160,13 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
         />
       </template>
 
-      <div class="flex min-w-0 flex-1 flex-col">
+      <div data-ui="editor-area" class="flex min-w-0 flex-1 flex-col">
         <!-- Editor tabs (open files) go here, between the sidebars. -->
-        <div id="workbench-editor-tabs" class="min-w-0 shrink-0" />
+        <div
+          id="workbench-editor-tabs"
+          data-ui="editor-tabs-slot"
+          class="min-w-0 shrink-0"
+        />
         <WorkbenchZone
           v-if="shown.center.length > 0"
           zone="center"
@@ -235,8 +240,12 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
     </div>
 
     <!-- Phones: one view at a time, explorer and details as overlays. -->
-    <div v-else class="flex min-h-0 flex-1 flex-col">
-      <div id="workbench-editor-tabs" class="min-w-0 shrink-0" />
+    <div v-else data-ui="workbench-phone" class="flex min-h-0 flex-1 flex-col">
+      <div
+        id="workbench-editor-tabs"
+        data-ui="editor-tabs-slot"
+        class="min-w-0 shrink-0"
+      />
       <div class="relative min-h-0 flex-1">
         <div
           :key="store.mobileMainView"
@@ -281,6 +290,7 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
     <!-- Status bar like VS Code's; views teleport their items into it. -->
     <footer
       id="workbench-status"
+      data-ui="status-bar"
       class="flex h-6 shrink-0 items-center gap-1 border-t border-zinc-800 bg-zinc-950 px-1 text-xs text-zinc-400"
       aria-label="Status bar"
     />

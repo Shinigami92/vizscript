@@ -270,7 +270,7 @@ function setModifier(modifier: string, enabled: boolean): void {
 </script>
 
 <template>
-  <div>
+  <div data-ui="symbol-details">
     <div class="border-b border-zinc-800 px-3 py-2.5">
       <div class="flex items-center gap-2">
         <span :class="SYMBOL_ICONS[symbol.kind]" />

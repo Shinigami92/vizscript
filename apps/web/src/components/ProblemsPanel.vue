@@ -32,7 +32,10 @@ const fileName = computed(() => props.path.split('/').at(-1) ?? props.path);
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col bg-zinc-950 text-sm">
+  <div
+    data-ui="problems-panel"
+    class="flex h-full min-h-0 flex-col bg-zinc-950 text-sm"
+  >
     <div
       v-if="sorted.length === 0"
       class="px-4 py-3 text-xs text-zinc-500"

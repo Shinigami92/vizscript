@@ -116,6 +116,7 @@ function deleteSelection(): void {
 
 <template>
   <aside
+    data-ui="details-panel"
     class="flex h-full min-h-0 flex-col bg-zinc-950 text-sm"
     aria-label="Details"
   >

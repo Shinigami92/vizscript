@@ -1133,8 +1133,9 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
 </script>
 
 <template>
-  <div class="shrink-0">
+  <div data-ui="script-workspace" class="shrink-0">
     <div
+      data-ui="workspace-toolbar"
       class="flex h-10 shrink-0 items-center gap-2 border-b border-zinc-800 bg-zinc-950 px-2"
     >
       <slot name="toolbar" />
@@ -1242,6 +1243,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
     <!-- The status bar is rendered by the Workbench after this toolbar. -->
     <Teleport defer to="#workbench-status">
       <button
+        data-ui="status-problems"
         type="button"
         class="flex h-full items-center gap-1 rounded-sm px-1.5 hover:bg-zinc-800 hover:text-zinc-100"
         :class="
@@ -1261,6 +1263,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
       </button>
       <span
         v-if="layoutStore && saving !== 'idle'"
+        data-ui="status-layout"
         class="ml-auto flex items-center gap-1 px-1.5"
         :class="saving === 'error' ? 'text-red-400' : ''"
         role="status"

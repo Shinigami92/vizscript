@@ -114,6 +114,7 @@ onMounted(async () => {
 <template>
   <div
     ref="menu"
+    data-ui="context-menu"
     role="menu"
     :aria-label="label"
     class="fixed z-40 min-w-56 max-w-80 rounded-lg border border-zinc-700 bg-zinc-900/98 p-1 text-sm shadow-2xl backdrop-blur"

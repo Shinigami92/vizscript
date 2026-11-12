@@ -92,6 +92,7 @@ const KIND_LABELS: Record<string, string> = {
 <template>
   <div
     v-if="entry"
+    data-ui="node-tooltip"
     ref="card"
     role="tooltip"
     class="pointer-events-none fixed z-30 max-w-sm rounded-lg border border-zinc-700 bg-zinc-900/97 p-2.5 text-xs text-zinc-300 shadow-2xl"

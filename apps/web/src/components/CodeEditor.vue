@@ -382,7 +382,7 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="container" class="h-full w-full" />
+  <div ref="container" data-ui="code-editor" class="h-full w-full" />
 </template>
 
 <style>

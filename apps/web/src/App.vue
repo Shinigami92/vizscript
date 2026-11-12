@@ -41,8 +41,9 @@ async function logout(): Promise<void> {
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <div data-ui="app" class="flex h-full flex-col">
     <header
+      data-ui="app-header"
       class="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-3"
     >
       <RouterLink
@@ -136,6 +137,7 @@ async function logout(): Promise<void> {
     </header>
 
     <main
+      data-ui="app-main"
       class="min-h-0 flex-1"
       :class="fullscreen ? 'overflow-hidden' : 'overflow-auto'"
     >
