@@ -253,6 +253,13 @@ export interface TypeSystemInfo {
   containerDefaults?: { array?: string; map?: string; set?: string };
   /** Value of an empty input (`undefined`, `None`, `null`). */
   placeholder?: string;
+  /** Reserved words: never offered as names to call or declare. */
+  keywords?: ReadonlyArray<string>;
+  /**
+   * Built-in functions that need no import (`console.log`, `print`), offered
+   * by the action menu like the file's own functions.
+   */
+  globals?: ReadonlyArray<string>;
   /**
    * Operators and values of the action menu (UE: `+`, Make Literal String,
    * Select, Make Array …). `$1`, `$2` … are their inputs.
