@@ -8,7 +8,12 @@ import type {
   StatementSyntax,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { applyTextOp, removeModifier, replaceKeyword } from '@vizscript/core';
+import {
+  applyTextOp,
+  lineStart,
+  removeModifier,
+  replaceKeyword,
+} from '@vizscript/core';
 import { addGDScriptImport } from './add-import';
 import { parseGDScriptDocument } from './lower';
 import { parseGDScript } from './parser';
@@ -257,8 +262,20 @@ export const GDSCRIPT_TYPES: TypeSystemInfo = {
     },
   ],
   containerDefaults: { array: '[]', map: '{}' },
+  exportHints: [
+    { name: '@export' },
+    { name: '@export_range', args: '0, 100, 1' },
+    { name: '@export_enum', args: '"Small", "Big"' },
+    { name: '@export_flags', args: '"Fire", "Water"' },
+    { name: '@export_multiline' },
+    { name: '@export_file', args: '"*.json"' },
+    { name: '@export_dir' },
+    { name: '@export_color_no_alpha' },
+    { name: '@export_node_path', args: '"Node2D"' },
+  ],
   modifiers: {
-    variable: { keywords: KINDS, flags: ['@export', '@onready', 'static'] },
+    // `@export` and its variants are chosen with `exportHints`.
+    variable: { keywords: KINDS, flags: ['@onready', 'static'] },
     constant: { keywords: KINDS },
     local: { keywords: KINDS },
     member: { keywords: KINDS },
@@ -295,7 +312,45 @@ function setModifier(
     return replaceKeyword(text, symbol, KINDS, modifier);
   }
 
-  if (['@export', '@onready', 'static'].includes(modifier)) {
+  // `@export`, `@export_range(0, 10)` …: one export annotation per variable.
+  if (modifier.startsWith('@export')) {
+    if (symbol.kind === 'local' || symbol.scope !== '') {
+      return {
+        ok: false,
+        error: 'Only member variables of the script can be exported.',
+      };
+    }
+
+    if (symbol.modifiers.includes('const')) {
+      return { ok: false, error: 'A const cannot be exported.' };
+    }
+
+    const start = lineStart(
+      text,
+      Math.max(lineStart(text, symbol.range.start) - 1, 0)
+    );
+    const head = text.slice(start, symbol.nameRange.start);
+    const current = head.match(/@export\w*(?:\([^)]*\))?/);
+    if (!enabled) {
+      const name = current?.[0].replace(/\(.*$/s, '');
+      return name
+        ? removeModifier(text, symbol, name)
+        : { ok: true, edits: [] };
+    }
+
+    if (current?.index !== undefined) {
+      const at = start + current.index;
+      return {
+        ok: true,
+        edits: [{ start: at, end: at + current[0].length, text: modifier }],
+      };
+    }
+
+    const at = symbol.range.start;
+    return { ok: true, edits: [{ start: at, end: at, text: `${modifier} ` }] };
+  }
+
+  if (['@onready', 'static'].includes(modifier)) {
     if (symbol.kind === 'local' || symbol.scope !== '') {
       return {
         ok: false,

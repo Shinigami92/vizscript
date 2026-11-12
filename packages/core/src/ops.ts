@@ -225,6 +225,11 @@ export interface TypeSystemInfo {
    * Select, Make Array …). `$1`, `$2` … are their inputs.
    */
   expressions?: ExpressionTemplate[];
+  /**
+   * Editor hints of exported variables (GDScript's `@export_range`, like
+   * UE's Slider Range); `args` are the default arguments.
+   */
+  exportHints?: Array<{ name: string; args?: string }>;
   /** Modifiers the Details panel offers per kind of symbol. */
   modifiers: Partial<
     Record<

@@ -16,6 +16,8 @@ import type {
   TextStyle,
 } from '@vizscript/core';
 import {
+  boxColorIndex,
+  COMMENT_BOX_COLORS,
   compactTitle,
   computeNodeGeometry,
   extractReroutes,
@@ -295,6 +297,8 @@ export class GraphView {
   private theme: Theme;
   private editable: boolean;
   private doc: GraphDocument | null = null;
+  /** Colors of comment boxes by box id (from the layout). */
+  private boxColors = new Map<string, string>();
   private nodes = new Map<string, NodeState>();
   private edges: Array<{ edge: GraphEdge; fnId: string }> = [];
   private edgesById = new Map<string, GraphEdge>();
@@ -451,6 +455,15 @@ export class GraphView {
           nodeIds: box.nodes,
           bounds: null,
         });
+      }
+    }
+
+    this.boxColors = new Map();
+    for (const frame of this.frames) {
+      const index = frame.boxId ? boxColorIndex(positions, frame.boxId) : 0;
+      const color = COMMENT_BOX_COLORS[index]?.color;
+      if (frame.boxId && color) {
+        this.boxColors.set(frame.boxId, color);
       }
     }
 
@@ -2368,16 +2381,22 @@ export class GraphView {
     const selected =
       frame.nodeIds.length > 0 &&
       frame.nodeIds.every((id) => this.selection.has(id));
+    // UE-like comment colors: a tinted body and a stronger header.
+    const color = frame.boxId ? this.boxColors.get(frame.boxId) : undefined;
     ctx.beginPath();
     ctx.roundRect(b.x, b.y, b.width, b.height, 6);
-    ctx.fillStyle = theme.commentFill;
+    ctx.fillStyle = color ? `${color}1f` : theme.commentFill;
     ctx.fill();
     ctx.save();
     ctx.clip();
-    ctx.fillStyle = theme.commentHeader;
+    ctx.fillStyle = color ? `${color}66` : theme.commentHeader;
     ctx.fillRect(b.x, b.y, b.width, COMMENT_HEADER);
     ctx.restore();
-    ctx.strokeStyle = selected ? theme.selection : theme.commentBorder;
+    ctx.strokeStyle = selected
+      ? theme.selection
+      : color
+        ? `${color}aa`
+        : theme.commentBorder;
     ctx.lineWidth = selected ? 2 : 1;
     ctx.stroke();
 

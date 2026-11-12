@@ -144,3 +144,29 @@ describe('script settings', () => {
     );
   });
 });
+
+function setExport(text: string, modifier: string, enabled = true): string {
+  const result = applyGDScriptOp(
+    text,
+    { type: 'setModifier', symbol: 'variable:speed', modifier, enabled },
+    't.gd'
+  );
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+
+  return applyTextEdits(text, result.edits);
+}
+
+describe('export hints', () => {
+  it('adds, changes and removes export annotations', () => {
+    const text = 'extends Node\n\nvar speed := 10\n';
+    const exported = setExport(text, '@export');
+    expect(exported).toBe('extends Node\n\n@export var speed := 10\n');
+    const ranged = setExport(exported, '@export_range(0, 20, 2)');
+    expect(ranged).toBe(
+      'extends Node\n\n@export_range(0, 20, 2) var speed := 10\n'
+    );
+    expect(setExport(ranged, '@export_range', false)).toBe(text);
+  });
+});

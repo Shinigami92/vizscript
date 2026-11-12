@@ -141,3 +141,51 @@ export function reconcileReroutes(
 
   return result;
 }
+
+/**
+ * Colors of comment boxes live in the layout too (UE keeps them in the
+ * asset, not in code): `~color|<boxId>` with the palette index in `x`.
+ */
+export const BOX_COLOR_PREFIX = '~color|';
+
+/** UE-like comment colors; index 0 is the default (no entry). */
+export const COMMENT_BOX_COLORS: ReadonlyArray<{
+  name: string;
+  color: string;
+}> = [
+  { name: 'Gray', color: '' },
+  { name: 'Red', color: '#e5484d' },
+  { name: 'Orange', color: '#f76b15' },
+  { name: 'Yellow', color: '#ffc53d' },
+  { name: 'Green', color: '#46a758' },
+  { name: 'Teal', color: '#12a594' },
+  { name: 'Blue', color: '#3e63dd' },
+  { name: 'Purple', color: '#8e4ec6' },
+  { name: 'Pink', color: '#d6409f' },
+];
+
+export function boxColorKey(boxId: string): string {
+  return `${BOX_COLOR_PREFIX}${boxId}`;
+}
+
+export function isBoxColorKey(key: string): boolean {
+  return key.startsWith(BOX_COLOR_PREFIX);
+}
+
+/** Layout entries that are not node positions (reroutes, box colors). */
+export function isExtraLayoutKey(key: string): boolean {
+  return isRerouteKey(key) || isBoxColorKey(key);
+}
+
+/** The box color entries of a layout. */
+export function boxColorEntries(positions: Positions): Positions {
+  return Object.fromEntries(
+    Object.entries(positions).filter(([key]) => isBoxColorKey(key))
+  );
+}
+
+/** Palette index of a comment box (0: default). */
+export function boxColorIndex(positions: Positions, boxId: string): number {
+  const index = Math.round(positions[boxColorKey(boxId)]?.x ?? 0);
+  return index > 0 && index < COMMENT_BOX_COLORS.length ? index : 0;
+}
