@@ -17,6 +17,7 @@ import {
   arrayOf,
   arrayOfAll,
   attachComments,
+  completeCallPins,
   functionIdCounter,
   GraphBuilderBase,
   isArrayType,
@@ -1849,5 +1850,6 @@ export function parsePythonDocument(
   };
   attachComments(doc, text, comments);
   linkSymbolGraphs(doc);
+  completeCallPins(doc, text, { placeholder: 'None', keywordArguments: true });
   return doc;
 }

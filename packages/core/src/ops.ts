@@ -138,7 +138,9 @@ export type GraphOp =
       kind: ValueKind;
     }
   /** Sets (or with `null` removes) the declared return type. */
-  | { type: 'setReturnType'; symbol: string; typeText: string | null };
+  | { type: 'setReturnType'; symbol: string; typeText: string | null }
+  /** Adds a placeholder argument to a call (UE: "Add pin"). */
+  | { type: 'addArgument'; node: string };
 
 /** How a value typed in the Details panel is written. */
 export type ValueKind = 'string' | 'number' | 'bool' | 'expression';

@@ -26,6 +26,7 @@ import {
   arrayElementType,
   arrayOfAll,
   attachComments,
+  completeCallPins,
   createEdge,
   isArrayType,
   lineIndent,
@@ -2340,5 +2341,6 @@ export function parseTypeScript(
   };
   attachComments(doc, text, comments);
   linkSymbolGraphs(doc);
+  completeCallPins(doc, text, { placeholder: 'undefined' });
   return doc;
 }

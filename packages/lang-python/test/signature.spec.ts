@@ -1,7 +1,7 @@
 import type { GraphOp } from '@vizscript/core';
 import { applyTextEdits } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { applyPythonOp } from '../src';
+import { applyPythonOp, parsePythonDocument } from '../src';
 
 function apply(text: string, op: GraphOp): string {
   const result = applyPythonOp(text, op, 'test.py');
@@ -67,5 +67,27 @@ describe('python lone values', () => {
         template: { type: 'value', expression: 'x' },
       })
     ).toBe('x = 1\nx\n');
+  });
+});
+
+describe('python argument pins', () => {
+  it('fills missing arguments by keyword', () => {
+    const text =
+      'def greet(name, times=2, loud=False):\n    pass\n\n\ngreet("a")\n';
+    const doc = parsePythonDocument(text, 't.py');
+    const call = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'call');
+    expect(
+      call?.pins.filter((p) => p.id.startsWith('param:')).map((p) => p.name)
+    ).toEqual(['times', 'loud']);
+    expect(
+      apply(text, {
+        type: 'setLiteral',
+        node: call?.id ?? '',
+        pin: 'param:loud',
+        value: 'true',
+      })
+    ).toContain('greet("a", loud=True)');
   });
 });

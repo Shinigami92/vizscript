@@ -1,3 +1,4 @@
+export * from './call-pins';
 export * from './comment-ops';
 export * from './comments';
 export * from './edit-meta';

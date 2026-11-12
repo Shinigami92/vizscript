@@ -1,3 +1,4 @@
+import { callClose } from './call-pins';
 import type { CommentSyntax } from './comment-ops';
 import {
   addCommentBox,
@@ -17,6 +18,7 @@ import type {
   GraphDocument,
   GraphEdge,
   GraphNode,
+  LiteralKind,
   Pin,
   PinLiteral,
   PinRef,
@@ -376,6 +378,46 @@ export function looksLikeCode(value: string, doc: GraphDocument): boolean {
   );
 }
 
+/** Source of a value typed into a pin that has no code yet. */
+function literalSource(
+  value: string,
+  kind: LiteralKind,
+  doc: GraphDocument,
+  syntax: StatementSyntax
+): string | { error: string } {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return { error: 'Value must not be empty.' };
+  }
+
+  switch (kind) {
+    case 'string':
+    case 'template': {
+      return syntax.declarations?.string(value) ?? JSON.stringify(value);
+    }
+
+    case 'number': {
+      return Number.isNaN(Number(trimmed.replaceAll('_', '')))
+        ? { error: `"${value}" is not a number.` }
+        : trimmed;
+    }
+
+    case 'boolean': {
+      const words = syntax.booleans ?? { true: 'true', false: 'false' };
+      const normalized = trimmed.toLowerCase();
+      return normalized === 'true' || normalized === 'false'
+        ? words[normalized]
+        : { error: `A boolean must be ${words.true} or ${words.false}.` };
+    }
+
+    default: {
+      return looksLikeCode(trimmed, doc)
+        ? trimmed
+        : (syntax.declarations?.string(value) ?? JSON.stringify(value));
+    }
+  }
+}
+
 function setLiteral(
   doc: GraphDocument,
   nodeId: string,
@@ -384,6 +426,23 @@ function setLiteral(
   syntax: StatementSyntax
 ): OpResult {
   const pin = findPin(findNode(doc, nodeId), pinId);
+  const insert = pin ? getMeta<InputPinMeta>(pin) : undefined;
+  if (pin?.literal && !pin.range && insert?.insertInitAt !== undefined) {
+    // A missing argument: its value is inserted (UE: a pin's default box).
+    const source = literalSource(value, pin.literal.kind, doc, syntax);
+    if (typeof source !== 'string') {
+      return failed(source.error);
+    }
+
+    return succeeded([
+      {
+        start: insert.insertInitAt,
+        end: insert.insertInitAt,
+        text: `${insert.insertPrefix ?? ' = '}${source}`,
+      },
+    ]);
+  }
+
   if (!pin?.literal || !pin.range) {
     return failed('This pin has no editable value.');
   }
@@ -927,9 +986,15 @@ function setInput(
     return succeeded([inputEdit(pin, pin.range, value)]);
   }
 
-  const insertAt = getMeta<InputPinMeta>(pin).insertInitAt;
-  if (insertAt !== undefined) {
-    return succeeded([{ start: insertAt, end: insertAt, text: ` = ${value}` }]);
+  const meta = getMeta<InputPinMeta>(pin);
+  if (meta.insertInitAt !== undefined) {
+    return succeeded([
+      {
+        start: meta.insertInitAt,
+        end: meta.insertInitAt,
+        text: `${meta.insertPrefix ?? ' = '}${value}`,
+      },
+    ]);
   }
 
   return failed('This input cannot be given a value.');
@@ -1092,6 +1157,38 @@ function callWith(
  * Turns a graph operation into minimal text edits, using the statement and
  * pin metadata produced by a backend's lowering (see `edit-meta.ts`).
  */
+/**
+ * Adds an argument to a call (UE: "Add pin"): a placeholder that shows as
+ * a new input pin to wire or fill in.
+ */
+function addArgument(
+  text: string,
+  doc: GraphDocument,
+  nodeId: string,
+  syntax: StatementSyntax
+): OpResult {
+  const node = findNode(doc, nodeId);
+  const close = node?.kind === 'call' ? callClose(text, node) : undefined;
+  if (!node || close === undefined) {
+    return failed('Arguments can only be added to calls.');
+  }
+
+  const hasArgs =
+    text.slice(text.lastIndexOf('(', close) + 1, close).trim() !== '';
+  const open = text.slice(node.range.start, close).includes('(');
+  if (!open) {
+    return failed('Cannot find the arguments of this call.');
+  }
+
+  return succeeded([
+    {
+      start: close,
+      end: close,
+      text: `${hasArgs ? ', ' : ''}${syntax.placeholder}`,
+    },
+  ]);
+}
+
 /** Ops of "My Script": add, rename and delete declarations. */
 function applySymbolOp(
   text: string,
@@ -1365,6 +1462,10 @@ export function applyTextOp(
 
     case 'deleteCommentBox': {
       return deleteCommentBox(text, doc, op.box);
+    }
+
+    case 'addArgument': {
+      return addArgument(text, doc, op.node, syntax);
     }
 
     default: {

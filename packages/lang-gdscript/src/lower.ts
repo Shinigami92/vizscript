@@ -17,6 +17,7 @@ import {
   arrayOf,
   arrayOfAll,
   attachComments,
+  completeCallPins,
   functionIdCounter,
   GraphBuilderBase,
   isArrayType,
@@ -1577,5 +1578,6 @@ export function parseGDScriptDocument(
   };
   attachComments(doc, text, comments);
   linkSymbolGraphs(doc);
+  completeCallPins(doc, text, { placeholder: 'null' });
   return doc;
 }
