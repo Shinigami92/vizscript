@@ -13,6 +13,11 @@ export interface CommentSyntax {
   region: (title: string) => string;
   /** End marker of a region (`// #endregion`). */
   endRegion: string;
+  /**
+   * How a new documentation comment (a description) starts: `block` for
+   * `/** … *\/`, else a line marker (`##`). Without it, `line`.
+   */
+  doc?: string;
 }
 
 function failed(error: string): OpResult {
@@ -65,7 +70,9 @@ export function setComment(
   doc: GraphDocument,
   nodeId: string,
   value: string,
-  syntax: CommentSyntax
+  syntax: CommentSyntax,
+  /** A description: a new comment is a documentation comment. */
+  documentation = false
 ): OpResult {
   const fn = functionOfNode(doc, nodeId);
   const node = fn?.nodes.find((n) => n.id === nodeId);
@@ -75,12 +82,18 @@ export function setComment(
 
   const trimmed = value.replace(/\s+$/, '');
   if (node.comment) {
+    // Keep the marker the comment has (`##`, `///`).
+    const marker =
+      text
+        .slice(node.comment.range.start, node.comment.range.end)
+        .trimStart()
+        .match(/^(?:\/\/+|#+)/)?.[0] ?? syntax.line;
     const replacement = trimmed
       ? formatComment(
           trimmed,
           lineIndent(text, node.comment.range.start),
           node.comment.block === true,
-          syntax
+          { ...syntax, line: marker }
         )
       : '';
     return {
@@ -124,7 +137,14 @@ export function setComment(
       {
         start,
         end: start,
-        text: formatComment(trimmed, lineIndent(text, anchor), false, syntax),
+        text: formatComment(
+          trimmed,
+          lineIndent(text, anchor),
+          documentation && syntax.doc === 'block',
+          documentation && syntax.doc && syntax.doc !== 'block'
+            ? { ...syntax, line: syntax.doc }
+            : syntax
+        ),
       },
     ],
   };

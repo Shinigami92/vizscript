@@ -48,3 +48,34 @@ describe('collapse to function', () => {
     );
   });
 });
+
+function entryOf(source: string): string {
+  return (
+    parseGDScriptDocument(source, 't.gd')
+      .functions.find((f) => f.name === 'jump')
+      ?.nodes.find((n) => n.kind === 'entry')?.id ?? ''
+  );
+}
+
+describe('descriptions', () => {
+  it('uses ## doc comments and keeps them when edited', () => {
+    const text = 'extends Node\n\n\nfunc jump() -> void:\n\tpass\n';
+    const first = applyGDScriptOp(
+      text,
+      { type: 'setComment', node: entryOf(text), text: 'Jumps.', doc: true },
+      't.gd'
+    );
+    const added = first.ok ? applyTextEdits(text, first.edits) : '';
+    expect(added).toBe(
+      'extends Node\n\n\n## Jumps.\nfunc jump() -> void:\n\tpass\n'
+    );
+    const second = applyGDScriptOp(
+      added,
+      { type: 'setComment', node: entryOf(added), text: 'Jumps high.' },
+      't.gd'
+    );
+    expect(second.ok && applyTextEdits(added, second.edits)).toBe(
+      'extends Node\n\n\n## Jumps high.\nfunc jump() -> void:\n\tpass\n'
+    );
+  });
+});

@@ -389,6 +389,7 @@ export const GDSCRIPT_SYNTAX: StatementSyntax = {
     line: '#',
     region: (title) => (title ? `#region ${title}` : '#region'),
     endRegion: '#endregion',
+    doc: '##',
   },
   template: (template, indent, unit) => {
     switch (template.type) {

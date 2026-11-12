@@ -116,3 +116,25 @@ describe('collapse to function', () => {
     ).toThrow('The selection contains a return');
   });
 });
+
+describe('descriptions', () => {
+  it('writes a new description as a doc comment', () => {
+    const text = 'function greet(name: string) {\n  return name;\n}\n';
+    const entry = parseTypeScript(text, 't.ts')
+      .functions.find((f) => f.name === 'greet')
+      ?.nodes.find((n) => n.kind === 'entry');
+    const result = applyTypeScriptOp(
+      text,
+      {
+        type: 'setComment',
+        node: entry?.id ?? '',
+        text: 'Says hello.',
+        doc: true,
+      },
+      't.ts'
+    );
+    expect(result.ok && applyTextEdits(text, result.edits)).toBe(
+      '/**\n * Says hello.\n */\nfunction greet(name: string) {\n  return name;\n}\n'
+    );
+  });
+});

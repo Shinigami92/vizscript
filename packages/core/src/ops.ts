@@ -62,7 +62,13 @@ export type GraphOp =
    */
   | { type: 'useValue'; pin: PinRef; expression: string; position?: Point }
   /** Sets the comment above a node's code (empty text removes it). */
-  | { type: 'setComment'; node: string; text: string }
+  | {
+      type: 'setComment';
+      node: string;
+      text: string;
+      /** A description of a function or variable: a doc comment. */
+      doc?: boolean;
+    }
   /** Puts the statements of the nodes into a titled region. */
   | { type: 'addCommentBox'; nodes: string[]; title: string }
   | { type: 'renameCommentBox'; box: string; title: string }

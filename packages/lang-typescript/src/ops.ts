@@ -415,6 +415,7 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
     line: '//',
     region: (title) => (title ? `// #region ${title}` : '// #region'),
     endRegion: '// #endregion',
+    doc: 'block',
   },
   template: (template, indent) => {
     switch (template.type) {

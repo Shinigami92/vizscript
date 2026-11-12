@@ -1684,7 +1684,14 @@ export function applyTextOp(
     }
 
     case 'setComment': {
-      return setComment(text, doc, op.node, op.text, syntax.comment);
+      return setComment(
+        text,
+        doc,
+        op.node,
+        op.text,
+        syntax.comment,
+        op.doc === true
+      );
     }
 
     case 'addCommentBox': {
