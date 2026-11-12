@@ -507,7 +507,20 @@ function onDrop(event: DragEvent): void {
           : undefined
         : name;
     const get = (): void => add({ type: 'value', expression: name });
-    if (event.ctrlKey || event.metaKey || !call) {
+    const kind = symbol.importedKind;
+    if (kind === 'function' && !event.ctrlKey && !event.metaKey) {
+      // Known from its file: a call node with the function's inputs.
+      add({ type: 'call', callee: name });
+      return;
+    }
+
+    if (
+      event.ctrlKey ||
+      event.metaKey ||
+      !call ||
+      kind === 'variable' ||
+      kind === 'constant'
+    ) {
       get();
       return;
     }

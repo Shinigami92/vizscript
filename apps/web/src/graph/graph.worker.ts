@@ -13,7 +13,9 @@ function handle(request: WorkerRequest): WorkerResponse {
       return {
         id: request.id,
         ok: true,
-        doc: backend.parse(request.text, request.fileName),
+        doc: backend.parse(request.text, request.fileName, {
+          imports: request.imports,
+        }),
       };
     }
 
@@ -37,7 +39,9 @@ function handle(request: WorkerRequest): WorkerResponse {
       return {
         id: request.id,
         ok: true,
-        result: backend.applyOp(request.text, request.op, request.fileName),
+        result: backend.applyOp(request.text, request.op, request.fileName, {
+          imports: request.imports,
+        }),
       };
     }
   }

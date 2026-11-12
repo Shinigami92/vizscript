@@ -1,13 +1,21 @@
 import type {
   GraphDocument,
   GraphOp,
+  ImportedDeclaration,
   ModuleReference,
   OpResult,
   TypeSystemInfo,
 } from '@vizscript/core';
 
 export type WorkerRequest =
-  | { id: number; type: 'parse'; text: string; fileName: string }
+  | {
+      id: number;
+      type: 'parse';
+      text: string;
+      fileName: string;
+      /** Declarations of imported names (call pins, types). */
+      imports?: ImportedDeclaration[];
+    }
   | { id: number; type: 'references'; text: string; fileName: string }
   | { id: number; type: 'typeSystem'; fileName: string }
   | {
@@ -16,6 +24,7 @@ export type WorkerRequest =
       text: string;
       fileName: string;
       op: GraphOp;
+      imports?: ImportedDeclaration[];
     };
 
 export type WorkerResponse =

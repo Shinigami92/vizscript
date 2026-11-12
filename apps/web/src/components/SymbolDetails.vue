@@ -10,7 +10,7 @@ import { pinColor } from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
 import { lineColumn, snippet } from '../graph/source';
-import { SYMBOL_ICONS, SYMBOL_LABELS, symbolType } from '../graph/symbols';
+import { SYMBOL_ICONS, symbolLabel, symbolType } from '../graph/symbols';
 import TypePicker from './TypePicker.vue';
 
 /** Details of a symbol selected in "My Script" (UE: the Details panel). */
@@ -295,13 +295,13 @@ function setModifier(modifier: string, enabled: boolean): void {
   <div data-ui="symbol-details">
     <div class="border-b border-zinc-800 px-3 py-2.5">
       <div class="flex items-center gap-2">
-        <span :class="SYMBOL_ICONS[symbol.kind]" />
+        <span :class="SYMBOL_ICONS[symbol.importedKind ?? symbol.kind]" />
         <span class="truncate font-semibold text-zinc-50">{{
           symbol.name
         }}</span>
       </div>
       <div class="mt-0.5 text-xs text-zinc-400">
-        {{ SYMBOL_LABELS[symbol.kind]
+        {{ symbolLabel(symbol)
         }}<template v-if="symbol.scope"> in {{ symbol.scope }}</template>
       </div>
     </div>
@@ -618,17 +618,21 @@ function setModifier(modifier: string, enabled: boolean): void {
             >{{ param.type?.text ?? param.dataType }}</span
           >
           <span
-            v-if="param.defaultRange"
+            v-if="param.defaultRange || param.defaultText !== undefined"
             class="max-w-24 shrink-0 truncate font-mono text-zinc-500"
-            :title="code(param.defaultRange)"
-            >= {{ code(param.defaultRange) }}</span
+            :title="param.defaultText ?? code(param.defaultRange)"
+            >= {{ param.defaultText ?? code(param.defaultRange) }}</span
           >
         </div>
       </template>
     </section>
 
     <section
-      v-if="symbol.kind === 'function' || symbol.kind === 'method'"
+      v-if="
+        symbol.kind === 'function' ||
+        symbol.kind === 'method' ||
+        symbol.importedKind === 'function'
+      "
       class="section"
     >
       <h3 class="section-title">Output</h3>

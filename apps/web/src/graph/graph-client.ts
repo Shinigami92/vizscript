@@ -1,6 +1,7 @@
 import type {
   GraphDocument,
   GraphOp,
+  ImportedDeclaration,
   ModuleReference,
   OpResult,
   TypeSystemInfo,
@@ -55,8 +56,17 @@ export class GraphClient {
     });
   }
 
-  public async parse(text: string, fileName: string): Promise<GraphDocument> {
-    const response = await this.send({ type: 'parse', text, fileName });
+  public async parse(
+    text: string,
+    fileName: string,
+    imports?: ImportedDeclaration[]
+  ): Promise<GraphDocument> {
+    const response = await this.send({
+      type: 'parse',
+      text,
+      fileName,
+      imports,
+    });
     if (!response.ok) {
       throw new Error(response.error);
     }
@@ -90,9 +100,16 @@ export class GraphClient {
   public async applyOp(
     text: string,
     fileName: string,
-    op: GraphOp
+    op: GraphOp,
+    imports?: ImportedDeclaration[]
   ): Promise<OpResult> {
-    const response = await this.send({ type: 'applyOp', text, fileName, op });
+    const response = await this.send({
+      type: 'applyOp',
+      text,
+      fileName,
+      op,
+      imports,
+    });
     if (!response.ok) {
       return { ok: false, error: response.error };
     }

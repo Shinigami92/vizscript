@@ -33,6 +33,13 @@ export const SYMBOL_LABELS: Record<SymbolKind, string> = {
   import: 'Import',
 };
 
+/** "Function", or "Imported function" once the import's file was read. */
+export function symbolLabel(symbol: ScriptSymbol): string {
+  return symbol.kind === 'import' && symbol.importedKind
+    ? `Imported ${SYMBOL_LABELS[symbol.importedKind].toLowerCase()}`
+    : SYMBOL_LABELS[symbol.kind];
+}
+
 /**
  * Type shown next to a symbol: the declared one, else the inferred pin type
  * (marked as inferred), else `any`.
@@ -45,7 +52,11 @@ export function symbolType(symbol: ScriptSymbol): {
     return { text: symbol.returns?.text ?? '', inferred: false };
   }
 
-  if (symbol.kind === 'import') {
+  if (
+    symbol.kind === 'import' &&
+    symbol.importedKind !== 'variable' &&
+    symbol.importedKind !== 'constant'
+  ) {
     return { text: '', inferred: false };
   }
 

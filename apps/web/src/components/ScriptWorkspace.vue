@@ -9,6 +9,7 @@ import type {
   GraphDocument,
   GraphNode,
   GraphOp,
+  ImportedDeclaration,
   LayoutPatch,
   ModuleReference,
   NodeTemplate,
@@ -19,6 +20,8 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  defaultExport,
+  exportedSymbols,
   findDefinition,
   findNode,
   findNodeAtOffset,
@@ -84,6 +87,11 @@ const props = defineProps<{
   stateKey: string;
   /** Paths of the repository's files: imports of them open on Cmd+click. */
   files?: ReadonlySet<string>;
+  /**
+   * Reads another file of the repository (with unsaved changes), so
+   * imported names get their declarations: call pins, types.
+   */
+  readFile?: (path: string) => Promise<string>;
   /** Hide the share button (e.g. local folders, which have no shareable URL). */
   hideShare?: boolean;
   /** The file is open in a tab: keep its editor state when switching. */
@@ -294,6 +302,84 @@ async function updateReferences(seq: number): Promise<void> {
   const refs = await client.references(text.value, props.path);
   if (seq === parseSeq) {
     references.value = refs;
+    void updateImports(seq);
+  }
+}
+
+// ------------------------------------------------- declarations of imports
+
+/** What imported files export, by path (parsed once per workspace). */
+const exportsByPath = new Map<string, Promise<ScriptSymbol[]>>();
+
+function exportsOf(path: string): Promise<ScriptSymbol[]> {
+  let exports = exportsByPath.get(path);
+  if (!exports) {
+    const read = props.readFile;
+    exports = read
+      ? read(path)
+          .then(async (source) =>
+            exportedSymbols(await client.parse(source, path), source)
+          )
+          .catch(() => [])
+      : Promise.resolve([]);
+    exportsByPath.set(path, exports);
+  }
+
+  return exports;
+}
+
+/** Declarations of the imported names, sent along with every parse. */
+let importDeclarations: ImportedDeclaration[] = [];
+
+async function declarationOf(
+  symbol: ScriptSymbol
+): Promise<ImportedDeclaration | undefined> {
+  const target = importTarget(symbol);
+  if (!target) {
+    return undefined;
+  }
+
+  const exports = await exportsOf(target.path);
+  if (exports.length === 0) {
+    return undefined;
+  }
+
+  if (symbol.imported === 'default') {
+    const declaration = defaultExport(exports);
+    return declaration ? { name: symbol.name, declaration } : undefined;
+  }
+
+  if (target.symbol) {
+    const declaration = exports.find((s) => s.name === target.symbol);
+    return declaration ? { name: symbol.name, declaration } : undefined;
+  }
+
+  // A whole module: `ns.fn()`, `module.fn()`, `Script.new()`.
+  return { name: symbol.name, members: exports };
+}
+
+/** Reads the imported files; parses again when their declarations change. */
+async function updateImports(seq: number): Promise<void> {
+  const imports = (doc.value?.symbols ?? []).filter((s) => s.kind === 'import');
+  if (
+    !props.readFile ||
+    (imports.length === 0 && importDeclarations.length === 0)
+  ) {
+    return;
+  }
+
+  const found = await Promise.all(imports.map((s) => declarationOf(s)));
+  if (seq !== parseSeq) {
+    return;
+  }
+
+  // Plain JSON: the declarations are posted to the worker.
+  const next = JSON.parse(
+    JSON.stringify(found.filter((d) => d !== undefined))
+  ) as ImportedDeclaration[];
+  if (JSON.stringify(next) !== JSON.stringify(importDeclarations)) {
+    importDeclarations = next;
+    void reparse();
   }
 }
 
@@ -512,7 +598,7 @@ async function reparse(): Promise<void> {
   const source = text.value;
   let next: GraphDocument;
   try {
-    next = await client.parse(source, props.path);
+    next = await client.parse(source, props.path, importDeclarations);
   } catch (error) {
     show(`Parsing failed: ${(error as Error).message}`, 'error');
     return;
@@ -1038,7 +1124,12 @@ async function onOp(op: GraphOp): Promise<void> {
     return;
   }
 
-  const result = await client.applyOp(text.value, props.path, op);
+  const result = await client.applyOp(
+    text.value,
+    props.path,
+    op,
+    importDeclarations
+  );
   if (!result.ok) {
     show(result.error, 'error');
     return;

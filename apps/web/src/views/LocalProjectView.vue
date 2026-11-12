@@ -133,6 +133,20 @@ const buffers = shallowReactive(
   new Map<string, { saved: string; text: string }>()
 );
 
+/** Text of another file: an open tab's current text, else the file's. */
+async function readFile(filePath: string): Promise<string> {
+  const buffer = buffers.get(filePath);
+  if (buffer) {
+    return buffer.text;
+  }
+
+  if (!project.value) {
+    throw new Error('No folder open');
+  }
+
+  return project.value.read(filePath);
+}
+
 const dirtyTabs = computed(() => {
   const result = new Set<string>();
   for (const tab of fileTabs.tabs.value) {
@@ -440,6 +454,7 @@ function selectFile(next: string, symbol?: string): void {
       :layout-store="layoutStore"
       :state-key="`local/${id}:${shown}`"
       :files="files"
+      :read-file="readFile"
       hide-share
       keep-editor
       @open="selectFile"

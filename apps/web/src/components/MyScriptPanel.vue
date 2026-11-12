@@ -8,7 +8,7 @@ import {
   DRAGGABLE_KINDS,
   SYMBOL_DRAG_MIME,
   SYMBOL_ICONS,
-  SYMBOL_LABELS,
+  symbolLabel,
   symbolNodes,
   symbolType,
   topLevelGraph,
@@ -418,7 +418,7 @@ const menuEntries = computed<MenuEntry[]>(() => {
 
   const isImport = symbol.kind === 'import';
   return [
-    { type: 'header', label: `${SYMBOL_LABELS[symbol.kind]} ${symbol.name}` },
+    { type: 'header', label: `${symbolLabel(symbol)} ${symbol.name}` },
     ...(isImport
       ? [
           {
@@ -639,7 +639,10 @@ function addLabel(kind: AddKind, owner: string): string {
                 @keydown="onRowKeydown($event, symbol)"
                 @contextmenu.prevent="openMenu($event, symbol)"
               >
-                <span class="shrink-0" :class="SYMBOL_ICONS[symbol.kind]" />
+                <span
+                  class="shrink-0"
+                  :class="SYMBOL_ICONS[symbol.importedKind ?? symbol.kind]"
+                />
                 <span class="min-w-0 truncate">{{ symbol.name }}</span>
                 <span
                   v-if="badges(symbol)"

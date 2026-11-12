@@ -154,9 +154,32 @@ function forget(paths: ReadonlyArray<string>): void {
   }
 }
 
+/** Files read for the declarations of imports (not opened). */
+const readCache = new Map<string, Promise<string>>();
+
+/** Text of another file: an open tab's current text, else the stored one. */
+function readFile(filePath: string): Promise<string> {
+  const buffer = buffers.get(filePath);
+  if (buffer) {
+    return Promise.resolve(buffer.text);
+  }
+
+  let read = readCache.get(filePath);
+  if (!read) {
+    read = api
+      .getFile(provider.value, owner.value, repo.value, ref_.value, filePath)
+      .then((f) => f.content);
+    read.catch(() => readCache.delete(filePath));
+    readCache.set(filePath, read);
+  }
+
+  return read;
+}
+
 // Another branch has other files: start fresh.
 watch(ref_, () => {
   forget([...buffers.keys()]);
+  readCache.clear();
 });
 
 onBeforeUnmount(() => {
@@ -417,6 +440,7 @@ function switchBranch(event: Event): void {
       :layout-store="layoutStore"
       :state-key="`${provider}/${owner}/${repo}@${ref_}:${file.path}`"
       :files="files"
+      :read-file="readFile"
       keep-editor
       @open="selectFile"
     >
