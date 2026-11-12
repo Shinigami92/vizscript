@@ -72,7 +72,13 @@ export type GraphOp =
       position?: Point;
     }
   /** Replaces the expression feeding a data input. */
-  | { type: 'setInput'; pin: PinRef; expression: string }
+  | {
+      type: 'setInput';
+      pin: PinRef;
+      expression: string;
+      /** Where a node written by the expression goes (UI only). */
+      position?: Point;
+    }
   /** Moves the expression feeding a data input into a new variable. */
   | { type: 'extract'; pin: PinRef; name: string; position?: Point }
   /** Stores the value of a data output in a new variable. */

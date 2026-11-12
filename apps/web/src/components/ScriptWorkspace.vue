@@ -169,6 +169,8 @@ let pendingPlacement: {
   known: Set<string>;
   /** Prefers the node the user asked for over helper nodes of the edit. */
   matches?: (node: GraphNode) => boolean;
+  /** The node written as this code (`greeter()` given to an input). */
+  code?: string;
   /**
    * Select afterwards: all new nodes (pasted ones), or only the placed one
    * (the call of collapsed nodes), like UE.
@@ -878,7 +880,7 @@ async function reparse(): Promise<void> {
 
   let selectAfter: string[] | undefined;
   if (pendingPlacement) {
-    const { world, known, matches, select } = pendingPlacement;
+    const { world, known, matches, code, select } = pendingPlacement;
     pendingPlacement = null;
     const fresh = next.functions
       .flatMap((f) => f.nodes)
@@ -890,6 +892,11 @@ async function reparse(): Promise<void> {
     );
     const added =
       (matches && fresh.find(matches)) ??
+      (code === undefined
+        ? undefined
+        : fresh.find(
+            (n) => source.slice(n.range.start, n.range.end) === code
+          )) ??
       fresh.find((n) => n.purity === 'impure') ??
       fresh.find((n) => !used.has(n.id));
     if (added) {
@@ -1555,6 +1562,7 @@ async function onOp(op: GraphOp): Promise<void> {
     (placed.type === 'addNode' ||
       placed.type === 'callWith' ||
       placed.type === 'useValue' ||
+      placed.type === 'setInput' ||
       placed.type === 'promote' ||
       placed.type === 'extract' ||
       placed.type === 'collapseToFunction') &&
@@ -1563,6 +1571,10 @@ async function onOp(op: GraphOp): Promise<void> {
     let matches: ((node: GraphNode) => boolean) | undefined;
     if (placed.type === 'addNode') {
       matches = templateMatcher(placed.template);
+    } else if (placed.type === 'promote' || placed.type === 'extract') {
+      // The new SET node, not the call that moved into it.
+      const title = `Set ${placed.name}`;
+      matches = (n) => n.kind === 'setVar' && n.title === title;
     } else if (placed.type === 'collapseToFunction') {
       // The call of the new function (`name`, `this.name`, `self.name`).
       const name = placed.name;
@@ -1574,6 +1586,7 @@ async function onOp(op: GraphOp): Promise<void> {
       world: placed.position,
       known: allNodeIds(doc.value),
       matches,
+      ...(placed.type === 'setInput' ? { code: placed.expression.trim() } : {}),
       select:
         placed.type === 'collapseToFunction'
           ? 'added'
@@ -1599,6 +1612,12 @@ async function onOp(op: GraphOp): Promise<void> {
   }
 
   editor.value?.applyEdits(result.edits);
+
+  // Like UE, nothing stays selected after a delete (entry nodes would).
+  if (op.type === 'deleteNodes') {
+    canvas.value?.setSelection([]);
+    onSelectionChange([]);
+  }
 }
 
 useEventListener(window, 'keydown', (event: KeyboardEvent) => {

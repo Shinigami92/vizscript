@@ -137,6 +137,10 @@ const selected = computed(() =>
 const single = computed(() =>
   selected.value.length === 1 ? selected.value[0] : undefined
 );
+/** Entry nodes go with their function (deleted in My Script). */
+const deletable = computed(() =>
+  selected.value.filter((entry) => entry.node.kind !== 'entry')
+);
 const location = computed(() =>
   single.value ? lineColumn(props.text, single.value.node.range.start) : null
 );
@@ -303,7 +307,10 @@ function isEvent(symbol: ScriptSymbol): boolean {
 }
 
 function deleteSelection(): void {
-  emit('op', { type: 'deleteNodes', nodeIds: [...shownSelection.value] });
+  emit('op', {
+    type: 'deleteNodes',
+    nodeIds: deletable.value.map((entry) => entry.node.id),
+  });
 }
 </script>
 
@@ -582,8 +589,15 @@ function deleteSelection(): void {
           <dl class="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1 px-3 text-xs">
             <dt class="text-zinc-500">Kind</dt>
             <dd class="text-zinc-300">
-              {{ single.node.kind }} · {{ single.node.purity }} ·
-              {{ single.node.category }}
+              {{
+                [
+                  ...new Set([
+                    single.node.kind,
+                    single.node.purity,
+                    single.node.category,
+                  ]),
+                ].join(' · ')
+              }}
             </dd>
             <dt class="text-zinc-500">Node ID</dt>
             <dd
@@ -626,14 +640,15 @@ function deleteSelection(): void {
             }}</span>
           </button>
         </section>
-        <div v-if="editable" class="px-3 pb-3">
+        <div v-if="editable && deletable.length > 0" class="px-3 pb-3">
           <button
             type="button"
             class="btn-ghost w-full justify-center text-red-300 hover:bg-red-950/60"
             @click="deleteSelection"
           >
-            <span class="i-mdi-delete-outline" /> Delete {{ selected.length }}
-            nodes
+            <span class="i-mdi-delete-outline" /> Delete
+            {{ deletable.length }}
+            {{ deletable.length === 1 ? 'node' : 'nodes' }}
           </button>
         </div>
       </template>

@@ -623,10 +623,23 @@ function onDrop(event: DragEvent): void {
   }
 }
 
+/** A value picked for an input from the action menu goes where it opened. */
+function withPosition(op: GraphOp, world: Point): GraphOp {
+  if (op.type === 'withImport') {
+    return { ...op, op: withPosition(op.op, world) };
+  }
+
+  return op.type === 'setInput' && !op.position
+    ? { ...op, position: world }
+    : op;
+}
+
 function emitOp(op: GraphOp): void {
+  const open = menu.value;
+  const placed = open?.from ? withPosition(op, { ...open.world }) : op;
   closeMenu();
   // Ops are posted to a worker: strip reactive proxies (ops are plain JSON).
-  emit('op', JSON.parse(JSON.stringify(op)) as GraphOp);
+  emit('op', JSON.parse(JSON.stringify(placed)) as GraphOp);
   canvas.value?.focus();
 }
 
@@ -1135,11 +1148,13 @@ function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
       category: 'Variables',
       icon: 'i-mdi-variable text-sky-400',
       keywords: 'let const var set',
-      action: (query) =>
+      // The search text found this entry, so it is no name ("Declare
+      // variable foo" from the typed entries is).
+      action: () =>
         void ask({
           label: 'Variable name',
           placeholder: 'value',
-          value: IDENTIFIER_PATH.test(query) ? query : '',
+          value: '',
           submit: (name) =>
             addNode({ type: 'setVar', name, declaration: 'const' }, state),
         }),
@@ -1279,13 +1294,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
               category: 'Variables',
               icon: 'i-mdi-variable text-sky-400',
               keywords: 'promote const let',
-              action: (query: string) =>
-                promoteTo(
-                  source,
-                  pin,
-                  state.world,
-                  IDENTIFIER_PATH.test(query) ? query : undefined
-                ),
+              action: () => promoteTo(source, pin, state.world),
             },
           ]),
       ...expressionActions(state),
