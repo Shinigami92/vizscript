@@ -556,11 +556,13 @@ function avoidSavedNodes(
     }
   }
 
+  // Room below a node for its problem banner ("ERROR!").
+  const below = 24;
   const overlaps = (a: Box, b: Box): boolean =>
     a.x < b.x + b.width + 4 &&
     b.x < a.x + a.width + 4 &&
-    a.y < b.y + b.height + 4 &&
-    b.y < a.y + a.height + 4;
+    a.y < b.y + b.height + below &&
+    b.y < a.y + a.height + below;
 
   for (const node of unsaved) {
     const p = out[node.id];
@@ -575,7 +577,7 @@ function avoidSavedNodes(
         break;
       }
 
-      box.y = hit.y + hit.height + gap / 2;
+      box.y = hit.y + hit.height + below + gap / 2;
     }
 
     out[node.id] = { x: box.x, y: box.y };
