@@ -13,6 +13,7 @@ export * from './reconcile';
 export * from './reroute';
 export * from './search';
 export * from './summarize';
+export * from './symbols';
 export * from './text-ops';
 export * from './text-utils';
 export * from './types';

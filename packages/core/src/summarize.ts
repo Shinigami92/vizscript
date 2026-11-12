@@ -36,3 +36,36 @@ export function summarizeGraph(doc: GraphDocument): string {
 
   return lines.join('\n');
 }
+
+/**
+ * Compact representation of a document's symbols, one per line, e.g.
+ * `function greeter(person: string): string [export] → greeter` (snapshots).
+ */
+export function summarizeSymbols(doc: GraphDocument): string {
+  const graphs = new Map(doc.functions.map((f) => [f.id, f.name]));
+  return (doc.symbols ?? [])
+    .map((s) => {
+      const params = s.params
+        ? `(${s.params
+            .map(
+              (p) =>
+                `${p.rest ? '...' : ''}${p.name}${p.type ? `: ${p.type.text}` : ''}${p.defaultRange ? ' = …' : ''}`
+            )
+            .join(', ')})`
+        : '';
+      const type = s.type
+        ? `: ${s.type.text}`
+        : s.returns
+          ? `: ${s.returns.text}`
+          : '';
+      const inferred =
+        !s.type && !s.params && s.dataType !== 'any' ? ` ~${s.dataType}` : '';
+      const value = s.defaultRange ? ' = …' : '';
+      const modifiers =
+        s.modifiers.length > 0 ? ` [${s.modifiers.join(' ')}]` : '';
+      const graph = s.fnId ? ` → ${graphs.get(s.fnId) ?? '?'}` : '';
+      const scope = s.scope ? `${s.scope}::` : '';
+      return `${s.kind} ${scope}${s.name}${params}${type}${inferred}${value}${modifiers}${graph}`;
+    })
+    .join('\n');
+}

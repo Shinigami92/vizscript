@@ -5,6 +5,8 @@
  * and persistence only ever work with the IR, never with a language AST.
  */
 
+import type { ScriptSymbol } from './symbols';
+
 /** Half-open character offset range `[start, end)` into the source text. */
 export interface SourceRange {
   start: number;
@@ -193,6 +195,8 @@ export interface GraphDocument {
   language: string;
   functions: FunctionGraph[];
   diagnostics: Diagnostic[];
+  /** Declarations of the script (functions, variables, types, …). */
+  symbols?: ScriptSymbol[];
 }
 
 export type Positions = Record<string, Point>;
