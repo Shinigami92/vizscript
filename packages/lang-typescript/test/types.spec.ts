@@ -26,7 +26,7 @@ describe('types and values', () => {
         typeText: 'string',
         defaultValue: "''",
       })
-    ).toBe("let user: string = '';\n");
+    ).toBe('let user: string = "";\n');
     expect(
       apply('const n: number = 1;\n', {
         type: 'setSymbolType',

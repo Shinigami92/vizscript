@@ -309,6 +309,67 @@ function consumerInput(doc: GraphDocument, node: GraphNode): Pin | undefined {
   return undefined;
 }
 
+/** Longest run of blank lines between two lines of a text. */
+function longestBlankRun(text: string): number {
+  let longest = 0;
+  for (const run of text.matchAll(/\n((?:[ \t]*\n)+)/g)) {
+    longest = Math.max(longest, (run[1] ?? '').split('\n').length - 1);
+  }
+
+  return longest;
+}
+
+/**
+ * Deleting several statements leaves the blank lines that separated them:
+ * runs of blank lines longer than any in the file before, and blank lines
+ * added at its end, shrink again. One edit from the first to the last change.
+ */
+function tidyBlankLines(text: string, result: OpResult): OpResult {
+  if (!result.ok || result.edits.length === 0) {
+    return result;
+  }
+
+  const edited = applyTextEdits(text, result.edits);
+  const longest = longestBlankRun(text);
+  const ending = text.match(/\n*$/)?.[0] ?? '';
+  let tidy = edited.replaceAll(/\n((?:[ \t]*\n)+)/g, (whole, run: string) =>
+    run.split('\n').length - 1 > longest ? `\n${'\n'.repeat(longest)}` : whole
+  );
+  const trailing = tidy.match(/\n*$/)?.[0] ?? '';
+  if (trailing.length > ending.length) {
+    tidy = tidy.slice(0, tidy.length - trailing.length) + ending;
+  }
+  if (tidy === edited) {
+    return result;
+  }
+
+  let start = 0;
+  while (
+    start < text.length &&
+    start < tidy.length &&
+    text[start] === tidy[start]
+  ) {
+    start++;
+  }
+
+  let end = 0;
+  while (
+    end < text.length - start &&
+    end < tidy.length - start &&
+    text[text.length - 1 - end] === tidy[tidy.length - 1 - end]
+  ) {
+    end++;
+  }
+
+  return succeeded([
+    {
+      start,
+      end: text.length - end,
+      text: tidy.slice(start, tidy.length - end),
+    },
+  ]);
+}
+
 function deleteNodes(
   text: string,
   doc: GraphDocument,
@@ -1797,7 +1858,7 @@ export function applyTextOp(
     }
 
     case 'deleteNodes': {
-      return deleteNodes(text, doc, op.nodeIds, syntax);
+      return tidyBlankLines(text, deleteNodes(text, doc, op.nodeIds, syntax));
     }
 
     case 'setLiteral': {

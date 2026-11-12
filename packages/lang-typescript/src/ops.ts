@@ -659,14 +659,30 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
   },
 };
 
+/** The empty text default (`''`) in the file's quotes. */
+function withQuotes(text: string, op: GraphOp): GraphOp {
+  if (op.type === 'withImport') {
+    return { ...op, op: withQuotes(text, op.op) };
+  }
+
+  return op.type === 'setSymbolType' && op.defaultValue === "''"
+    ? { ...op, defaultValue: quoteOf(text).repeat(2) }
+    : op;
+}
+
 export function applyTypeScriptOp(
   text: string,
   op: GraphOp,
   fileName?: string,
   options?: ParseOptions
 ): OpResult {
-  return applyTextOp(text, parseTypeScript(text, fileName, options), op, {
-    ...TYPESCRIPT_SYNTAX,
-    declarations: declarations(text, fileName),
-  });
+  return applyTextOp(
+    text,
+    parseTypeScript(text, fileName, options),
+    withQuotes(text, op),
+    {
+      ...TYPESCRIPT_SYNTAX,
+      declarations: declarations(text, fileName),
+    }
+  );
 }

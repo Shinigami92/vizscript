@@ -351,6 +351,36 @@ describe('deleting and restoring a return', () => {
     ).toBe(false);
   });
 
+  it("writes an empty text default in the file's quotes", () => {
+    const text = 'const a = "x";\nlet b;\n';
+    const b = parseTypeScript(text).symbols?.find((s) => s.name === 'b');
+    expect(
+      apply(text, {
+        type: 'setSymbolType',
+        symbol: b?.id ?? '',
+        typeText: 'string',
+        defaultValue: "''",
+      })
+    ).toBe('const a = "x";\nlet b: string = "";\n');
+  });
+
+  it('leaves no extra blank lines when deleting several statements', () => {
+    const text =
+      'function f() {\n}\n\nconst a = 1;\n\nconst b = 2;\n\nlog(a, b);\n';
+    const doc = parseTypeScript(text);
+    const ids = doc.functions
+      .flatMap((f) => f.nodes)
+      .filter((n) => n.kind !== 'entry')
+      .map((n) => n.id);
+    expect(apply(text, { type: 'deleteNodes', nodeIds: ids })).toBe(
+      'function f() {\n}\n'
+    );
+    const b = node(doc, (n) => n.title === 'Set b');
+    expect(apply(text, { type: 'deleteNodes', nodeIds: [b.id] })).toBe(
+      'function f() {\n}\n\nconst a = 1;\n\nlog(a, b);\n'
+    );
+  });
+
   it('keeps a call argument as its own statement when disconnected', () => {
     const text = 'foo(bar(1), 2);\n';
     const doc = parseTypeScript(text);
