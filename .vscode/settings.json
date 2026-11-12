@@ -1,0 +1,9 @@
+{
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
+  "files.associations": {
+    "*.json5": "jsonc"
+  },
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true,
+  "oxc.enable": true
+}

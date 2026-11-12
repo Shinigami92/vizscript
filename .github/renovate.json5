@@ -1,0 +1,52 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:best-practices",
+    "group:allNonMajor",
+    ":prHourlyLimitNone",
+    "schedule:earlyMondays"
+  ],
+  labels: ["c: dependencies"],
+  reviewersFromCodeOwners: true,
+  lockFileMaintenance: { enabled: true },
+  rangeStrategy: "bump",
+  packageRules: [
+    {
+      groupName: "oxc",
+      matchPackageNames: ["oxlint", "oxlint-tsgolint", "oxfmt"]
+    },
+    {
+      groupName: "vitest",
+      matchPackageNames: ["vitest", "@vitest/**"]
+    },
+    {
+      groupName: "nestjs",
+      matchPackageNames: ["@nestjs/**"]
+    },
+    {
+      groupName: "vue",
+      matchPackageNames: ["vue", "vue-router", "pinia", "vue-tsc", "@vueuse/**"]
+    },
+    {
+      groupName: "unocss",
+      matchPackageNames: ["unocss", "@unocss/**", "@iconify-json/**"]
+    },
+    {
+      // vue-tsc and the in-browser tooling need the TypeScript JS API.
+      groupName: "typescript",
+      matchPackageNames: ["typescript"],
+      allowedVersions: "<7"
+    }
+  ],
+  customManagers: [
+    {
+      customType: "regex",
+      managerFilePatterns: ["/^package\\.json$/"],
+      matchStrings: [
+        "\"name\":\\s*\"pnpm\",\\s*\"version\":\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      depNameTemplate: "pnpm",
+      datasourceTemplate: "npm"
+    }
+  ]
+}

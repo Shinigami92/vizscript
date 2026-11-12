@@ -1,0 +1,14 @@
+{
+  "name": "@vizscript/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Language-agnostic graph IR, layout and edit operations",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "ts-check": "tsc"
+  }
+}

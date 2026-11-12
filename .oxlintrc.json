@@ -1,0 +1,102 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "import",
+    "typescript",
+    "unicorn",
+    "oxc",
+    "vitest",
+    "promise",
+    "vue"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "options": {
+    "typeAware": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2024": true
+  },
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/coverage/**",
+    "**/__snapshots__/**",
+    "**/test/fixtures/**"
+  ],
+  "rules": {
+    "curly": "error",
+    "eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ],
+    "prefer-template": "error",
+    "no-underscore-dangle": "off",
+    "sort-imports": [
+      "error",
+      {
+        "ignoreDeclarationSort": true,
+        "ignoreCase": true
+      }
+    ],
+    "import/consistent-type-specifier-style": ["error", "prefer-top-level"],
+    "import/no-unassigned-import": "off",
+    "typescript/array-type": [
+      "error",
+      {
+        "default": "array-simple",
+        "readonly": "generic"
+      }
+    ],
+    "typescript/consistent-type-imports": "error",
+    "typescript/explicit-module-boundary-types": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-extraneous-class": "off",
+    "unicorn/filename-case": [
+      "error",
+      {
+        "case": "kebabCase"
+      }
+    ],
+    "unicorn/no-array-callback-reference": "off",
+    "unicorn/no-null": "off",
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/consistent-return": "off",
+    "unicorn/require-post-message-target-origin": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.vue"],
+      "rules": {
+        "unicorn/filename-case": "off"
+      }
+    },
+    {
+      "files": ["**/test/**/*.spec.ts"],
+      "rules": {
+        "typescript/explicit-module-boundary-types": "off",
+        "typescript/no-non-null-assertion": "off",
+        "vitest/expect-expect": "off"
+      }
+    },
+    {
+      "files": ["apps/api/migrations/**"],
+      "rules": {
+        "unicorn/filename-case": "off"
+      }
+    },
+    {
+      "files": ["apps/web/src/monaco/**"],
+      "rules": {
+        "import/default": "off"
+      }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "name": "vizscript",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Visualize source code as Blueprint-style node graphs",
+  "license": "MIT",
+  "author": {
+    "name": "Christopher Quadflieg",
+    "email": "chrissi92@hotmail.de",
+    "url": "https://github.com/Shinigami92"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shinigami92/vizscript.git"
+  },
+  "type": "module",
+  "scripts": {
+    "clean": "git clean -fdx --exclude .claude --exclude .env --exclude .mcp.json",
+    "dev": "run-p dev:api dev:web",
+    "dev:api": "pnpm --filter @vizscript/api run dev",
+    "dev:web": "pnpm --filter @vizscript/web run dev",
+    "build": "pnpm --recursive --filter './apps/*' run build",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint",
+    "ts-check": "pnpm --recursive run ts-check",
+    "test": "vitest",
+    "test:update-snapshots": "vitest run -u",
+    "db:up": "docker compose up -d --wait db",
+    "db:down": "docker compose down",
+    "migrate": "pnpm --filter @vizscript/api run migrate",
+    "preflight": "pnpm install && run-s format build lint test:update-snapshots ts-check"
+  },
+  "packageManager": "pnpm@12.16.1",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.16.1",
+      "onFail": "download"
+    }
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@vitest/coverage-v8": "5.1.0",
+    "npm-run-all2": "9.0.4",
+    "oxfmt": "0.78.0",
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2006",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0"
+  }
+}

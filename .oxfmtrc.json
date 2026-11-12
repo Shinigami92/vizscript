@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "singleQuote": true,
+  "trailingComma": "es5",
+  "printWidth": 80,
+  "sortPackageJson": false,
+  "sortImports": {
+    "groups": [
+      ["builtin", "external", "internal"],
+      {
+        "newlinesBetween": false
+      },
+      ["parent", "sibling", "index"]
+    ],
+    "newlinesBetween": false,
+    "order": "asc",
+    "ignoreCase": true
+  },
+  "ignorePatterns": [
+    "pnpm-lock.yaml",
+    "CHANGELOG.md",
+    "**/__snapshots__/**",
+    "**/test/fixtures/**"
+  ],
+  "overrides": [
+    {
+      "files": ["*.json5"],
+      "options": {
+        "quoteProps": "preserve",
+        "singleQuote": false,
+        "trailingComma": "none"
+      }
+    }
+  ]
+}
