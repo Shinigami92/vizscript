@@ -1,5 +1,5 @@
 import type { GraphDocument } from '@vizscript/core';
-import { applyTextEdits } from '@vizscript/core';
+import { applyTextEdits, summarizeSymbols } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
 
@@ -199,5 +199,36 @@ describe('enum members', () => {
       'Light',
       'Dark',
     ]);
+  });
+});
+
+describe('expose on spawn', () => {
+  it('lists parameter properties as fields', () => {
+    const doc = parseTypeScript(
+      'class Ship {\n  constructor(private readonly speed: number = 10) {}\n}\n',
+      't.ts'
+    );
+    expect(summarizeSymbols(doc)).toContain(
+      'variable Ship::speed: number = … [private readonly constructor]'
+    );
+  });
+
+  it('moves a field into the constructor and back', () => {
+    const text = 'class Ship {\n  private speed: number = 10;\n}\n';
+    const exposed = toggle(text, 'variable:Ship.speed', 'constructor');
+    expect(exposed).toBe(
+      'class Ship {\n  constructor(private speed: number = 10) {}\n}\n'
+    );
+    expect(toggle(exposed, 'variable:Ship.speed', 'constructor', false)).toBe(
+      'class Ship {\n  private speed: number = 10;\n  constructor() {}\n}\n'
+    );
+  });
+
+  it('adds to an existing constructor', () => {
+    const text =
+      'class Ship {\n  name = "x";\n  constructor(id: string) {\n    use(id);\n  }\n}\n';
+    expect(toggle(text, 'variable:Ship.name', 'constructor')).toBe(
+      'class Ship {\n  constructor(id: string, public name = "x") {\n    use(id);\n  }\n}\n'
+    );
   });
 });

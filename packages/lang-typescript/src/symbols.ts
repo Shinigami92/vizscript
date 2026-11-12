@@ -347,6 +347,10 @@ class SymbolCollector {
         const key = member.key;
         const memberName =
           key.type === 'PrivateName' ? `#${key.id.name}` : key.name;
+        if (member.kind === 'constructor') {
+          this.parameterProperties(member, name);
+        }
+
         this.fn(
           'method',
           member.kind === 'get' || member.kind === 'set'
@@ -384,6 +388,45 @@ class SymbolCollector {
           modifiers: memberModifiers,
         });
       }
+    }
+  }
+
+  /**
+   * `constructor(public speed = 10)`: parameter properties are fields of
+   * the class set when it is created (UE's "Expose on Spawn").
+   */
+  private parameterProperties(member: t.ClassMethod, className: string): void {
+    for (const param of member.params) {
+      if (param.type !== 'TSParameterProperty') {
+        continue;
+      }
+
+      const inner = param.parameter;
+      const id = inner.type === 'AssignmentPattern' ? inner.left : inner;
+      if (id.type !== 'Identifier') {
+        continue;
+      }
+
+      const value = inner.type === 'AssignmentPattern' ? inner.right : null;
+      const type = this.typeRef(id.typeAnnotation);
+      this.add({
+        kind: 'variable',
+        name: id.name,
+        scope: className,
+        range: rangeOf(param),
+        declarationRange: rangeOf(param),
+        nameRange: nameRangeOf(id),
+        ...(type ? { type } : {}),
+        dataType: type
+          ? typeFromAnnotation(id.typeAnnotation)
+          : inferType(value),
+        ...(value ? { defaultRange: rangeOf(value) } : {}),
+        modifiers: [
+          ...(param.accessibility ? [param.accessibility] : []),
+          ...(param.readonly ? ['readonly'] : []),
+          'constructor',
+        ],
+      });
     }
   }
 

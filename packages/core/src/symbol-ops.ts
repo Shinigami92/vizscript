@@ -573,7 +573,12 @@ function leadingComments(
  * with its comma; an item alone in braces takes the braces and the comma
  * before them (`import a, { b }` becomes `import a`).
  */
-function removeListItem(text: string, range: SourceRange): TextEdit {
+export function removeListItem(
+  text: string,
+  range: SourceRange,
+  /** Parameters: `f(a)` keeps its `()` when `a` goes. */
+  keepBrackets = false
+): TextEdit {
   let { start, end } = range;
   const after = text.slice(end).match(/^\s*,[ \t]*/)?.[0];
   const before = text.slice(0, start).match(/,\s*$/)?.[0];
@@ -581,7 +586,7 @@ function removeListItem(text: string, range: SourceRange): TextEdit {
     end += after.length;
   } else if (before) {
     start -= before.length;
-  } else {
+  } else if (!keepBrackets) {
     const open = text.slice(0, start).match(/[{(]\s*$/)?.[0];
     const close = text.slice(end).match(/^\s*[})]/)?.[0];
     if (open && close) {
@@ -612,8 +617,18 @@ export function deleteSymbol(
         (s) => s !== symbol && s.declarationRange?.start === shared.start
       )
     : [];
-  if (together.length > 0 && symbol.kind === 'import') {
-    return succeeded([removeListItem(text, symbol.range)]);
+  // One name of an import list, one parameter property of a constructor.
+  if (
+    (together.length > 0 && symbol.kind === 'import') ||
+    symbol.modifiers.includes('constructor')
+  ) {
+    return succeeded([
+      removeListItem(
+        text,
+        symbol.range,
+        symbol.modifiers.includes('constructor')
+      ),
+    ]);
   }
 
   if (together.length > 0) {

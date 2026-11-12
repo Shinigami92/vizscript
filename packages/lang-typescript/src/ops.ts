@@ -6,9 +6,15 @@ import type {
   ParseOptions,
   ScriptSymbol,
   StatementSyntax,
+  SymbolParam,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { applyTextOp, removeModifier, replaceKeyword } from '@vizscript/core';
+import {
+  applyTextOp,
+  removeListItem,
+  removeModifier,
+  replaceKeyword,
+} from '@vizscript/core';
 import { addTypeScriptImport } from './add-import';
 import { parseFile, parseTypeScript } from './lower';
 import { renameTypeScriptSymbol, typeScriptCallSites } from './rename';
@@ -224,6 +230,7 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
     },
   ],
   containerDefaults: { array: '[]', map: 'new Map()', set: 'new Set()' },
+  exposeOnSpawn: true,
   modifiers: {
     variable: { keywords: KINDS, flags: ['export'] },
     constant: { keywords: KINDS, flags: ['export'] },
@@ -241,9 +248,119 @@ function quoteOf(text: string): string {
   return single > double ? "'" : '"';
 }
 
+/**
+ * UE's "Expose on Spawn": a field becomes a parameter property of the
+ * constructor (`constructor(public speed = 10)`), set when the class is
+ * created, and back.
+ */
+function setConstructorParameter(
+  text: string,
+  doc: GraphDocument,
+  symbol: ScriptSymbol,
+  enabled: boolean
+): OpResult {
+  if (symbol.kind !== 'variable' || symbol.scope === '') {
+    return {
+      ok: false,
+      error: 'Only fields of a class can be set when created.',
+    };
+  }
+
+  const ctor = doc.symbols?.find(
+    (s) =>
+      s.kind === 'method' &&
+      s.scope === symbol.scope &&
+      s.name === 'constructor'
+  );
+  const access = symbol.modifiers.find((m) => ACCESS.includes(m));
+  const readonly = symbol.modifiers.includes('readonly');
+  const type = symbol.type ? `: ${symbol.type.text}` : '';
+  const value = symbol.defaultRange
+    ? ` = ${text.slice(symbol.defaultRange.start, symbol.defaultRange.end)}`
+    : '';
+
+  if (!enabled) {
+    // Back to a field above the constructor.
+    if (!ctor) {
+      return { ok: false, error: 'Cannot find the constructor.' };
+    }
+
+    const removed = removeListItem(text, symbol.range, true);
+    const lineStart = text.lastIndexOf('\n', ctor.range.start - 1) + 1;
+    const indent =
+      text.slice(lineStart, ctor.range.start).match(/^\s*/)?.[0] ?? '';
+    const prefix = [
+      ...(access && access !== 'public' ? [access] : []),
+      ...(readonly ? ['readonly'] : []),
+    ].join(' ');
+    const field = `${indent}${prefix ? `${prefix} ` : ''}${symbol.name}${type}${value};\n`;
+    return {
+      ok: true,
+      edits: [removed, { start: lineStart, end: lineStart, text: field }],
+    };
+  }
+
+  if (symbol.modifiers.includes('static') || symbol.name.startsWith('#')) {
+    return {
+      ok: false,
+      error: 'Static and #private fields cannot be constructor parameters.',
+    };
+  }
+
+  const param = `${access ?? 'public'} ${readonly ? 'readonly ' : ''}${symbol.name}${type}${value}`;
+  const fieldStart = text.lastIndexOf('\n', symbol.range.start - 1) + 1;
+  const fieldEnd = text.indexOf('\n', symbol.range.end);
+  const field = {
+    start: fieldStart,
+    end: fieldEnd === -1 ? text.length : fieldEnd + 1,
+  };
+  if (!ctor) {
+    const cls = doc.symbols?.find(
+      (s) => s.kind === 'class' && s.name === symbol.scope
+    );
+    if (cls?.extends) {
+      return {
+        ok: false,
+        error: `${symbol.scope} extends ${cls.extends}: add a constructor that calls super() first.`,
+      };
+    }
+
+    // The field's line becomes the constructor.
+    const indent = text.slice(fieldStart, symbol.range.start);
+    return {
+      ok: true,
+      edits: [{ ...field, text: `${indent}constructor(${param}) {}\n` }],
+    };
+  }
+
+  // After the last parameter, or inside `()`.
+  const params = ctor.params ?? [];
+  const last = params.at(-1);
+  const open = text.indexOf('(', ctor.nameRange.end);
+  const insert = last
+    ? { start: paramEnd(text, last), text: `, ${param}` }
+    : { start: open + 1, text: param };
+  return {
+    ok: true,
+    edits: [
+      { start: field.start, end: field.end, text: '' },
+      { start: insert.start, end: insert.start, text: insert.text },
+    ],
+  };
+}
+
+/** End of a parameter in the code (with its type and default value). */
+function paramEnd(text: string, param: SymbolParam): number {
+  return Math.max(
+    param.nameRange.end,
+    param.type?.range.end ?? 0,
+    param.defaultRange?.end ?? 0
+  );
+}
+
 function setModifier(
   text: string,
-  _doc: GraphDocument,
+  doc: GraphDocument,
   symbol: ScriptSymbol,
   modifier: string,
   enabled: boolean
@@ -258,6 +375,10 @@ function setModifier(
     }
 
     return replaceKeyword(text, symbol, KINDS, modifier);
+  }
+
+  if (modifier === 'constructor') {
+    return setConstructorParameter(text, doc, symbol, enabled);
   }
 
   if (ACCESS.includes(modifier)) {

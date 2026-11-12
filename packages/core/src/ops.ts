@@ -241,6 +241,11 @@ export interface TypeSystemInfo {
     vectors?: Record<string, string[]>;
     color?: string;
   };
+  /**
+   * Class fields can be constructor parameters (UE's "Expose on Spawn"),
+   * switched with the `constructor` modifier.
+   */
+  exposeOnSpawn?: boolean;
   /** Variables can be put into categories (`ScriptSymbol.group`). */
   symbolGroups?: boolean;
   /**
