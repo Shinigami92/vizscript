@@ -262,6 +262,7 @@ export const GDSCRIPT_TYPES: TypeSystemInfo = {
     },
   ],
   containerDefaults: { array: '[]', map: '{}' },
+  privatePrefix: '_',
   exportHints: [
     { name: '@export' },
     { name: '@export_range', args: '0, 100, 1' },
@@ -325,10 +326,13 @@ function setModifier(
       return { ok: false, error: 'A const cannot be exported.' };
     }
 
-    const start = lineStart(
-      text,
-      Math.max(lineStart(text, symbol.range.start) - 1, 0)
-    );
+    // An annotation alone on the line above belongs to the declaration.
+    const own = lineStart(text, symbol.range.start);
+    const above = lineStart(text, Math.max(own - 1, 0));
+    const start =
+      own > 0 && /^\s*@\w+(?:\([^)]*\))?\s*$/.test(text.slice(above, own))
+        ? above
+        : own;
     const head = text.slice(start, symbol.nameRange.start);
     const current = head.match(/@export\w*(?:\([^)]*\))?/);
     if (!enabled) {

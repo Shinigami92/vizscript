@@ -169,4 +169,19 @@ describe('export hints', () => {
     );
     expect(setExport(ranged, '@export_range', false)).toBe(text);
   });
+
+  it('leaves the annotation of the variable above alone', () => {
+    const text =
+      'extends Node\n\n@export_range(0, 10) var size := 1\nvar speed := 10\n';
+    expect(setExport(text, '@export')).toBe(
+      'extends Node\n\n@export_range(0, 10) var size := 1\n@export var speed := 10\n'
+    );
+  });
+
+  it('changes an annotation on its own line above', () => {
+    const text = 'extends Node\n\n@export\nvar speed := 10\n';
+    expect(setExport(text, '@export_range(0, 5)')).toBe(
+      'extends Node\n\n@export_range(0, 5)\nvar speed := 10\n'
+    );
+  });
 });
