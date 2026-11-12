@@ -1,0 +1,19 @@
+{
+  "name": "@vizscript/lang-python",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Python language backend",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "ts-check": "tsc"
+  },
+  "dependencies": {
+    "@lezer/common": "~1.5.5",
+    "@lezer/python": "~1.1.19",
+    "@vizscript/core": "workspace:*"
+  }
+}
