@@ -164,6 +164,29 @@ describe('layoutDocument', () => {
     expect(positions.entry).toEqual(auto.entry);
   });
 
+  it('moves a function down when another one grew into it', () => {
+    const doc: GraphDocument = {
+      language: 'test',
+      diagnostics: [],
+      functions: [fnOf('a'), fnOf('b')],
+    };
+    const auto = layoutDocument(doc, { sizeOf });
+    // A node of `a` saved where `b` starts (and all of `b` saved too).
+    const saved: Positions = {
+      a1: { x: auto.b1?.x ?? 0, y: auto.b1?.y ?? 0 },
+      b0: auto.b0 ?? { x: 0, y: 0 },
+      b1: auto.b1 ?? { x: 0, y: 0 },
+    };
+    const moved = layoutDocument(doc, { sizeOf }, saved);
+    expect(moved.a1).toEqual(saved.a1);
+    expect(moved.b0?.y ?? 0).toBeGreaterThanOrEqual(
+      (saved.a1?.y ?? 0) +
+        sizeOf(doc.functions[0]?.nodes[1] ?? node('x', 'impure', [])).height +
+        110
+    );
+    expect(moved.b1?.x).toBe(saved.b1?.x);
+  });
+
   it('leaves room above nodes for bubbles and comment boxes', () => {
     const doc: GraphDocument = {
       language: 'test',

@@ -25,6 +25,11 @@ export interface LayoutOptions {
   spaceAbove?: (node: GraphNode) => number;
   /** Room a comment box needs above its nodes (title bar and padding). */
   commentBoxTop?: number;
+  /**
+   * Least space between the nodes of two functions, so their frames don't
+   * overlap (frame padding and title bar). Default 110.
+   */
+  frameGap?: number;
 }
 
 /**
@@ -139,6 +144,7 @@ export function layoutDocument(
   const maxRowWidth = options.maxRowWidth ?? 2400;
 
   const result: Positions = {};
+  const boxes: FunctionBox[] = [];
   let offsetY = 0;
 
   for (const fn of doc.functions) {
@@ -180,9 +186,79 @@ export function layoutDocument(
 
     mergeSaved(fn, index, auto, saved, result);
     avoidSavedNodes(fn, saved, result, options.sizeOf, gapY);
+    separateFunction(fn, above, result, boxes, options);
   }
 
   return result;
+}
+
+/** Outline of a function's nodes. */
+interface FunctionBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/**
+ * A function that grew into an earlier one below or beside it (nodes added
+ * where there was room, all positions saved) moves down until their frames
+ * no longer overlap, like separate graphs in UE.
+ */
+function separateFunction(
+  fn: FunctionGraph,
+  above: ReadonlyMap<string, number>,
+  positions: Positions,
+  boxes: FunctionBox[],
+  options: LayoutOptions
+): void {
+  const gap = options.frameGap ?? 110;
+  let box: FunctionBox | undefined;
+  for (const node of fn.nodes) {
+    const p = positions[node.id];
+    if (!p) {
+      continue;
+    }
+
+    const size = options.sizeOf(node);
+    const top = p.y - (above.get(node.id) ?? 0);
+    box = box
+      ? {
+          left: Math.min(box.left, p.x),
+          top: Math.min(box.top, top),
+          right: Math.max(box.right, p.x + size.width),
+          bottom: Math.max(box.bottom, p.y + size.height),
+        }
+      : { left: p.x, top, right: p.x + size.width, bottom: p.y + size.height };
+  }
+
+  if (!box) {
+    return;
+  }
+
+  // Only earlier functions that share columns with this one count.
+  let shift = 0;
+  for (const other of boxes) {
+    const sideBySide =
+      box.right + gap <= other.left || other.right + gap <= box.left;
+    const clear =
+      box.top + shift >= other.bottom + gap ||
+      box.bottom + shift + gap <= other.top;
+    if (!sideBySide && !clear) {
+      shift = other.bottom + gap - box.top;
+    }
+  }
+
+  if (shift > 0) {
+    for (const node of fn.nodes) {
+      const p = positions[node.id];
+      if (p) {
+        positions[node.id] = { x: p.x, y: p.y + shift };
+      }
+    }
+  }
+
+  boxes.push({ ...box, top: box.top + shift, bottom: box.bottom + shift });
 }
 
 function mergeSaved(
