@@ -9,7 +9,7 @@ import type {
   SourceRange,
 } from '@vizscript/core';
 import { insertImport, joinImport, symbolId } from '@vizscript/core';
-import { maskForParser } from './convert';
+import { maskForParser } from './convert-utils';
 
 function children(node: SyntaxNode): SyntaxNode[] {
   const result: SyntaxNode[] = [];

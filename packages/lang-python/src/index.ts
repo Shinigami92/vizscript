@@ -6,7 +6,8 @@ import { PYTHON_LIBRARIES, pythonLibrary } from './stdlib';
 
 export type * from './ast';
 export { parsePython } from './convert';
-export { dataTypeOf, parsePythonDocument } from './lower';
+export { parsePythonDocument } from './lower';
+export { dataTypeOf } from './lower-utils';
 export { applyPythonOp, PYTHON_SYNTAX } from './ops';
 export { pythonReferences } from './references';
 

@@ -15,7 +15,7 @@ import type {
   Span,
   Stmt,
 } from './ast';
-import { dataTypeOf } from './lower';
+import { dataTypeOf } from './lower-utils';
 
 const ENUM_BASES = /^(?:enum\.)?(?:Enum|IntEnum|StrEnum|Flag|IntFlag)$/;
 

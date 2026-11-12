@@ -1,7 +1,7 @@
 import type { SyntaxNode } from '@lezer/common';
 import { parser } from '@lezer/python';
 import type { ModuleReference } from '@vizscript/core';
-import { maskForParser } from './convert';
+import { maskForParser } from './convert-utils';
 
 interface DottedName {
   start: number;

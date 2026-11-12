@@ -8,7 +8,8 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import { applyTextOp, removeModifier } from '@vizscript/core';
-import { parsePython, splitString } from './convert';
+import { parsePython } from './convert';
+import { splitString } from './convert-utils';
 import { addPythonImport } from './imports';
 import { parsePythonDocument } from './lower';
 import { pythonCallSites, renamePythonSymbol } from './rename';
