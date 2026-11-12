@@ -799,6 +799,22 @@ function openSymbol(id: string): void {
   }
 }
 
+function revealSymbol(id: string): void {
+  const symbol = doc.value?.symbols?.find((s) => s.id === id);
+  if (symbol) {
+    void revealRange(symbol.nameRange);
+  }
+}
+
+/** Edits from "My Script"; a renamed selection keeps being selected. */
+function onScriptOp(op: GraphOp): void {
+  if (op.type === 'renameSymbol' && selectedSymbolId.value === op.symbol) {
+    selectedSymbolId.value = op.symbol.replace(/[^:.]+$/, op.name);
+  }
+
+  void onOp(op);
+}
+
 async function revealRange(range: SourceRange): Promise<void> {
   if (!codeVisible.value) {
     workbench.show('code');
@@ -1252,10 +1268,13 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :text="text"
         :selected-symbol="selectedSymbol?.id ?? null"
         :current-function="currentFunction"
+        :editable="editable"
         @select-symbol="selectSymbol"
         @open-symbol="openSymbol"
         @select-function="selectFunction"
         @select="selectNodes"
+        @reveal="revealSymbol"
+        @op="onScriptOp"
       />
     </WorkbenchView>
 

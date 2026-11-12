@@ -31,11 +31,6 @@ const GROUPS: ReadonlyArray<{
       },
       { action: 'Jump to code', input: 'Double-click a node' },
       {
-        action: 'Show a function or variable',
-        input:
-          'Click it in My Script (uses are highlighted), double-click to select them',
-      },
-      {
         action: 'Go to definition',
         input: '{F12} on a call or variable node',
       },
@@ -99,6 +94,22 @@ const GROUPS: ReadonlyArray<{
       },
       { action: 'Comment box around selection', input: '{C}' },
       { action: 'Rename a comment box', input: 'Double-click its title' },
+    ],
+  },
+  {
+    title: 'My Script',
+    rows: [
+      {
+        action: 'Show uses / details',
+        input: 'Click a function or variable (uses are highlighted)',
+      },
+      { action: 'Show in graph', input: 'Double-click it, or {Enter}' },
+      {
+        action: 'Add a function, variable, local or signal',
+        input: 'The {+} of its section or class',
+      },
+      { action: 'Rename', input: '{F2}, or right-click → Rename' },
+      { action: 'Delete', input: '{Delete}, or right-click → Delete' },
     ],
   },
   {
