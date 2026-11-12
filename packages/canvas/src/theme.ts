@@ -23,6 +23,14 @@ export interface Theme {
   operatorGlyph: string;
   /** Drop shadow under nodes. */
   nodeShadow: string;
+  /** Light top edge of headers (UE's gloss). */
+  headerShine: string;
+  /** Line between header and body. */
+  headerDivider: string;
+  /** Shadow behind header titles. */
+  titleShadow: string;
+  /** Alpha (hex) of the type tint at the left of Get pills. */
+  pillTint: string;
   /** Alpha (hex) at the right end of the header gradient. */
   headerFade: string;
   exec: string;
@@ -73,7 +81,11 @@ export const DARK_THEME: Theme = {
   compactSubtext: '#a1a1aa',
   operatorGlyph: 'rgba(244, 244, 245, 0.55)',
   nodeShadow: 'rgba(0, 0, 0, 0.55)',
-  headerFade: '55',
+  headerShine: 'rgba(255, 255, 255, 0.16)',
+  headerDivider: 'rgba(0, 0, 0, 0.45)',
+  titleShadow: 'rgba(0, 0, 0, 0.7)',
+  pillTint: '40',
+  headerFade: '33',
   exec: execColor('dark'),
   pinLabel: '#d4d4d8',
   literalBackground: '#2b2b30',
@@ -118,6 +130,10 @@ export const LIGHT_THEME: Theme = {
   compactSubtext: '#71717a',
   operatorGlyph: 'rgba(24, 24, 27, 0.45)',
   nodeShadow: 'rgba(24, 24, 27, 0.18)',
+  headerShine: 'rgba(255, 255, 255, 0.22)',
+  headerDivider: 'rgba(0, 0, 0, 0.18)',
+  titleShadow: 'rgba(0, 0, 0, 0.35)',
+  pillTint: '33',
   headerFade: 'aa',
   exec: execColor('light'),
   pinLabel: '#27272a',

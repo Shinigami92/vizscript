@@ -23,6 +23,7 @@ import {
   extractReroutes,
   headerIcon,
   ICON_SPACE,
+  isAdvancedPin,
   isArrayType,
   isCompact,
   isLatent,
@@ -190,7 +191,12 @@ interface Tween<T> {
 }
 
 interface NodeState {
+  /** The node as drawn (advanced pins left out while folded). */
   node: GraphNode;
+  /** The node with all its pins. */
+  full: GraphNode;
+  /** Number of advanced pins (UE's ▼ row when there are any). */
+  advanced: number;
   fnId: string;
   geom: NodeGeometry;
   x: number;
@@ -219,7 +225,8 @@ interface FrameState {
 type Hit =
   | { type: 'pin'; ns: NodeState; pg: PinGeometry }
   | { type: 'literal'; ns: NodeState; pg: PinGeometry }
-  | { type: 'node'; ns: NodeState }
+  /** `advanced`: on the ▼ / ▲ row that folds advanced pins. */
+  | { type: 'node'; ns: NodeState; advanced?: boolean }
   | { type: 'bubble'; ns: NodeState }
   | { type: 'knot'; edgeId: string; index: number }
   | { type: 'frame'; frame: FrameState };
@@ -298,6 +305,8 @@ const NODE_MOTION_MS = 200;
 const NODE_APPEAR_MS = 180;
 const NODE_PULSE_MS = 700;
 const KNOT_RADIUS = 6;
+/** Row under a node with folded advanced pins (UE's ▼). */
+const ADVANCED_ROW = 14;
 
 /** Closer than half a pixel: not worth a slide. */
 function samePoint(a: Point, b: Point): boolean {
@@ -349,6 +358,8 @@ export class GraphView {
     world: Point;
   } | null = null;
   private connectedPins = new Set<string>();
+  /** Nodes whose advanced pins are shown (UE's ▲). */
+  private expandedNodes = new Set<string>();
   private frames: FrameState[] = [];
   private framesDirty = true;
 
@@ -475,10 +486,13 @@ export class GraphView {
     for (const fn of doc.functions) {
       for (const node of fn.nodes) {
         const p = positions[node.id] ?? { x: 0, y: 0 };
+        const shown = this.nodeGeometry(node);
         const ns: NodeState = {
-          node,
+          node: shown.node,
+          full: node,
+          advanced: shown.advanced,
           fnId: fn.id,
-          geom: computeNodeGeometry(node, this.measure),
+          geom: shown.geom,
           x: p.x,
           y: p.y,
           bubble: bubbleText(node.comment)
@@ -618,9 +632,46 @@ export class GraphView {
   public readonly sizeOf = (
     node: GraphNode
   ): { width: number; height: number } => {
-    const geom = computeNodeGeometry(node, this.measure);
+    const { geom } = this.nodeGeometry(node);
     return { width: geom.width, height: geom.height };
   };
+
+  /**
+   * A node as drawn: advanced pins (arguments left at their default) fold
+   * behind a ▼ row like UE's, unless the node was expanded.
+   */
+  private nodeGeometry(node: GraphNode): {
+    node: GraphNode;
+    geom: NodeGeometry;
+    advanced: number;
+  } {
+    const advanced = node.pins.filter(isAdvancedPin).length;
+    const shown =
+      advanced === 0 || this.expandedNodes.has(node.id)
+        ? node
+        : { ...node, pins: node.pins.filter((p) => !isAdvancedPin(p)) };
+    const geom = computeNodeGeometry(shown, this.measure);
+    return {
+      node: shown,
+      advanced,
+      geom: advanced ? { ...geom, height: geom.height + ADVANCED_ROW } : geom,
+    };
+  }
+
+  /** Shows or hides the advanced pins of a node (UE's ▼ / ▲). */
+  private toggleAdvanced(ns: NodeState): void {
+    if (this.expandedNodes.has(ns.full.id)) {
+      this.expandedNodes.delete(ns.full.id);
+    } else {
+      this.expandedNodes.add(ns.full.id);
+    }
+
+    const shown = this.nodeGeometry(ns.full);
+    ns.node = shown.node;
+    ns.geom = shown.geom;
+    this.rebuildIndex();
+    this.requestRender();
+  }
 
   /** Room a node needs above it (its comment bubble); use it for layout. */
   public readonly spaceAbove = (node: GraphNode): number => {
@@ -1448,7 +1499,9 @@ export class GraphView {
         }
       }
 
-      return { type: 'node', ns };
+      const advanced =
+        ns.advanced > 0 && world.y >= ns.y + ns.geom.height - ADVANCED_ROW;
+      return advanced ? { type: 'node', ns, advanced } : { type: 'node', ns };
     }
 
     for (const ns of this.nodes.values()) {
@@ -1654,6 +1707,11 @@ export class GraphView {
       }
 
       this.requestRender();
+      return;
+    }
+
+    if (hit?.type === 'node' && hit.advanced) {
+      this.toggleAdvanced(hit.ns);
       return;
     }
 
@@ -1956,15 +2014,17 @@ export class GraphView {
     } else {
       this.setHover(hit.ns.node.id, hit.type === 'pin' ? hit.pg.pin.id : null);
       cursor =
-        hit.type === 'pin' && this.editable
-          ? 'crosshair'
-          : hit.type === 'literal' &&
-              this.editable &&
-              hit.pg.pin.literal?.editable !== false
-            ? hit.pg.pin.literal?.kind === 'boolean'
-              ? 'pointer'
-              : 'text'
-            : 'move';
+        hit.type === 'node' && hit.advanced
+          ? 'pointer'
+          : hit.type === 'pin' && this.editable
+            ? 'crosshair'
+            : hit.type === 'literal' &&
+                this.editable &&
+                hit.pg.pin.literal?.editable !== false
+              ? hit.pg.pin.literal?.kind === 'boolean'
+                ? 'pointer'
+                : 'text'
+              : 'move';
     }
 
     if (this.spaceDown) {
@@ -2970,6 +3030,28 @@ export class GraphView {
     ctx.fill();
     ctx.restore();
 
+    // Like UE's Get pills: a tint of the value's type from the left.
+    if (compact && node.category === 'variable' && node.kind !== 'setVar') {
+      const out = node.pins.find(
+        (p) => p.direction === 'out' && p.kind === 'data'
+      );
+      if (out) {
+        const color = pinColor(out.type, theme.scheme);
+        const tint = ctx.createLinearGradient(
+          ns.x,
+          ns.y,
+          ns.x + geom.width,
+          ns.y
+        );
+        tint.addColorStop(0, `${color}${theme.pillTint}`);
+        tint.addColorStop(1, `${color}00`);
+        ctx.beginPath();
+        ctx.roundRect(ns.x, ns.y, geom.width, geom.height, r);
+        ctx.fillStyle = tint;
+        ctx.fill();
+      }
+    }
+
     // Header
     if (!compact) {
       ctx.save();
@@ -2987,6 +3069,19 @@ export class GraphView {
       gradient.addColorStop(1, `${color}${theme.headerFade}`);
       ctx.fillStyle = gradient;
       ctx.fillRect(ns.x, ns.y, geom.width, geom.headerHeight);
+      // UE's gloss: a light top edge and a dark line under the header.
+      const shine = ctx.createLinearGradient(
+        ns.x,
+        ns.y,
+        ns.x,
+        ns.y + geom.headerHeight
+      );
+      shine.addColorStop(0, theme.headerShine);
+      shine.addColorStop(0.45, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = shine;
+      ctx.fillRect(ns.x, ns.y, geom.width, geom.headerHeight);
+      ctx.fillStyle = theme.headerDivider;
+      ctx.fillRect(ns.x, ns.y + geom.headerHeight - 1, geom.width, 1);
       ctx.restore();
     } else if (node.category !== 'variable') {
       ctx.beginPath();
@@ -3064,11 +3159,20 @@ export class GraphView {
       ctx.font = this.font('title');
       ctx.fillStyle = theme.nodeTitle;
       ctx.textAlign = 'left';
+      ctx.save();
+      if (!lod) {
+        const scale = this.camera.zoom * this.dpr;
+        ctx.shadowColor = theme.titleShadow;
+        ctx.shadowBlur = 2 * scale;
+        ctx.shadowOffsetY = 1 * scale;
+      }
+
       ctx.fillText(
         node.title,
         ns.x + NODE_METRICS.paddingX + (icon ? ICON_SPACE : 0),
         titleY
       );
+      ctx.restore();
       if (node.subtitle && !lod) {
         ctx.font = this.font('subtitle');
         ctx.fillStyle = theme.nodeSubtext;
@@ -3084,6 +3188,35 @@ export class GraphView {
     for (const pg of geom.pins.values()) {
       this.drawPin(ns, pg, lod);
     }
+
+    if (ns.advanced > 0 && !lod) {
+      this.drawAdvancedToggle(ns);
+    }
+  }
+
+  /** UE's ▼ under a node with folded advanced pins (▲ when shown). */
+  private drawAdvancedToggle(ns: NodeState): void {
+    const { ctx, theme } = this;
+    const x = ns.x + ns.geom.width / 2;
+    const y = ns.y + ns.geom.height - ADVANCED_ROW / 2 - 1;
+    const open = this.expandedNodes.has(ns.full.id);
+    const hovered = this.hoverNode === ns.node.id;
+    ctx.beginPath();
+    if (open) {
+      ctx.moveTo(x - 5, y + 2.5);
+      ctx.lineTo(x + 5, y + 2.5);
+      ctx.lineTo(x, y - 2.5);
+    } else {
+      ctx.moveTo(x - 5, y - 2.5);
+      ctx.lineTo(x + 5, y - 2.5);
+      ctx.lineTo(x, y + 2.5);
+    }
+
+    ctx.closePath();
+    ctx.fillStyle = hovered ? theme.nodeText : theme.pinLabel;
+    ctx.globalAlpha = hovered ? 1 : 0.6;
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
   /**
@@ -3213,6 +3346,17 @@ export class GraphView {
         }
 
         ctx.stroke();
+        if (!lod) {
+          // UE's small arrow after a data pin, in the direction of flow.
+          const ax = p.x + r + 2;
+          ctx.beginPath();
+          ctx.moveTo(ax, p.y - 2.5);
+          ctx.lineTo(ax + 3, p.y);
+          ctx.lineTo(ax, p.y + 2.5);
+          ctx.closePath();
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
       }
     }
 

@@ -91,6 +91,10 @@ const GROUPS: ReadonlyArray<{
         input: 'Right-click a call → Add argument pin',
       },
       {
+        action: 'Show arguments left at their default',
+        input: 'Click the ▼ under a call (▲ hides them again)',
+      },
+      {
         action: 'Add a loop, switch or try',
         input:
           'Right-click or drag from an exec pin, then type (loop, switch …)',
