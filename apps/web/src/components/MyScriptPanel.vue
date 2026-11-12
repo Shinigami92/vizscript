@@ -63,6 +63,8 @@ interface Group {
   /** Class (or other owner) the items belong to; `''` for the module. */
   owner: string;
   items: ScriptSymbol[];
+  /** A category (UE) / export group (GDScript), not a class. */
+  category?: boolean;
 }
 
 interface Section {
@@ -96,16 +98,26 @@ function matches(symbol: ScriptSymbol): boolean {
 }
 
 function grouped(items: ReadonlyArray<ScriptSymbol>): Group[] {
-  const groups = new Map<string, ScriptSymbol[]>();
+  const groups = new Map<
+    string,
+    { items: ScriptSymbol[]; category: boolean }
+  >();
   for (const item of items) {
-    const list = groups.get(item.scope) ?? [];
-    list.push(item);
-    groups.set(item.scope, list);
+    // Categories (GDScript export groups) group like classes do.
+    const key = item.group ? `\u0000${item.group}` : item.scope;
+    const entry = groups.get(key) ?? { items: [], category: !!item.group };
+    entry.items.push(item);
+    groups.set(key, entry);
   }
 
-  // Module members first, then one group per class, in code order.
+  // Module members first, then one group per class or category, in code
+  // order.
   return [...groups.entries()]
-    .map(([owner, list]) => ({ owner, items: list }))
+    .map(([key, { items: list, category }]) => ({
+      owner: category ? key.slice(1) : key,
+      items: list,
+      ...(category ? { category } : {}),
+    }))
     .toSorted((a, b) => (a.owner === '' ? -1 : b.owner === '' ? 1 : 0));
 }
 
@@ -627,7 +639,9 @@ function addLabel(kind: AddKind, owner: string): string {
                 :class="
                   section.id === 'imports'
                     ? 'i-mdi-file-import-outline'
-                    : 'i-mdi-cube-outline'
+                    : group.category
+                      ? 'i-mdi-folder-outline'
+                      : 'i-mdi-cube-outline'
                 "
               />
               <span
@@ -637,7 +651,7 @@ function addLabel(kind: AddKind, owner: string): string {
                 >{{ group.owner }}</span
               >
               <button
-                v-if="editable && section.add"
+                v-if="editable && section.add && !group.category"
                 type="button"
                 class="add"
                 :title="addLabel(section.add, group.owner)"

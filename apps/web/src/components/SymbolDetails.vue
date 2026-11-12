@@ -397,7 +397,9 @@ const currentExport = computed(() => {
     ? above
     : own;
   const head = props.text.slice(start, props.symbol.nameRange.start);
-  const match = head.match(/(@export\w*)(?:\(([^)]*)\))?/);
+  const match = head.match(
+    /(@export(?!_group|_subgroup|_category)\w*)(?:\(([^)]*)\))?/
+  );
   return match ? { name: match[1] ?? '', args: match[2] ?? '' } : undefined;
 });
 
@@ -481,6 +483,37 @@ function setExportArgs(args: string): void {
   const current = currentExport.value;
   if (current && args.trim() !== current.args) {
     setModifier(`${current.name}(${args.trim()})`, true);
+  }
+}
+
+// --------------------------------------------------------------- category
+
+/**
+ * UE's Category: GDScript export groups of exported script variables
+ * (moving the variable under its group's `@export_group` line).
+ */
+const groupable = computed(
+  () =>
+    props.types?.symbolGroups === true &&
+    props.symbol.kind === 'variable' &&
+    props.symbol.scope === '' &&
+    props.symbol.modifiers.some((m) => m.startsWith('@export'))
+);
+const knownGroups = computed(() => [
+  ...new Set(
+    (props.symbols ?? [])
+      .map((s) => s.group)
+      .filter((g): g is string => g !== undefined)
+  ),
+]);
+
+function setGroup(group: string): void {
+  if (group.trim() !== (props.symbol.group ?? '')) {
+    emit('op', {
+      type: 'setSymbolGroup',
+      symbol: props.symbol.id,
+      group: group.trim(),
+    });
   }
 }
 
@@ -825,6 +858,26 @@ function setModifier(modifier: string, enabled: boolean): void {
               @keydown.enter="($event.target as HTMLInputElement).blur()"
               @change="setExportArgs(($event.target as HTMLInputElement).value)"
             />
+          </dd>
+        </template>
+        <template v-if="groupable">
+          <dt class="pt-1 text-zinc-500">Category</dt>
+          <dd>
+            <input
+              :key="`${symbol.id}:${symbol.group ?? ''}`"
+              class="input py-1 text-xs"
+              :value="symbol.group ?? ''"
+              :readonly="!editable"
+              :list="`groups-${symbol.id}`"
+              placeholder="Default"
+              aria-label="Category"
+              title="Export group; Group/Subgroup nests"
+              @keydown.enter="($event.target as HTMLInputElement).blur()"
+              @change="setGroup(($event.target as HTMLInputElement).value)"
+            />
+            <datalist :id="`groups-${symbol.id}`">
+              <option v-for="name in knownGroups" :key="name" :value="name" />
+            </datalist>
           </dd>
         </template>
         <template v-if="privatePrefix && !compact">
