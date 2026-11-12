@@ -22,8 +22,9 @@ import type {
   PinRef,
   Point,
   Positions,
+  ScriptSymbol,
 } from '@vizscript/core';
-import { isTypeCompatible } from '@vizscript/core';
+import { isTypeCompatible, qualifiedName } from '@vizscript/core';
 import {
   computed,
   nextTick,
@@ -40,7 +41,12 @@ import { useToasts } from '../composables/use-toasts';
 import { indexDocument, pinEdges } from '../graph/doc-index';
 import type { Problem, ProblemSeverity } from '../graph/problems';
 import { worstSeverity } from '../graph/problems';
-import { shortcut, snippet } from '../graph/source';
+import { isMac, shortcut, snippet } from '../graph/source';
+import {
+  endOfFunction,
+  SYMBOL_DRAG_MIME,
+  topLevelGraph,
+} from '../graph/symbols';
 import type { ActionEntry } from './ActionMenu.vue';
 import ActionMenu from './ActionMenu.vue';
 import type { MenuEntry } from './ContextMenu.vue';
@@ -278,6 +284,146 @@ function commitPrompt(): void {
 }
 
 /** Emits an op built from the menu state and closes the menu. */
+// ------------------------------------------------- drop from "My Script"
+
+/** Get / Set menu of a variable dropped into the graph (like UE). */
+const dropMenu = ref<{ x: number; y: number; entries: MenuEntry[] } | null>(
+  null
+);
+
+const PLACEHOLDERS: Record<string, string> = {
+  typescript: 'undefined',
+  python: 'None',
+  gdscript: 'null',
+};
+
+function onDragOver(event: DragEvent): void {
+  if (props.editable && event.dataTransfer?.types.includes(SYMBOL_DRAG_MIME)) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }
+}
+
+/** `this.x` / `self.x` for members used inside a method of their class. */
+function memberAccess(
+  symbol: ScriptSymbol,
+  owner: ScriptSymbol | undefined,
+  language: string
+): string | undefined {
+  const isMember =
+    symbol.scope !== '' &&
+    symbol.kind !== 'local' &&
+    !(language === 'gdscript' && symbol.scope === '');
+  if (!isMember) {
+    return symbol.name;
+  }
+
+  if (owner?.kind !== 'method' || owner.scope !== symbol.scope) {
+    return undefined;
+  }
+
+  return `${language === 'typescript' ? 'this' : 'self'}.${symbol.name}`;
+}
+
+function onDrop(event: DragEvent): void {
+  const id = event.dataTransfer?.getData(SYMBOL_DRAG_MIME);
+  const v = view.value;
+  const doc = props.doc;
+  if (!id || !v || !doc || !props.editable) {
+    return;
+  }
+
+  event.preventDefault();
+  const symbol = doc.symbols?.find((s) => s.id === id);
+  if (!symbol) {
+    return;
+  }
+
+  const world = v.worldAt(event.clientX, event.clientY);
+  const top = topLevelGraph(doc, props.text);
+  const fnId = v.functionAt(world) ?? top?.id;
+  const anchor = fnId ? endOfFunction(doc, fnId) : undefined;
+  // A GDScript file's top level is its class body: no statements there.
+  if (!fnId || !anchor || (doc.language === 'gdscript' && fnId === top?.id)) {
+    show('Drop it into a function.');
+    return;
+  }
+
+  const owner = doc.symbols?.find(
+    (s) => s.fnId === fnId && (s.kind === 'function' || s.kind === 'method')
+  );
+  const placeholder = PLACEHOLDERS[doc.language] ?? 'null';
+  const add = (template: NodeTemplate): void =>
+    emitOp({ type: 'addNode', template, ...anchor, position: world });
+
+  if (
+    symbol.kind === 'function' ||
+    symbol.kind === 'method' ||
+    symbol.kind === 'signal'
+  ) {
+    const callee =
+      symbol.kind === 'signal'
+        ? `${symbol.name}.emit`
+        : memberAccess(symbol, owner, doc.language);
+    if (!callee) {
+      show(`Methods of ${symbol.scope} can be dropped into its own methods.`);
+      return;
+    }
+
+    // Like a new call node: required inputs get a placeholder.
+    const args = (symbol.params ?? [])
+      .filter((p) => !p.defaultRange && !p.rest)
+      .map(() => placeholder);
+    add({ type: 'call', callee, args });
+    return;
+  }
+
+  if (
+    symbol.kind === 'local' &&
+    owner &&
+    qualifiedName(owner) !== symbol.scope
+  ) {
+    show(`${symbol.name} is a local variable of ${symbol.scope}.`);
+    return;
+  }
+
+  const name = memberAccess(symbol, owner, doc.language);
+  if (!name) {
+    show(`Members of ${symbol.scope} can be dropped into its own methods.`);
+    return;
+  }
+
+  const get = (): void => add({ type: 'value', expression: name });
+  const set = (): void => add({ type: 'setVar', name, declaration: 'none' });
+  // UE: Ctrl-drag gets, Alt-drag sets, otherwise ask.
+  if (event.ctrlKey || event.metaKey) {
+    get();
+  } else if (event.altKey && symbol.kind !== 'constant') {
+    set();
+  } else {
+    dropMenu.value = {
+      x: event.clientX,
+      y: event.clientY,
+      entries: [
+        { type: 'header', label: name },
+        {
+          label: `Get ${name}`,
+          icon: 'i-mdi-arrow-right-bold-box-outline',
+          shortcut: isMac ? '⌘ drag' : 'Ctrl drag',
+          action: get,
+        },
+        {
+          label: `Set ${name}`,
+          icon: 'i-mdi-arrow-left-bold-box-outline',
+          shortcut: isMac ? '⌥ drag' : 'Alt drag',
+          disabled: symbol.kind === 'constant',
+          action: set,
+        },
+      ],
+    };
+  }
+}
+
 function emitOp(op: GraphOp): void {
   closeMenu();
   // Ops are posted to a worker: strip reactive proxies (ops are plain JSON).
@@ -1243,6 +1389,8 @@ defineExpose({
     @pointermove="onPointerMove"
     @pointerdown="hideTooltip"
     @wheel.passive="hideTooltip"
+    @dragover="onDragOver"
+    @drop="onDrop"
   >
     <canvas
       ref="canvas"
@@ -1407,5 +1555,13 @@ defineExpose({
         @close="prompt || closeMenu()"
       />
     </template>
+    <ContextMenu
+      v-if="dropMenu"
+      :x="dropMenu.x"
+      :y="dropMenu.y"
+      :entries="dropMenu.entries"
+      label="Variable"
+      @close="dropMenu = null"
+    />
   </div>
 </template>

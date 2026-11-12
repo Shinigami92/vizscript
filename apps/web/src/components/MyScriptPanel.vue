@@ -5,6 +5,8 @@ import { useStorage } from '@vueuse/core';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
 import {
+  DRAGGABLE_KINDS,
+  SYMBOL_DRAG_MIME,
   SYMBOL_ICONS,
   SYMBOL_LABELS,
   symbolNodes,
@@ -333,6 +335,17 @@ function remove(symbol: ScriptSymbol): void {
   emit('op', { type: 'deleteSymbol', symbol: symbol.id });
 }
 
+/** Like UE: drag a function or variable into the graph. */
+function onDragStart(event: DragEvent, symbol: ScriptSymbol): void {
+  if (!event.dataTransfer) {
+    return;
+  }
+
+  event.dataTransfer.setData(SYMBOL_DRAG_MIME, symbol.id);
+  event.dataTransfer.setData('text/plain', symbol.name);
+  event.dataTransfer.effectAllowed = 'copy';
+}
+
 function onRowKeydown(event: KeyboardEvent, symbol: ScriptSymbol): void {
   if (editing.value) {
     return;
@@ -537,9 +550,11 @@ function addLabel(kind: AddKind, owner: string): string {
                     : '',
                 ]"
                 :aria-selected="symbol.id === selectedSymbol"
-                :title="`${symbol.name} — double-click to show it in the graph${editable ? ', F2 to rename' : ''}`"
+                :title="`${symbol.name} — double-click to show it in the graph${editable ? ', drag it into the graph, F2 to rename' : ''}`"
                 @click="emit('selectSymbol', symbol.id)"
                 @dblclick="emit('openSymbol', symbol.id)"
+                :draggable="editable && DRAGGABLE_KINDS.has(symbol.kind)"
+                @dragstart="onDragStart($event, symbol)"
                 @keydown="onRowKeydown($event, symbol)"
                 @contextmenu.prevent="openMenu($event, symbol)"
               >

@@ -109,6 +109,15 @@ const GROUPS: ReadonlyArray<{
       },
       { action: 'Show in graph', input: 'Double-click it, or {Enter}' },
       {
+        action: 'Call a function',
+        input: 'Drag it into a function of the graph',
+      },
+      {
+        action: 'Get / set a variable',
+        input:
+          'Drag it into the graph and pick; {Mod} + drag gets, {Alt} + drag sets',
+      },
+      {
         action: 'Add a function, variable, local or signal',
         input: 'The {+} of its section or class',
       },
