@@ -260,6 +260,8 @@ type Drag =
       startCamera: Camera;
     };
 
+/** Below this zoom, right-clicking a pin opens its node's menu. */
+const PIN_MENU_ZOOM = 0.5;
 const FRAME_PADDING = 32;
 const FRAME_HEADER = 34;
 /** Height of the ERROR / WARNING banner below a node, and its gap. */
@@ -1943,17 +1945,22 @@ export class GraphView {
 
   private contextTarget(world: Point): ContextTarget {
     const hit = this.hitTest(world);
+    // Zoomed out, pins are too small to aim at: the node's menu instead.
+    const pinTarget =
+      (hit?.type === 'pin' || hit?.type === 'literal') &&
+      this.camera.zoom >= PIN_MENU_ZOOM;
     switch (hit?.type) {
       case 'pin':
-      case 'literal': {
-        return {
-          kind: 'pin',
-          pin: { node: hit.ns.node.id, pin: hit.pg.pin.id },
-        };
-      }
-
+      case 'literal':
       case 'node':
       case 'bubble': {
+        if (pinTarget && (hit.type === 'pin' || hit.type === 'literal')) {
+          return {
+            kind: 'pin',
+            pin: { node: hit.ns.node.id, pin: hit.pg.pin.id },
+          };
+        }
+
         // Like UE: right-clicking an unselected node selects it.
         const id = hit.ns.node.id;
         if (!this.selection.has(id)) {
