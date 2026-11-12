@@ -1824,7 +1824,10 @@ export class GraphView {
             from: { node: out.ns.node.id, pin: out.pg.pin.id },
             to: { node: input.ns.node.id, pin: input.pg.pin.id },
           });
-        } else if (!this.hitTest(drag.currentWorld)) {
+        } else if (
+          // A frame or comment box title counts as empty space too.
+          (this.hitTest(drag.currentWorld)?.type ?? 'frame') === 'frame'
+        ) {
           // Like Blueprints: dropping a wire on empty space opens the
           // actions for that pin; the wire stays until the menu closes.
           const ref = { node: from.ns.node.id, pin: from.pg.pin.id };
