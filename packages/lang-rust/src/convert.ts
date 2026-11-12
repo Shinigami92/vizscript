@@ -124,6 +124,19 @@ const TYPE_NODES = new Set([
   'QualifiedScope',
 ]);
 
+/**
+ * `a * b as f64` is `a * (b as f64)`: `as` binds tighter than every binary
+ * operator, but `@lezer/rust` casts the whole binary expression. The cast
+ * moves onto the rightmost operand (parenthesized operands stay `Paren`).
+ */
+function castRightmost(value: Expr, target: Span, end: number): Expr {
+  if (value.type === 'Binary') {
+    return { ...value, end, right: castRightmost(value.right, target, end) };
+  }
+
+  return { type: 'Cast', start: value.start, end, value, target };
+}
+
 function children(node: SyntaxNode): SyntaxNode[] {
   const result: SyntaxNode[] = [];
   for (let kid = node.firstChild; kid; kid = kid.nextSibling) {
@@ -1306,12 +1319,7 @@ class Converter {
         const value = kids[0];
         const target = kids[asAt + 1];
         return value && target && asAt !== -1
-          ? {
-              type: 'Cast',
-              ...span,
-              value: this.expr(value),
-              target: this.span(target),
-            }
+          ? castRightmost(this.expr(value), this.span(target), span.end)
           : this.opaque(node);
       }
 

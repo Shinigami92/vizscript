@@ -569,6 +569,15 @@ class FnGraphBuilder extends GraphBuilderBase {
   private lowerStatement(stmt: Stmt, path: string, tail: boolean): void {
     this.currentStatement = rangeOf(stmt);
     const meta = this.statementMeta(rangeOf(stmt), false);
+    if (
+      tail &&
+      this.returnsValue &&
+      (stmt.type === 'If' || stmt.type === 'Match')
+    ) {
+      // The function's value: deleting it leaves `todo!()`.
+      meta['tail'] = true;
+    }
+
     const insert = this.statementInsert(stmt);
     switch (stmt.type) {
       case 'Item': {
@@ -1079,9 +1088,16 @@ class FnGraphBuilder extends GraphBuilderBase {
   }
 
   /** Outputs for the names a pattern binds (`Some(x)` → `x`). */
-  private bindingOutputs(bindings: Pattern['bindings'], prefix: string): Pin[] {
+  private bindingOutputs(
+    bindings: Pattern['bindings'],
+    prefix: string,
+    visibleIn: SourceRange
+  ): Pin[] {
     return bindings.map((b, i) =>
-      this.dataOut(`${prefix}${i}`, b.name, 'any', { sourceText: b.name })
+      this.dataOut(`${prefix}${i}`, b.name, 'any', {
+        sourceText: b.name,
+        visibleIn,
+      })
     );
   }
 
@@ -1124,7 +1140,7 @@ class FnGraphBuilder extends GraphBuilderBase {
         condition.pin,
         this.execOut('true', 'True', this.blockInsert(part.body)),
         this.execOut('false', 'False', this.blockInsert(next)),
-        ...this.bindingOutputs(condition.bindings, 'bind'),
+        ...this.bindingOutputs(condition.bindings, 'bind', rangeOf(part.body)),
       ];
       if (!isElif && !tail) {
         pins.push(this.execOut('completed', 'Completed', insert, true));
@@ -1183,7 +1199,7 @@ class FnGraphBuilder extends GraphBuilderBase {
           truncate(`${label}${guard}`, 24),
           isBlock(arm.body) ? this.blockInsert(arm.body) : undefined
         ),
-        ...this.bindingOutputs(arm.pattern.bindings, `case${i}_`)
+        ...this.bindingOutputs(arm.pattern.bindings, `case${i}_`, rangeOf(arm))
       );
     }
 
@@ -1255,10 +1271,17 @@ class FnGraphBuilder extends GraphBuilderBase {
       pins.push(
         this.dataOut('element', name, isRange ? 'number' : elementType, {
           sourceText: name,
+          visibleIn: rangeOf(stmt.body),
         })
       );
     } else {
-      pins.push(...this.bindingOutputs(stmt.pattern.bindings, 'element'));
+      pins.push(
+        ...this.bindingOutputs(
+          stmt.pattern.bindings,
+          'element',
+          rangeOf(stmt.body)
+        )
+      );
     }
 
     pins.push(this.execOut('completed', 'Completed', insert, true));
@@ -1309,7 +1332,7 @@ class FnGraphBuilder extends GraphBuilderBase {
         this.execIn(),
         condition.pin,
         this.execOut('body', 'Loop Body', this.blockInsert(stmt.body)),
-        ...this.bindingOutputs(condition.bindings, 'bind'),
+        ...this.bindingOutputs(condition.bindings, 'bind', rangeOf(stmt.body)),
         this.execOut('completed', 'Completed', insert, true),
       ],
       path,
@@ -1353,11 +1376,10 @@ class FnGraphBuilder extends GraphBuilderBase {
   ): { title: string; signature?: Signature; chain?: string[] } {
     const chain = simpleChain(callee);
     const root = chain?.[0];
-    const rootWired =
-      root !== undefined &&
-      root !== 'self' &&
-      this.lookup(root)?.source !== undefined;
-    if (chain && (!rootWired || chain.length === 1)) {
+    // A variable as receiver (`cart.first()`) becomes the Target pin.
+    const rootIsVariable =
+      root !== undefined && root !== 'self' && this.lookup(root) !== undefined;
+    if (chain && (!rootIsVariable || chain.length === 1)) {
       const title = chain.join('.');
       const owner = root === 'self' || root === 'Self' ? this.owner : undefined;
       const member = chain.slice(1).join('.');
@@ -1893,6 +1915,13 @@ class FnGraphBuilder extends GraphBuilderBase {
   ): ValueSource {
     const bare = expr.name.split('::').at(-1) ?? expr.name;
     const range = rangeOf(expr);
+    if (bare === 'todo' && (expr.args?.length ?? 0) === 0) {
+      // The placeholder of an empty input (like `undefined` in TypeScript)
+      // is an inline value, not a call, and says nothing about the type.
+      const raw = this.src(range);
+      return this.literal('undefined', raw, raw, 'any');
+    }
+
     if (bare === 'vec' && expr.args) {
       return this.makeArray(
         expr.args,

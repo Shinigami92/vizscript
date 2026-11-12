@@ -1,4 +1,5 @@
 import type {
+  DataType,
   DeclarationSyntax,
   GraphDocument,
   GraphOp,
@@ -14,6 +15,7 @@ import {
   applyTextOp,
   checkName,
   classOf,
+  deleteSymbol,
   lineIndent,
   removeModifier,
   replaceKeyword,
@@ -290,6 +292,8 @@ export const RUST_TYPES: TypeSystemInfo = {
     },
   ],
   noParameterDefaults: true,
+  noFieldValues: true,
+  requiredType: 'i32',
   flow: ['forEach', 'forRange', 'while', 'switch', 'break', 'continue'],
   modifiers: {
     variable: { keywords: ['static', 'const'], flags: ['pub'] },
@@ -448,12 +452,15 @@ const DECLARATIONS: DeclarationSyntax = {
     return constant ? `const ${name}: i32 = 0;` : `static ${name}: i32 = 0;`;
   },
   extract: {
-    fn: (name, params, body, { method, isStatic, isAsync }) => {
+    fn: (name, params, body, { method, isStatic, isAsync, returns }) => {
       const list = [
         ...(method && !isStatic ? ['&self'] : []),
         ...params.map((p) => `${p.name}: ${p.type ?? '_'}`),
       ].join(', ');
-      return `${isAsync ? 'async ' : ''}fn ${name}(${list}) {\n${body}\n}`;
+      const result = returns
+        ? ` -> ${returns.type ?? rustTypeOf(returns.dataType)}`
+        : '';
+      return `${isAsync ? 'async ' : ''}fn ${name}(${list})${result} {\n${body}\n}`;
     },
     call: (callee, args, { isAsync, output }) => {
       const store = output
@@ -461,7 +468,8 @@ const DECLARATIONS: DeclarationSyntax = {
         : '';
       return `${store}${callee}(${args.join(', ')})${isAsync ? '.await' : ''};`;
     },
-    returnValue: (name) => `return ${name};`,
+    // The last expression of a block is its value.
+    returnValue: (name) => name,
     method: (name, className, isStatic) =>
       isStatic ? `${className}::${name}` : `self.${name}`,
   },
@@ -482,6 +490,11 @@ export const RUST_SYNTAX: StatementSyntax = {
   declare: (name, expr) => `let ${name} = ${expr};`,
   declarePrefix: (name) => `let ${name} = `,
   quote,
+  // `2` where `1.0` was: an integer literal does not fit a float.
+  number: (value, previous) =>
+    /^-?\d[\d_]*$/.test(value) && /^-?\d[\d_]*(?:\.\d|[eE])/.test(previous)
+      ? `${value}.0`
+      : value,
   // Statements only live in functions; the file holds items.
   appendToFile: false,
   statementEnd: ';',
@@ -532,7 +545,8 @@ export const RUST_SYNTAX: StatementSyntax = {
       }
 
       case 'return': {
-        return 'return;';
+        // `return;` does not compile in a function with a result.
+        return template.value ? 'return todo!();' : 'return;';
       }
 
       case 'value': {
@@ -546,6 +560,84 @@ export const RUST_SYNTAX: StatementSyntax = {
     }
   },
 };
+
+/**
+ * Rust type of a pin type, where it is clear: `Item[]` → `Vec<Item>`.
+ * Numbers have several types; unclear ones become `_`, which the compiler
+ * asks to replace.
+ */
+function rustTypeOf(dataType: DataType): string {
+  if (dataType.endsWith('[]')) {
+    const inner = rustTypeOf(dataType.slice(0, -2));
+    return inner === '_' ? '_' : `Vec<${inner}>`;
+  }
+
+  if (dataType === 'string') {
+    return 'String';
+  }
+
+  if (dataType === 'bool') {
+    return 'bool';
+  }
+
+  return /^[A-Z]\w*$/.test(dataType) ? dataType : '_';
+}
+
+/**
+ * A type cannot outlive its `impl` blocks: deleting a struct, enum or trait
+ * also deletes `impl Name`, `impl Trait for Name` and `impl Name for T`.
+ */
+function withImpls(
+  text: string,
+  doc: GraphDocument,
+  id: string,
+  result: Extract<OpResult, { ok: true }>
+): OpResult {
+  const symbol = doc.symbols?.find((s) => s.id === id);
+  if (
+    !symbol ||
+    symbol.scope !== '' ||
+    !['class', 'enum', 'type'].includes(symbol.kind)
+  ) {
+    return result;
+  }
+
+  const impls = parseRust(text).items.filter(
+    (item): item is ImplItem =>
+      item.type === 'Impl' &&
+      (item.target === symbol.name ||
+        item.trait?.split('::').at(-1) === symbol.name)
+  );
+  const edits = [...result.edits];
+  for (const impl of impls) {
+    const block: ScriptSymbol = {
+      id: 'impl:block',
+      kind: 'type',
+      name: 'impl',
+      scope: '',
+      range: { start: impl.start, end: impl.end },
+      nameRange: { start: impl.start, end: impl.start },
+      dataType: 'any',
+      modifiers: [],
+    };
+    const removed = deleteSymbol(
+      text,
+      { ...doc, symbols: [block] },
+      block.id,
+      RUST_SYNTAX.comment,
+      RUST_SYNTAX.emptyBody
+    );
+    if (removed.ok) {
+      edits.push(
+        ...removed.edits.filter((e) =>
+          edits.every((o) => e.end <= o.start || e.start >= o.end)
+        )
+      );
+    }
+  }
+
+  return { ok: true, edits };
+}
 
 /** The inherent impl (`impl Point { … }`, not a trait impl) of a type. */
 function inherentImpl(
@@ -717,5 +809,8 @@ export function applyRustOp(
     return addField(text, doc, op.scope, op.name);
   }
 
-  return applyTextOp(text, doc, op, RUST_SYNTAX);
+  const result = applyTextOp(text, doc, op, RUST_SYNTAX);
+  return op.type === 'deleteSymbol' && result.ok
+    ? withImpls(text, doc, op.symbol, result)
+    : result;
 }

@@ -1,4 +1,5 @@
 import type { SyntaxNode } from '@lezer/common';
+import { parser } from '@lezer/rust';
 import type {
   CallSite,
   OpResult,
@@ -45,6 +46,57 @@ function visit(
   for (let child = node.firstChild; child; child = child.nextSibling) {
     visit(child, fn);
   }
+}
+
+/** Source a visited node belongs to: the file or a macro's arguments. */
+interface Piece {
+  text: string;
+  /** Add to a node's offsets to get offsets in the file. */
+  shift: number;
+}
+
+const MACRO_PREFIX = 'fn f(){f(';
+
+/**
+ * Visits a tree and the arguments of its macros (`write!(f, "{}", x.a)`),
+ * which Lezer keeps as plain tokens: they are parsed as call arguments of
+ * a tiny file, and the visitor gets the piece to slice and shift with.
+ */
+function visitWithMacros(
+  root: SyntaxNode,
+  text: string,
+  fn: (node: SyntaxNode, piece: Piece) => boolean | void
+): void {
+  const walk = (node: SyntaxNode, piece: Piece): void => {
+    visit(node, (current) => {
+      const result = fn(current, piece);
+      if (result !== false && current.name === 'MacroInvocation') {
+        const tokens = children(current).find((k) => k.name.endsWith('Tokens'));
+        if (tokens && tokens.to - tokens.from > 2) {
+          const inner = piece.text.slice(tokens.from + 1, tokens.to - 1);
+          const sub = `${MACRO_PREFIX}${inner})}`;
+          let args: SyntaxNode | undefined;
+          visit(parser.parse(sub).topNode, (n) => {
+            if (!args && n.name === 'ArgList') {
+              args = n;
+            }
+
+            return !args;
+          });
+          if (args) {
+            walk(args, {
+              text: sub,
+              shift: piece.shift + tokens.from + 1 - MACRO_PREFIX.length,
+            });
+          }
+        }
+      }
+
+      return result;
+    });
+  };
+
+  walk(root, { text, shift: 0 });
 }
 
 /** Whether a function (its range) binds `name` itself (shadowing). */
@@ -221,31 +273,24 @@ export function renameRustSymbol(
     case 'constant':
     case 'variable': {
       if (symbol.kind === 'variable' && symbol.scope !== '') {
-        // A struct field.
-        visit(top, (node) => {
-          if (node.name === 'FieldIdentifier' && isName(node)) {
-            edits.push({ start: node.from, end: node.to, text: name });
+        // A struct field, also inside macro arguments.
+        visitWithMacros(top, text, (node, piece) => {
+          if (piece.text.slice(node.from, node.to) !== old) {
+            return true;
+          }
+
+          const start = node.from + piece.shift;
+          const end = node.to + piece.shift;
+          if (node.name === 'FieldIdentifier') {
+            edits.push({ start, end, text: name });
           } else if (
-            node.name === 'Identifier' &&
-            isName(node) &&
-            node.parent?.name === 'ShorthandFieldInitializer'
+            (node.name === 'Identifier' &&
+              node.parent?.name === 'ShorthandFieldInitializer') ||
+            (node.name === 'BoundIdentifier' &&
+              node.parent?.name === 'FieldPattern' &&
+              children(node.parent).length === 1)
           ) {
-            edits.push({
-              start: node.from,
-              end: node.to,
-              text: `${name}: ${old}`,
-            });
-          } else if (
-            node.name === 'BoundIdentifier' &&
-            isName(node) &&
-            node.parent?.name === 'FieldPattern' &&
-            children(node.parent).length === 1
-          ) {
-            edits.push({
-              start: node.from,
-              end: node.to,
-              text: `${name}: ${old}`,
-            });
+            edits.push({ start, end, text: `${name}: ${old}` });
           }
 
           return true;
@@ -287,33 +332,39 @@ export function renameRustSymbol(
 
     case 'method': {
       const owner = symbol.scope.split('.').at(-1) ?? symbol.scope;
-      visit(top, (node) => {
+      visitWithMacros(top, text, (node, piece) => {
+        if (piece.text.slice(node.from, node.to) !== old) {
+          return true;
+        }
+
+        const edit = {
+          start: node.from + piece.shift,
+          end: node.to + piece.shift,
+          text: name,
+        };
         if (
           node.name === 'BoundIdentifier' &&
-          isName(node) &&
           node.parent?.name === 'FunctionItem' &&
-          inside(node, symbol.range)
+          inside({ from: edit.start, to: edit.end }, symbol.range)
         ) {
-          edits.push({ start: node.from, end: node.to, text: name });
+          edits.push(edit);
         } else if (
           node.name === 'FieldIdentifier' &&
-          isName(node) &&
           node.parent?.name === 'FieldExpression' &&
           (node.parent.parent?.name === 'CallExpression' ||
             node.parent.parent?.name === 'GenericFunction')
         ) {
-          edits.push({ start: node.from, end: node.to, text: name });
+          edits.push(edit);
         } else if (
           node.name === 'Identifier' &&
-          isName(node) &&
           node.parent?.name === 'ScopedIdentifier'
         ) {
-          const head = text
+          const head = piece.text
             .slice(node.parent.from, node.from)
             .replace(/::$/, '');
           const last = head.split('::').at(-1) ?? '';
           if (last === owner || last === 'Self') {
-            edits.push({ start: node.from, end: node.to, text: name });
+            edits.push(edit);
           }
         }
 
@@ -325,15 +376,19 @@ export function renameRustSymbol(
     case 'class':
     case 'enum':
     case 'type': {
-      visit(top, (node) => {
+      visitWithMacros(top, text, (node, piece) => {
         if (
           (node.name === 'TypeIdentifier' ||
             node.name === 'ScopeIdentifier' ||
             (node.name === 'Identifier' &&
               node.parent?.name === 'ScopedIdentifier')) &&
-          isName(node)
+          piece.text.slice(node.from, node.to) === old
         ) {
-          edits.push({ start: node.from, end: node.to, text: name });
+          edits.push({
+            start: node.from + piece.shift,
+            end: node.to + piece.shift,
+            text: name,
+          });
         }
 
         return true;
@@ -404,12 +459,12 @@ export function rustCallSites(
   _symbols: ReadonlyArray<ScriptSymbol>,
   symbol: ScriptSymbol
 ): CallSite[] {
-  const { tree, text } = parseRustTree(source);
+  const { tree, text: masked } = parseRustTree(source);
   const sites: CallSite[] = [];
   const method = symbol.kind === 'method';
   const owner = symbol.scope.split('.').at(-1) ?? '';
   const hasSelf = method && takesSelf(source, symbol);
-  visit(tree.topNode, (node) => {
+  visitWithMacros(tree.topNode, masked, (node, { text, shift }) => {
     if (node.name !== 'CallExpression') {
       return true;
     }
@@ -466,10 +521,10 @@ export function rustCallSites(
 
     const ranges = argKids
       .filter((a) => a.name !== '(' && a.name !== ')' && a.name !== ',')
-      .map((a) => ({ start: a.from, end: a.to }));
+      .map((a) => ({ start: a.from + shift, end: a.to + shift }));
     sites.push({
-      open: open.to,
-      close: close.from,
+      open: open.to + shift,
+      close: close.from + shift,
       args: skipFirst ? ranges.slice(1) : ranges,
     });
     return true;

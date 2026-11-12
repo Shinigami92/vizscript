@@ -44,14 +44,14 @@ function Item::total
   #0 entry "total" (method of Item) [>then:▶ >self:Item]
   #1 getProperty ".price" [<target:object >value:any]
   #2 getProperty ".quantity" [<target:object >value:any]
-  #3 operator "*" [<a:any <b:any >value:any]
-  #4 operator "as f64" [<a:any >value:number]
+  #3 operator "as f64" [<a:any >value:number]
+  #4 operator "*" [<a:any <b:number >value:number]
   #5 return "Return" (value) [<exec:▶ <value:number]
   --> #0.self -> #1.target
   --> #0.self -> #2.target
-  --> #1.value -> #3.a
-  --> #2.value -> #3.b
-  --> #3.value -> #4.a
+  --> #2.value -> #3.a
+  --> #1.value -> #4.a
+  --> #3.value -> #4.b
   --> #4.value -> #5.value
   ==> #0.then -> #5.exec
 function total_price
@@ -150,11 +150,12 @@ function main
   #8 operator "&" [<a:Item[] >value:Item[]]
   #9 call "total_price" [<exec:▶ >then:▶ <arg0:Item[] <arg1:number=0.1 >return:number]
   #10 call "println!" [<exec:▶ >then:▶ <arg0:string="Total: {} EUR" <arg1:number]
-  #11 call "cart.last" [<exec:▶ >then:▶ >return:any]
-  #12 loop "While Let" (Some(item)) [<exec:▶ <condition:any >body:▶ >bind0:any >completed:▶]
-  #13 getProperty ".name" [<target:object >value:any]
-  #14 call "println!" [<exec:▶ >then:▶ <arg0:string="{}" <arg1:any]
-  #15 break "Break" [<exec:▶]
+  #11 getVar "cart" [>value:Item[]]
+  #12 call "last" [<exec:▶ >then:▶ <target:object >return:any]
+  #13 loop "While Let" (Some(item)) [<exec:▶ <condition:any >body:▶ >bind0:any >completed:▶]
+  #14 getProperty ".name" [<target:object >value:any]
+  #15 call "println!" [<exec:▶ >then:▶ <arg0:string="{}" <arg1:any]
+  #16 break "Break" [<exec:▶]
   ==> #0.then -> #1.exec
   ==> #1.then -> #2.exec
   --> #1.return -> #3.e0
@@ -169,13 +170,14 @@ function main
   ==> #6.then -> #9.exec
   --> #9.return -> #10.arg1
   ==> #9.then -> #10.exec
-  ==> #10.then -> #11.exec
-  --> #11.return -> #12.condition
-  ==> #11.then -> #12.exec
-  --> #12.bind0 -> #13.target
-  --> #13.value -> #14.arg1
-  ==> #12.body -> #14.exec
-  ==> #14.then -> #15.exec
+  --> #11.value -> #12.target
+  ==> #10.then -> #12.exec
+  --> #12.return -> #13.condition
+  ==> #12.then -> #13.exec
+  --> #13.bind0 -> #14.target
+  --> #14.value -> #15.arg1
+  ==> #13.body -> #15.exec
+  ==> #15.then -> #16.exec
 function position callback
   #0 entry "position callback" (closure) [>then:▶ >param0:any]
   #1 getProperty ".name" [<target:object >value:any]
