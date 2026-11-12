@@ -894,9 +894,14 @@ async function reparse(): Promise<void> {
   if (pendingPlacement) {
     const { world, known, matches, code, select } = pendingPlacement;
     pendingPlacement = null;
+    // Old nodes whose id changed with their text (an `if` around the new
+    // statement) are followed, not new.
+    const followed = new Set(
+      previous ? renamedNodes(previous, next, change).values() : []
+    );
     const fresh = next.functions
       .flatMap((f) => f.nodes)
-      .filter((n) => !known.has(n.id));
+      .filter((n) => !known.has(n.id) && !followed.has(n.id));
     // The node asked for (also a pure one, e.g. a lone Get), else the first
     // new statement, else the root of a new expression (output not wired).
     const used = new Set(
