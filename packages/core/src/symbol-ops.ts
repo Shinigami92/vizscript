@@ -407,6 +407,32 @@ function leadingComments(
   return start;
 }
 
+/**
+ * Removes one item of a comma-separated list (`b` of `import { a, b }`),
+ * with its comma; an item alone in braces takes the braces and the comma
+ * before them (`import a, { b }` becomes `import a`).
+ */
+function removeListItem(text: string, range: SourceRange): TextEdit {
+  let { start, end } = range;
+  const after = text.slice(end).match(/^\s*,[ \t]*/)?.[0];
+  const before = text.slice(0, start).match(/,\s*$/)?.[0];
+  if (after) {
+    end += after.length;
+  } else if (before) {
+    start -= before.length;
+  } else {
+    const open = text.slice(0, start).match(/[{(]\s*$/)?.[0];
+    const close = text.slice(end).match(/^\s*[})]/)?.[0];
+    if (open && close) {
+      start -= open.length;
+      end += close.length;
+      start -= text.slice(0, start).match(/,\s*$/)?.[0].length ?? 0;
+    }
+  }
+
+  return { start, end, text: '' };
+}
+
 export function deleteSymbol(
   text: string,
   doc: GraphDocument,
@@ -425,6 +451,10 @@ export function deleteSymbol(
         (s) => s !== symbol && s.declarationRange?.start === shared.start
       )
     : [];
+  if (together.length > 0 && symbol.kind === 'import') {
+    return succeeded([removeListItem(text, symbol.range)]);
+  }
+
   if (together.length > 0) {
     return failed(
       `${symbol.name} is declared together with ${together.map((s) => s.name).join(', ')}; change it in the code.`
@@ -503,6 +533,10 @@ export function renameSymbol(
 
   if (symbol.name === name) {
     return succeeded([]);
+  }
+
+  if (symbol.kind === 'import') {
+    return failed('Imports are renamed in the code for now.');
   }
 
   const error = checkName(doc, syntax, symbol.scope, name, symbol);

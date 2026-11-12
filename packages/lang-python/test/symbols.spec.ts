@@ -39,22 +39,23 @@ describe('pythonSymbols', () => {
     ].join('\n');
     expect(summarizeSymbols(parsePythonDocument(text, 'cart.py')))
       .toMatchInlineSnapshot(`
-      "constant MAX_ITEMS ~number = …
-      variable name: str = …
-      enum Color ~Color
-      constant Color::RED ~number = …
-      class Cart ~Cart → Cart
-      variable Cart::count: int = …
-      method Cart::__init__(owner: str) → Cart.__init__
-      variable Cart::owner = … [self.]
-      variable Cart::items: list[str] = … [self.]
-      method Cart::create(...args, ...kwargs): "Cart" [@staticmethod] → Cart.create
-      local Cart.create::total ~number = …
-      local Cart.create::item
-      local Cart.create::seen ~bool = …
-      local Cart.create::a
-      local Cart.create::b
-      function load(path, retries = …) [async] → load"
-    `);
+        "import Enum ← Enum of enum
+        constant MAX_ITEMS ~number = …
+        variable name: str = …
+        enum Color ~Color
+        constant Color::RED ~number = …
+        class Cart ~Cart → Cart
+        variable Cart::count: int = …
+        method Cart::__init__(owner: str) → Cart.__init__
+        variable Cart::owner = … [self.]
+        variable Cart::items: list[str] = … [self.]
+        method Cart::create(...args, ...kwargs): "Cart" [@staticmethod] → Cart.create
+        local Cart.create::total ~number = …
+        local Cart.create::item
+        local Cart.create::seen ~bool = …
+        local Cart.create::a
+        local Cart.create::b
+        function load(path, retries = …) [async] → load"
+      `);
   });
 });

@@ -1,7 +1,9 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`pythonSymbols > lists the declarations of the fixture 1`] = `
-"constant TAX ~number = …
+"import json ← * of json
+import dataclass ← dataclass of dataclasses
+constant TAX ~number = …
 class Item ~Item [@dataclass] → Item
 variable Item::name: str
 variable Item::price: float

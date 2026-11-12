@@ -386,7 +386,46 @@ class SymbolCollector {
     }
   }
 
+  /** `import a, { b as c, type D } from './x'`, `import * as ns from 'y'`. */
+  imports(stmt: t.ImportDeclaration): void {
+    for (const specifier of stmt.specifiers) {
+      let imported: string;
+      if (specifier.type === 'ImportDefaultSpecifier') {
+        imported = 'default';
+      } else if (specifier.type === 'ImportNamespaceSpecifier') {
+        imported = '*';
+      } else {
+        imported =
+          specifier.imported.type === 'Identifier'
+            ? specifier.imported.name
+            : specifier.imported.value;
+      }
+
+      const typeOnly =
+        stmt.importKind === 'type' ||
+        (specifier.type === 'ImportSpecifier' &&
+          specifier.importKind === 'type');
+      this.add({
+        kind: 'import',
+        name: specifier.local.name,
+        scope: '',
+        range: rangeOf(specifier),
+        declarationRange: rangeOf(stmt),
+        nameRange: nameRangeOf(specifier.local),
+        dataType: 'any',
+        modifiers: typeOnly ? ['type'] : [],
+        module: stmt.source.value,
+        imported,
+      });
+    }
+  }
+
   statement(stmt: t.Statement): void {
+    if (stmt.type === 'ImportDeclaration') {
+      this.imports(stmt);
+      return;
+    }
+
     let node: t.Node = stmt;
     let range = rangeOf(stmt);
     const modifiers: string[] = [];

@@ -1,7 +1,8 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`typeScriptSymbols > lists the declarations of the fixtures > control-flow.ts 1`] = `
-"function loadUsers(paths: string[], verbose = …) [export async] → loadUsers
+"import readFile ← readFile of node:fs/promises
+function loadUsers(paths: string[], verbose = …) [export async] → loadUsers
 local loadUsers::users ~array = … [const]
 local loadUsers::path [const]
 local loadUsers::raw = … [const]
@@ -13,7 +14,8 @@ variable i ~number = … [let]"
 `;
 
 exports[`typeScriptSymbols > lists the declarations of the fixtures > exports.ts 1`] = `
-"constant SEED = … [const]
+"import defineConfig ← defineConfig of vitest/config
+constant SEED = … [const]
 constant VERSION ~string = … [export const]
 function helper(value: number): number [export] → helper
 function twice(value: number): number [export const] → twice

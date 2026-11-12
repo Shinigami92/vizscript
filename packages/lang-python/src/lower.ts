@@ -38,6 +38,7 @@ import type {
   Stmt,
 } from './ast';
 import { parsePython } from './convert';
+import { pythonImports } from './imports';
 import { pythonSymbols } from './symbols';
 
 export const LANGUAGE_ID = 'python';
@@ -1846,7 +1847,7 @@ export function parsePythonDocument(
       range: { start: d.start, end: d.end },
       severity: 'error',
     })),
-    symbols: pythonSymbols(body, text),
+    symbols: [...pythonImports(text), ...pythonSymbols(body, text)],
   };
   attachComments(doc, text, comments);
   linkSymbolGraphs(doc);

@@ -65,7 +65,9 @@ export function summarizeSymbols(doc: GraphDocument): string {
         s.modifiers.length > 0 ? ` [${s.modifiers.join(' ')}]` : '';
       const graph = s.fnId ? ` → ${graphs.get(s.fnId) ?? '?'}` : '';
       const scope = s.scope ? `${s.scope}::` : '';
-      return `${s.kind} ${scope}${s.name}${params}${type}${inferred}${value}${modifiers}${graph}`;
+      const from =
+        s.module === undefined ? '' : ` ← ${s.imported ?? '*'} of ${s.module}`;
+      return `${s.kind} ${scope}${s.name}${params}${type}${inferred}${value}${modifiers}${graph}${from}`;
     })
     .join('\n');
 }

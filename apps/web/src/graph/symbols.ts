@@ -17,6 +17,7 @@ export const SYMBOL_ICONS: Record<SymbolKind, string> = {
   type: 'i-mdi-shape-outline text-purple-400',
   enum: 'i-mdi-format-list-numbered text-purple-400',
   signal: 'i-mdi-broadcast text-red-400',
+  import: 'i-mdi-import text-zinc-400',
 };
 
 export const SYMBOL_LABELS: Record<SymbolKind, string> = {
@@ -29,6 +30,7 @@ export const SYMBOL_LABELS: Record<SymbolKind, string> = {
   type: 'Type',
   enum: 'Enum',
   signal: 'Signal',
+  import: 'Import',
 };
 
 /**
@@ -41,6 +43,10 @@ export function symbolType(symbol: ScriptSymbol): {
 } {
   if (symbol.params) {
     return { text: symbol.returns?.text ?? '', inferred: false };
+  }
+
+  if (symbol.kind === 'import') {
+    return { text: '', inferred: false };
   }
 
   if (symbol.type) {
@@ -76,8 +82,12 @@ export function symbolNodes(
   }
 
   const name = escape(symbol.name);
-  // `name`, `self.name`, `this.name`, `obj.name(…)`
-  const uses = new RegExp(String.raw`(?:^|[.\s])${name}$`);
+  // `name`, `self.name`, `this.name`, `obj.name(…)`; imports: `name`,
+  // `name.member` (namespaces, modules, preloaded scripts).
+  const uses =
+    symbol.kind === 'import'
+      ? new RegExp(String.raw`^${name}(?:$|\.)`)
+      : new RegExp(String.raw`(?:^|[.\s])${name}$`);
   const sets = new RegExp(String.raw`^Set (?:\w+\.)?${name}$`);
   const graphs =
     symbol.kind === 'local'
@@ -100,12 +110,17 @@ export function symbolNodes(
 
     for (const node of fn.nodes) {
       const matches =
-        symbol.kind === 'function' || symbol.kind === 'method'
-          ? node.kind === 'call' && uses.test(node.title)
-          : (node.kind === 'getVar' || node.kind === 'getProperty') &&
-              uses.test(node.title)
-            ? true
-            : node.kind === 'setVar' && sets.test(node.title);
+        symbol.kind === 'import'
+          ? (node.kind === 'call' ||
+              node.kind === 'getVar' ||
+              node.kind === 'getProperty') &&
+            uses.test(node.title)
+          : symbol.kind === 'function' || symbol.kind === 'method'
+            ? node.kind === 'call' && uses.test(node.title)
+            : (node.kind === 'getVar' || node.kind === 'getProperty') &&
+                uses.test(node.title)
+              ? true
+              : node.kind === 'setVar' && sets.test(node.title);
       if (matches) {
         ids.push(node.id);
       }
@@ -126,6 +141,7 @@ export const DRAGGABLE_KINDS: ReadonlySet<SymbolKind> = new Set([
   'constant',
   'local',
   'signal',
+  'import',
 ]);
 
 /**

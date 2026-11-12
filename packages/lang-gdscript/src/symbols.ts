@@ -82,6 +82,8 @@ function inferType(expr: Expr | undefined): DataType {
   }
 }
 
+const LOADERS = new Set(['preload', 'load']);
+
 class SymbolCollector {
   readonly symbols: ScriptSymbol[] = [];
 
@@ -131,6 +133,33 @@ class SymbolCollector {
   }
 
   private variable(decl: VarDecl, scope: string, local: boolean): void {
+    // `const Bullet = preload("res://bullet.gd")` imports a script.
+    const loader = decl.value?.type === 'Call' ? decl.value : undefined;
+    const path = loader?.args[0];
+    if (
+      !local &&
+      scope === '' &&
+      decl.kind === 'const' &&
+      loader?.callee.type === 'Identifier' &&
+      LOADERS.has(loader.callee.name) &&
+      path?.type === 'Literal' &&
+      path.kind === 'string'
+    ) {
+      this.add({
+        kind: 'import',
+        name: decl.name,
+        scope,
+        range: spanRange(decl),
+        nameRange: spanRange(decl.nameSpan),
+        dataType: 'any',
+        defaultRange: spanRange(loader),
+        modifiers: [loader.callee.name],
+        module: path.value,
+        imported: '*',
+      });
+      return;
+    }
+
     const type = this.typeRef(decl.typeRef);
     this.add({
       kind: local ? 'local' : decl.kind === 'const' ? 'constant' : 'variable',

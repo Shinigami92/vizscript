@@ -3,7 +3,7 @@ import type { DataType, GraphDocument, SourceRange } from './ir';
 /**
  * What a script declares, like the sections of UE's "My Blueprint" panel.
  * `variable` and `constant` live in the module or a class, `local` in a
- * function.
+ * function. `import` is a name bound by an import (or a GDScript preload).
  */
 export type SymbolKind =
   | 'function'
@@ -14,7 +14,8 @@ export type SymbolKind =
   | 'local'
   | 'type'
   | 'enum'
-  | 'signal';
+  | 'signal'
+  | 'import';
 
 /** A type annotation as written in the code. */
 export interface TypeRef {
@@ -75,6 +76,13 @@ export interface ScriptSymbol {
   graphStart?: number;
   /** The function graph of a function, method or class. */
   fnId?: string;
+  /** Module of an import, as written (`./util`, `os.path`, `res://x.gd`). */
+  module?: string;
+  /**
+   * What an import takes from its module: the exported name, `default`, or
+   * `*` for the whole module (`import * as ns`, `import os`, a preload).
+   */
+  imported?: string;
 }
 
 /** Qualified name of a symbol, e.g. `Item.total`. */
