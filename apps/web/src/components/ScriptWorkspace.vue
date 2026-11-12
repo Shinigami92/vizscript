@@ -926,13 +926,17 @@ async function reparse(): Promise<void> {
   // Keep the selection on nodes whose own text changed (e.g. an edited value).
   if (previous && selection.value.length > 0) {
     const renamed = renamedNodes(previous, next);
-    const kept = selection.value
+    const before = selection.value;
+    const kept = before
       .map((id) => renamed.get(id) ?? id)
       .filter((id) => findNode(next, id) !== undefined);
     await nextTick();
-    canvas.value?.setSelection(kept);
-    if (kept.join() !== selection.value.join()) {
-      onSelectionChange(kept);
+    // Unless something else was selected meanwhile (a new symbol of My Script).
+    if (selection.value === before) {
+      canvas.value?.setSelection(kept);
+      if (kept.join() !== selection.value.join()) {
+        onSelectionChange(kept);
+      }
     }
   }
 
@@ -1395,6 +1399,14 @@ const symbolUses = computed(() =>
   selectedSymbol.value ? symbolNodes(doc.value, selectedSymbol.value) : []
 );
 watch(symbolUses, (ids) => canvas.value?.setHighlight(ids));
+/** Uses without the function's own entry node (highlighted, not counted). */
+const symbolUseCount = computed(
+  () =>
+    symbolUses.value.filter(
+      (id) =>
+        (doc.value ? findNode(doc.value, id)?.kind : undefined) !== 'entry'
+    ).length
+);
 
 /** Function whose local variables "My Script" lists. */
 const currentFunction = computed<string | null>(() => {
@@ -2068,7 +2080,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :closable="isMobile"
         :symbol="selection.length === 0 ? selectedSymbol : null"
         :node-symbol="nodeSymbol"
-        :symbol-uses="symbolUses.length"
+        :symbol-uses="symbolUseCount"
         :import-path="selectedImportPath"
         :box-color-of="boxColorOf"
         :base-doc="baseDoc"

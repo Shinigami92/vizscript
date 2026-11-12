@@ -32,6 +32,7 @@ import type {
 } from '@vizscript/core';
 import {
   ARG_PIN,
+  endOfFunction,
   getMeta,
   isTypeCompatible,
   qualifiedName,
@@ -58,12 +59,7 @@ import { worstSeverity } from '../graph/problems';
 import type { ExternalName } from '../graph/project-index';
 import { signature } from '../graph/project-index';
 import { isMac, shortcut } from '../graph/source';
-import {
-  endOfFunction,
-  SYMBOL_DRAG_MIME,
-  symbolNodes,
-  topLevelGraph,
-} from '../graph/symbols';
+import { SYMBOL_DRAG_MIME, symbolNodes, topLevelGraph } from '../graph/symbols';
 import type { ActionEntry } from './ActionMenu.vue';
 import ActionMenu from './ActionMenu.vue';
 import type { MenuEntry } from './ContextMenu.vue';
@@ -869,7 +865,12 @@ const callables = computed(() => {
     names.add(name);
   }
 
-  return [...names].toSorted((a, b) => a.localeCompare(b));
+  // The file's own names first, then built-ins (`console.log`, `print`).
+  const own = [...names].toSorted((a, b) => a.localeCompare(b));
+  return [
+    ...own,
+    ...(props.types?.globals ?? []).filter((name) => !names.has(name)),
+  ];
 });
 
 /** Names of other files and libraries not offered as callables already. */
@@ -1403,30 +1404,45 @@ function actionEntries(state: MenuState): ActionEntry[] {
 function suggestActions(state: MenuState, query: string): ActionEntry[] {
   const found = state.from ? pinOf(state.from) : undefined;
   const source = state.from;
-  const callable = IDENTIFIER_PATH.test(query);
+  const reserved = new Set(props.types?.keywords ?? []).has(
+    query.split('.')[0] ?? query
+  );
+  // Names the menu offers already ("greeter()") need no typed twin.
+  const known =
+    callables.value.includes(query) ||
+    externalNames.value.some((e) => e.callee === query);
+  const callable = IDENTIFIER_PATH.test(query) && !reserved && !known;
+  const declarable = /^[A-Za-z_$][\w$]*$/.test(query) && !reserved;
   if (!props.editable) {
     return [];
   }
 
   if (!found || !source || found.pin.kind === 'exec') {
-    if (!callable) {
-      return [];
-    }
-
     return [
-      {
-        label: `Call ${query}()`,
-        category: 'Typed',
-        icon: ICON_CALL,
-        action: () => addNode({ type: 'call', callee: query }, state),
-      },
-      {
-        label: `Declare variable ${query}`,
-        category: 'Typed',
-        icon: 'i-mdi-variable text-sky-400',
-        action: () =>
-          addNode({ type: 'setVar', name: query, declaration: 'const' }, state),
-      },
+      ...(callable
+        ? [
+            {
+              label: `Call ${query}()`,
+              category: 'Typed',
+              icon: ICON_CALL,
+              action: () => addNode({ type: 'call', callee: query }, state),
+            },
+          ]
+        : []),
+      ...(declarable
+        ? [
+            {
+              label: `Declare variable ${query}`,
+              category: 'Typed',
+              icon: 'i-mdi-variable text-sky-400',
+              action: () =>
+                addNode(
+                  { type: 'setVar', name: query, declaration: 'const' },
+                  state
+                ),
+            },
+          ]
+        : []),
     ];
   }
 
@@ -1449,14 +1465,25 @@ function suggestActions(state: MenuState, query: string): ActionEntry[] {
       : [];
   }
 
+  // A value written by hand: not an operator alone ("+"), not a variable
+  // the menu lists anyway.
+  const listed = scopeVariables(
+    index.value.nodes.get(found.node.id)?.fn.id
+  ).some((v) => v.expression === query);
   return [
-    {
-      label: `Use ${query}`,
-      category: 'Typed',
-      icon: 'i-mdi-form-textbox',
-      action: () =>
-        emitOp({ type: 'setInput', pin: source, expression: query }),
-    },
+    ...(/[\w$'"`]/.test(query) &&
+    !listed &&
+    (!reserved || VALUE_WORDS.has(query))
+      ? [
+          {
+            label: `Use ${query}`,
+            category: 'Typed',
+            icon: 'i-mdi-form-textbox',
+            action: () =>
+              emitOp({ type: 'setInput', pin: source, expression: query }),
+          },
+        ]
+      : []),
     ...(callable
       ? [
           {
@@ -1474,6 +1501,19 @@ function suggestActions(state: MenuState, query: string): ActionEntry[] {
       : []),
   ];
 }
+
+/** Reserved words that are values (`Use true`), unlike `return`. */
+const VALUE_WORDS: ReadonlySet<string> = new Set([
+  'true',
+  'false',
+  'null',
+  'undefined',
+  'this',
+  'True',
+  'False',
+  'None',
+  'self',
+]);
 
 /** Title of the action menu, like "Actions taking a string". */
 function actionTitle(state: MenuState): string {
@@ -1929,6 +1969,61 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
               },
             ]
           : []),
+        // The node's own actions first, then the generic editing ones.
+        ...(props.editable && ids.length === 1 && first?.node.kind === 'call'
+          ? [
+              {
+                // UE's "Add pin": one more argument to wire or fill in.
+                label: 'Add argument pin',
+                icon: 'i-mdi-plus-circle-outline',
+                action: () =>
+                  emitOp({ type: 'addArgument', node: target.nodeId }),
+              },
+            ]
+          : []),
+        ...(reference
+          ? [
+              {
+                // UE's "Find References".
+                label: `Find references of ${reference}`,
+                icon: 'i-mdi-magnify-scan',
+                action: () => findReferences(target.nodeId),
+              },
+            ]
+          : []),
+        ...(reference && props.editable
+          ? [
+              {
+                // UE's "Replace References" / "Replace with".
+                label:
+                  first?.node.kind === 'call'
+                    ? 'Replace function…'
+                    : 'Replace variable…',
+                icon: 'i-mdi-swap-horizontal',
+                action: () => {
+                  replacing.value = target.nodeId;
+                },
+              },
+            ]
+          : []),
+        ...(props.editable && ids.length === 1
+          ? [
+              {
+                // UE's "Break Node Link(s)".
+                label: 'Break node links',
+                icon: 'i-mdi-link-variant-off',
+                disabled: !first?.fn.edges.some(
+                  (e) =>
+                    e.kind === 'data' &&
+                    (e.from.node === target.nodeId ||
+                      e.to.node === target.nodeId)
+                ),
+                action: () =>
+                  emitOp({ type: 'disconnectNode', node: target.nodeId }),
+              },
+            ]
+          : []),
+        { type: 'separator' },
         ...(props.editable
           ? [
               {
@@ -1967,32 +2062,6 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
                 shortcut: shortcut('D'),
                 action: () => duplicateSelection(),
               },
-              { type: 'separator' as const },
-            ]
-          : []),
-        ...(reference
-          ? [
-              {
-                // UE's "Find References".
-                label: `Find references of ${reference}`,
-                icon: 'i-mdi-magnify-scan',
-                action: () => findReferences(target.nodeId),
-              },
-            ]
-          : []),
-        ...(reference && props.editable
-          ? [
-              {
-                // UE's "Replace References" / "Replace with".
-                label:
-                  first?.node.kind === 'call'
-                    ? 'Replace function…'
-                    : 'Replace variable…',
-                icon: 'i-mdi-swap-horizontal',
-                action: () => {
-                  replacing.value = target.nodeId;
-                },
-              },
             ]
           : []),
         ...(props.editable
@@ -2002,34 +2071,6 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
                 label: 'Collapse to function…',
                 icon: 'i-mdi-function-variant',
                 action: () => collapseToFunction(ids),
-              },
-            ]
-          : []),
-        ...(props.editable && ids.length === 1 && first?.node.kind === 'call'
-          ? [
-              {
-                // UE's "Add pin": one more argument to wire or fill in.
-                label: 'Add argument pin',
-                icon: 'i-mdi-plus-circle-outline',
-                action: () =>
-                  emitOp({ type: 'addArgument', node: target.nodeId }),
-              },
-            ]
-          : []),
-        ...(props.editable && ids.length === 1
-          ? [
-              {
-                // UE's "Break Node Link(s)".
-                label: 'Break node links',
-                icon: 'i-mdi-link-variant-off',
-                disabled: !first?.fn.edges.some(
-                  (e) =>
-                    e.kind === 'data' &&
-                    (e.from.node === target.nodeId ||
-                      e.to.node === target.nodeId)
-                ),
-                action: () =>
-                  emitOp({ type: 'disconnectNode', node: target.nodeId }),
               },
             ]
           : []),

@@ -7,7 +7,7 @@ import type {
   ValueKind,
 } from '@vizscript/core';
 import { fieldValue, pinColor } from '@vizscript/core';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
 import { lineColumn, snippet } from '../graph/source';
 import { SYMBOL_ICONS, symbolLabel, symbolType } from '../graph/symbols';
@@ -67,9 +67,8 @@ const location = computed(() =>
 const source = computed(() =>
   snippet(
     props.text,
-    props.symbol.kind === 'import'
-      ? (props.symbol.declarationRange ?? props.symbol.range)
-      : props.symbol.range,
+    // The whole declaration (`let user;`), not only the declared name.
+    props.symbol.declarationRange ?? props.symbol.range,
     16
   )
 );
@@ -282,8 +281,29 @@ function addParameter(): void {
     name = `${base}${i}`;
   }
 
+  pendingParameter.value = name;
   emit('op', { type: 'addParameter', symbol: props.symbol.id, name });
 }
+
+/** A new input starts with its name selected, like a new function. */
+const pendingParameter = ref<string | null>(null);
+watch(
+  () => props.symbol.params?.map((p) => p.name).join(','),
+  async () => {
+    const name = pendingParameter.value;
+    if (!name || !props.symbol.params?.some((p) => p.name === name)) {
+      return;
+    }
+
+    pendingParameter.value = null;
+    await nextTick();
+    const input = document.querySelector<HTMLInputElement>(
+      `[data-ui="parameter-name"][data-name="${CSS.escape(name)}"]`
+    );
+    input?.focus();
+    input?.select();
+  }
+);
 
 function removeParameter(index: number): void {
   emit('op', { type: 'removeParameter', symbol: props.symbol.id, index });
@@ -1104,6 +1124,8 @@ function setModifier(modifier: string, enabled: boolean): void {
             <input
               class="input min-w-0 flex-1 py-0.5 font-mono text-xs"
               :value="param.name"
+              data-ui="parameter-name"
+              :data-name="param.name"
               :aria-label="`Name of input ${index + 1}`"
               spellcheck="false"
               @keydown.enter.prevent="

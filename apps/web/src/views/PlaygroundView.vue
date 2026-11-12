@@ -53,6 +53,13 @@ async function reset(): Promise<void> {
   texts.value = next;
   try {
     localStorage.removeItem(`vizscript:layout:playground:${sampleName.value}`);
+    // Cameras of earlier resets (the version counter restarts on reload).
+    const cameras = `vizscript:camera:playground:${sampleName.value}:`;
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith(cameras)) {
+        localStorage.removeItem(key);
+      }
+    }
   } catch {
     // ignore
   }
