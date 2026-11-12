@@ -4,17 +4,17 @@ import type {
   ScriptSymbol,
   SourceRange,
   TypeSystemInfo,
-  ValueKind,
 } from '@vizscript/core';
-import { fieldValue, pinColor } from '@vizscript/core';
-import { computed, nextTick, ref, watch } from 'vue';
+import { pinColor } from '@vizscript/core';
+import { computed, ref, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
-import { usesSnakeCase } from '../graph/languages';
 import { lineColumn, snippet } from '../graph/source';
 import { SYMBOL_ICONS, symbolLabel, symbolType } from '../graph/symbols';
 import DetailsSection from './DetailsSection.vue';
+import SymbolExportHint from './symbol-details/SymbolExportHint.vue';
+import SymbolSignature from './symbol-details/SymbolSignature.vue';
+import SymbolValueField from './symbol-details/SymbolValueField.vue';
 import TypePicker from './TypePicker.vue';
-import ValueFields from './ValueFields.vue';
 
 /** Details of a symbol selected in "My Script" (UE: the Details panel). */
 const props = defineProps<{
@@ -142,138 +142,8 @@ const typeRequired = computed(
     (props.symbol.kind === 'variable' || props.symbol.kind === 'constant')
 );
 
-function code(range: SourceRange | undefined): string {
-  return range ? props.text.slice(range.start, range.end) : '';
-}
-
 function color(dataType: string): string {
   return pinColor(dataType, scheme.value);
-}
-
-// ------------------------------------------------------------ value editor
-
-const valueCode = computed(() => code(props.symbol.defaultRange).trim());
-
-/** The text of a simple string literal (`"a"`, `'b'`), else `undefined`. */
-function stringValue(literal: string): string | undefined {
-  const match = literal.match(/^([&^]?)(["'])((?:\\.|(?!\2).)*)\2$/s);
-  if (!match) {
-    return undefined;
-  }
-
-  return (match[3] ?? '').replaceAll(/\\(.)/g, (_, char: string) =>
-    char === 'n' ? '\n' : char === 't' ? '\t' : char
-  );
-}
-
-const BOOLEANS = new Set(['true', 'false', 'True', 'False']);
-
-/** How the value is edited: like UE, the widget follows the type. */
-const valueKind = computed<ValueKind>(() => {
-  const dataType = String(props.symbol.dataType);
-  const current = valueCode.value;
-  if (dataType === 'bool' && (current === '' || BOOLEANS.has(current))) {
-    return 'bool';
-  }
-
-  if (
-    dataType === 'number' &&
-    (current === '' || /^[-+]?[\d_.]+(?:e[-+]?\d+)?$/i.test(current))
-  ) {
-    return 'number';
-  }
-
-  if (
-    dataType === 'string' &&
-    (current === '' || stringValue(current) !== undefined)
-  ) {
-    return 'string';
-  }
-
-  return 'expression';
-});
-
-/** `undefined`, `null`, `None`: shown as an empty field, typing replaces it. */
-const PLACEHOLDER_VALUES: ReadonlySet<string> = new Set([
-  'undefined',
-  'null',
-  'None',
-]);
-const placeholderValue = computed(() =>
-  PLACEHOLDER_VALUES.has(valueCode.value.trim()) ? valueCode.value.trim() : ''
-);
-
-const draft = ref('');
-watch(
-  [valueCode, valueKind],
-  () => {
-    draft.value = placeholderValue.value
-      ? ''
-      : valueKind.value === 'string'
-        ? (stringValue(valueCode.value) ?? '')
-        : valueCode.value;
-  },
-  { immediate: true }
-);
-
-function commitValue(): void {
-  const current = placeholderValue.value
-    ? ''
-    : valueKind.value === 'string'
-      ? stringValue(valueCode.value)
-      : valueCode.value;
-  // `v-model` on a number field gives a number.
-  const next = String(draft.value);
-  if (next === current) {
-    return;
-  }
-
-  emit('op', {
-    type: 'setSymbolValue',
-    symbol: props.symbol.id,
-    value: next === '' && valueKind.value !== 'string' ? null : next,
-    kind: valueKind.value,
-  });
-}
-
-/** Vector, color and enum values get fields (`ValueFields`). */
-const fields = computed(() =>
-  isVariable.value
-    ? fieldValue(
-        valueCode.value,
-        props.symbol.type?.text ?? String(props.symbol.dataType),
-        props.types,
-        props.symbols ?? [],
-        props.text
-      )
-    : undefined
-);
-
-function setExpression(written: string): void {
-  emit('op', {
-    type: 'setSymbolValue',
-    symbol: props.symbol.id,
-    value: written,
-    kind: 'expression',
-  });
-}
-
-function setBoolean(event: Event): void {
-  emit('op', {
-    type: 'setSymbolValue',
-    symbol: props.symbol.id,
-    value: String((event.target as HTMLInputElement).checked),
-    kind: 'bool',
-  });
-}
-
-function clearValue(): void {
-  emit('op', {
-    type: 'setSymbolValue',
-    symbol: props.symbol.id,
-    value: null,
-    kind: 'expression',
-  });
 }
 
 function setType(typeText: string | null, defaultValue?: string): void {
@@ -283,97 +153,6 @@ function setType(typeText: string | null, defaultValue?: string): void {
     typeText,
     ...(defaultValue === undefined ? {} : { defaultValue }),
   });
-}
-
-// --------------------------------------------------------------- signature
-
-/** The type system (empty while it loads). */
-const typeInfo = computed<TypeSystemInfo>(
-  () => props.types ?? { primitives: [], modifiers: {} }
-);
-
-/** Inputs and output are editable for functions and methods. */
-const editingSignature = computed(
-  () =>
-    props.editable &&
-    props.types !== null &&
-    (props.symbol.kind === 'function' || props.symbol.kind === 'method')
-);
-
-function addParameter(): void {
-  const taken = new Set((props.symbol.params ?? []).map((p) => p.name));
-  const base = usesSnakeCase(props.language) ? 'new_param' : 'newParam';
-  let name = base;
-  for (let i = 2; taken.has(name); i++) {
-    name = `${base}${i}`;
-  }
-
-  pendingParameter.value = name;
-  emit('op', { type: 'addParameter', symbol: props.symbol.id, name });
-}
-
-/** A new input starts with its name selected, like a new function. */
-const pendingParameter = ref<string | null>(null);
-watch(
-  () => props.symbol.params?.map((p) => p.name).join(','),
-  async () => {
-    const name = pendingParameter.value;
-    if (!name || !props.symbol.params?.some((p) => p.name === name)) {
-      return;
-    }
-
-    pendingParameter.value = null;
-    await nextTick();
-    const input = document.querySelector<HTMLInputElement>(
-      `[data-ui="parameter-name"][data-name="${CSS.escape(name)}"]`
-    );
-    input?.focus();
-    input?.select();
-  }
-);
-
-function removeParameter(index: number): void {
-  emit('op', { type: 'removeParameter', symbol: props.symbol.id, index });
-}
-
-function moveParameter(from: number, to: number): void {
-  emit('op', { type: 'moveParameter', symbol: props.symbol.id, from, to });
-}
-
-function renameParameter(index: number, event: Event): void {
-  const name = (event.target as HTMLInputElement).value.trim();
-  if (name && name !== props.symbol.params?.[index]?.name) {
-    emit('op', {
-      type: 'renameParameter',
-      symbol: props.symbol.id,
-      index,
-      name,
-    });
-  }
-}
-
-function setParameterType(index: number, typeText: string | null): void {
-  emit('op', {
-    type: 'setParameterType',
-    symbol: props.symbol.id,
-    index,
-    typeText,
-  });
-}
-
-function setParameterValue(index: number, event: Event): void {
-  const value = (event.target as HTMLInputElement).value.trim();
-  emit('op', {
-    type: 'setParameterValue',
-    symbol: props.symbol.id,
-    index,
-    value: value === '' ? null : value,
-    kind: 'expression',
-  });
-}
-
-function setReturnType(typeText: string | null): void {
-  emit('op', { type: 'setReturnType', symbol: props.symbol.id, typeText });
 }
 
 // --------------------------------------------------------------- modifiers
@@ -431,138 +210,15 @@ const otherModifiers = computed(() => {
   return props.symbol.modifiers.filter((m) => !known.has(m));
 });
 
-// ----------------------------------------------------------- export hints
-
-/** Exported variables of the script can get an editor hint (GDScript). */
-const exportHints = computed(() =>
-  props.symbol.kind === 'variable' && props.symbol.scope === ''
-    ? (props.types?.exportHints ?? [])
-    : []
-);
-
-/** The export annotation written (`@export_range(0, 10)`), if any. */
-const currentExport = computed(() => {
-  // The declaration's line, and the line above when it holds only an
-  // annotation (`@export_range(0, 10)` on its own line).
-  const own = props.text.lastIndexOf('\n', props.symbol.range.start - 1) + 1;
-  const above = own > 0 ? props.text.lastIndexOf('\n', own - 2) + 1 : own;
-  const start = /^\s*@\w+(?:\([^)]*\))?\s*$/.test(props.text.slice(above, own))
-    ? above
-    : own;
-  const head = props.text.slice(start, props.symbol.nameRange.start);
-  const match = head.match(
-    /(@export(?!_group|_subgroup|_category)\w*)(?:\(([^)]*)\))?/
-  );
-  return match ? { name: match[1] ?? '', args: match[2] ?? '' } : undefined;
-});
-
-function setExportHint(name: string): void {
-  const current = currentExport.value;
-  if (!name) {
-    if (current) {
-      setModifier(current.name, false);
-    }
-
-    return;
-  }
-
-  const hint = exportHints.value.find((h) => h.name === name);
-  setModifier(hint?.args ? `${name}(${hint.args})` : name, true);
-}
-
-// `@export_range(min, max, step, "or_greater", "suffix:m")` as fields.
-const RANGE_FIELDS = ['min', 'max', 'step'];
-const RANGE_FLAGS = ['or_greater', 'or_less'];
-
-/** Top-level arguments (commas inside strings stay). */
-function splitArgs(args: string): string[] {
-  return (args.match(/"(?:\\.|[^"\\])*"|[^,]+/g) ?? [])
-    .map((a) => a.trim())
-    .filter(Boolean);
-}
-
-const range = computed(() => {
-  const current = currentExport.value;
-  if (current?.name !== '@export_range') {
-    return undefined;
-  }
-
-  const args = splitArgs(current.args);
-  const numbers = args.filter((a) => !a.startsWith('"'));
-  const hints = args
-    .filter((a) => a.startsWith('"'))
-    .map((a) => a.slice(1, -1));
-  return {
-    numbers,
-    flags: hints.filter((h) => RANGE_FLAGS.includes(h)),
-    /** Other hints (`suffix:m`, `exp`) are kept as they are. */
-    other: hints.filter((h) => !RANGE_FLAGS.includes(h)),
-  };
-});
-
-function writeRange(
-  numbers: ReadonlyArray<string>,
-  hints: ReadonlyArray<string>
-): void {
-  const filled = numbers.map((n) => n.trim()).filter(Boolean);
-  setExportArgs([...filled, ...hints.map((h) => `"${h}"`)].join(', '));
-}
-
-function setRangeNumber(index: number, value: string): void {
-  const current = range.value;
-  if (!current) {
-    return;
-  }
-
-  const numbers = [...current.numbers];
-  numbers[index] = value;
-  writeRange(numbers, [...current.flags, ...current.other]);
-}
-
-function setRangeFlag(flag: string, enabled: boolean): void {
-  const current = range.value;
-  if (!current) {
-    return;
-  }
-
-  // Godot's order: or_greater, or_less, then the other hints.
-  const flags = RANGE_FLAGS.filter((f) =>
-    f === flag ? enabled : current.flags.includes(f)
-  );
-  writeRange(current.numbers, [...flags, ...current.other]);
-}
-
-function setExportArgs(args: string): void {
-  const current = currentExport.value;
-  if (current && args.trim() !== current.args) {
-    setModifier(`${current.name}(${args.trim()})`, true);
-  }
-}
-
 // ------------------------------------------------------------------ reset
 
-/** Like UE's ↶: value and type differ from the saved version. */
-const valueChanged = computed(
-  () =>
-    props.base !== undefined &&
-    isVariable.value &&
-    props.base.value !== (valueCode.value || null)
-);
+/** Like UE's ↶: the type differs from the saved version. */
 const typeChanged = computed(
   () =>
     props.base !== undefined &&
     isVariable.value &&
     props.base.type !== (props.symbol.type?.text ?? null)
 );
-
-function resetValue(): void {
-  emit('op', {
-    type: 'setSymbolValue',
-    symbol: props.symbol.id,
-    value: props.base?.value ?? null,
-    kind: 'expression',
-  });
-}
 
 function resetType(): void {
   emit('op', {
@@ -787,76 +443,16 @@ function setModifier(modifier: string, enabled: boolean): void {
             </button>
           </dd>
         </template>
-        <template v-if="isVariable && !isValuelessField">
-          <dt class="pt-1 text-zinc-500">
-            {{ symbol.kind === 'local' ? 'Value' : 'Default value' }}
-          </dt>
-          <dd class="flex min-w-0 items-center gap-1">
-            <template v-if="!editable">
-              <span class="truncate px-1.5 font-mono text-zinc-200">{{
-                valueCode || '—'
-              }}</span>
-            </template>
-            <label
-              v-else-if="valueKind === 'bool'"
-              class="flex cursor-pointer items-center gap-1.5 px-1.5 py-0.5"
-            >
-              <input
-                type="checkbox"
-                class="accent-amber-500"
-                :checked="valueCode === 'true' || valueCode === 'True'"
-                :aria-label="`Value of ${symbol.name}`"
-                @change="setBoolean"
-              />
-              <span class="font-mono text-zinc-300">{{
-                valueCode || 'no value'
-              }}</span>
-            </label>
-            <ValueFields
-              v-else-if="fields"
-              :value="fields"
-              :editable="editable"
-              :label="`Value of ${symbol.name}`"
-              @set="setExpression"
-            />
-            <input
-              v-else
-              :key="`${symbol.id}:${valueKind}`"
-              v-model="draft"
-              class="input py-0.5 text-xs"
-              :class="valueKind === 'string' ? '' : 'font-mono'"
-              :type="valueKind === 'number' ? 'number' : 'text'"
-              :placeholder="
-                placeholderValue ||
-                (valueKind === 'string' ? 'Text' : 'No value')
-              "
-              :aria-label="`Value of ${symbol.name}`"
-              spellcheck="false"
-              @keydown.enter.prevent="commitValue"
-              @blur="commitValue"
-            />
-            <button
-              v-if="editable && symbol.defaultRange"
-              type="button"
-              class="btn-ghost shrink-0 px-1"
-              title="Remove the value"
-              aria-label="Remove the value"
-              @click="clearValue"
-            >
-              <span class="i-mdi-close" />
-            </button>
-            <button
-              v-if="editable && valueChanged"
-              type="button"
-              class="btn-ghost shrink-0 px-1 text-amber-400"
-              :title="`Reset to the saved value (${base?.value ?? 'none'})`"
-              aria-label="Reset the value"
-              @click="resetValue"
-            >
-              <span class="i-mdi-restore" />
-            </button>
-          </dd>
-        </template>
+        <SymbolValueField
+          v-if="isVariable && !isValuelessField"
+          :symbol="symbol"
+          :text="text"
+          :editable="editable"
+          :types="types"
+          :symbols="symbols"
+          :base="base"
+          @op="emit('op', $event)"
+        />
         <template v-if="modifierOptions?.keywords">
           <dt class="pt-1 text-zinc-500">Declaration</dt>
           <dd
@@ -903,85 +499,13 @@ function setModifier(modifier: string, enabled: boolean): void {
             </button>
           </dd>
         </template>
-        <template v-if="exportHints.length > 0">
-          <dt class="pt-1 text-zinc-500">Export</dt>
-          <dd class="flex min-w-0 flex-col gap-1">
-            <select
-              class="input py-1 font-mono text-xs"
-              :value="currentExport?.name ?? ''"
-              :disabled="!editable"
-              aria-label="Export hint"
-              @change="
-                setExportHint(($event.target as HTMLSelectElement).value)
-              "
-            >
-              <option value="">not exported</option>
-              <option
-                v-for="hint in exportHints"
-                :key="hint.name"
-                :value="hint.name"
-              >
-                {{ hint.name }}
-              </option>
-            </select>
-            <!-- UE's Slider / Value Range: min … max, step, open ends. -->
-            <div
-              v-if="range"
-              :key="currentExport?.args"
-              data-ui="export-range"
-              class="flex flex-col gap-1"
-            >
-              <div class="flex items-center gap-1">
-                <input
-                  v-for="(field, i) in RANGE_FIELDS"
-                  :key="field"
-                  class="input min-w-0 py-1 font-mono text-xs"
-                  :value="range.numbers[i] ?? ''"
-                  :placeholder="field"
-                  :readonly="!editable"
-                  :aria-label="field"
-                  :title="field"
-                  @keydown.enter="($event.target as HTMLInputElement).blur()"
-                  @change="
-                    setRangeNumber(i, ($event.target as HTMLInputElement).value)
-                  "
-                />
-              </div>
-              <div class="flex flex-wrap gap-x-3">
-                <label
-                  v-for="flag in RANGE_FLAGS"
-                  :key="flag"
-                  class="flex cursor-pointer items-center gap-1.5 font-mono text-zinc-300"
-                >
-                  <input
-                    type="checkbox"
-                    class="accent-amber-500"
-                    :checked="range.flags.includes(flag)"
-                    :disabled="!editable"
-                    @change="
-                      setRangeFlag(
-                        flag,
-                        ($event.target as HTMLInputElement).checked
-                      )
-                    "
-                  />
-                  {{ flag }}
-                </label>
-              </div>
-            </div>
-            <input
-              v-else-if="currentExport && currentExport.args !== ''"
-              :key="`${currentExport.name}:${currentExport.args}`"
-              class="input py-1 font-mono text-xs"
-              :value="currentExport.args"
-              :readonly="!editable"
-              :aria-label="`Arguments of ${currentExport.name}`"
-              spellcheck="false"
-              @keydown.enter="($event.target as HTMLInputElement).blur()"
-              @change="setExportArgs(($event.target as HTMLInputElement).value)"
-            />
-          </dd>
-        </template>
+        <SymbolExportHint
+          :symbol="symbol"
+          :text="text"
+          :editable="editable"
+          :types="types"
+          @op="emit('op', $event)"
+        />
         <template v-if="groupable">
           <dt class="pt-1 text-zinc-500">Category</dt>
           <dd>
@@ -1126,160 +650,15 @@ function setModifier(modifier: string, enabled: boolean): void {
       </dl>
     </DetailsSection>
 
-    <DetailsSection v-if="symbol.params" id="symbol-inputs" title="Inputs">
-      <template #actions>
-        <button
-          v-if="editingSignature"
-          type="button"
-          class="btn-ghost mb-1 px-1.5 py-0.5 text-xs"
-          title="Add an input"
-          @click="addParameter"
-        >
-          <span class="i-mdi-plus" /> Input
-        </button>
-      </template>
-      <p v-if="symbol.params.length === 0" class="px-3 text-xs text-zinc-500">
-        No inputs.
-      </p>
-      <template v-if="editingSignature">
-        <div
-          v-for="(param, index) in symbol.params"
-          :key="`${index}:${param.name}`"
-          class="mx-2 mb-1.5 space-y-1 rounded-md border border-zinc-800 p-1.5 text-xs"
-        >
-          <div class="flex items-center gap-1">
-            <span
-              class="size-2.5 shrink-0 rounded-full border-2"
-              :style="{ borderColor: color(String(param.dataType)) }"
-            />
-            <input
-              class="input min-w-0 flex-1 py-0.5 font-mono text-xs"
-              :value="param.name"
-              data-ui="parameter-name"
-              :data-name="param.name"
-              :aria-label="`Name of input ${index + 1}`"
-              spellcheck="false"
-              @keydown.enter.prevent="
-                ($event.target as HTMLInputElement).blur()
-              "
-              @change="renameParameter(index, $event)"
-            />
-            <button
-              type="button"
-              class="btn-ghost shrink-0 px-1"
-              title="Move up"
-              :aria-label="`Move ${param.name} up`"
-              :disabled="index === 0"
-              @click="moveParameter(index, index - 1)"
-            >
-              <span class="i-mdi-arrow-up" />
-            </button>
-            <button
-              type="button"
-              class="btn-ghost shrink-0 px-1"
-              title="Move down"
-              :aria-label="`Move ${param.name} down`"
-              :disabled="index === symbol.params.length - 1"
-              @click="moveParameter(index, index + 1)"
-            >
-              <span class="i-mdi-arrow-down" />
-            </button>
-            <button
-              type="button"
-              class="btn-ghost shrink-0 px-1 text-red-300"
-              title="Remove this input"
-              :aria-label="`Remove ${param.name}`"
-              @click="removeParameter(index)"
-            >
-              <span class="i-mdi-close" />
-            </button>
-          </div>
-          <div class="flex items-center gap-1">
-            <TypePicker
-              class="min-w-0 flex-1"
-              :value="param.type?.text ?? null"
-              :data-type="param.dataType"
-              :types="typeInfo"
-              :declared="declared"
-              :editable="true"
-              :required="typeInfo.requiredType !== undefined"
-              @change="(typeText) => setParameterType(index, typeText)"
-            />
-            <input
-              v-if="!typeInfo?.noParameterDefaults"
-              class="input w-24 shrink-0 py-0.5 font-mono text-xs"
-              :value="code(param.defaultRange)"
-              placeholder="default"
-              :aria-label="`Default value of ${param.name}`"
-              spellcheck="false"
-              @keydown.enter.prevent="
-                ($event.target as HTMLInputElement).blur()
-              "
-              @change="setParameterValue(index, $event)"
-            />
-          </div>
-        </div>
-      </template>
-      <template v-else>
-        <div
-          v-for="param in symbol.params"
-          :key="param.name"
-          class="flex items-center gap-2 px-3 py-1 text-xs"
-        >
-          <span
-            class="size-2.5 shrink-0 rounded-full border-2"
-            :style="{ borderColor: color(String(param.dataType)) }"
-          />
-          <span class="min-w-0 truncate font-mono text-zinc-200"
-            >{{ param.rest ? '…' : '' }}{{ param.name }}</span
-          >
-          <span
-            class="ml-auto truncate font-mono"
-            :class="param.type ? 'text-zinc-400' : 'text-zinc-600 italic'"
-            >{{ param.type?.text ?? param.dataType }}</span
-          >
-          <span
-            v-if="param.defaultRange || param.defaultText !== undefined"
-            class="max-w-24 shrink-0 truncate font-mono text-zinc-500"
-            :title="param.defaultText ?? code(param.defaultRange)"
-            >= {{ param.defaultText ?? code(param.defaultRange) }}</span
-          >
-        </div>
-      </template>
-    </DetailsSection>
-
-    <DetailsSection
-      v-if="
-        symbol.kind === 'function' ||
-        symbol.kind === 'method' ||
-        symbol.importedKind === 'function'
-      "
-      id="symbol-output"
-      title="Output"
-    >
-      <div class="px-2 text-xs">
-        <TypePicker
-          v-if="editingSignature"
-          :value="symbol.returns?.text ?? null"
-          :data-type="symbol.returnType ?? 'any'"
-          :types="typeInfo"
-          :declared="declared"
-          :editable="true"
-          @change="setReturnType"
-        />
-        <div v-else class="flex items-center gap-2 px-1 py-1">
-          <span
-            class="size-2.5 shrink-0 rounded-full border-2"
-            :style="{ borderColor: color(String(symbol.returnType ?? 'any')) }"
-          />
-          <span
-            class="font-mono"
-            :class="symbol.returns ? 'text-zinc-200' : 'text-zinc-600 italic'"
-            >{{ symbol.returns?.text ?? 'not declared' }}</span
-          >
-        </div>
-      </div>
-    </DetailsSection>
+    <SymbolSignature
+      :symbol="symbol"
+      :text="text"
+      :editable="editable"
+      :types="types"
+      :declared="declared"
+      :language="language"
+      @op="emit('op', $event)"
+    />
 
     <DetailsSection v-if="!compact" id="symbol-source" title="Source">
       <pre
