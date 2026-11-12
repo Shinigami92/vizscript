@@ -18,7 +18,16 @@ export function inferTypes(doc: GraphDocument): void {
       (s) => s.fnId === fn.id && (s.kind === 'function' || s.kind === 'method')
     );
     const result = owner?.returnType;
-    if (result === undefined || result === 'any' || result === 'void') {
+    // An async function returns the promised value, not the `Promise`.
+    const promised =
+      owner?.modifiers.includes('async') === true &&
+      /^Promise\s*</.test(owner.returns?.text ?? '');
+    if (
+      result === undefined ||
+      result === 'any' ||
+      result === 'void' ||
+      promised
+    ) {
       continue;
     }
 
@@ -58,7 +67,7 @@ export function inferTypes(doc: GraphDocument): void {
       );
     });
     const type = node?.pins.find((p) => p.id === 'value')?.type;
-    if (type !== undefined && type !== 'any') {
+    if (type !== undefined && type !== 'any' && type !== 'void') {
       symbol.dataType = type;
     }
   }

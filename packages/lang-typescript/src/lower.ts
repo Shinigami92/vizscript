@@ -1985,8 +1985,9 @@ class FnGraphBuilder {
       }
 
       case 'Identifier': {
+        // A placeholder (`x = undefined`) says nothing about the type.
         if (expr.name === 'undefined') {
-          return this.literal('undefined', 'undefined', raw, 'void');
+          return this.literal('undefined', 'undefined', raw, 'any');
         }
 
         const entry = this.lookup(expr.name);

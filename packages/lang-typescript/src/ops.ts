@@ -677,9 +677,12 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
           return undefined;
         }
 
+        // `let x;` needs no value (its value pin inserts one); `const` does.
         return template.declaration === 'none'
           ? `${name} = undefined;`
-          : `${template.declaration} ${name} = undefined;`;
+          : template.declaration === 'let'
+            ? `let ${name};`
+            : `${template.declaration} ${name} = undefined;`;
       }
 
       case 'branch': {

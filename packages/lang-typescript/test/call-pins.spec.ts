@@ -152,4 +152,20 @@ describe('argument pins from signatures', () => {
     expect(ret?.pins.find((p) => p.id === 'value')?.type).toBe('string');
     expect(doc.symbols?.find((s) => s.name === 't')?.dataType).toBe('string');
   });
+
+  it('leaves a placeholder value untyped', () => {
+    const doc = parseTypeScript('const x = undefined;\n', 't.ts');
+    expect(doc.symbols?.find((s) => s.name === 'x')?.dataType).toBe('any');
+  });
+
+  it('does not type the Return of an async function as the Promise', () => {
+    const doc = parseTypeScript(
+      'async function f(): Promise<number> {\n  return;\n}\n',
+      't.ts'
+    );
+    const ret = doc.functions
+      .flatMap((fn) => fn.nodes)
+      .find((n) => n.kind === 'return');
+    expect(ret?.pins.find((p) => p.id === 'value')?.type).toBe('any');
+  });
 });

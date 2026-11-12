@@ -82,7 +82,7 @@ describe('adding symbols', () => {
         name: 'suffix',
         local: true,
       })
-    ).toContain('{\n  let suffix = undefined;\n  const prefix');
+    ).toContain('{\n  let suffix;\n  const prefix');
   });
 
   it('rejects invalid and taken names', () => {
