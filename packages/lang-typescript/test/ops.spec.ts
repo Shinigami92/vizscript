@@ -1,5 +1,5 @@
 import type { GraphDocument, GraphNode, GraphOp } from '@vizscript/core';
-import { applyTextEdits } from '@vizscript/core';
+import { applyTextEdits, reconcilePositions } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
 
@@ -379,6 +379,87 @@ describe('deleting and restoring a return', () => {
     expect(apply(text, { type: 'deleteNodes', nodeIds: [b.id] })).toBe(
       'function f() {\n}\n\nconst a = 1;\n\nlog(a, b);\n'
     );
+  });
+
+  it('keeps positions with their code when equal nodes swap ids', () => {
+    const text =
+      'const user = "Jane";\nconst t = greeter(user);\nlog(greeter(user));\n';
+    const before = parseTypeScript(text);
+    const calls = before.functions[0]?.nodes.filter(
+      (n) => n.title === 'greeter'
+    );
+    const [first, second] = calls ?? [];
+    const set = node(before, (n) => n.title === 'Set t');
+    const result = applyTypeScriptOp(text, {
+      type: 'deleteNodes',
+      nodeIds: [set.id],
+    });
+    if (!result.ok || !first || !second) {
+      throw new Error('no edit');
+    }
+
+    const after = parseTypeScript(applyTextEdits(text, result.edits));
+    const positions = reconcilePositions(
+      before,
+      after,
+      { [first.id]: { x: 1, y: 1 }, [second.id]: { x: 2, y: 2 } },
+      { edits: result.edits, before: text }
+    );
+    const log = node(after, (n) => n.title === 'log');
+    const nested = after.functions[0]?.edges.find((e) => e.to.node === log.id)
+      ?.from.node;
+    // The call inside log() keeps the place of the call inside log().
+    expect(positions[nested ?? '']).toEqual({ x: 2, y: 2 });
+  });
+
+  it('keeps positions with code moved to another place', () => {
+    const text =
+      'const user = "Jane";\nconst t = greeter(user);\nlog(greeter(user));\n';
+    const before = parseTypeScript(text);
+    const module = before.functions[0];
+    const [first, second] =
+      module?.nodes.filter((n) => n.title === 'greeter') ?? [];
+    const entry = module?.nodes.find((n) => n.kind === 'entry');
+    const log = node(before, (n) => n.title === 'log');
+    const result = applyTypeScriptOp(text, {
+      type: 'connect',
+      from: { node: entry?.id ?? '', pin: 'then' },
+      to: { node: log.id, pin: 'exec' },
+    });
+    if (!result.ok || !first || !second) {
+      throw new Error('no edit');
+    }
+
+    const moved = applyTextEdits(text, result.edits);
+    expect(moved.startsWith('log(greeter(user));')).toBe(true);
+    const after = parseTypeScript(moved);
+    const positions = reconcilePositions(
+      before,
+      after,
+      { [first.id]: { x: 1, y: 1 }, [second.id]: { x: 2, y: 2 } },
+      { edits: result.edits, before: text }
+    );
+    const calls = after.functions[0]?.nodes.filter(
+      (n) => n.title === 'greeter'
+    );
+    const inLog = calls?.find((n) => n.range.start < 10);
+    const inSet = calls?.find((n) => n.range.start > 10);
+    expect(positions[inLog?.id ?? '']).toEqual({ x: 2, y: 2 });
+    expect(positions[inSet?.id ?? '']).toEqual({ x: 1, y: 1 });
+  });
+
+  it('leaves no blank line where a moved statement was', () => {
+    const text = 'log(a);\n\nconst a = 1;\n\nconst b = 2;\n';
+    const doc = parseTypeScript(text);
+    const log = node(doc, (n) => n.title === 'log');
+    const b = node(doc, (n) => n.title === 'Set b');
+    expect(
+      apply(text, {
+        type: 'connect',
+        from: { node: b.id, pin: 'then' },
+        to: { node: log.id, pin: 'exec' },
+      })
+    ).toBe('const a = 1;\n\nconst b = 2;\nlog(a);\n');
   });
 
   it('keeps a call argument as its own statement when disconnected', () => {

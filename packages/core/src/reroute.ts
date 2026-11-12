@@ -1,5 +1,6 @@
 import { edgeId } from './ids';
 import type { GraphDocument, Point, Positions } from './ir';
+import type { TextChange } from './reconcile';
 import { renamedNodes } from './reconcile';
 
 /**
@@ -103,14 +104,15 @@ export function reroutePatch(
 export function reconcileReroutes(
   previous: GraphDocument | undefined,
   next: GraphDocument,
-  positions: Positions
+  positions: Positions,
+  change?: TextChange
 ): Positions {
   const entries = rerouteEntries(positions);
   if (!previous || Object.keys(entries).length === 0) {
     return entries;
   }
 
-  const rename = renamedNodes(previous, next);
+  const rename = renamedNodes(previous, next, change);
   if (rename.size === 0) {
     return entries;
   }

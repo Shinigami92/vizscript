@@ -310,6 +310,36 @@ function consumerInput(doc: GraphDocument, node: GraphNode): Pin | undefined {
   return undefined;
 }
 
+/**
+ * A moved statement leaves no blank line behind: a removal between two
+ * blank lines (or at the start of the file) takes the one after it too.
+ * The edits stay apart, so the moved code can be followed.
+ */
+function withoutDoubleBlankLines(text: string, result: OpResult): OpResult {
+  if (!result.ok) {
+    return result;
+  }
+
+  return succeeded(
+    result.edits.map((edit) => {
+      if (edit.text !== '') {
+        return edit;
+      }
+
+      const before = text.slice(0, edit.start);
+      const blankAfter = text.slice(edit.end).match(/^[ \t]*\n/)?.[0];
+      const blankBefore =
+        /^\s*$/.test(before) || /\n[ \t]*\n[ \t]*$/.test(before);
+      const end = edit.end + (blankAfter?.length ?? 0);
+      const touches = result.edits.some(
+        (other) =>
+          other !== edit && other.start >= edit.end && other.start <= end
+      );
+      return blankAfter && blankBefore && !touches ? { ...edit, end } : edit;
+    })
+  );
+}
+
 /** Longest run of blank lines between two lines of a text. */
 function longestBlankRun(text: string): number {
   let longest = 0;
@@ -339,6 +369,13 @@ function tidyBlankLines(text: string, result: OpResult): OpResult {
   const trailing = tidy.match(/\n*$/)?.[0] ?? '';
   if (trailing.length > ending.length) {
     tidy = tidy.slice(0, tidy.length - trailing.length) + ending;
+  }
+
+  // Nor at its start.
+  const opening = text.match(/^\n*/)?.[0] ?? '';
+  const leading = tidy.match(/^\n*/)?.[0] ?? '';
+  if (leading.length > opening.length) {
+    tidy = opening + tidy.slice(leading.length);
   }
   if (tidy === edited) {
     return result;
@@ -1915,7 +1952,10 @@ export function applyTextOp(
       }
 
       return fromPin.kind === 'exec'
-        ? connectExec(text, doc, op.from, op.to, syntax)
+        ? withoutDoubleBlankLines(
+            text,
+            connectExec(text, doc, op.from, op.to, syntax)
+          )
         : connectData(text, doc, op.from, op.to, syntax);
     }
 
