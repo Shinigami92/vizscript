@@ -24,9 +24,11 @@ import type {
   Point,
   Positions,
   ScriptSymbol,
+  StatementMeta,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { isTypeCompatible, qualifiedName } from '@vizscript/core';
+import { getMeta, isTypeCompatible, qualifiedName } from '@vizscript/core';
+import { useEventListener } from '@vueuse/core';
 import {
   computed,
   nextTick,
@@ -1176,6 +1178,195 @@ async function copyCode(ids: ReadonlyArray<string>): Promise<void> {
   }
 }
 
+// --------------------------------------------- copy, cut, paste, duplicate
+
+/** Clipboard type that tells which language copied nodes are in. */
+const NODES_MIME = 'application/x-vizscript-nodes';
+
+/**
+ * The code of the selected nodes, like UE copies nodes: whole statements
+ * (with their pure inputs, which are part of them), outermost first, each
+ * with its line's indentation so nested lines keep their place.
+ */
+function selectionCode(ids: ReadonlyArray<string>): {
+  code: string;
+  statements: GraphNode[];
+} {
+  const nodes = ids
+    .map((id) => index.value.nodes.get(id)?.node)
+    .filter((n): n is GraphNode => n !== undefined);
+  const ranges = nodes
+    .map((node) => ({
+      node,
+      range: getMeta<StatementMeta>(node).stmt ?? node.range,
+    }))
+    .filter(({ range }) => range.end > range.start);
+  const outer = ranges
+    .filter(
+      (a) =>
+        !ranges.some(
+          (b) =>
+            b !== a &&
+            b.range.start <= a.range.start &&
+            a.range.end <= b.range.end &&
+            (b.range.start < a.range.start || b.range.end > a.range.end)
+        )
+    )
+    .toSorted((a, b) => a.range.start - b.range.start);
+  const code = outer
+    .map(({ range }) => {
+      const lineStart = props.text.lastIndexOf('\n', range.start - 1) + 1;
+      const before = props.text.slice(lineStart, range.start);
+      const indent = /^[ \t]*$/.test(before) ? before : '';
+      return indent + props.text.slice(range.start, range.end);
+    })
+    .join('\n');
+  return {
+    code,
+    statements: outer
+      .map(({ node }) => node)
+      .filter((n) => n.purity === 'impure'),
+  };
+}
+
+function canvasHasFocus(): boolean {
+  return document.activeElement === canvas.value;
+}
+
+function onCopy(event: ClipboardEvent, cut = false): void {
+  if (!canvasHasFocus() || selection.value.length === 0) {
+    return;
+  }
+
+  const { code } = selectionCode(selection.value);
+  if (!code) {
+    return;
+  }
+
+  event.preventDefault();
+  event.clipboardData?.setData('text/plain', code);
+  event.clipboardData?.setData(
+    NODES_MIME,
+    JSON.stringify({ language: props.doc?.language ?? '' })
+  );
+  if (cut && props.editable) {
+    emitOp({ type: 'deleteNodes', nodeIds: [...selection.value] });
+  }
+}
+
+/** Exec output that continues after a statement (`completed` of blocks). */
+function continuation(node: GraphNode): PinRef | undefined {
+  const out =
+    node.pins.find(
+      (p) => p.kind === 'exec' && p.direction === 'out' && p.id === 'completed'
+    ) ??
+    node.pins.find(
+      (p) => p.kind === 'exec' && p.direction === 'out' && p.id === 'then'
+    );
+  return out ? { node: node.id, pin: out.id } : undefined;
+}
+
+/** Where the pointer is in the graph, else the middle of the view. */
+function pointerWorld(): Point | undefined {
+  const v = view.value;
+  const rect = canvas.value?.getBoundingClientRect();
+  if (!v || !rect) {
+    return undefined;
+  }
+
+  const inside =
+    pointer.x >= rect.left &&
+    pointer.x <= rect.right &&
+    pointer.y >= rect.top &&
+    pointer.y <= rect.bottom;
+  return inside
+    ? v.worldAt(pointer.x, pointer.y)
+    : v.worldAt(rect.left + rect.width / 2, rect.top + rect.height / 2);
+}
+
+/**
+ * Inserts code as nodes: after the selected statement, else at the end of
+ * the function under the pointer, where the pointer is.
+ */
+function pasteCode(code: string, world: Point, after?: PinRef): void {
+  const template: NodeTemplate = { type: 'code', code };
+  if (after) {
+    emitOp({ type: 'addNode', template, after, position: world });
+    return;
+  }
+
+  const place = placeAt(world);
+  if (!place) {
+    show('Paste inside a function.');
+    return;
+  }
+
+  emitOp({ type: 'addNode', template, ...place.anchor, position: world });
+}
+
+function onPaste(event: ClipboardEvent): void {
+  if (!canvasHasFocus() || !props.editable) {
+    return;
+  }
+
+  const code = event.clipboardData?.getData('text/plain') ?? '';
+  const world = pointerWorld();
+  if (!code.trim() || !world) {
+    return;
+  }
+
+  event.preventDefault();
+  try {
+    const from = JSON.parse(
+      event.clipboardData?.getData(NODES_MIME) || '{}'
+    ) as { language?: string };
+    if (from.language && from.language !== props.doc?.language) {
+      show(`Pasted ${from.language} code into a ${props.doc?.language} file.`);
+    }
+  } catch {
+    // not copied from a graph
+  }
+
+  // After the selected statement when the pointer is in its function,
+  // else at the end of the function under the pointer.
+  const only = selection.value.length === 1 ? selection.value[0] : undefined;
+  const entry = only ? index.value.nodes.get(only) : undefined;
+  const sameFunction = entry?.fn.id === view.value?.functionAt(world);
+  pasteCode(
+    code,
+    world,
+    entry?.node.purity === 'impure' && sameFunction
+      ? continuation(entry.node)
+      : undefined
+  );
+}
+
+/** UE's Ctrl+D: a copy of the selection right after it. */
+function duplicateSelection(): void {
+  if (!props.editable || selection.value.length === 0) {
+    return;
+  }
+
+  const { code, statements } = selectionCode(selection.value);
+  const last = statements.at(-1);
+  const positions = view.value?.getPositions() ?? {};
+  const origin = positions[selection.value[0] ?? ''];
+  if (!code) {
+    return;
+  }
+
+  const world = origin
+    ? { x: origin.x + 40, y: origin.y + 40 }
+    : pointerWorld();
+  if (world) {
+    pasteCode(code, world, last ? continuation(last) : undefined);
+  }
+}
+
+useEventListener(document, 'copy', (event) => onCopy(event));
+useEventListener(document, 'cut', (event) => onCopy(event, true));
+useEventListener(document, 'paste', onPaste);
+
 function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
   const v = view.value;
   if (!v) {
@@ -1223,8 +1414,19 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
         {
           label: ids.length > 1 ? 'Copy code of nodes' : 'Copy code',
           icon: 'i-mdi-content-copy',
+          shortcut: shortcut('C'),
           action: () => void copyCode(ids),
         },
+        ...(props.editable
+          ? [
+              {
+                label: 'Duplicate',
+                icon: 'i-mdi-content-duplicate',
+                shortcut: shortcut('D'),
+                action: () => duplicateSelection(),
+              },
+            ]
+          : []),
         ...(props.editable && ids.length === 1 && first?.node.kind === 'call'
           ? [
               {
@@ -1670,6 +1872,9 @@ function onKeydown(event: KeyboardEvent): void {
   } else if (command && key === 'f') {
     event.preventDefault();
     void openSearch();
+  } else if (command && key === 'd') {
+    event.preventDefault();
+    duplicateSelection();
   } else if (event.key === 'F12' && selection.value.length === 1) {
     event.preventDefault();
     emit('goToDefinition', selection.value[0] ?? '');

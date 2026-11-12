@@ -114,6 +114,12 @@ const GROUPS: ReadonlyArray<{
       { action: 'Add a reroute point', input: 'Double-click a wire' },
       { action: 'Remove a reroute point', input: '{Alt} + click it' },
       { action: 'Delete', input: '{Delete} / {Backspace}' },
+      {
+        action: 'Copy / cut / paste nodes',
+        input:
+          '{Mod}{C} / {Mod}{X} / {Mod}{V} (as code: paste code from anywhere)',
+      },
+      { action: 'Duplicate nodes', input: '{Mod}{D}' },
       { action: 'Save to disk (local folders)', input: '{Mod}{S}' },
       { action: 'Undo', input: '{Mod}{Z}' },
       { action: 'Redo', input: '{Mod}{Shift}{Z}' },
