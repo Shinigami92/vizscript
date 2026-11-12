@@ -60,7 +60,7 @@ On phones the viewer is read-only: you can switch between code and graph, pan an
 - GitLab provider
 - More languages (C#, Rust, Go, C++, Ruby, …)
 - Real type information for pins in all typed languages (e.g. through the TypeScript language service)
-- Collapsing nodes to functions, comment boxes and reroute nodes
+- Side-by-side editor groups (two files next to each other), with cross-file rename and find references
 - Desktop app based on Tauri
 - VS Code extension that shows the graph view inside VS Code
 
