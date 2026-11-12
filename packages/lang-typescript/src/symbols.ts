@@ -1,6 +1,7 @@
 import type * as t from '@babel/types';
 import type {
   DataType,
+  Reexport,
   ScriptSymbol,
   SourceRange,
   SymbolKind,
@@ -510,6 +511,46 @@ class SymbolCollector {
       }
     }
   }
+}
+
+function exportName(node: t.Identifier | t.StringLiteral): string {
+  return node.type === 'Identifier' ? node.name : node.value;
+}
+
+/**
+ * Re-exports of a module: `export { a as b } from './x'`, `export * from
+ * './x'`, `export * as ns from './x'` and local aliases `export { a as b }`.
+ */
+export function typeScriptReexports(program: t.Program): Reexport[] {
+  const result: Reexport[] = [];
+  for (const stmt of program.body) {
+    if (stmt.type === 'ExportAllDeclaration') {
+      result.push({ module: stmt.source.value, imported: '*', name: '*' });
+      continue;
+    }
+
+    if (stmt.type !== 'ExportNamedDeclaration' || stmt.declaration) {
+      continue;
+    }
+
+    for (const specifier of stmt.specifiers) {
+      if (specifier.type === 'ExportNamespaceSpecifier') {
+        result.push({
+          module: stmt.source?.value,
+          imported: '*',
+          name: exportName(specifier.exported),
+        });
+      } else if (specifier.type === 'ExportSpecifier') {
+        result.push({
+          ...(stmt.source ? { module: stmt.source.value } : {}),
+          imported: exportName(specifier.local),
+          name: exportName(specifier.exported),
+        });
+      }
+    }
+  }
+
+  return result;
 }
 
 /** Declarations of a TypeScript / JavaScript program. */

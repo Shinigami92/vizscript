@@ -197,6 +197,19 @@ export interface GraphDocument {
   diagnostics: Diagnostic[];
   /** Declarations of the script (functions, variables, types, …). */
   symbols?: ScriptSymbol[];
+  /** Names exported from other modules (`export { a } from './x'`). */
+  reexports?: Reexport[];
+}
+
+/**
+ * A re-export: `export { a as b } from './x'` (`imported` `a`, `name` `b`),
+ * `export * from './x'` (both `*`), `export * as ns from './x'`, or a local
+ * alias `export { a as b }` (no `module`).
+ */
+export interface Reexport {
+  module?: string;
+  imported: string;
+  name: string;
 }
 
 export type Positions = Record<string, Point>;

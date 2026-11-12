@@ -153,6 +153,10 @@ function dirname(path: string): string {
  * run from their folder), else the dotted path from the repository root.
  */
 function moduleOf(request: ImportRequest): string {
+  if (request.module) {
+    return request.module;
+  }
+
   const path = request.path.replace(/\.pyi?$/, '').replace(/\/__init__$/, '');
   if (dirname(request.path) === dirname(request.from)) {
     return path.split('/').at(-1) ?? path;
@@ -182,8 +186,10 @@ export function addPythonImport(
   const module = moduleOf(request);
   const { name, imported } = request;
   if (imported === '*') {
-    const last = module.split('.').at(-1);
-    const line = `import ${module}${last === name ? '' : ` as ${name}`}`;
+    // `import os.path` binds `os`, `import numpy as np` binds `np`.
+    const bound =
+      name === module.split('.')[0] || name === module.split('.').at(-1);
+    const line = `import ${module}${bound ? '' : ` as ${name}`}`;
     return {
       ok: true,
       edits: [insertImport(text, doc, syntax, line, docstringEnd(text))],

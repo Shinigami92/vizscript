@@ -232,6 +232,13 @@ export interface LanguageBackend {
   references?(text: string, fileName?: string): ModuleReference[];
   /** Types and modifiers offered by the Details panel. */
   typeSystem?: TypeSystemInfo;
+  /**
+   * Declarations of a library module the backend knows (a stub in its own
+   * language, e.g. Python's standard library), parsed like a file.
+   */
+  library?(module: string): { text: string; fileName: string } | undefined;
+  /** Library modules the backend knows (offered by the action menu). */
+  libraries?: ReadonlyArray<string>;
 }
 
 /**

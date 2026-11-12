@@ -13,6 +13,10 @@ const SOURCE_EXTENSION = /\.(?:d\.)?[cm]?[jt]sx?$/;
  * without extension (`./util`), or with `.js` (TypeScript's ESM style).
  */
 function moduleOf(doc: GraphDocument, request: ImportRequest): string {
+  if (request.module) {
+    return request.module;
+  }
+
   const relative = relativePath(request.from, request.path);
   const base = relative.replace(SOURCE_EXTENSION, '');
   const jsStyle = (doc.symbols ?? []).some(

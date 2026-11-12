@@ -5,6 +5,7 @@ import {
   exportedSymbols,
   summarizeGraph,
   summarizeSymbols,
+  withReexports,
 } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
@@ -241,5 +242,37 @@ describe('adding imports', () => {
     expect(() => useGreet('const greet = 1;\nfunction f() {\n}\n')).toThrow(
       'greet already exists in this file.'
     );
+  });
+});
+
+describe('re-exports', () => {
+  it('follows re-exports of declaration files', async () => {
+    const files: Record<string, string> = {
+      'index.d.ts': [
+        "export * from './a';",
+        "export { b as bee, c } from './b';",
+        'export declare function own(x: number): void;',
+        'export { own as alias };',
+        '',
+      ].join('\n'),
+      'a.d.ts': 'export declare function a(name: string): string;\n',
+      'b.d.ts':
+        'export declare function b(): number;\nexport declare const c: string;\n',
+    };
+    const read = async (path: string): Promise<ScriptSymbol[]> => {
+      const text = files[path] ?? '';
+      const doc = parseTypeScript(text, path);
+      return withReexports(
+        exportedSymbols(doc, text),
+        doc.reexports ?? [],
+        (module) => read(`${module.slice(2)}.d.ts`)
+      );
+    };
+    const exports = await read('index.d.ts');
+    expect(
+      exports.map(
+        (s) => `${s.name}(${(s.params ?? []).map((p) => p.name).join(', ')})`
+      )
+    ).toEqual(['own(x)', 'a(name)', 'bee()', 'c()', 'alias(x)']);
   });
 });

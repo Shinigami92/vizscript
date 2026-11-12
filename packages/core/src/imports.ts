@@ -1,4 +1,4 @@
-import type { GraphDocument, SourceRange } from './ir';
+import type { GraphDocument, Reexport, SourceRange } from './ir';
 import type { ScriptSymbol, SymbolParam, TypeRef } from './symbols';
 
 /**
@@ -29,6 +29,11 @@ export interface ImportRequest {
   imported: string;
   /** Project root for root paths (GDScript's `res://`), `''` for the repo. */
   root?: string;
+  /**
+   * Module as written, for libraries (`vue`, `math`); `path` and `from`
+   * are not used then.
+   */
+  module?: string;
 }
 
 function dirname(path: string): string {
@@ -146,6 +151,52 @@ export function exportedSymbols(
       }
     })
     .map((symbol) => portable(symbol, text));
+}
+
+/**
+ * Exports of a module including what it re-exports: `resolve` returns the
+ * exports of another module (already followed), or nothing when unknown.
+ */
+export async function withReexports(
+  exports: ReadonlyArray<ScriptSymbol>,
+  reexports: ReadonlyArray<Reexport>,
+  resolve: (module: string) => Promise<ReadonlyArray<ScriptSymbol>>
+): Promise<ScriptSymbol[]> {
+  const result = [...exports];
+  const names = new Set(result.map((s) => s.name));
+  const add = (symbol: ScriptSymbol, name: string): void => {
+    if (!names.has(name)) {
+      names.add(name);
+      result.push(name === symbol.name ? symbol : { ...symbol, name });
+    }
+  };
+
+  for (const reexport of reexports) {
+    const from = reexport.module ? await resolve(reexport.module) : exports;
+    if (reexport.imported === '*' && reexport.name === '*') {
+      // `export *` leaves out the default export.
+      for (const symbol of from) {
+        if (!symbol.modifiers.includes('export default')) {
+          add(symbol, symbol.name);
+        }
+      }
+    } else if (reexport.imported !== '*') {
+      const symbol =
+        reexport.imported === 'default'
+          ? defaultExport(from)
+          : from.find((s) => s.name === reexport.imported);
+      if (symbol) {
+        add(
+          reexport.name === 'default'
+            ? { ...symbol, modifiers: [...symbol.modifiers, 'export default'] }
+            : symbol,
+          reexport.name === 'default' ? symbol.name : reexport.name
+        );
+      }
+    }
+  }
+
+  return result;
 }
 
 /** The default export (`export default function …`). */

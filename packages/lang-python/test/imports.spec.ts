@@ -4,7 +4,12 @@ import {
   summarizeGraph,
 } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { applyPythonOp, parsePythonDocument } from '../src';
+import {
+  applyPythonOp,
+  parsePythonDocument,
+  PYTHON_LIBRARIES,
+  pythonLibrary,
+} from '../src';
 
 function imports(doc: {
   symbols?: ReadonlyArray<{
@@ -138,6 +143,34 @@ describe('adding imports', () => {
       )
     ).toBe(
       'import os\nfrom lib.text import a, greet\n\n\ndef f():\n    greet()\n    pass\n'
+    );
+  });
+});
+
+describe('standard library', () => {
+  it('parses every stub without problems', () => {
+    for (const module of PYTHON_LIBRARIES) {
+      const stub = pythonLibrary(module);
+      const doc = parsePythonDocument(stub?.text ?? '', stub?.fileName);
+      expect({ module, diagnostics: doc.diagnostics }).toEqual({
+        module,
+        diagnostics: [],
+      });
+      expect(exportedSymbols(doc, stub?.text ?? '').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('types calls of library functions', () => {
+    const stub = pythonLibrary('math');
+    const exports = exportedSymbols(
+      parsePythonDocument(stub?.text ?? '', stub?.fileName),
+      stub?.text ?? ''
+    );
+    const doc = parsePythonDocument('import math\n\nmath.log(8)\n', 'a.py', {
+      imports: [{ name: 'math', members: exports }],
+    });
+    expect(summarizeGraph(doc)).toContain(
+      'call "math.log" [<exec:▶ >then:▶ <arg0:number=8 <param:base:number= >return:number]'
     );
   });
 });

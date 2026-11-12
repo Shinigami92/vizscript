@@ -39,7 +39,7 @@ import {
   truncate,
 } from '@vizscript/core';
 import { patternAnnotation, typeFromAnnotation } from './annotations';
-import { typeScriptSymbols } from './symbols';
+import { typeScriptReexports, typeScriptSymbols } from './symbols';
 
 export const LANGUAGE_ID = 'typescript';
 
@@ -2341,6 +2341,7 @@ export function parseTypeScript(
     functions: lowering.functions,
     diagnostics,
     symbols: typeScriptSymbols(program, text),
+    reexports: typeScriptReexports(program),
   };
   attachComments(doc, text, comments);
   linkSymbolGraphs(doc);
