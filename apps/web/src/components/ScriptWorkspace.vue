@@ -160,8 +160,11 @@ let pendingPlacement: {
   known: Set<string>;
   /** Prefers the node the user asked for over helper nodes of the edit. */
   matches?: (node: GraphNode) => boolean;
-  /** Select all new nodes afterwards (pasted nodes, like UE). */
-  select?: boolean;
+  /**
+   * Select afterwards: all new nodes (pasted ones), or only the placed one
+   * (the call of collapsed nodes), like UE.
+   */
+  select?: 'fresh' | 'added';
 } | null = null;
 
 /** Recognizes the node an `addNode` op creates (by kind and name). */
@@ -848,8 +851,10 @@ async function reparse(): Promise<void> {
       void persist({ [added.id]: world });
     }
 
-    if (select && fresh.length > 0) {
+    if (select === 'fresh' && fresh.length > 0) {
       selectAfter = fresh.map((n) => n.id);
+    } else if (select === 'added' && added) {
+      selectAfter = [added.id];
     }
   }
 
@@ -1371,17 +1376,30 @@ async function onOp(op: GraphOp): Promise<void> {
       placed.type === 'callWith' ||
       placed.type === 'useValue' ||
       placed.type === 'promote' ||
-      placed.type === 'extract') &&
+      placed.type === 'extract' ||
+      placed.type === 'collapseToFunction') &&
     placed.position
   ) {
+    let matches: ((node: GraphNode) => boolean) | undefined;
+    if (placed.type === 'addNode') {
+      matches = templateMatcher(placed.template);
+    } else if (placed.type === 'collapseToFunction') {
+      // The call of the new function (`name`, `this.name`, `self.name`).
+      const name = placed.name;
+      matches = (n) =>
+        n.kind === 'call' && (n.title === name || n.title.endsWith(`.${name}`));
+    }
+
     pendingPlacement = {
       world: placed.position,
       known: allNodeIds(doc.value),
-      matches:
-        placed.type === 'addNode'
-          ? templateMatcher(placed.template)
-          : undefined,
-      select: placed.type === 'addNode' && placed.template.type === 'code',
+      matches,
+      select:
+        placed.type === 'collapseToFunction'
+          ? 'added'
+          : placed.type === 'addNode' && placed.template.type === 'code'
+            ? 'fresh'
+            : undefined,
     };
   }
 

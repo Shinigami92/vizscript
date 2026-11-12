@@ -27,7 +27,12 @@ import type {
   StatementMeta,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { getMeta, isTypeCompatible, qualifiedName } from '@vizscript/core';
+import {
+  getMeta,
+  isTypeCompatible,
+  qualifiedName,
+  uniqueName,
+} from '@vizscript/core';
 import { useEventListener } from '@vueuse/core';
 import {
   computed,
@@ -1341,6 +1346,38 @@ function onPaste(event: ClipboardEvent): void {
   );
 }
 
+/** Asks for a name and collapses the nodes into a new function. */
+function collapseToFunction(ids: ReadonlyArray<string>): void {
+  const doc = props.doc;
+  if (!doc) {
+    return;
+  }
+
+  const snake = doc.language === 'python' || doc.language === 'gdscript';
+  const positions = view.value?.getPositions() ?? {};
+  const first = ids
+    .map((id) => positions[id])
+    .filter((p): p is Point => p !== undefined)
+    .reduce<Point | undefined>((a, b) => (!a || b.x < a.x ? b : a), undefined);
+  openMenu({
+    world: { x: 0, y: 0 },
+    client: { x: pointer.x, y: pointer.y },
+    target: { kind: 'node', nodeId: ids[0] ?? '' },
+  });
+  void ask({
+    label: 'Name of the new function',
+    placeholder: snake ? 'new_function' : 'newFunction',
+    value: uniqueName(doc, '', snake ? 'new_function' : 'newFunction'),
+    submit: (name) =>
+      emitOp({
+        type: 'collapseToFunction',
+        nodes: [...ids],
+        name,
+        ...(first ? { position: { ...first } } : {}),
+      }),
+  });
+}
+
 /** UE's Ctrl+D: a copy of the selection right after it. */
 function duplicateSelection(): void {
   if (!props.editable || selection.value.length === 0) {
@@ -1419,6 +1456,12 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
         },
         ...(props.editable
           ? [
+              {
+                // UE's "Collapse to Function".
+                label: 'Collapse to function…',
+                icon: 'i-mdi-function-variant',
+                action: () => collapseToFunction(ids),
+              },
               {
                 label: 'Duplicate',
                 icon: 'i-mdi-content-duplicate',

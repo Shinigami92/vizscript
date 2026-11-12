@@ -120,6 +120,10 @@ const GROUPS: ReadonlyArray<{
           '{Mod}{C} / {Mod}{X} / {Mod}{V} (as code: paste code from anywhere)',
       },
       { action: 'Duplicate nodes', input: '{Mod}{D}' },
+      {
+        action: 'Collapse to function',
+        input: 'Right-click the selected statements → Collapse to function…',
+      },
       { action: 'Save to disk (local folders)', input: '{Mod}{S}' },
       { action: 'Undo', input: '{Mod}{Z}' },
       { action: 'Redo', input: '{Mod}{Shift}{Z}' },
