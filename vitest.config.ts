@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    projects: ['packages/*'],
+    projects: ['packages/*', 'apps/api'],
     reporters: process.env.CI_PREFLIGHT
       ? ['default', 'github-actions']
       : [['default', { summary: false }]],
