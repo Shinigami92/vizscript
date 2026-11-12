@@ -38,6 +38,9 @@ const props = defineProps<{
   nodeSymbol?: ScriptSymbol | null;
   /** Palette index of a comment box's color (0: default). */
   boxColorOf?: (boxId: string) => number;
+  /** The saved version of the file and its parse (reset ↶). */
+  baseDoc?: GraphDocument | null;
+  baseText?: string;
 }>();
 
 const emit = defineEmits<{
@@ -240,6 +243,24 @@ function renameBox(title: string): void {
   }
 }
 
+/** Value and type of a symbol in the saved version (reset ↶). */
+function baseOf(
+  symbol: ScriptSymbol
+): { value: string | null; type: string | null } | undefined {
+  const base = props.baseDoc?.symbols?.find((s) => s.id === symbol.id);
+  const text = props.baseText;
+  if (!base || text === undefined) {
+    return undefined;
+  }
+
+  return {
+    value: base.defaultRange
+      ? text.slice(base.defaultRange.start, base.defaultRange.end)
+      : null,
+    type: base.type?.text ?? null,
+  };
+}
+
 function setSetting(setting: string, value: string): void {
   emit('op', { type: 'setScriptSetting', setting, value });
 }
@@ -384,6 +405,7 @@ function deleteSelection(): void {
         v-if="shownSymbol"
         :symbol="shownSymbol"
         :description="descriptionOf(shownSymbol)"
+        :base="baseOf(shownSymbol)"
         :symbols="doc?.symbols ?? []"
         :event="isEvent(shownSymbol)"
         :text="docText ?? text"
@@ -405,6 +427,7 @@ function deleteSelection(): void {
           <SymbolDetails
             :symbol="shownNodeSymbol"
             :description="descriptionOf(shownNodeSymbol)"
+            :base="baseOf(shownNodeSymbol)"
             :symbols="doc?.symbols ?? []"
             :text="docText ?? text"
             :uses="0"
@@ -688,7 +711,7 @@ function deleteSelection(): void {
                   {{ variable.symbol.name }}
                 </button>
               </dt>
-              <dd>
+              <dd class="flex items-center gap-1">
                 <input
                   :key="`${variable.symbol.id}:${variable.value}`"
                   class="input py-1 font-mono text-xs"
@@ -705,6 +728,26 @@ function deleteSelection(): void {
                     )
                   "
                 />
+                <button
+                  v-if="
+                    editable &&
+                    baseOf(variable.symbol) &&
+                    (baseOf(variable.symbol)?.value ?? '') !== variable.value
+                  "
+                  type="button"
+                  class="btn-ghost shrink-0 px-1 text-amber-400"
+                  :title="`Reset to the saved value (${baseOf(variable.symbol)?.value ?? 'none'})`"
+                  :aria-label="`Reset ${variable.symbol.name}`"
+                  @click="
+                    setDefault(
+                      variable.symbol,
+                      variable.value,
+                      baseOf(variable.symbol)?.value ?? ''
+                    )
+                  "
+                >
+                  <span class="i-mdi-restore" />
+                </button>
               </dd>
             </template>
           </dl>

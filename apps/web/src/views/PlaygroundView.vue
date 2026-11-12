@@ -69,6 +69,7 @@ async function reset(): Promise<void> {
       :key="`${sampleName}:${version}`"
       :path="sampleName"
       :text="textFor(sampleName)"
+      :base-text="SAMPLES.find((s) => s.name === sampleName)?.text"
       :layout-store="localLayoutStore(`playground:${sampleName}`)"
       :state-key="`playground:${sampleName}:${version}`"
       @update:text="update"

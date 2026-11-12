@@ -441,6 +441,7 @@ function switchBranch(event: Event): void {
       :state-key="`${provider}/${owner}/${repo}@${ref_}:${file.path}`"
       :files="files"
       :read-file="readFile"
+      :base-text="file.content"
       keep-editor
       @open="selectFile"
     >

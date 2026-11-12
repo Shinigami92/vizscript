@@ -44,6 +44,11 @@ const props = defineProps<{
   event?: boolean;
   /** Symbols of the file (enum members for value choices). */
   symbols?: ReadonlyArray<ScriptSymbol>;
+  /**
+   * Value and type in the saved version of the file (last commit, file on
+   * disk) for UE's reset ↶; missing for symbols that are new.
+   */
+  base?: { value: string | null; type: string | null };
 }>();
 
 const emit = defineEmits<{
@@ -374,6 +379,7 @@ const otherModifiers = computed(() => {
     ...(options?.flags ?? []),
     ...(options?.flags?.includes('export') ? ['export default'] : []),
     ...(props.types?.exportHints ?? []).map((h) => h.name),
+    ...(props.types?.exposeOnSpawn ? ['constructor'] : []),
   ]);
   return props.symbol.modifiers.filter((m) => !known.has(m));
 });
@@ -485,6 +491,51 @@ function setExportArgs(args: string): void {
     setModifier(`${current.name}(${args.trim()})`, true);
   }
 }
+
+// ------------------------------------------------------------------ reset
+
+/** Like UE's ↶: value and type differ from the saved version. */
+const valueChanged = computed(
+  () =>
+    props.base !== undefined &&
+    isVariable.value &&
+    props.base.value !== (valueCode.value || null)
+);
+const typeChanged = computed(
+  () =>
+    props.base !== undefined &&
+    isVariable.value &&
+    props.base.type !== (props.symbol.type?.text ?? null)
+);
+
+function resetValue(): void {
+  emit('op', {
+    type: 'setSymbolValue',
+    symbol: props.symbol.id,
+    value: props.base?.value ?? null,
+    kind: 'expression',
+  });
+}
+
+function resetType(): void {
+  emit('op', {
+    type: 'setSymbolType',
+    symbol: props.symbol.id,
+    typeText: props.base?.type ?? null,
+  });
+}
+
+// ------------------------------------------------------- expose on spawn
+
+/** UE's "Expose on Spawn": a class field set by the constructor. */
+const spawnable = computed(
+  () =>
+    props.types?.exposeOnSpawn === true &&
+    props.symbol.kind === 'variable' &&
+    props.symbol.scope !== '' &&
+    !props.symbol.modifiers.includes('static') &&
+    !props.symbol.name.startsWith('#')
+);
 
 // --------------------------------------------------------------- category
 
@@ -650,7 +701,7 @@ function setModifier(modifier: string, enabled: boolean): void {
         </template>
         <template v-else-if="!symbol.params">
           <dt class="pt-0.5 text-zinc-500">Type</dt>
-          <dd class="min-w-0">
+          <dd class="flex min-w-0 items-center gap-1">
             <TypePicker
               v-if="types && isVariable"
               :value="symbol.type?.text ?? null"
@@ -676,6 +727,16 @@ function setModifier(modifier: string, enabled: boolean): void {
                 >{{ type.text }}</span
               >
             </span>
+            <button
+              v-if="editable && typeChanged"
+              type="button"
+              class="btn-ghost shrink-0 px-1 text-amber-400"
+              :title="`Reset to the saved type (${base?.type ?? 'none'})`"
+              aria-label="Reset the type"
+              @click="resetType"
+            >
+              <span class="i-mdi-restore" />
+            </button>
           </dd>
         </template>
         <template v-if="isVariable">
@@ -732,6 +793,16 @@ function setModifier(modifier: string, enabled: boolean): void {
               @click="clearValue"
             >
               <span class="i-mdi-close" />
+            </button>
+            <button
+              v-if="editable && valueChanged"
+              type="button"
+              class="btn-ghost shrink-0 px-1 text-amber-400"
+              :title="`Reset to the saved value (${base?.value ?? 'none'})`"
+              aria-label="Reset the value"
+              @click="resetValue"
+            >
+              <span class="i-mdi-restore" />
             </button>
           </dd>
         </template>
@@ -878,6 +949,30 @@ function setModifier(modifier: string, enabled: boolean): void {
             <datalist :id="`groups-${symbol.id}`">
               <option v-for="name in knownGroups" :key="name" :value="name" />
             </datalist>
+          </dd>
+        </template>
+        <template v-if="spawnable && !compact">
+          <dt class="pt-0.5 text-zinc-500">Expose on spawn</dt>
+          <dd>
+            <label
+              class="flex cursor-pointer items-center gap-1.5 text-zinc-300"
+              title="A parameter of the constructor (set when created)"
+            >
+              <input
+                type="checkbox"
+                class="accent-amber-500"
+                :checked="symbol.modifiers.includes('constructor')"
+                :disabled="!editable"
+                aria-label="Expose on spawn"
+                @change="
+                  setModifier(
+                    'constructor',
+                    ($event.target as HTMLInputElement).checked
+                  )
+                "
+              />
+              <span class="font-mono text-zinc-500">constructor(…)</span>
+            </label>
           </dd>
         </template>
         <template v-if="privatePrefix && !compact">

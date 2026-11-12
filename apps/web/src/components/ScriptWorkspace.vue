@@ -104,6 +104,11 @@ const props = defineProps<{
    * imported names get their declarations: call pins, types.
    */
   readFile?: (path: string) => Promise<string>;
+  /**
+   * The saved version of the file (last commit, file on disk, original
+   * sample): Details offers to reset values to it (UE's ↶).
+   */
+  baseText?: string;
   /** Hide the share button (e.g. local folders, which have no shareable URL). */
   hideShare?: boolean;
   /** The file is open in a tab: keep its editor state when switching. */
@@ -1131,6 +1136,21 @@ function onCameraChange(camera: Camera): void {
   void saveCamera(camera, route.path);
 }
 
+// ------------------------------------------------------------------ reset
+
+/** The saved version, parsed once (reset ↶ in Details). */
+const baseDoc = shallowRef<GraphDocument | null>(null);
+watch(
+  () => props.baseText,
+  async (base) => {
+    baseDoc.value =
+      base === undefined || !visualizable.value
+        ? null
+        : await client.parse(base, props.path).catch(() => null);
+  },
+  { immediate: true }
+);
+
 // ------------------------------------------------------------ focus mode
 //
 // Like UE's graph tabs: one function on its own, with a breadcrumb and
@@ -2015,6 +2035,8 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :symbol-uses="symbolUses.length"
         :import-path="selectedImportPath"
         :box-color-of="boxColorOf"
+        :base-doc="baseDoc"
+        :base-text="baseText"
         :types="typeSystem"
         :doc-text="docText"
         @select="selectNodes"

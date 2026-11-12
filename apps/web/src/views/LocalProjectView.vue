@@ -455,6 +455,7 @@ function selectFile(next: string, symbol?: string): void {
       :state-key="`local/${id}:${shown}`"
       :files="files"
       :read-file="readFile"
+      :base-text="saved"
       hide-share
       keep-editor
       @open="selectFile"
