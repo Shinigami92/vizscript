@@ -1,0 +1,21 @@
+{
+  "name": "@vizscript/lang-typescript",
+  "version": "0.0.0",
+  "private": true,
+  "description": "JavaScript/TypeScript language backend",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "ts-check": "tsc"
+  },
+  "devDependencies": {
+    "@babel/types": "8.1.0"
+  },
+  "dependencies": {
+    "@babel/parser": "~8.1.0",
+    "@vizscript/core": "workspace:*"
+  }
+}
