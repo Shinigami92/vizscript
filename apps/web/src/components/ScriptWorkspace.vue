@@ -15,6 +15,7 @@ import type {
   Point,
   Positions,
   SourceRange,
+  TypeSystemInfo,
 } from '@vizscript/core';
 import {
   findDefinition,
@@ -434,15 +435,18 @@ function relayout(): void {
 }
 
 let parseSeq = 0;
+/** The text `doc` was parsed from (ranges of `doc` point into it). */
+const docText = ref('');
 async function reparse(): Promise<void> {
   if (!visualizable.value) {
     return;
   }
 
   const seq = ++parseSeq;
+  const source = text.value;
   let next: GraphDocument;
   try {
-    next = await client.parse(text.value, props.path);
+    next = await client.parse(source, props.path);
   } catch (error) {
     show(`Parsing failed: ${(error as Error).message}`, 'error');
     return;
@@ -474,6 +478,7 @@ async function reparse(): Promise<void> {
   }
 
   doc.value = next;
+  docText.value = source;
   relayout();
   if (props.files) {
     void updateReferences(seq);
@@ -733,11 +738,37 @@ function onSelectionChange(ids: string[]): void {
 
 // ------------------------------------------------------- My Script
 
+/** Types and modifiers of the file's language (for the Details panel). */
+const typeSystem = shallowRef<TypeSystemInfo | null>(null);
+watch(
+  () => props.path,
+  async (path) => {
+    typeSystem.value = visualizable.value
+      ? await client.typeSystem(path).catch(() => null)
+      : null;
+  },
+  { immediate: true }
+);
+
 /** Symbol selected in "My Script"; Details shows it instead of nodes. */
 const selectedSymbolId = ref<string | null>(null);
 const selectedSymbol = computed(
   () => doc.value?.symbols?.find((s) => s.id === selectedSymbolId.value) ?? null
 );
+// A symbol's kind can change (`let` → `const`): keep it selected by name.
+watch(doc, (next) => {
+  const id = selectedSymbolId.value;
+  if (!id || !next?.symbols || next.symbols.some((s) => s.id === id)) {
+    return;
+  }
+
+  const qualified = id.slice(id.indexOf(':') + 1);
+  const same = next.symbols.find((s) => qualifiedName(s) === qualified);
+  if (same) {
+    selectedSymbolId.value = same.id;
+  }
+});
+
 /** Nodes using the selected symbol, highlighted like UE does. */
 const symbolUses = computed(() =>
   selectedSymbol.value ? symbolNodes(doc.value, selectedSymbol.value) : []
@@ -1288,12 +1319,14 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :closable="isMobile"
         :symbol="selection.length === 0 ? selectedSymbol : null"
         :symbol-uses="symbolUses.length"
+        :types="typeSystem"
+        :doc-text="docText"
         @select="selectNodes"
         @select-function="selectFunction"
         @activate="onActivate"
         @reveal="revealRange"
         @open-symbol="openSymbol"
-        @op="onOp"
+        @op="onScriptOp"
         @close="workbench.hide('details')"
       />
     </WorkbenchView>

@@ -25,6 +25,14 @@ function handle(request: WorkerRequest): WorkerResponse {
       };
     }
 
+    case 'typeSystem': {
+      return {
+        id: request.id,
+        ok: true,
+        typeSystem: backend.typeSystem ?? null,
+      };
+    }
+
     case 'applyOp': {
       return {
         id: request.id,

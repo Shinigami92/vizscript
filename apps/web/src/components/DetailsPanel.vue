@@ -6,6 +6,7 @@ import type {
   Pin,
   ScriptSymbol,
   SourceRange,
+  TypeSystemInfo,
 } from '@vizscript/core';
 import { CATEGORY_COLORS } from '@vizscript/core';
 import { computed } from 'vue';
@@ -25,6 +26,10 @@ const props = defineProps<{
   symbol?: ScriptSymbol | null;
   /** Number of nodes using the symbol. */
   symbolUses?: number;
+  /** Types and modifiers of the file's language. */
+  types?: TypeSystemInfo | null;
+  /** The text `doc` was parsed from (symbol ranges point into it). */
+  docText?: string;
 }>();
 
 const emit = defineEmits<{
@@ -38,6 +43,12 @@ const emit = defineEmits<{
 }>();
 
 const index = computed(() => indexDocument(props.doc));
+/** Classes, interfaces, type aliases and enums of the file. */
+const declaredTypes = computed(() =>
+  (props.doc?.symbols ?? [])
+    .filter((s) => s.kind === 'class' || s.kind === 'type' || s.kind === 'enum')
+    .map((s) => s.name)
+);
 
 const selected = computed(() =>
   props.selection
@@ -124,9 +135,14 @@ function deleteSelection(): void {
       <SymbolDetails
         v-if="symbol"
         :symbol="symbol"
-        :text="text"
+        :text="docText ?? text"
         :uses="symbolUses ?? 0"
+        :editable="editable"
+        :types="types ?? null"
+        :declared="declaredTypes"
+        :language="doc?.language ?? ''"
         @reveal="(range) => emit('reveal', range)"
+        @op="(op) => emit('op', op)"
         @open="emit('openSymbol', symbol.id)"
       />
 

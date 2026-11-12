@@ -3,6 +3,7 @@ import type {
   GraphOp,
   ModuleReference,
   OpResult,
+  TypeSystemInfo,
 } from '@vizscript/core';
 import type { WorkerRequest, WorkerResponse } from './protocol';
 
@@ -78,6 +79,12 @@ export class GraphClient {
     }
 
     return response.references;
+  }
+
+  /** Types and modifiers of the file's language (for the Details panel). */
+  public async typeSystem(fileName: string): Promise<TypeSystemInfo | null> {
+    const response = await this.send({ type: 'typeSystem', fileName });
+    return response.ok && 'typeSystem' in response ? response.typeSystem : null;
   }
 
   public async applyOp(
