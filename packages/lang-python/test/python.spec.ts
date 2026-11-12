@@ -121,6 +121,21 @@ describe('applyPythonOp', () => {
     ).toBe("name = r\"C:\\temp\"\nprint('it\\'s')\n");
   });
 
+  it('replaces Get, Set and call references', () => {
+    const text =
+      'class C:\n    def m(self):\n        self.a = 1\n        print(self.a)\n';
+    const nodes = parsePythonDocument(text).functions.flatMap((f) => f.nodes);
+    const replace = (title: string, name: string): string =>
+      apply(text, {
+        type: 'replaceReference',
+        node: nodes.find((n) => n.title === title)?.id ?? '',
+        name,
+      });
+    expect(replace('Set self.a', 'self.b')).toContain('self.b = 1');
+    expect(replace('self.a', 'self.b')).toContain('print(self.b)');
+    expect(replace('print', 'log')).toContain('log(self.a)');
+  });
+
   it('replaces the only statement of a block with pass', () => {
     const text = 'def f():\n    if x:\n        foo()\n    bar()\n';
     const doc = parsePythonDocument(text);

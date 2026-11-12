@@ -304,6 +304,53 @@ describe('deleting and restoring a return', () => {
 `);
   });
 
+  it('breaks every data wire of a node', () => {
+    const text = 'const total = price * count;\nlog(total, price);\n';
+    const doc = parseTypeScript(text);
+    const times = node(doc, (n) => n.kind === 'operator');
+    // Its value stays as a statement, with its own inputs cleared.
+    expect(apply(text, { type: 'disconnectNode', node: times.id })).toBe(
+      'price;\ncount;\nundefined * undefined;\nconst total = undefined;\nlog(total, price);\n'
+    );
+    const log = node(doc, (n) => n.title === 'log');
+    expect(apply(text, { type: 'disconnectNode', node: log.id })).toBe(
+      'const total = price * count;\ntotal;\nprice;\nlog(undefined, undefined);\n'
+    );
+  });
+
+  it('replaces the variable of a Get or Set and the function of a call', () => {
+    const text =
+      'let a = 1;\nlet b = 2;\na = 3;\nlog(a);\nclass C {\n  x = 1;\n  m() { this.x = 2; }\n}\n';
+    const doc = parseTypeScript(text);
+    const replace = (n: GraphNode, name: string): string =>
+      apply(text, { type: 'replaceReference', node: n.id, name });
+    const get = node(doc, (n) => n.kind === 'getVar' && n.title === 'a');
+    expect(replace(get, 'b')).toContain('log(b);');
+    const set = node(
+      doc,
+      (n) => n.kind === 'setVar' && n.title === 'Set a' && n.range.start > 20
+    );
+    expect(replace(set, 'b')).toContain('\nb = 3;');
+    const call = node(doc, (n) => n.title === 'log');
+    expect(replace(call, 'console.warn')).toContain('console.warn(a);');
+    const member = node(
+      doc,
+      (n) => n.kind === 'setVar' && n.title.endsWith('x') && n.range.start > 60
+    );
+    expect(replace(member, 'this.y')).toContain('this.y = 2;');
+    const declaration = node(
+      doc,
+      (n) => n.kind === 'setVar' && n.range.start === 0
+    );
+    expect(
+      applyTypeScriptOp(
+        text,
+        { type: 'replaceReference', node: declaration.id, name: 'b' },
+        'test.ts'
+      ).ok
+    ).toBe(false);
+  });
+
   it('keeps a call argument as its own statement when disconnected', () => {
     const text = 'foo(bar(1), 2);\n';
     const doc = parseTypeScript(text);

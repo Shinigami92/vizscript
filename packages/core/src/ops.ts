@@ -55,6 +55,13 @@ export type GraphOp =
   | { type: 'setLiteral'; node: string; pin: string; value: string }
   | { type: 'connect'; from: PinRef; to: PinRef }
   | { type: 'disconnect'; pin: PinRef }
+  /** Breaks every data wire of a node (UE: "Break Node Link(s)"). */
+  | { type: 'disconnectNode'; node: string }
+  /**
+   * Another variable for a Get or Set, another function for a call; the
+   * wires stay (UE: "Replace References" / "Replace with").
+   */
+  | { type: 'replaceReference'; node: string; name: string }
   | {
       type: 'addNode';
       template: NodeTemplate;

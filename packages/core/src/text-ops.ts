@@ -26,6 +26,7 @@ import type {
   SourceRange,
 } from './ir';
 import type { GraphOp, NodeTemplate, OpResult, TextEdit } from './ops';
+import { applyTextEdits } from './ops';
 import { findNode } from './reconcile';
 import {
   addParameter,
@@ -944,7 +945,9 @@ function clearInput(
   doc: GraphDocument,
   target: GraphNode,
   pin: Pin,
-  syntax: StatementSyntax
+  syntax: StatementSyntax,
+  /** The code kept as a statement (default: the input's code as it is). */
+  keep = (r: SourceRange): string => text.slice(r.start, r.end)
 ): TextEdit[] {
   const range = pin.range;
   if (!range) {
@@ -969,7 +972,7 @@ function clearInput(
     edits.push({
       start: consumer.stmt.start,
       end: consumer.stmt.start,
-      text: `${asStatement(text.slice(range.start, range.end), syntax)}\n${indent}`,
+      text: `${asStatement(keep(range), syntax)}\n${indent}`,
     });
   }
 
@@ -1025,6 +1028,154 @@ function disconnect(
   }
 
   return edits.length > 0 ? succeeded(edits) : failed('Nothing to disconnect.');
+}
+
+/**
+ * UE's "Break Node Link(s)": every data wire into and out of a node. An
+ * edit inside another one (an input of a value that is itself cleared)
+ * is left out.
+ */
+function disconnectNode(
+  text: string,
+  doc: GraphDocument,
+  nodeId: string,
+  syntax: StatementSyntax
+): OpResult {
+  const node = findNode(doc, nodeId);
+  if (!node) {
+    return failed('Unknown node.');
+  }
+
+  const wires = edgesOf(doc, nodeId).filter((e) => e.kind === 'data');
+  const clear = (
+    edge: GraphEdge,
+    keep?: (r: SourceRange) => string
+  ): TextEdit[] => {
+    const target = findNode(doc, edge.to.node);
+    const pin = findPin(target, edge.to.pin);
+    return target && pin
+      ? clearInput(text, doc, target, pin, syntax, keep)
+      : [];
+  };
+
+  // The node's own inputs first; where its value is kept as a statement
+  // (its output cleared), it is kept with these inputs cleared.
+  const inputs = wires
+    .filter((e) => e.to.node === nodeId)
+    .flatMap((e) => clear(e));
+  const keep = (r: SourceRange): string =>
+    applyTextEdits(
+      text.slice(r.start, r.end),
+      inputs
+        .filter(
+          (e) =>
+            r.start <= e.start &&
+            e.end <= r.end &&
+            !(e.start === e.end && e.start === r.start)
+        )
+        .map((e) => ({ ...e, start: e.start - r.start, end: e.end - r.start }))
+    );
+  const outputs = wires
+    .filter((e) => e.from.node === nodeId)
+    .flatMap((e) => clear(e, keep));
+
+  // Edits inside a replaced range are part of it (or of its kept copy).
+  const kept: TextEdit[] = [];
+  for (const edit of [...outputs, ...inputs].toSorted(
+    (a, b) => b.end - b.start - (a.end - a.start)
+  )) {
+    const inside = kept.some(
+      (k) =>
+        k.end > k.start &&
+        k.start <= edit.start &&
+        edit.end <= k.end &&
+        (edit.start < edit.end ? true : edit.start > k.start)
+    );
+    const same = kept.some(
+      (k) =>
+        k.start === edit.start && k.end === edit.end && k.text === edit.text
+    );
+    if (!inside && !same) {
+      kept.push(edit);
+    }
+  }
+
+  // Statements kept at the same place, in order: inputs before the node.
+  const ordered = [...inputs, ...outputs];
+  const merged: TextEdit[] = [];
+  for (const edit of kept.toSorted(
+    (a, b) => a.start - b.start || ordered.indexOf(a) - ordered.indexOf(b)
+  )) {
+    const last = merged.at(-1);
+    if (
+      last &&
+      last.start === last.end &&
+      edit.start === edit.end &&
+      last.start === edit.start
+    ) {
+      merged[merged.length - 1] = { ...last, text: last.text + edit.text };
+    } else {
+      merged.push(edit);
+    }
+  }
+
+  const sorted = merged;
+  for (const [i, edit] of sorted.entries()) {
+    const next = sorted[i + 1];
+    if (next && next.start < edit.end) {
+      return failed('The wires of this node overlap; break them one by one.');
+    }
+  }
+
+  return merged.length > 0
+    ? succeeded(merged)
+    : failed('Nothing to disconnect.');
+}
+
+/** `name`, `this.name`, `ns.fn`. */
+const NAME_PATH = /^[A-Za-z_$#][\w$]*(?:\.[A-Za-z_$#][\w$]*)*$/;
+
+/** The variable of a Get / Set or the function of a call, as written. */
+export function referenceName(node: GraphNode): string | undefined {
+  const name =
+    node.kind === 'getVar' || node.kind === 'call'
+      ? node.title
+      : node.kind === 'setVar'
+        ? node.title.replace(/^Set /, '')
+        : undefined;
+  return name && NAME_PATH.test(name) ? name : undefined;
+}
+
+function replaceReference(
+  text: string,
+  doc: GraphDocument,
+  nodeId: string,
+  name: string
+): OpResult {
+  const node = findNode(doc, nodeId);
+  const current = node ? referenceName(node) : undefined;
+  if (!node || !current) {
+    return failed('Only Get, Set and call nodes can be replaced.');
+  }
+
+  if (!NAME_PATH.test(name)) {
+    return failed('Enter a name.');
+  }
+
+  // The name is where the node's code starts: `x`, `x = …`, `fn(…)`.
+  const at = node.range.start;
+  if (
+    text.slice(at, at + current.length) !== current ||
+    /[\w$]/.test(text.charAt(at + current.length))
+  ) {
+    return failed(
+      node.kind === 'setVar'
+        ? 'A declaration cannot point to another variable; rename it instead.'
+        : 'Cannot find the name of this node in the code.'
+    );
+  }
+
+  return succeeded([{ start: at, end: at + current.length, text: name }]);
 }
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
@@ -1666,6 +1817,14 @@ export function applyTextOp(
 
     case 'disconnect': {
       return disconnect(text, doc, op.pin, syntax);
+    }
+
+    case 'disconnectNode': {
+      return disconnectNode(text, doc, op.node, syntax);
+    }
+
+    case 'replaceReference': {
+      return replaceReference(text, doc, op.node, op.name);
     }
 
     case 'moveWires': {
