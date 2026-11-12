@@ -72,9 +72,11 @@ On phones the viewer is read-only: you can switch between code and graph, pan an
 - Commit graph edits back to the repository
 - Sign-in through Keycloak with GitHub as identity provider
 - GitLab and local folder providers
-- More languages (C#, Ruby, …)
-- Real type information for pins through the TypeScript language service
+- More languages (C#, Rust, Go, C++, Ruby, …)
+- Real type information for pins in all typed languages (e.g. through the TypeScript language service)
 - Collapsing nodes to functions, comment boxes and reroute nodes
+- Desktop app based on Tauri
+- VS Code extension that shows the graph view inside VS Code
 
 ## Contributing
 
