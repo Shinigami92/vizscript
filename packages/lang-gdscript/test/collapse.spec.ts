@@ -199,3 +199,116 @@ describe('enum members', () => {
     ]);
   });
 });
+
+const GROUPED = [
+  'extends Node',
+  '',
+  '@export var health := 100',
+  '@export_group("Movement")',
+  '@export var speed := 10',
+  '## How high.',
+  '@export var jump := 5',
+  '@export_subgroup("Air")',
+  '@export var glide := 2',
+  '',
+].join('\n');
+
+function group(text: string, name: string, target: string): string {
+  const result = applyGDScriptOp(
+    text,
+    { type: 'setSymbolGroup', symbol: `variable:${name}`, group: target },
+    't.gd'
+  );
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+
+  return applyTextEdits(text, result.edits);
+}
+
+describe('export groups', () => {
+  it('reads the group of exported variables', () => {
+    const doc = parseGDScriptDocument(GROUPED, 't.gd');
+    expect(
+      doc.symbols
+        ?.filter((s) => s.kind === 'variable')
+        .map((s) => `${s.name}:${s.group ?? ''}`)
+    ).toEqual([
+      'health:',
+      'speed:Movement',
+      'jump:Movement',
+      'glide:Movement/Air',
+    ]);
+  });
+
+  it('moves a variable into a group, out of it, and into a new one', () => {
+    expect(group(GROUPED, 'health', 'Movement')).toBe(
+      [
+        'extends Node',
+        '',
+        '@export_group("Movement")',
+        '@export var speed := 10',
+        '## How high.',
+        '@export var jump := 5',
+        '@export var health := 100',
+        '@export_subgroup("Air")',
+        '@export var glide := 2',
+        '',
+      ].join('\n')
+    );
+    expect(group(GROUPED, 'jump', '')).toBe(
+      [
+        'extends Node',
+        '',
+        '@export var health := 100',
+        '## How high.',
+        '@export var jump := 5',
+        '@export_group("Movement")',
+        '@export var speed := 10',
+        '@export_subgroup("Air")',
+        '@export var glide := 2',
+        '',
+      ].join('\n')
+    );
+    expect(group(GROUPED, 'health', 'Stats')).toBe(
+      [
+        'extends Node',
+        '',
+        '@export_group("Movement")',
+        '@export var speed := 10',
+        '## How high.',
+        '@export var jump := 5',
+        '@export_subgroup("Air")',
+        '@export var glide := 2',
+        '@export_group("Stats")',
+        '@export var health := 100',
+        '',
+      ].join('\n')
+    );
+  });
+});
+
+describe('export groups and hints', () => {
+  it('keeps the group line when the hint changes', () => {
+    const text =
+      'extends Node\n\n@export_group("Movement")\n@export var speed := 10\n';
+    const doc = parseGDScriptDocument(text, 't.gd');
+    expect(doc.symbols?.find((s) => s.name === 'speed')?.modifiers).toEqual([
+      '@export',
+      'var',
+    ]);
+    const result = applyGDScriptOp(
+      text,
+      {
+        type: 'setModifier',
+        symbol: 'variable:speed',
+        modifier: '@export_range(0, 5)',
+        enabled: true,
+      },
+      't.gd'
+    );
+    expect(result.ok && applyTextEdits(text, result.edits)).toBe(
+      'extends Node\n\n@export_group("Movement")\n@export_range(0, 5) var speed := 10\n'
+    );
+  });
+});

@@ -175,6 +175,8 @@ export type GraphOp =
       /** Where the call node goes (where the collapsed nodes were). */
       position?: Point;
     }
+  /** Moves a variable into a category (`group`; `''`: none). */
+  | { type: 'setSymbolGroup'; symbol: string; group: string }
   /** Changes a setting of the script (`extends`, `@tool`; see `settings`). */
   | { type: 'setScriptSetting'; setting: string; value: string }
   /** Another op that uses a name of another file, plus its import. */
@@ -239,6 +241,8 @@ export interface TypeSystemInfo {
     vectors?: Record<string, string[]>;
     color?: string;
   };
+  /** Variables can be put into categories (`ScriptSymbol.group`). */
+  symbolGroups?: boolean;
   /**
    * Prefix that makes a name private by convention (`_` in Python and
    * GDScript); Details offers it as UE's "Private" switch.

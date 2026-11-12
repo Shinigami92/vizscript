@@ -89,6 +89,11 @@ export interface ScriptSymbol {
   importedKind?: SymbolKind;
   /** Members of an enum (`IDLE`, `RUN`), for value choices. */
   members?: string[];
+  /**
+   * Category of a variable (UE's Category): GDScript's `@export_group`, with
+   * a subgroup as `Group/Subgroup`.
+   */
+  group?: string;
 }
 
 /** Qualified name of a symbol, e.g. `Item.total`. */

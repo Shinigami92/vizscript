@@ -1646,6 +1646,18 @@ export function applyTextOp(
       return moveWires(text, doc, op.from, op.to, syntax);
     }
 
+    case 'setSymbolGroup': {
+      const set = syntax.declarations?.setSymbolGroup;
+      const symbol = doc.symbols?.find((s) => s.id === op.symbol);
+      if (!symbol) {
+        return failed('Unknown symbol.');
+      }
+
+      return set
+        ? set(text, doc, symbol, op.group)
+        : failed('This language has no categories.');
+    }
+
     case 'setScriptSetting': {
       const set = syntax.declarations?.setScriptSetting;
       return set

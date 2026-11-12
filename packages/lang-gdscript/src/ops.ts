@@ -15,6 +15,7 @@ import {
   replaceKeyword,
 } from '@vizscript/core';
 import { addGDScriptImport } from './add-import';
+import { setGDScriptSymbolGroup } from './groups';
 import { parseGDScriptDocument } from './lower';
 import { parseGDScript } from './parser';
 import { gdscriptCallSites, renameGDScriptSymbol } from './rename';
@@ -263,6 +264,7 @@ export const GDSCRIPT_TYPES: TypeSystemInfo = {
   ],
   containerDefaults: { array: '[]', map: '{}' },
   privatePrefix: '_',
+  symbolGroups: true,
   valueEditors: {
     vectors: {
       Vector2: ['x', 'y'],
@@ -345,7 +347,10 @@ function setModifier(
         ? above
         : own;
     const head = text.slice(start, symbol.nameRange.start);
-    const current = head.match(/@export\w*(?:\([^)]*\))?/);
+    // Not the `@export_group(…)` line that may stand before it.
+    const current = head.match(
+      /@export(?!_group|_subgroup|_category)\w*(?:\([^)]*\))?/
+    );
     if (!enabled) {
       const name = current?.[0].replace(/\(.*$/s, '');
       return name
@@ -437,6 +442,7 @@ const DECLARATIONS: DeclarationSyntax = {
     method: (name, _className, isStatic) => (isStatic ? name : `self.${name}`),
   },
   setScriptSetting: setGDScriptSetting,
+  setSymbolGroup: setGDScriptSymbolGroup,
   addImport: (text, doc, request) =>
     addGDScriptImport(text, doc, request, DECLARATIONS),
   rename: (text, doc, symbol, name) =>

@@ -15,6 +15,7 @@ import type {
   TypeRef,
   VarDecl,
 } from './ast';
+import { assignGroups } from './groups';
 import { dataTypeOf } from './lower';
 
 function spanRange(span: Span): SourceRange {
@@ -115,8 +116,16 @@ class SymbolCollector {
     }
   }
 
+  /** Annotations of a declaration; group lines before it aren't its own. */
   private annotations(list: ReadonlyArray<Annotation>): string[] {
-    return list.map((a) => `@${a.name}`);
+    return list
+      .filter(
+        (a) =>
+          !['export_group', 'export_subgroup', 'export_category'].includes(
+            a.name
+          )
+      )
+      .map((a) => `@${a.name}`);
   }
 
   private param(param: Param): SymbolParam {
@@ -341,5 +350,6 @@ export function gdscriptSymbols(
 ): ScriptSymbol[] {
   const collector = new SymbolCollector(text);
   collector.members(body, '');
+  assignGroups(body, collector.symbols);
   return collector.symbols;
 }

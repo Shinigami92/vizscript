@@ -69,6 +69,13 @@ export interface DeclarationSyntax {
     symbol: ScriptSymbol,
     name: string
   ) => OpResult;
+  /** Edits that move a variable into a category (`ScriptSymbol.group`). */
+  setSymbolGroup?: (
+    text: string,
+    doc: GraphDocument,
+    symbol: ScriptSymbol,
+    group: string
+  ) => OpResult;
   /** Edits that change a script setting (`GraphDocument.settings`). */
   setScriptSetting?: (
     text: string,
