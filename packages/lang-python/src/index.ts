@@ -1,6 +1,6 @@
 import type { LanguageBackend } from '@vizscript/core';
 import { LANGUAGE_ID, parsePythonDocument } from './lower';
-import { applyPythonOp } from './ops';
+import { applyPythonOp, PYTHON_TYPES } from './ops';
 import { pythonReferences } from './references';
 
 export type * from './ast';
@@ -16,4 +16,5 @@ export const pythonBackend: LanguageBackend = {
   parse: parsePythonDocument,
   applyOp: applyPythonOp,
   references: pythonReferences,
+  typeSystem: PYTHON_TYPES,
 };

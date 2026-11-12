@@ -32,6 +32,9 @@ import {
   checkName,
   deleteSymbol,
   renameSymbol,
+  setModifier,
+  setSymbolType,
+  setSymbolValue,
 } from './symbol-ops';
 import { qualifiedName } from './symbols';
 import { lineAwareRange, lineIndent, lineStart, reindent } from './text-utils';
@@ -331,6 +334,39 @@ function deleteNodes(
   return succeeded(kept.map((k) => k.edit));
 }
 
+/** Words that are values in every supported language. */
+const VALUE_WORDS = new Set([
+  'true',
+  'false',
+  'null',
+  'undefined',
+  'None',
+  'True',
+  'False',
+  'NaN',
+  'Infinity',
+]);
+
+/**
+ * Whether a typed value is code (a number, a variable, an expression)
+ * rather than text: `42`, `user`, `a + 1`, `"x"` but not `Jane User`.
+ */
+export function looksLikeCode(value: string, doc: GraphDocument): boolean {
+  if (/^[-+]?(?:\d[\d_]*(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i.test(value)) {
+    return true;
+  }
+
+  if (VALUE_WORDS.has(value) || /[()[\]{}"'`.+\-*/%=<>!&|?:,$@#]/.test(value)) {
+    return true;
+  }
+
+  // A single name is code only when the script declares it.
+  return (
+    /^[A-Za-z_]\w*$/.test(value) &&
+    (doc.symbols ?? []).some((s) => s.name === value)
+  );
+}
+
 function setLiteral(
   doc: GraphDocument,
   nodeId: string,
@@ -378,7 +414,13 @@ function setLiteral(
         return failed('Value must not be empty.');
       }
 
-      replacement = value.trim();
+      // A placeholder (`undefined`, `None`) has no type yet: plain text is
+      // a string, like UE's text box; code stays code.
+      replacement =
+        (literal.kind === 'undefined' || literal.kind === 'null') &&
+        !looksLikeCode(value.trim(), doc)
+          ? (syntax.declarations?.string(value) ?? JSON.stringify(value))
+          : value.trim();
     }
   }
 
@@ -1053,7 +1095,10 @@ function applySymbolOp(
         | 'addVariable'
         | 'addSignal'
         | 'renameSymbol'
-        | 'deleteSymbol';
+        | 'deleteSymbol'
+        | 'setSymbolType'
+        | 'setSymbolValue'
+        | 'setModifier';
     }
   >,
   syntax: StatementSyntax
@@ -1093,6 +1138,39 @@ function applySymbolOp(
 
     case 'renameSymbol': {
       return renameSymbol(text, doc, op.symbol, op.name, declarations);
+    }
+
+    case 'setSymbolType': {
+      return setSymbolType(
+        text,
+        doc,
+        op.symbol,
+        op.typeText,
+        declarations,
+        op.defaultValue
+      );
+    }
+
+    case 'setSymbolValue': {
+      return setSymbolValue(
+        text,
+        doc,
+        op.symbol,
+        op.value,
+        op.kind,
+        declarations
+      );
+    }
+
+    case 'setModifier': {
+      return setModifier(
+        text,
+        doc,
+        op.symbol,
+        op.modifier,
+        op.enabled,
+        declarations
+      );
     }
 
     case 'deleteSymbol': {

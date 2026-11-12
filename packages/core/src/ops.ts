@@ -1,4 +1,4 @@
-import type { GraphDocument, PinRef, Point } from './ir';
+import type { DataType, GraphDocument, PinRef, Point } from './ir';
 import type { ModuleReference } from './module-refs';
 
 /** A text replacement on the original source. */
@@ -70,7 +70,78 @@ export type GraphOp =
   /** Renames a symbol and its uses in the file. */
   | { type: 'renameSymbol'; symbol: string; name: string }
   /** Removes the declaration of a symbol (its uses stay). */
-  | { type: 'deleteSymbol'; symbol: string };
+  | { type: 'deleteSymbol'; symbol: string }
+  /**
+   * Sets (or with `null` removes) the declared type of a variable. A
+   * `defaultValue` replaces a missing or placeholder value (`undefined`,
+   * `None`), like UE resets the default value when the type changes.
+   */
+  | {
+      type: 'setSymbolType';
+      symbol: string;
+      typeText: string | null;
+      defaultValue?: string;
+    }
+  /**
+   * Sets (or with `null` removes) the value of a variable. `kind` tells how
+   * to write it: `string` is quoted by the language, `expression` is code.
+   */
+  | {
+      type: 'setSymbolValue';
+      symbol: string;
+      value: string | null;
+      kind: ValueKind;
+    }
+  /**
+   * Turns a modifier of a declaration on or off: `export`, `static`,
+   * `readonly`, `@export`, `@onready`, or the declaration keyword
+   * (`const`, `let`, `var`; turning one on replaces the other).
+   */
+  | {
+      type: 'setModifier';
+      symbol: string;
+      modifier: string;
+      enabled: boolean;
+    };
+
+/** How a value typed in the Details panel is written. */
+export type ValueKind = 'string' | 'number' | 'bool' | 'expression';
+
+/** A basic type of a language, for the type picker. */
+export interface TypeOption {
+  /** As written in the code (`string`, `int`, `Vector2`). */
+  name: string;
+  /** Pin type (color and value editor). */
+  dataType: DataType;
+  /** Value of a new variable of this type (`""`, `0`, `Vector2.ZERO`). */
+  defaultValue: string;
+}
+
+/**
+ * Types of a language, as data (sent from the parser worker to the type
+ * picker). Containers are templates with `T` (`T[]`, `list[T]`) and `K`/`V`.
+ */
+export interface TypeSystemInfo {
+  primitives: TypeOption[];
+  array?: string;
+  map?: string;
+  set?: string;
+  optional?: string;
+  /** Values of new containers (`[]`, `new Map()`, `set()`). */
+  containerDefaults?: { array?: string; map?: string; set?: string };
+  /** Modifiers the Details panel offers per kind of symbol. */
+  modifiers: Partial<
+    Record<
+      'variable' | 'constant' | 'member' | 'local',
+      {
+        /** Mutually exclusive declaration keywords (`const` / `let`). */
+        keywords?: string[];
+        /** Independent switches (`export`, `@export`). */
+        flags?: string[];
+      }
+    >
+  >;
+}
 
 export type OpResult =
   | { ok: true; edits: TextEdit[] }
@@ -87,6 +158,8 @@ export interface LanguageBackend {
   applyOp(text: string, op: GraphOp, fileName?: string): OpResult;
   /** Files referenced by the source (imports, …) for Ctrl/Cmd+click. */
   references?(text: string, fileName?: string): ModuleReference[];
+  /** Types and modifiers offered by the Details panel. */
+  typeSystem?: TypeSystemInfo;
 }
 
 /**

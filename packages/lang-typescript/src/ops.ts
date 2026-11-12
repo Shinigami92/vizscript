@@ -1,10 +1,13 @@
 import type {
   DeclarationSyntax,
+  GraphDocument,
   GraphOp,
   OpResult,
+  ScriptSymbol,
   StatementSyntax,
+  TypeSystemInfo,
 } from '@vizscript/core';
-import { applyTextOp } from '@vizscript/core';
+import { applyTextOp, removeModifier, replaceKeyword } from '@vizscript/core';
 import { parseFile, parseTypeScript } from './lower';
 import { renameTypeScriptSymbol } from './rename';
 
@@ -18,9 +21,118 @@ const KEYWORDS = new Set(
   ).split(' ')
 );
 
+const KINDS = ['const', 'let', 'var'];
+
+export const TYPESCRIPT_TYPES: TypeSystemInfo = {
+  primitives: [
+    { name: 'string', dataType: 'string', defaultValue: "''" },
+    { name: 'number', dataType: 'number', defaultValue: '0' },
+    { name: 'boolean', dataType: 'bool', defaultValue: 'false' },
+    { name: 'bigint', dataType: 'bigint', defaultValue: '0n' },
+    { name: 'object', dataType: 'object', defaultValue: '{}' },
+    { name: 'Date', dataType: 'Date', defaultValue: 'new Date()' },
+    { name: 'RegExp', dataType: 'regexp', defaultValue: '/(?:)/' },
+    { name: 'unknown', dataType: 'any', defaultValue: 'undefined' },
+  ],
+  array: 'T[]',
+  map: 'Map<K, V>',
+  set: 'Set<T>',
+  optional: 'T | null',
+  containerDefaults: { array: '[]', map: 'new Map()', set: 'new Set()' },
+  modifiers: {
+    variable: { keywords: KINDS, flags: ['export'] },
+    constant: { keywords: KINDS, flags: ['export'] },
+    local: { keywords: KINDS },
+    member: { flags: ['static', 'readonly'] },
+  },
+};
+
+/** Quote most strings of the file use. */
+function quoteOf(text: string): string {
+  const single = text.match(/'/g)?.length ?? 0;
+  const double = text.match(/"/g)?.length ?? 0;
+  return single > double ? "'" : '"';
+}
+
+function setModifier(
+  text: string,
+  _doc: GraphDocument,
+  symbol: ScriptSymbol,
+  modifier: string,
+  enabled: boolean
+): OpResult {
+  if (KINDS.includes(modifier)) {
+    if (!enabled) {
+      return { ok: true, edits: [] };
+    }
+
+    if (modifier === 'const' && !symbol.defaultRange) {
+      return { ok: false, error: `A const needs a value; set one first.` };
+    }
+
+    return replaceKeyword(text, symbol, KINDS, modifier);
+  }
+
+  if (modifier === 'export') {
+    if (symbol.scope !== '' || symbol.kind === 'local') {
+      return { ok: false, error: 'Only module declarations can be exported.' };
+    }
+
+    if (!enabled) {
+      return removeModifier(text, symbol, 'export');
+    }
+
+    const at = (symbol.declarationRange ?? symbol.range).start;
+    return { ok: true, edits: [{ start: at, end: at, text: 'export ' }] };
+  }
+
+  if (modifier === 'static' || modifier === 'readonly') {
+    if (symbol.scope === '' || symbol.kind === 'local') {
+      return { ok: false, error: `Only class members can be ${modifier}.` };
+    }
+
+    if (!enabled) {
+      return removeModifier(text, symbol, modifier);
+    }
+
+    // `private static readonly name`: static before readonly.
+    const lineStart = text.lastIndexOf('\n', symbol.nameRange.start - 1) + 1;
+    const head = text.slice(lineStart, symbol.nameRange.start);
+    const readonly = head.search(/\breadonly\b/);
+    const at =
+      modifier === 'static' && readonly !== -1
+        ? lineStart + readonly
+        : symbol.nameRange.start;
+    return { ok: true, edits: [{ start: at, end: at, text: `${modifier} ` }] };
+  }
+
+  return { ok: false, error: `Unknown modifier ${modifier}.` };
+}
+
 /** Declarations of "My Script"; renames parse the file again. */
-function declarations(fileName?: string): DeclarationSyntax {
+function declarations(text: string, fileName?: string): DeclarationSyntax {
+  const isJs = /\.[cm]?jsx?$/i.test(fileName ?? '');
   return {
+    typeSystem: TYPESCRIPT_TYPES,
+    validType: (type) => {
+      if (isJs) {
+        return 'JavaScript has no type annotations.';
+      }
+
+      try {
+        const parsed = parseFile(`let x: ${type};`, 'type.ts');
+        const body = parsed.program.body;
+        return (parsed.errors?.length ?? 0) > 0 || body.length !== 1
+          ? `"${type}" is not a valid TypeScript type.`
+          : undefined;
+      } catch {
+        return `"${type}" is not a valid TypeScript type.`;
+      }
+    },
+    string: (value) => quoteString(value, quoteOf(text)),
+    booleans: { true: 'true', false: 'false' },
+    valueRequired: (symbol) => symbol.modifiers.includes('const'),
+    setModifier,
     identifier: /^[A-Za-z_$][\w$]*$/,
     keywords: KEYWORDS,
     defaultIndent: '  ',
@@ -36,9 +148,9 @@ function declarations(fileName?: string): DeclarationSyntax {
 
       return constant ? `const ${name} = undefined;` : `let ${name};`;
     },
-    rename: (text, doc, symbol, name) =>
+    rename: (source, doc, symbol, name) =>
       renameTypeScriptSymbol(
-        parseFile(text, fileName).program,
+        parseFile(source, fileName).program,
         doc.symbols ?? [],
         symbol,
         name
@@ -122,6 +234,6 @@ export function applyTypeScriptOp(
 ): OpResult {
   return applyTextOp(text, parseTypeScript(text, fileName), op, {
     ...TYPESCRIPT_SYNTAX,
-    declarations: declarations(fileName),
+    declarations: declarations(text, fileName),
   });
 }

@@ -1,10 +1,13 @@
 import type {
   DeclarationSyntax,
+  GraphDocument,
   GraphOp,
   OpResult,
+  ScriptSymbol,
   StatementSyntax,
+  TypeSystemInfo,
 } from '@vizscript/core';
-import { applyTextOp } from '@vizscript/core';
+import { applyTextOp, removeModifier, replaceKeyword } from '@vizscript/core';
 import { parseGDScriptDocument } from './lower';
 import { parseGDScript } from './parser';
 import { renameGDScriptSymbol } from './rename';
@@ -39,7 +42,113 @@ const KEYWORDS = new Set(
   ).split(' ')
 );
 
+const KINDS = ['var', 'const'];
+
+export const GDSCRIPT_TYPES: TypeSystemInfo = {
+  primitives: [
+    { name: 'bool', dataType: 'bool', defaultValue: 'false' },
+    { name: 'int', dataType: 'number', defaultValue: '0' },
+    { name: 'float', dataType: 'number', defaultValue: '0.0' },
+    { name: 'String', dataType: 'string', defaultValue: '""' },
+    { name: 'StringName', dataType: 'string', defaultValue: '&""' },
+    { name: 'NodePath', dataType: 'string', defaultValue: '^""' },
+    { name: 'Vector2', dataType: 'Vector2', defaultValue: 'Vector2.ZERO' },
+    { name: 'Vector2i', dataType: 'Vector2i', defaultValue: 'Vector2i.ZERO' },
+    { name: 'Vector3', dataType: 'Vector3', defaultValue: 'Vector3.ZERO' },
+    { name: 'Vector3i', dataType: 'Vector3i', defaultValue: 'Vector3i.ZERO' },
+    { name: 'Color', dataType: 'Color', defaultValue: 'Color.WHITE' },
+    { name: 'Rect2', dataType: 'Rect2', defaultValue: 'Rect2()' },
+    {
+      name: 'Transform2D',
+      dataType: 'Transform2D',
+      defaultValue: 'Transform2D.IDENTITY',
+    },
+    { name: 'Dictionary', dataType: 'object', defaultValue: '{}' },
+    { name: 'Node', dataType: 'Node', defaultValue: 'null' },
+    { name: 'Resource', dataType: 'Resource', defaultValue: 'null' },
+    { name: 'Variant', dataType: 'any', defaultValue: 'null' },
+  ],
+  array: 'Array[T]',
+  map: 'Dictionary[K, V]',
+  containerDefaults: { array: '[]', map: '{}' },
+  modifiers: {
+    variable: { keywords: KINDS, flags: ['@export', '@onready', 'static'] },
+    constant: { keywords: KINDS },
+    local: { keywords: KINDS },
+    member: { keywords: KINDS },
+  },
+};
+
+function setModifier(
+  text: string,
+  _doc: GraphDocument,
+  symbol: ScriptSymbol,
+  modifier: string,
+  enabled: boolean
+): OpResult {
+  if (KINDS.includes(modifier)) {
+    if (!enabled) {
+      return { ok: true, edits: [] };
+    }
+
+    if (modifier === 'const' && !symbol.defaultRange) {
+      return { ok: false, error: 'A const needs a value; set one first.' };
+    }
+
+    if (
+      modifier === 'const' &&
+      symbol.modifiers.some((m) => m.startsWith('@') || m === 'static')
+    ) {
+      return {
+        ok: false,
+        error: 'Remove @export, @onready and static before making it const.',
+      };
+    }
+
+    return replaceKeyword(text, symbol, KINDS, modifier);
+  }
+
+  if (['@export', '@onready', 'static'].includes(modifier)) {
+    if (symbol.kind === 'local' || symbol.scope !== '') {
+      return {
+        ok: false,
+        error: `Only member variables of the script can be ${modifier}.`,
+      };
+    }
+
+    if (!enabled) {
+      return removeModifier(text, symbol, modifier);
+    }
+
+    if (symbol.modifiers.includes('const')) {
+      return { ok: false, error: `A const cannot be ${modifier}.` };
+    }
+
+    // Annotations come first, `static` right before `var`.
+    const head = text.slice(symbol.range.start, symbol.nameRange.start);
+    const keyword = head.search(/\bvar\b/);
+    const at =
+      modifier === 'static' && keyword !== -1
+        ? symbol.range.start + keyword
+        : symbol.range.start;
+    return { ok: true, edits: [{ start: at, end: at, text: `${modifier} ` }] };
+  }
+
+  return { ok: false, error: `Unknown modifier ${modifier}.` };
+}
+
 const DECLARATIONS: DeclarationSyntax = {
+  typeSystem: GDSCRIPT_TYPES,
+  validType: (type) =>
+    /^[A-Za-z_][\w.]*(?:\[\s*[A-Za-z_][\w.]*\s*(?:,\s*[A-Za-z_][\w.]*\s*)?\])?$/.test(
+      type
+    )
+      ? undefined
+      : `"${type}" is not a valid GDScript type.`,
+  string: (value) => JSON.stringify(value),
+  booleans: { true: 'true', false: 'false' },
+  valueRequired: (symbol) => symbol.modifiers.includes('const'),
+  setModifier,
   identifier: /^[A-Za-z_]\w*$/,
   keywords: KEYWORDS,
   defaultIndent: '\t',

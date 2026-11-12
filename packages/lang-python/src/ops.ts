@@ -4,6 +4,7 @@ import type {
   OpResult,
   PinLiteral,
   StatementSyntax,
+  TypeSystemInfo,
 } from '@vizscript/core';
 import { applyTextOp } from '@vizscript/core';
 import { parsePython, splitString } from './convert';
@@ -42,7 +43,45 @@ const KEYWORDS = new Set(
   ).split(' ')
 );
 
+export const PYTHON_TYPES: TypeSystemInfo = {
+  primitives: [
+    { name: 'str', dataType: 'string', defaultValue: '""' },
+    { name: 'int', dataType: 'number', defaultValue: '0' },
+    { name: 'float', dataType: 'number', defaultValue: '0.0' },
+    { name: 'bool', dataType: 'bool', defaultValue: 'False' },
+    { name: 'bytes', dataType: 'string', defaultValue: 'b""' },
+    { name: 'object', dataType: 'any', defaultValue: 'None' },
+  ],
+  array: 'list[T]',
+  map: 'dict[K, V]',
+  set: 'set[T]',
+  optional: 'T | None',
+  containerDefaults: { array: '[]', map: '{}', set: 'set()' },
+  // Python has no declaration keywords; constants are UPPER_CASE names.
+  modifiers: {},
+};
+
 const DECLARATIONS: DeclarationSyntax = {
+  typeSystem: PYTHON_TYPES,
+  validType: (type) => {
+    const { body, diagnostics } = parsePython(`x: ${type} = None\n`);
+    const [stmt] = body;
+    return diagnostics.length > 0 ||
+      body.length !== 1 ||
+      stmt?.type !== 'Assign' ||
+      !stmt.annotation
+      ? `"${type}" is not a valid Python type.`
+      : undefined;
+  },
+  string: (value) => JSON.stringify(value),
+  booleans: { true: 'True', false: 'False' },
+  // `x = 1` needs its value; `x: int` alone is a declaration (not `self.x`).
+  valueRequired: (symbol, typed) =>
+    !typed || symbol.modifiers.some((m) => m.endsWith('.')),
+  setModifier: () => ({
+    ok: false,
+    error: 'Python has no declaration modifiers; constants are UPPER_CASE.',
+  }),
   identifier: /^[A-Za-z_]\w*$/,
   keywords: KEYWORDS,
   defaultIndent: '    ',

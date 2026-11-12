@@ -1,6 +1,6 @@
 import type { CommentSyntax } from './comment-ops';
 import type { GraphDocument, SourceRange } from './ir';
-import type { OpResult, TextEdit } from './ops';
+import type { OpResult, TextEdit, TypeSystemInfo, ValueKind } from './ops';
 import type { ScriptSymbol } from './symbols';
 import { qualifiedName } from './symbols';
 import { lineIndent, lineStart } from './text-utils';
@@ -31,6 +31,24 @@ export interface DeclarationSyntax {
   ) => string;
   /** A new signal (GDScript). */
   signal?: (name: string) => string;
+  /** Types and modifiers offered by the Details panel. */
+  typeSystem: TypeSystemInfo;
+  /** Error message for an invalid type annotation. */
+  validType: (text: string) => string | undefined;
+  /** A string literal (`"text"` with the language's escapes). */
+  string: (value: string) => string;
+  /** Boolean literals. */
+  booleans: { true: string; false: string };
+  /** Whether a variable cannot exist without a value (`const`, Python). */
+  valueRequired: (symbol: ScriptSymbol, typed: boolean) => boolean;
+  /** Turns a modifier of a declaration on or off. */
+  setModifier: (
+    text: string,
+    doc: GraphDocument,
+    symbol: ScriptSymbol,
+    modifier: string,
+    enabled: boolean
+  ) => OpResult;
   /**
    * Edits that rename a symbol and its uses; backends resolve the uses with
    * their own scope rules.
@@ -480,4 +498,272 @@ export function renameSymbol(
 
   const error = checkName(doc, syntax, symbol.scope, name, symbol);
   return error ? failed(error) : syntax.rename(text, doc, symbol, name);
+}
+
+const TYPED_KINDS = new Set(['variable', 'constant', 'local']);
+
+/** End of a name, after TypeScript's `?` / `!` markers. */
+function afterName(text: string, symbol: ScriptSymbol): number {
+  let end = symbol.nameRange.end;
+  while (text[end] === '?' || text[end] === '!') {
+    end++;
+  }
+
+  return end;
+}
+
+function typedSymbol(doc: GraphDocument, id: string): ScriptSymbol | string {
+  const symbol = findSymbol(doc, id);
+  if (!symbol) {
+    return 'Unknown symbol.';
+  }
+
+  return TYPED_KINDS.has(symbol.kind)
+    ? symbol
+    : `${symbol.name} is not a variable.`;
+}
+
+/** Adds, changes or removes the type annotation of a variable. */
+export function setSymbolType(
+  text: string,
+  doc: GraphDocument,
+  id: string,
+  typeText: string | null,
+  syntax: DeclarationSyntax,
+  defaultValue?: string
+): OpResult {
+  const symbol = typedSymbol(doc, id);
+  if (typeof symbol === 'string') {
+    return failed(symbol);
+  }
+
+  const result = typeEdits(text, symbol, typeText, syntax);
+  const current = symbol.defaultRange
+    ? text.slice(symbol.defaultRange.start, symbol.defaultRange.end).trim()
+    : undefined;
+  if (
+    !result.ok ||
+    !defaultValue ||
+    !typeText?.trim() ||
+    (current !== undefined && !PLACEHOLDERS.has(current))
+  ) {
+    return result;
+  }
+
+  // The new type's default value replaces a placeholder or missing value.
+  if (symbol.defaultRange) {
+    return succeeded([
+      ...result.edits,
+      {
+        start: symbol.defaultRange.start,
+        end: symbol.defaultRange.end,
+        text: defaultValue,
+      },
+    ]);
+  }
+
+  const [typeEdit] = result.edits;
+  return typeEdit
+    ? succeeded([{ ...typeEdit, text: `${typeEdit.text} = ${defaultValue}` }])
+    : result;
+}
+
+const PLACEHOLDERS = new Set(['undefined', 'null', 'None']);
+
+function typeEdits(
+  text: string,
+  symbol: ScriptSymbol,
+  typeText: string | null,
+  syntax: DeclarationSyntax
+): OpResult {
+  const type = typeText?.trim() || null;
+  if (type) {
+    const error = syntax.validType(type);
+    if (error) {
+      return failed(error);
+    }
+  }
+
+  if (symbol.type) {
+    const colon = text.lastIndexOf(':', symbol.type.range.start);
+    if (colon < symbol.nameRange.end) {
+      return failed('Cannot find the type annotation.');
+    }
+
+    if (type) {
+      return succeeded([
+        { start: colon, end: symbol.type.range.end, text: `: ${type}` },
+      ]);
+    }
+
+    if (!symbol.defaultRange && syntax.valueRequired(symbol, false)) {
+      return failed(`${symbol.name} needs a value to have no type.`);
+    }
+
+    return succeeded([{ start: colon, end: symbol.type.range.end, text: '' }]);
+  }
+
+  if (!type) {
+    return succeeded([]);
+  }
+
+  const at = afterName(text, symbol);
+  // GDScript: `var x := 1` → `var x: int = 1`
+  const inferred = text.slice(at).match(/^\s*:=/);
+  if (inferred) {
+    return succeeded([
+      { start: at, end: at + inferred[0].length, text: `: ${type} =` },
+    ]);
+  }
+
+  return succeeded([{ start: at, end: at, text: `: ${type}` }]);
+}
+
+/** Writes a value of the given kind in the language's syntax. */
+function valueSource(
+  value: string,
+  kind: ValueKind,
+  syntax: DeclarationSyntax
+): string | { error: string } {
+  switch (kind) {
+    case 'string': {
+      return syntax.string(value);
+    }
+
+    case 'bool': {
+      return value === 'true' ? syntax.booleans.true : syntax.booleans.false;
+    }
+
+    case 'number': {
+      const trimmed = value.trim();
+      return trimmed === '' || Number.isNaN(Number(trimmed.replaceAll('_', '')))
+        ? { error: `"${value}" is not a number.` }
+        : trimmed;
+    }
+
+    case 'expression': {
+      return value.trim() === ''
+        ? { error: 'The value must not be empty.' }
+        : value.trim();
+    }
+  }
+}
+
+/** Sets or removes the value (initializer) of a variable. */
+export function setSymbolValue(
+  text: string,
+  doc: GraphDocument,
+  id: string,
+  value: string | null,
+  kind: ValueKind,
+  syntax: DeclarationSyntax
+): OpResult {
+  const symbol = typedSymbol(doc, id);
+  if (typeof symbol === 'string') {
+    return failed(symbol);
+  }
+
+  const from = symbol.type ? symbol.type.range.end : afterName(text, symbol);
+  if (value === null) {
+    if (!symbol.defaultRange) {
+      return succeeded([]);
+    }
+
+    if (syntax.valueRequired(symbol, symbol.type !== undefined)) {
+      return failed(`${symbol.name} needs a value.`);
+    }
+
+    return succeeded([{ start: from, end: symbol.defaultRange.end, text: '' }]);
+  }
+
+  const source = valueSource(value, kind, syntax);
+  if (typeof source !== 'string') {
+    return failed(source.error);
+  }
+
+  if (symbol.defaultRange) {
+    return succeeded([
+      {
+        start: symbol.defaultRange.start,
+        end: symbol.defaultRange.end,
+        text: source,
+      },
+    ]);
+  }
+
+  return succeeded([{ start: from, end: from, text: ` = ${source}` }]);
+}
+
+export function setModifier(
+  text: string,
+  doc: GraphDocument,
+  id: string,
+  modifier: string,
+  enabled: boolean,
+  syntax: DeclarationSyntax
+): OpResult {
+  const symbol = findSymbol(doc, id);
+  if (!symbol) {
+    return failed('Unknown symbol.');
+  }
+
+  if (symbol.modifiers.includes(modifier) === enabled) {
+    return succeeded([]);
+  }
+
+  return syntax.setModifier(text, doc, symbol, modifier, enabled);
+}
+
+/**
+ * Replaces the declaration keyword (`const` → `let`, `var` → `const`) that
+ * comes before the name of a symbol.
+ */
+export function replaceKeyword(
+  text: string,
+  symbol: ScriptSymbol,
+  keywords: ReadonlyArray<string>,
+  next: string
+): OpResult {
+  const start = (symbol.declarationRange ?? symbol.range).start;
+  const head = text.slice(start, symbol.nameRange.start);
+  const pattern = new RegExp(String.raw`\b(?:${keywords.join('|')})\b`, 'g');
+  const match = [...head.matchAll(pattern)].at(-1);
+  if (!match) {
+    return failed(`Cannot find the ${keywords.join(' / ')} of ${symbol.name}.`);
+  }
+
+  const at = start + match.index;
+  return succeeded([{ start: at, end: at + match[0].length, text: next }]);
+}
+
+/**
+ * Removes a modifier word (with its arguments and the space after it) that
+ * stands before the name, also on a line of its own above the declaration
+ * (`@export` in GDScript).
+ */
+export function removeModifier(
+  text: string,
+  symbol: ScriptSymbol,
+  modifier: string
+): OpResult {
+  let start = (symbol.declarationRange ?? symbol.range).start;
+  // An annotation alone on the line above belongs to the declaration.
+  const above = lineStart(text, Math.max(lineStart(text, start) - 1, 0));
+  if (
+    /^\s*@\w+(?:\([^)]*\))?\s*$/.test(text.slice(above, lineStart(text, start)))
+  ) {
+    start = above;
+  }
+
+  const head = text.slice(start, symbol.nameRange.start);
+  const escaped = modifier.replaceAll(/[$.*+?^()[\]{}|\\]/g, String.raw`\$&`);
+  const match = head.match(
+    new RegExp(String.raw`(?:^|(?<=\s))${escaped}(?:\([^)]*\))?\s+`)
+  );
+  if (match?.index === undefined) {
+    return failed(`${symbol.name} has no ${modifier}.`);
+  }
+
+  const at = start + match.index;
+  return succeeded([{ start: at, end: at + match[0].length, text: '' }]);
 }

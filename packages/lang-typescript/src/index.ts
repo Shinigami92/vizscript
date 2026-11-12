@@ -1,6 +1,6 @@
 import type { LanguageBackend } from '@vizscript/core';
 import { LANGUAGE_ID, parseTypeScript } from './lower';
-import { applyTypeScriptOp } from './ops';
+import { applyTypeScriptOp, TYPESCRIPT_TYPES } from './ops';
 import { typeScriptReferences } from './references';
 
 export { applyTypeScriptOp } from './ops';
@@ -14,4 +14,5 @@ export const typescriptBackend: LanguageBackend = {
   parse: parseTypeScript,
   applyOp: applyTypeScriptOp,
   references: typeScriptReferences,
+  typeSystem: TYPESCRIPT_TYPES,
 };
