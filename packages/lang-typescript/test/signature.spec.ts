@@ -156,4 +156,21 @@ describe('lone values (UE: a Get node on its own)', () => {
       })
     ).toBe('const o = 1;\n({ a: o });\n');
   });
+
+  it('adds a Return node with the first result type, like UE', () => {
+    expect(
+      apply('function f(a: string) {\n  log(a);\n}\n', {
+        type: 'setReturnType',
+        symbol: 'function:f',
+        typeText: 'string',
+      })
+    ).toBe('function f(a: string): string {\n  log(a);\n  return;\n}\n');
+    expect(
+      apply('function f() {\n  return 1;\n}\n', {
+        type: 'setReturnType',
+        symbol: 'function:f',
+        typeText: 'number',
+      })
+    ).toBe('function f(): number {\n  return 1;\n}\n');
+  });
 });

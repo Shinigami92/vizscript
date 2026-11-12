@@ -15,6 +15,7 @@ import type {
   StatementMeta,
 } from './edit-meta';
 import { getMeta, owningStatement } from './edit-meta';
+import { endOfFunction } from './flow';
 import type {
   GraphDocument,
   GraphEdge,
@@ -1630,6 +1631,41 @@ function removeArgument(
   ]);
 }
 
+const NO_RESULT = new Set(['void', 'None', 'undefined', 'null', 'never']);
+
+/**
+ * Like UE adds a Return node with the first output: a function that gets a
+ * result type but has no `return` gets one at the end of its flow, in the
+ * same edit.
+ */
+function withReturnNode(
+  text: string,
+  doc: GraphDocument,
+  symbolId: string,
+  typeText: string | null,
+  result: OpResult,
+  syntax: StatementSyntax
+): OpResult {
+  const type = typeText?.trim() ?? '';
+  const fnId = doc.symbols?.find((s) => s.id === symbolId)?.fnId;
+  const fn = doc.functions.find((f) => f.id === fnId);
+  if (
+    !result.ok ||
+    type === '' ||
+    NO_RESULT.has(type) ||
+    !fn ||
+    fn.nodes.some((n) => n.kind === 'return')
+  ) {
+    return result;
+  }
+
+  const anchor = endOfFunction(doc, fn.id);
+  const added = anchor
+    ? addNode(text, doc, { type: 'return' }, anchor, syntax)
+    : undefined;
+  return added?.ok ? succeeded([...result.edits, ...added.edits]) : result;
+}
+
 /** Ops of "My Script": add, rename and delete declarations. */
 function applySymbolOp(
   text: string,
@@ -1772,7 +1808,14 @@ function applySymbolOp(
     }
 
     case 'setReturnType': {
-      return setReturnType(text, doc, op.symbol, op.typeText, declarations);
+      return withReturnNode(
+        text,
+        doc,
+        op.symbol,
+        op.typeText,
+        setReturnType(text, doc, op.symbol, op.typeText, declarations),
+        syntax
+      );
     }
 
     case 'setModifier': {

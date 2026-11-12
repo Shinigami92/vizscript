@@ -4,6 +4,7 @@ export * from './collapse';
 export * from './comment-ops';
 export * from './comments';
 export * from './edit-meta';
+export * from './flow';
 export * from './geometry';
 export * from './graph-builder';
 export * from './ids';
