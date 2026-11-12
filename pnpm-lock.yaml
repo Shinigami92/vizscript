@@ -191,6 +191,12 @@ importers:
         specifier: 5.1.0
         version: 5.1.0(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.7(@types/node@26.6.6)(jiti@2.7.0))
 
+  packages/canvas:
+    dependencies:
+      '@vizscript/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/core: {}
 
   packages/lang-gdscript:

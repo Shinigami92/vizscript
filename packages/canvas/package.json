@@ -1,0 +1,17 @@
+{
+  "name": "@vizscript/canvas",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Canvas2D Blueprint-style graph renderer",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "ts-check": "tsc"
+  },
+  "dependencies": {
+    "@vizscript/core": "workspace:*"
+  }
+}
