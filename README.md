@@ -60,7 +60,9 @@ On phones the viewer is read-only: you can switch between code and graph, pan an
 - Sign-in through Keycloak with GitHub as identity provider
 - GitLab provider
 - More languages (C#, Rust, Go, C++, Ruby, …)
-- Real type information for pins in all typed languages (e.g. through the TypeScript language service)
+- Real type information for pins in all typed languages (e.g. through the TypeScript language service), and with it the members of a dragged pin's type in the action menu (`response.ok`, `response.json()`), like UE's "Target is …" actions
+- Events in the action menu, like UE's "Add Event": GDScript callbacks (`_ready`, `_process`, `_input`) and signal handlers, overridable methods of a base class in TypeScript and Python
+- Disable a node, like UE's Enabled State (the statement is commented out)
 - Side-by-side editor groups (two files next to each other), with cross-file rename and find references
 - Desktop app based on Tauri
 - VS Code extension that shows the graph view inside VS Code
