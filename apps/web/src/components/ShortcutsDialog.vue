@@ -112,6 +112,10 @@ const GROUPS: ReadonlyArray<{
         action: 'Add a function, variable, local or signal',
         input: 'The {+} of its section or class',
       },
+      {
+        action: 'Edit inputs and output',
+        input: 'Select a function; Details lists its inputs and output',
+      },
       { action: 'Rename', input: '{F2}, or right-click → Rename' },
       { action: 'Delete', input: '{Delete}, or right-click → Delete' },
     ],
