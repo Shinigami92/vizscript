@@ -108,6 +108,18 @@ const GROUPS: ReadonlyArray<{
         input: 'Drag a wire into empty space and type, or right-click',
       },
       {
+        action: 'Add a Branch, For Each loop or Return',
+        input: 'Hold {B}, {L} or {R} and click empty space',
+      },
+      {
+        action: 'Favorite an action',
+        input: 'Click the ☆ of an action in the action menu (shown on top)',
+      },
+      {
+        action: 'Fold an action category',
+        input: 'Click its title in the action menu',
+      },
+      {
         action: 'Disconnect a wire',
         input: '{Alt} + click a pin (the nodes stay)',
       },

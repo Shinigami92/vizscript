@@ -757,6 +757,7 @@ function scopeVariables(fnId: string | undefined): ScopeVariable[] {
 function callSignature(callee: string): {
   first?: DataType;
   returns?: DataType;
+  detail?: string;
 } {
   const name = callee.replace(/^(?:this|self)\./, '');
   const symbol = props.doc?.symbols?.find(
@@ -765,7 +766,20 @@ function callSignature(callee: string): {
       s.params !== undefined &&
       (s.kind === 'function' || s.kind === 'method' || s.kind === 'import')
   );
-  return symbol ? signature(symbol) : {};
+  if (!symbol) {
+    return {};
+  }
+
+  // UE's action tooltip: the signature, then the description.
+  const typed = signature(symbol, props.text);
+  const about = symbol.fnId
+    ? props.doc?.functions
+        .find((f) => f.id === symbol.fnId)
+        ?.nodes.find((n) => n.kind === 'entry')?.comment?.text
+    : undefined;
+  return typed.detail && about
+    ? { ...typed, detail: `${typed.detail}\n\n${about}` }
+    : typed;
 }
 
 /** UE's Context Sensitive: does a value of `from` fit into `to`? */
@@ -1069,12 +1083,14 @@ function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
       label: callee,
       category: 'Call function',
       icon: ICON_CALL,
+      detail: callSignature(callee).detail,
       action: () => addNode({ type: 'call', callee }, state),
     })),
     ...externalNames.value.map((external): ActionEntry => ({
       label: external.callee,
       category: 'Call function',
       icon: ICON_IMPORT,
+      detail: external.detail,
       hint: external.where,
       keywords: `${external.path} import`,
       action: () =>
@@ -1138,6 +1154,32 @@ function actionEntries(state: MenuState): ActionEntry[] {
     return [
       ...(props.editable ? addNodeActions(state, true) : []),
       ...(props.editable ? expressionActions(state) : []),
+      ...(props.editable
+        ? [
+            {
+              label: 'Paste here',
+              category: 'Graph',
+              icon: 'i-mdi-content-paste',
+              hint: shortcut('V'),
+              keywords: 'clipboard insert',
+              action: () => void pasteFromClipboard(state.world),
+            },
+          ]
+        : []),
+      ...(props.editable && selection.value.length > 0
+        ? [
+            {
+              // UE's "Add Comment…" around the selected nodes.
+              label: 'Add comment box around selection…',
+              category: 'Graph',
+              icon: 'i-mdi-comment-multiple-outline',
+              hint: 'C',
+              keywords: 'comment box region group',
+              action: () =>
+                createCommentBox([...selection.value], state.client),
+            },
+          ]
+        : []),
       {
         label: 'Find…',
         category: 'Graph',
@@ -1180,6 +1222,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
         label: `${callee}(value)`,
         category: 'Call function with this value',
         icon: ICON_CALL,
+        detail: callSignature(callee).detail,
         keywords: callee,
         fits: fitsType(pin.type, callSignature(callee).first),
         action: () =>
@@ -1196,6 +1239,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
           label: `${external.callee}(value)`,
           category: 'Call function with this value',
           icon: ICON_IMPORT,
+          detail: external.detail,
           hint: external.where,
           fits: fitsType(pin.type, external.first),
           keywords: `${external.callee} ${external.path} import`,
@@ -1286,6 +1330,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
       label: `${callee}()`,
       category: 'Call function',
       icon: ICON_CALL,
+      detail: callSignature(callee).detail,
       keywords: callee,
       fits: fitsType(callSignature(callee).returns, pin.type),
       action: () =>
@@ -1300,6 +1345,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
         label: expression,
         category: external.kind === 'function' ? 'Call function' : 'Variables',
         icon: ICON_IMPORT,
+        detail: external.detail,
         hint: external.where,
         fits:
           external.kind === 'function'
@@ -1546,6 +1592,7 @@ function replaceEntries(nodeId: string): ActionEntry[] {
           label: callee,
           category: 'Functions',
           icon: ICON_CALL,
+          detail: callSignature(callee).detail,
           keywords: callee,
           action: () => emitOp(replace(callee)),
         })),
@@ -1555,6 +1602,7 @@ function replaceEntries(nodeId: string): ActionEntry[] {
           label: external.callee,
           category: 'Functions',
           icon: ICON_IMPORT,
+          detail: external.detail,
           hint: external.where,
           keywords: `${external.callee} ${external.path} import`,
           action: () => emitOp(withImport(external, replace(external.callee))),
@@ -2531,6 +2579,66 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+/**
+ * UE's node hotkeys: hold a key and click empty space for a node there,
+ * at the end of the function under the pointer.
+ */
+const HOTKEYS: Record<string, { template: NodeTemplate; flow?: FlowTemplate }> =
+  {
+    b: { template: { type: 'branch' } },
+    l: { template: { type: 'flow', flow: 'forEach' }, flow: 'forEach' },
+    r: { template: { type: 'return' } },
+  };
+const heldKey = ref<string | null>(null);
+
+function onHotkeyDown(event: KeyboardEvent): void {
+  const key = event.key.toLowerCase();
+  if (
+    event.target === canvas.value &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    key in HOTKEYS
+  ) {
+    heldKey.value = key;
+  }
+}
+
+function onHotkeyUp(event: KeyboardEvent): void {
+  if (event.key.toLowerCase() === heldKey.value) {
+    heldKey.value = null;
+  }
+}
+
+useEventListener(window, 'blur', () => {
+  heldKey.value = null;
+});
+
+function onPointerDownCapture(event: PointerEvent): void {
+  const hotkey = heldKey.value ? HOTKEYS[heldKey.value] : undefined;
+  const v = view.value;
+  if (!hotkey || !v || !props.editable || event.button !== 0) {
+    return;
+  }
+
+  const world = v.worldAt(event.clientX, event.clientY);
+  if (
+    !v.isEmptyAt(world) ||
+    (hotkey.flow && !(props.types?.flow ?? []).includes(hotkey.flow))
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  addNode(hotkey.template, {
+    world,
+    client: { x: event.clientX, y: event.clientY },
+    target: { kind: 'background' },
+  });
+}
+
 function onPointerDown(event: PointerEvent): void {
   hideTooltip();
   // Mouse back / forward buttons, like in UE and browsers.
@@ -2580,7 +2688,10 @@ defineExpose({
     data-ui="graph-canvas"
     class="relative h-full w-full overflow-hidden"
     @keydown="onKeydown"
+    @keydown.capture="onHotkeyDown"
+    @keyup="onHotkeyUp"
     @pointermove="onPointerMove"
+    @pointerdown.capture="onPointerDownCapture"
     @pointerdown="onPointerDown"
     @wheel.passive="hideTooltip"
     @dragover="onDragOver"

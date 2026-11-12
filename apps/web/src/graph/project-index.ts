@@ -24,18 +24,54 @@ export interface ExternalName {
   /** Type of the first parameter and of the result, when known. */
   first?: DataType;
   returns?: DataType;
+  /** Signature for the action menu's tooltip (`clamp(v: number) → number`). */
+  detail?: string;
   request: ImportRequest;
 }
 
-/** Types of a function's first parameter and result (action menu filter). */
-export function signature(symbol: ScriptSymbol): {
+/**
+ * A function's signature in one neutral form for tooltips:
+ * `greet(name: string, times = 2) → string`. `text` is the file that
+ * declares it, for default values given as ranges.
+ */
+export function signatureText(
+  symbol: ScriptSymbol,
+  text?: string
+): string | undefined {
+  if (!symbol.params) {
+    return undefined;
+  }
+
+  const params = symbol.params.map((p) => {
+    const value =
+      p.defaultText ??
+      (p.defaultRange && text
+        ? text.slice(p.defaultRange.start, p.defaultRange.end)
+        : undefined);
+    return `${p.rest ? '…' : ''}${p.name}${p.type ? `: ${p.type.text}` : ''}${value === undefined ? '' : ` = ${value}`}`;
+  });
+  const returns = symbol.returns?.text;
+  return `${symbol.name}(${params.join(', ')})${returns ? ` → ${returns}` : ''}`;
+}
+
+/**
+ * Types of a function's first parameter and result (action menu filter),
+ * and its signature for the tooltip.
+ */
+export function signature(
+  symbol: ScriptSymbol,
+  text?: string
+): {
   first?: DataType;
   returns?: DataType;
+  detail?: string;
 } {
   const first = symbol.params?.find((p) => !p.rest)?.dataType;
+  const detail = signatureText(symbol, text);
   return {
     ...(first === undefined ? {} : { first }),
     ...(symbol.returnType === undefined ? {} : { returns: symbol.returnType }),
+    ...(detail === undefined ? {} : { detail }),
   };
 }
 

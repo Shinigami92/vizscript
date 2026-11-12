@@ -9,6 +9,8 @@ export interface ActionEntry {
   keywords?: string;
   /** Hint on the right, e.g. a type. */
   hint?: string;
+  /** Shown below the list while active, e.g. a signature and its doc. */
+  detail?: string;
   /**
    * Whether the action fits the pin the wire came from (types match).
    * Hidden while "Context Sensitive" is on; default `true`.
@@ -59,6 +61,31 @@ const viewport = useWindowSize();
 const query = ref('');
 const active = ref(0);
 const contextSensitive = useStorage('vizscript:context-sensitive', true);
+/** UE's favorites (★): pinned at the top, per browser. */
+const favorites = useStorage<string[]>('vizscript:action-favorites', []);
+/** Categories folded away (open again while searching). */
+const collapsed = useStorage<string[]>('vizscript:action-collapsed', []);
+
+const FAVORITES = 'Favorites';
+
+function keyOf(entry: ActionEntry): string {
+  return `${entry.category}:${entry.label}`;
+}
+
+function toggleFavorite(entry: ActionEntry): void {
+  const key = keyOf(entry);
+  favorites.value = favorites.value.includes(key)
+    ? favorites.value.filter((k) => k !== key)
+    : [...favorites.value, key];
+  input.value?.focus({ preventScroll: true });
+}
+
+function toggleCategory(category: string): void {
+  collapsed.value = collapsed.value.includes(category)
+    ? collapsed.value.filter((c) => c !== category)
+    : [...collapsed.value, category];
+  input.value?.focus({ preventScroll: true });
+}
 
 const position = computed(() => ({
   left: `${Math.max(4, Math.min(props.x, viewport.width.value - width.value - 4))}px`,
@@ -112,12 +139,38 @@ const groups = computed(() => {
     byCategory.set(entry.category, group);
   }
 
-  return [...byCategory.entries()]
+  const starred = new Set(favorites.value);
+  const pinned = [...byCategory.values()]
+    .flatMap((g) => g.items)
+    .filter((entry) => starred.has(keyOf(entry)));
+  const sorted = [...byCategory.entries()]
     .map(([category, g]) => ({ category, ...g }))
     .toSorted((a, b) => a.best - b.best || a.order - b.order);
+  const all =
+    pinned.length > 0
+      ? [{ category: FAVORITES, best: -1, order: -1, items: pinned }, ...sorted]
+      : sorted;
+
+  // Rows get their place in the keyboard order; folded groups have none.
+  let index = 0;
+  return all.map((group) => {
+    const folded = !text && collapsed.value.includes(group.category);
+    return {
+      category: group.category,
+      count: group.items.length,
+      folded,
+      rows: folded
+        ? []
+        : group.items.map((entry) => ({ entry, index: index++ })),
+    };
+  });
 });
 
-const flat = computed(() => groups.value.flatMap((g) => g.items));
+const flat = computed(() =>
+  groups.value.flatMap((g) => g.rows.map((r) => r.entry))
+);
+
+const activeEntry = computed(() => flat.value[active.value]);
 
 watch([query, contextSensitive], () => {
   active.value = 0;
@@ -243,47 +296,94 @@ onMounted(async () => {
       class="min-h-0 flex-1 overflow-y-auto px-1 pb-1"
     >
       <li
-        v-if="flat.length === 0"
+        v-if="groups.length === 0"
         class="px-3 py-2 text-xs text-zinc-500"
         role="presentation"
       >
         No matching actions.
       </li>
       <template v-for="group in groups" :key="group.category">
-        <li
-          role="presentation"
-          class="px-2.5 pt-2 pb-0.5 text-[11px] font-semibold tracking-wide text-zinc-500 uppercase"
-        >
-          {{ group.category }}
+        <li role="presentation">
+          <button
+            type="button"
+            tabindex="-1"
+            class="flex w-full items-center gap-1 rounded px-1.5 pt-2 pb-0.5 text-left text-[11px] font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-300"
+            :aria-expanded="!group.folded"
+            @click="toggleCategory(group.category)"
+          >
+            <span
+              class="shrink-0"
+              :class="
+                group.folded ? 'i-mdi-chevron-right' : 'i-mdi-chevron-down'
+              "
+            />
+            <span
+              v-if="group.category === FAVORITES"
+              class="i-mdi-star shrink-0 text-amber-400"
+            />
+            <span class="min-w-0 flex-1 truncate">{{ group.category }}</span>
+            <span
+              v-if="group.folded"
+              class="font-normal tracking-normal normal-case"
+              >{{ group.count }}</span
+            >
+          </button>
         </li>
         <li
-          v-for="entry in group.items"
-          :id="`action-${flat.indexOf(entry)}`"
-          :key="`${group.category}:${entry.label}`"
+          v-for="row in group.rows"
+          :id="`action-${row.index}`"
+          :key="`${group.category}|${keyOf(row.entry)}`"
           role="option"
-          :aria-selected="flat.indexOf(entry) === active"
-          :data-active="flat.indexOf(entry) === active"
-          class="flex cursor-pointer items-center gap-2 rounded px-2.5 py-1 text-zinc-200"
+          :aria-selected="row.index === active"
+          :data-active="row.index === active"
+          class="group flex cursor-pointer items-center gap-2 rounded px-2.5 py-1 text-zinc-200"
           :class="
-            flat.indexOf(entry) === active
-              ? 'bg-amber-500/20'
-              : 'hover:bg-zinc-800'
+            row.index === active ? 'bg-amber-500/20' : 'hover:bg-zinc-800'
           "
-          @mousemove="active = flat.indexOf(entry)"
-          @click="run(entry)"
+          @mousemove="active = row.index"
+          @click="run(row.entry)"
         >
           <span
             class="shrink-0"
-            :class="entry.icon ?? 'i-mdi-circle-small text-zinc-500'"
+            :class="row.entry.icon ?? 'i-mdi-circle-small text-zinc-500'"
           />
-          <span class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
+          <span class="min-w-0 flex-1 truncate">{{ row.entry.label }}</span>
           <span
-            v-if="entry.hint"
+            v-if="row.entry.hint"
             class="shrink-0 font-mono text-[11px] text-zinc-500"
-            >{{ entry.hint }}</span
+            >{{ row.entry.hint }}</span
           >
+          <button
+            type="button"
+            tabindex="-1"
+            class="shrink-0"
+            :class="
+              favorites.includes(keyOf(row.entry))
+                ? 'i-mdi-star text-amber-400'
+                : 'i-mdi-star-outline text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-amber-400'
+            "
+            :aria-label="
+              favorites.includes(keyOf(row.entry))
+                ? 'Remove from favorites'
+                : 'Add to favorites'
+            "
+            :title="
+              favorites.includes(keyOf(row.entry))
+                ? 'Remove from favorites'
+                : 'Add to favorites'
+            "
+            @click.stop="toggleFavorite(row.entry)"
+          />
         </li>
       </template>
     </ul>
+    <!-- UE's action tooltip: signature and description of the active one. -->
+    <div
+      v-if="activeEntry?.detail"
+      data-ui="action-detail"
+      class="border-t border-zinc-800 px-3 py-2 text-xs whitespace-pre-wrap text-zinc-400"
+    >
+      {{ activeEntry.detail }}
+    </div>
   </div>
 </template>
