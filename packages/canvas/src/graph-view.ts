@@ -154,6 +154,8 @@ export interface GraphViewEvents {
     from?: PinRef;
   };
   activate: { nodeId: string };
+  /** A function's frame title was double-clicked (open it on its own). */
+  openFunction: { fnId: string };
   /** Double-click on a comment bubble or comment box title. */
   editComment: {
     target: CommentTarget;
@@ -1989,6 +1991,11 @@ export class GraphView {
 
     if (hit.type === 'bubble') {
       this.editComment({ kind: 'node', nodeId: hit.ns.node.id });
+      return;
+    }
+
+    if (hit.type === 'frame' && hit.frame.kind === 'function') {
+      this.emitter.emit('openFunction', { fnId: hit.frame.fnId });
       return;
     }
 
