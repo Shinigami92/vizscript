@@ -95,7 +95,7 @@ const KIND_LABELS: Record<string, string> = {
     data-ui="node-tooltip"
     ref="card"
     role="tooltip"
-    class="pointer-events-none fixed z-30 max-w-sm rounded-lg border border-zinc-700 bg-zinc-900/97 p-2.5 text-xs text-zinc-300 shadow-2xl"
+    class="motion-fade pointer-events-none fixed z-30 max-w-sm rounded-lg border border-zinc-700 bg-zinc-900/97 p-2.5 text-xs text-zinc-300 shadow-2xl"
     :style="position"
   >
     <ul v-if="problems && problems.length > 0" class="mb-2 space-y-1">

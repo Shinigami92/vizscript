@@ -232,7 +232,7 @@ function color(dataType: DataType): string {
         data-ui="type-picker-popover"
         role="dialog"
         aria-label="Type"
-        class="fixed z-50 flex max-h-96 flex-col rounded-lg border border-zinc-700 bg-zinc-900 text-xs shadow-2xl"
+        class="motion-pop fixed z-50 flex max-h-96 flex-col rounded-lg border border-zinc-700 bg-zinc-900 text-xs shadow-2xl"
         :style="popoverStyle"
         @keydown.esc.stop="open = false"
       >

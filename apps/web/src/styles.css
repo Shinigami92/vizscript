@@ -11,3 +11,81 @@ body {
 :root {
   color-scheme: dark;
 }
+
+/*
+ * Subtle enter animations, only for users who haven't asked their system
+ * for less motion. Opacity and translation only: menus measure their size
+ * (`getBoundingClientRect`) to stay inside the window.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .motion-pop {
+    animation: motion-pop 120ms ease-out;
+  }
+
+  .motion-fade {
+    animation: motion-fade 150ms ease-out;
+  }
+
+  .motion-toast {
+    animation: motion-toast 180ms ease-out;
+  }
+
+  .motion-drawer {
+    animation: motion-drawer 200ms ease-out;
+  }
+
+  .motion-expand {
+    animation: motion-expand 150ms ease-out;
+  }
+
+  .motion-flash {
+    animation: motion-flash 1.2s ease-out;
+  }
+
+  .motion-rotate {
+    transition: transform 150ms ease-out;
+  }
+}
+
+@keyframes motion-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes motion-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes motion-toast {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes motion-drawer {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes motion-expand {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes motion-flash {
+  from {
+    background-color: color-mix(
+      in srgb,
+      var(--colors-amber-500) 30%,
+      transparent
+    );
+  }
+}

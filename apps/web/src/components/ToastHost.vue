@@ -13,7 +13,7 @@ const { toasts, dismiss } = useToasts();
       v-for="toast in toasts"
       :key="toast.id"
       type="button"
-      class="pointer-events-auto max-w-sm rounded-lg border px-4 py-2 text-left text-sm shadow-lg"
+      class="motion-toast pointer-events-auto max-w-sm rounded-lg border px-4 py-2 text-left text-sm shadow-lg"
       :class="
         toast.kind === 'error'
           ? 'border-red-800 bg-red-950/95 text-red-100'

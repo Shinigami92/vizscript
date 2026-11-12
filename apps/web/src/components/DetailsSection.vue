@@ -37,7 +37,11 @@ const isCollapsed = computed(
   () => collapsed.value[props.id] ?? props.defaultCollapsed ?? false
 );
 
+/** Opened by a click (not by showing another selection): animate it. */
+const toggled = ref(false);
+
 function toggle(): void {
+  toggled.value = true;
   collapsed.value = { ...collapsed.value, [props.id]: !isCollapsed.value };
 }
 
@@ -91,13 +95,15 @@ onUpdated(check);
         @click="toggle"
       >
         <span
-          class="shrink-0"
-          :class="open ? 'i-mdi-chevron-down' : 'i-mdi-chevron-right'"
+          class="motion-rotate i-mdi-chevron-down shrink-0"
+          :class="open ? '' : '-rotate-90'"
         />
         <span class="truncate">{{ title }}</span>
       </button>
       <slot v-if="open" name="actions" />
     </div>
-    <slot v-if="open" />
+    <div v-if="open" :class="toggled ? 'motion-expand' : ''">
+      <slot />
+    </div>
   </section>
 </template>

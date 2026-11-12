@@ -121,7 +121,7 @@ Then summarize the most important findings for the user and ask whether to fix t
 
 ## Tips (learned the hard way)
 
-**Motion:** camera moves (fit all, zoom to selection, reveal, zoom buttons) ease over 250 ms and moved nodes slide for 200 ms. Wait about 300 ms before a screenshot or before reading the zoom. Animations follow `prefers-reduced-motion`; `page.emulateMedia({ reducedMotion: 'reduce' })` turns them off.
+**Motion:** camera moves (fit all, zoom to selection, reveal, zoom buttons) ease over 250 ms moved nodes slide for 200 ms, new nodes fade in for 180 ms, and menus pop in for 120 ms. Wait about 300 ms before a screenshot or before reading the zoom. Animations follow `prefers-reduced-motion`; `page.emulateMedia({ reducedMotion: 'reduce' })` turns them off.
 
 **Read the code panel:**
 

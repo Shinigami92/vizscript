@@ -7,7 +7,14 @@ import type {
 } from '@vizscript/core';
 import { pinColor, qualifiedName, uniqueName } from '@vizscript/core';
 import { useStorage } from '@vueuse/core';
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  ref,
+  useTemplateRef,
+  watch,
+} from 'vue';
 import { useTheme } from '../composables/use-theme';
 import {
   DRAGGABLE_KINDS,
@@ -361,6 +368,28 @@ function cancelRename(): void {
   editing.value = null;
 }
 
+/** Symbols that just appeared (added or renamed), highlighted briefly. */
+const fresh = ref(new Set<string>());
+let freshTimer: ReturnType<typeof setTimeout> | undefined;
+watch(
+  () => props.doc?.symbols,
+  (list, before) => {
+    const old = new Set((before ?? []).map((s) => s.id));
+    const added = (list ?? []).filter((s) => !old.has(s.id));
+    // Nothing in common: another file was opened, nothing to point out.
+    if (added.length === 0 || added.length === list?.length) {
+      return;
+    }
+
+    fresh.value = new Set(added.map((s) => s.id));
+    clearTimeout(freshTimer);
+    freshTimer = setTimeout(() => {
+      fresh.value = new Set();
+    }, 1200);
+  }
+);
+onBeforeUnmount(() => clearTimeout(freshTimer));
+
 watch(
   () => props.doc?.symbols,
   (list) => {
@@ -700,6 +729,7 @@ function addLabel(kind: AddKind, owner: string): string {
                   symbol.id === selectedSymbol
                     ? 'bg-amber-500/15 text-zinc-50'
                     : '',
+                  fresh.has(symbol.id) ? 'motion-flash' : '',
                 ]"
                 :aria-selected="symbol.id === selectedSymbol"
                 :title="

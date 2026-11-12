@@ -250,7 +250,7 @@ onMounted(async () => {
     data-ui="action-menu"
     role="dialog"
     :aria-label="title"
-    class="fixed z-40 flex max-h-[min(480px,80vh)] w-80 flex-col rounded-lg border border-zinc-700 bg-zinc-900/98 text-sm shadow-2xl backdrop-blur"
+    class="motion-pop fixed z-40 flex max-h-[min(480px,80vh)] w-80 flex-col rounded-lg border border-zinc-700 bg-zinc-900/98 text-sm shadow-2xl backdrop-blur"
     :style="position"
     @keydown="onKeydown"
   >

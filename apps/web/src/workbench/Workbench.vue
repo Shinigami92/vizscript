@@ -269,11 +269,11 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
         />
         <template v-if="store.mobileDrawer && store.available.has('explorer')">
           <div
-            class="fixed inset-0 z-30 bg-black/50"
+            class="motion-fade fixed inset-0 z-30 bg-black/50"
             @click="store.mobileDrawer = false"
           />
           <aside
-            class="fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-80 flex-col border-r border-zinc-800 bg-zinc-950"
+            class="motion-drawer fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-80 flex-col border-r border-zinc-800 bg-zinc-950"
           >
             <div
               class="flex h-10 shrink-0 items-center justify-between border-b border-zinc-800 px-3 text-sm"

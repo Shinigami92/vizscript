@@ -258,6 +258,7 @@ function selectNodes(ids: string[], focus = true): void {
   emit('selectionChange', ids);
   if (focus) {
     view.value?.focusNodes(ids);
+    view.value?.pulseNodes(ids);
   }
 }
 
@@ -2958,7 +2959,7 @@ defineExpose({
     <template v-if="menu">
       <form
         v-if="prompt"
-        class="fixed z-40 w-72 rounded-lg border border-zinc-700 bg-zinc-900/98 p-2 shadow-2xl"
+        class="motion-pop fixed z-40 w-72 rounded-lg border border-zinc-700 bg-zinc-900/98 p-2 shadow-2xl"
         :style="{ left: `${menu.client.x}px`, top: `${menu.client.y}px` }"
         @submit.prevent="commitPrompt"
       >

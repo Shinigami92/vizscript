@@ -59,7 +59,7 @@ async function copy(): Promise<void> {
       ref="panel"
       role="dialog"
       aria-label="Share link"
-      class="absolute right-0 top-full z-40 mt-1 w-[min(24rem,calc(100vw-1rem))] rounded-lg border border-zinc-700 bg-zinc-900/98 p-3 text-sm shadow-2xl"
+      class="motion-pop absolute right-0 top-full z-40 mt-1 w-[min(24rem,calc(100vw-1rem))] rounded-lg border border-zinc-700 bg-zinc-900/98 p-3 text-sm shadow-2xl"
       @keydown.escape="open = false"
     >
       <label class="flex cursor-pointer items-start gap-2">

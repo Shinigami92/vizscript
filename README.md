@@ -32,7 +32,7 @@ Editing the graph edits the code: every change becomes a minimal text edit, so f
 - **Tabs for open files**, like VS Code: preview tabs that the next file replaces, tabs that stay once you edit or double-click them, and each file keeps its unsaved changes, undo history and scroll position while you switch.
 - **A workbench like VS Code's.** Explorer, My Script, Code, Graph, Details and Problems views can be moved, split, resized and hidden; preset layouts are one click away. Light and dark mode follow your system or your choice.
 - **Links keep the view.** The graph's position and zoom are part of the URL, so a shared link shows exactly what you saw.
-- **Smooth, but only if you want it.** The graph eases to its new view when you frame or zoom, and nodes moved by an edit slide to their new place, so you see what changed. With reduced motion turned on in your system, everything jumps at once.
+- **Smooth, but only if you want it.** The graph eases to its new view when you frame or zoom, nodes moved by an edit slide to their new place, new nodes fade in, and a ring marks the nodes you jump to, so you see what changed. Menus, dialogs and new entries in My Script get a short animation too. With reduced motion turned on in your system, everything jumps at once.
 - **Markdown preview** with GitHub-flavoured Markdown, highlighted code blocks and links that open repository files inside vizscript.
 
 ## Try it
