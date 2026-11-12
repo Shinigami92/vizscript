@@ -1,4 +1,5 @@
 import type {
+  DataType,
   GraphDocument,
   ImportRequest,
   ScriptSymbol,
@@ -20,7 +21,22 @@ export interface ExternalName {
   callee: string;
   /** The value as an input (`LIMIT`, `Bullet`, `math.pi`). */
   expression: string;
+  /** Type of the first parameter and of the result, when known. */
+  first?: DataType;
+  returns?: DataType;
   request: ImportRequest;
+}
+
+/** Types of a function's first parameter and result (action menu filter). */
+export function signature(symbol: ScriptSymbol): {
+  first?: DataType;
+  returns?: DataType;
+} {
+  const first = symbol.params?.find((p) => !p.rest)?.dataType;
+  return {
+    ...(first === undefined ? {} : { first }),
+    ...(symbol.returnType === undefined ? {} : { returns: symbol.returnType }),
+  };
 }
 
 /** Folders whose files are never imported by hand. */
@@ -130,7 +146,13 @@ export function externalNames(
         : symbol.name;
       if (symbol.kind === 'function') {
         add(
-          { name: symbol.name, path, kind: 'function', callee: symbol.name },
+          {
+            name: symbol.name,
+            path,
+            kind: 'function',
+            callee: symbol.name,
+            ...signature(symbol),
+          },
           imported
         );
       } else if (symbol.kind === 'variable' || symbol.kind === 'constant') {
@@ -170,9 +192,11 @@ export function libraryNames(
     }
 
     const member = `${module}.${symbol.name}`;
+    const typed = kind === 'function' ? signature(symbol) : {};
     result.push(
       style === 'module'
         ? {
+            ...typed,
             name: binding,
             path: module,
             where: module,
@@ -182,6 +206,7 @@ export function libraryNames(
             request: { path: '', from, name: binding, imported: '*', module },
           }
         : {
+            ...typed,
             name: symbol.name,
             path: module,
             where: module,

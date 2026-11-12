@@ -14,6 +14,7 @@ import {
   MIN_ZOOM,
 } from '@vizscript/canvas';
 import type {
+  DataType,
   FlowTemplate,
   GraphDocument,
   GraphNode,
@@ -52,6 +53,7 @@ import { indexDocument, pinEdges } from '../graph/doc-index';
 import type { Problem, ProblemSeverity } from '../graph/problems';
 import { worstSeverity } from '../graph/problems';
 import type { ExternalName } from '../graph/project-index';
+import { signature } from '../graph/project-index';
 import { isMac, shortcut, snippet } from '../graph/source';
 import {
   endOfFunction,
@@ -673,6 +675,101 @@ interface Variable {
   type: string;
 }
 
+/** A variable a function can read and set (UE: Get / Set in the menu). */
+interface ScopeVariable {
+  /** As written in the function (`score`, `this.speed`, `self.hp`). */
+  expression: string;
+  dataType: DataType;
+  /** Type as written, for the hint. */
+  type: string;
+  constant: boolean;
+}
+
+/**
+ * Variables of a function: its parameters and locals, the fields of its
+ * class and the module's variables.
+ */
+function scopeVariables(fnId: string | undefined): ScopeVariable[] {
+  const doc = props.doc;
+  if (!doc || !fnId) {
+    return [];
+  }
+
+  const symbols = doc.symbols ?? [];
+  const owner = symbols.find(
+    (s) => s.fnId === fnId && (s.kind === 'function' || s.kind === 'method')
+  );
+  const scope = owner ? qualifiedName(owner) : undefined;
+  const found = new Map<string, ScopeVariable>();
+  const add = (variable: ScopeVariable): void => {
+    if (!found.has(variable.expression)) {
+      found.set(variable.expression, variable);
+    }
+  };
+
+  for (const param of owner?.params ?? []) {
+    if (!param.rest) {
+      add({
+        expression: param.name,
+        dataType: param.dataType,
+        type: param.type?.text ?? String(param.dataType),
+        constant: false,
+      });
+    }
+  }
+
+  for (const symbol of symbols) {
+    const local = symbol.kind === 'local' && symbol.scope === scope;
+    if (!local && symbol.kind !== 'variable' && symbol.kind !== 'constant') {
+      continue;
+    }
+
+    const expression = local
+      ? symbol.name
+      : memberAccess(symbol, owner, doc.language);
+    if (expression) {
+      add({
+        expression,
+        dataType: symbol.dataType,
+        type: symbol.type?.text ?? String(symbol.dataType),
+        constant:
+          symbol.kind === 'constant' ||
+          symbol.modifiers.includes('const') ||
+          symbol.modifiers.includes('readonly'),
+      });
+    }
+  }
+
+  return [...found.values()].toSorted((a, b) =>
+    a.expression.localeCompare(b.expression)
+  );
+}
+
+/** First parameter and result types of a function of the file. */
+function callSignature(callee: string): {
+  first?: DataType;
+  returns?: DataType;
+} {
+  const name = callee.replace(/^(?:this|self)\./, '');
+  const symbol = props.doc?.symbols?.find(
+    (s) =>
+      s.name === name &&
+      s.params !== undefined &&
+      (s.kind === 'function' || s.kind === 'method' || s.kind === 'import')
+  );
+  return symbol ? signature(symbol) : {};
+}
+
+/** UE's Context Sensitive: does a value of `from` fit into `to`? */
+function fitsType(
+  from: DataType | undefined,
+  to: DataType | undefined
+): boolean | undefined {
+  return from === undefined || to === undefined
+    ? undefined
+    : isTypeCompatible(from, to);
+}
+
 /** Variables that can be read in the function of `nodeId`, with types. */
 function variablesNear(nodeId: string): Variable[] {
   const fn = index.value.nodes.get(nodeId)?.fn;
@@ -844,6 +941,7 @@ const ALIGN_ENTRIES: ReadonlyArray<{
 /** Actions for a wire dropped on empty space (like Blueprints). */
 const ICON_CALL = 'i-mdi-function-variant text-sky-400';
 const ICON_VARIABLE = 'i-mdi-alpha-x-box-outline text-sky-400';
+const ICON_SET = 'i-mdi-arrow-left-bold-box-outline text-sky-400';
 
 const JUMPS: ReadonlySet<FlowTemplate> = new Set([
   'throw',
@@ -899,7 +997,50 @@ const FLOW_ENTRIES: Record<
 
 /** Add-node actions at an exec pin (or, without one, at the end). */
 function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
+  const fnId = state.from
+    ? index.value.nodes.get(state.from.node)?.fn.id
+    : placeAt(state.world)?.fnId;
   return [
+    // UE's Get / Set of every variable; a Get from an exec pin makes no
+    // sense (it has no exec pins).
+    ...scopeVariables(fnId).flatMap((variable): ActionEntry[] => [
+      ...(state.from
+        ? []
+        : [
+            {
+              label: `Get ${variable.expression}`,
+              category: 'Variables',
+              icon: ICON_VARIABLE,
+              hint: variable.type,
+              keywords: 'get read',
+              action: () =>
+                addNode(
+                  { type: 'value', expression: variable.expression },
+                  state
+                ),
+            },
+          ]),
+      ...(variable.constant
+        ? []
+        : [
+            {
+              label: `Set ${variable.expression}`,
+              category: 'Variables',
+              icon: ICON_SET,
+              hint: variable.type,
+              keywords: 'set assign write',
+              action: () =>
+                addNode(
+                  {
+                    type: 'setVar',
+                    name: variable.expression,
+                    declaration: 'none',
+                  },
+                  state
+                ),
+            },
+          ]),
+    ]),
     ...callables.value.map((callee): ActionEntry => ({
       label: callee,
       category: 'Call function',
@@ -1016,6 +1157,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
         category: 'Call function with this value',
         icon: ICON_CALL,
         keywords: callee,
+        fits: fitsType(pin.type, callSignature(callee).first),
         action: () =>
           emitOp({
             type: 'callWith',
@@ -1031,6 +1173,7 @@ function actionEntries(state: MenuState): ActionEntry[] {
           category: 'Call function with this value',
           icon: ICON_IMPORT,
           hint: external.where,
+          fits: fitsType(pin.type, external.first),
           keywords: `${external.callee} ${external.path} import`,
           action: () =>
             emitOp(
@@ -1041,6 +1184,24 @@ function actionEntries(state: MenuState): ActionEntry[] {
                 position: { ...state.world },
               })
             ),
+        })),
+      // Set a variable to this value (`score = value`).
+      ...scopeVariables(index.value.nodes.get(source.node)?.fn.id)
+        .filter((variable) => !variable.constant)
+        .map((variable): ActionEntry => ({
+          label: `Set ${variable.expression}`,
+          category: 'Variables',
+          icon: ICON_SET,
+          hint: variable.type,
+          keywords: 'set assign store',
+          fits: isTypeCompatible(pin.type, variable.dataType),
+          action: () =>
+            emitOp({
+              type: 'useValue',
+              pin: source,
+              expression: `${variable.expression} = $value`,
+              position: { ...state.world },
+            }),
         })),
       ...(named
         ? []
@@ -1085,11 +1246,34 @@ function actionEntries(state: MenuState): ActionEntry[] {
       action: () =>
         emitOp({ type: 'setInput', pin: source, expression: variable.name }),
     })),
+    // Fields and module variables too (the near ones come first).
+    ...scopeVariables(index.value.nodes.get(node.id)?.fn.id)
+      .filter(
+        (variable) =>
+          !variablesNear(node.id).some(
+            (near) => near.name === variable.expression
+          )
+      )
+      .map((variable): ActionEntry => ({
+        label: variable.expression,
+        category: 'Variables',
+        icon: ICON_VARIABLE,
+        hint: variable.type,
+        keywords: 'get',
+        fits: isTypeCompatible(variable.dataType, pin.type),
+        action: () =>
+          emitOp({
+            type: 'setInput',
+            pin: source,
+            expression: variable.expression,
+          }),
+      })),
     ...callables.value.map((callee): ActionEntry => ({
       label: `${callee}()`,
       category: 'Call function',
       icon: ICON_CALL,
       keywords: callee,
+      fits: fitsType(callSignature(callee).returns, pin.type),
       action: () =>
         emitOp({ type: 'setInput', pin: source, expression: `${callee}()` }),
     })),
@@ -1103,6 +1287,10 @@ function actionEntries(state: MenuState): ActionEntry[] {
         category: external.kind === 'function' ? 'Call function' : 'Variables',
         icon: ICON_IMPORT,
         hint: external.where,
+        fits:
+          external.kind === 'function'
+            ? fitsType(external.returns, pin.type)
+            : undefined,
         keywords: `${external.name} ${external.path} import`,
         action: () =>
           emitOp(
