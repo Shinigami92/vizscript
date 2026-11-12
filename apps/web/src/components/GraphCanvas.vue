@@ -96,6 +96,10 @@ const emit = defineEmits<{
   redo: [];
   /** The action menu opened (names of other files can be looked up). */
   actionMenu: [];
+  /** Show only this function (UE: open its graph). */
+  openFunction: [fnId: string];
+  /** Back / forward through the shown functions (mouse buttons, Alt+←/→). */
+  navigate: [direction: 'back' | 'forward'];
 }>();
 
 const { show } = useToasts();
@@ -1743,6 +1747,12 @@ function targetEntries(target: ContextTarget, state: MenuState): MenuEntry[] {
       return [
         { type: 'header', label: fn?.name ?? 'Function' },
         {
+          label: 'Open on its own',
+          icon: 'i-mdi-arrow-expand',
+          shortcut: 'Double-click',
+          action: () => emit('openFunction', target.fnId),
+        },
+        {
           label: 'Select all nodes',
           icon: 'i-mdi-selection-multiple',
           action: () => v.selectFunction(target.fnId),
@@ -1803,6 +1813,7 @@ onMounted(() => {
   v.on('layoutChange', ({ patch }) => emit('layoutChange', patch));
   v.on('op', (op) => emit('op', op));
   v.on('activate', ({ nodeId }) => emit('activate', nodeId));
+  v.on('openFunction', ({ fnId }) => emit('openFunction', fnId));
   v.on('cameraChange', (camera) => {
     zoom.value = camera.zoom;
     hideTooltip();
@@ -1902,6 +1913,15 @@ function onKeydown(event: KeyboardEvent): void {
     return;
   }
 
+  if (
+    event.altKey &&
+    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+  ) {
+    event.preventDefault();
+    emit('navigate', event.key === 'ArrowLeft' ? 'back' : 'forward');
+    return;
+  }
+
   if (command && key === 'z') {
     event.preventDefault();
     if (event.shiftKey) {
@@ -1944,6 +1964,15 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+function onPointerDown(event: PointerEvent): void {
+  hideTooltip();
+  // Mouse back / forward buttons, like in UE and browsers.
+  if (event.button === 3 || event.button === 4) {
+    event.preventDefault();
+    emit('navigate', event.button === 3 ? 'back' : 'forward');
+  }
+}
+
 function onPointerMove(event: PointerEvent): void {
   pointer.x = event.clientX;
   pointer.y = event.clientY;
@@ -1954,6 +1983,8 @@ defineExpose({
     view.value?.sizeOf(node) ?? { width: 160, height: 60 },
   spaceAbove: (node: GraphNode) => view.value?.spaceAbove(node) ?? 0,
   setHighlight: (ids: string[]) => view.value?.setHighlight(ids),
+  getCamera: () => view.value?.getCamera(),
+  setCamera: (camera: Camera) => view.value?.setCamera(camera),
   setSelection: (ids: string[]) => {
     view.value?.setSelection(ids);
     selection.value = view.value?.getSelection() ?? [];
@@ -1983,7 +2014,7 @@ defineExpose({
     class="relative h-full w-full overflow-hidden"
     @keydown="onKeydown"
     @pointermove="onPointerMove"
-    @pointerdown="hideTooltip"
+    @pointerdown="onPointerDown"
     @wheel.passive="hideTooltip"
     @dragover="onDragOver"
     @drop="onDrop"

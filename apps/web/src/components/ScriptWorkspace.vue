@@ -682,7 +682,7 @@ async function goToDefinition(nodeId: string): Promise<void> {
     return;
   }
 
-  canvas.value?.selectNodes([target.nodeId]);
+  await selectNodes([target.nodeId]);
   await onActivate(target.nodeId);
 }
 
@@ -827,6 +827,25 @@ async function reparse(): Promise<void> {
   }
 
   const previous = doc.value;
+  // A renamed function keeps the focus (its id follows the name).
+  const focused = focusFn.value;
+  if (focused && previous && !next.functions.some((f) => f.id === focused)) {
+    const old = previous.functions.find((f) => f.id === focused);
+    const same = old
+      ? (next.functions.find((f) => f.range.start === old.range.start) ??
+        next.functions[previous.functions.indexOf(old)])
+      : undefined;
+    focusFn.value = same?.id ?? null;
+    const query = { ...route.query };
+    if (same) {
+      query[FOCUS_PARAM] = same.id;
+    } else {
+      delete query[FOCUS_PARAM];
+    }
+
+    void router.replace({ query });
+  }
+
   pinned.value = previous
     ? {
         ...reconcilePositions(previous, next, pinned.value),
@@ -1108,7 +1127,105 @@ const saveCamera = useDebounceFn((camera: Camera, path: string) => {
 }, 300);
 
 function onCameraChange(camera: Camera): void {
+  lastCamera = camera;
   void saveCamera(camera, route.path);
+}
+
+// ------------------------------------------------------------ focus mode
+//
+// Like UE's graph tabs: one function on its own, with a breadcrumb and
+// back / forward. `?fn=` keeps it for reloads and shared links.
+
+const FOCUS_PARAM = 'fn';
+const focusFn = ref<string | null>(
+  typeof route.query[FOCUS_PARAM] === 'string' ? route.query[FOCUS_PARAM] : null
+);
+const focusBack = ref<Array<string | null>>([]);
+const focusAhead = ref<Array<string | null>>([]);
+/** The camera of each view (`''`: all functions), to come back to. */
+const focusCameras = new Map<string, Camera>();
+let lastCamera: Camera | null = null;
+
+const focusedFunction = computed(() =>
+  focusFn.value
+    ? doc.value?.functions.find((f) => f.id === focusFn.value)
+    : undefined
+);
+
+/** The document the graph shows: one function in focus mode. */
+const shownDoc = computed(() => {
+  const d = doc.value;
+  const fn = focusedFunction.value;
+  return d && fn ? { ...d, functions: [fn] } : d;
+});
+
+async function showFocus(id: string | null): Promise<void> {
+  if (lastCamera) {
+    focusCameras.set(focusFn.value ?? '', lastCamera);
+  }
+
+  focusFn.value = id;
+  const query = { ...route.query };
+  if (id) {
+    query[FOCUS_PARAM] = id;
+  } else {
+    delete query[FOCUS_PARAM];
+  }
+
+  void router.replace({ query });
+  // The canvas gets the new document first.
+  await nextTick();
+  await nextTick();
+  const camera = focusCameras.get(id ?? '');
+  if (camera) {
+    canvas.value?.setCamera(camera);
+  } else {
+    canvas.value?.frameAll();
+  }
+}
+
+/** Shows one function (or all with `null`), remembered for Back. */
+async function focusFunction(id: string | null): Promise<void> {
+  if (id === focusFn.value) {
+    return;
+  }
+
+  focusBack.value = [...focusBack.value, focusFn.value];
+  focusAhead.value = [];
+  await showFocus(id);
+}
+
+function navigateFocus(direction: 'back' | 'forward'): void {
+  const from = direction === 'back' ? focusBack : focusAhead;
+  const to = direction === 'back' ? focusAhead : focusBack;
+  const next = from.value.at(-1);
+  if (next === undefined) {
+    return;
+  }
+
+  from.value = from.value.slice(0, -1);
+  to.value = [...to.value, focusFn.value];
+  void showFocus(next);
+}
+
+/** The function of a node, when focus mode hides it. */
+function hiddenFunctionOf(
+  ids: ReadonlyArray<string>
+): string | null | undefined {
+  const focused = focusedFunction.value;
+  if (!focused || ids.every((id) => focused.nodes.some((n) => n.id === id))) {
+    return undefined;
+  }
+
+  const fns = new Set(
+    ids.map(
+      (id) =>
+        doc.value?.functions.find((f) => f.nodes.some((n) => n.id === id))?.id
+    )
+  );
+  const [only] = fns;
+  // Nodes of several functions: show all of them.
+  return fns.size === 1 && only ? only : null;
 }
 
 // ------------------------------------------------------- code <-> graph
@@ -1279,14 +1396,15 @@ function openSymbol(id: string): void {
     return;
   }
 
+  // Like UE: double-clicking a function opens its graph.
   if (symbol.fnId) {
-    selectFunction(symbol.fnId);
+    void focusFunction(symbol.fnId);
     return;
   }
 
   const uses = symbolNodes(doc.value, symbol);
   if (uses.length > 0) {
-    selectNodes(uses);
+    void selectNodes(uses);
   }
 }
 
@@ -1316,11 +1434,22 @@ async function revealRange(range: SourceRange): Promise<void> {
 }
 
 /** Selects nodes from outside the canvas (details panel, My Script). */
-function selectNodes(ids: string[]): void {
+async function selectNodes(ids: string[]): Promise<void> {
+  const fn = hiddenFunctionOf(ids);
+  if (fn !== undefined) {
+    await focusFunction(fn);
+  }
+
   canvas.value?.selectNodes(ids);
 }
 
 function selectFunction(fnId: string): void {
+  // In focus mode another function opens instead.
+  if (focusFn.value && focusFn.value !== fnId) {
+    void focusFunction(fnId);
+    return;
+  }
+
   canvas.value?.selectFunction(fnId);
 }
 
@@ -1730,9 +1859,62 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
 
     <WorkbenchView v-if="visualizable" id="graph">
       <div class="relative h-full w-full">
+        <!-- UE's breadcrumb: back / forward and the shown function. -->
+        <div
+          v-if="
+            focusedFunction || focusBack.length > 0 || focusAhead.length > 0
+          "
+          data-ui="graph-breadcrumb"
+          class="absolute left-2 top-2 z-10 flex max-w-[calc(100%-1rem)] items-center gap-0.5 rounded-md border border-zinc-800 bg-zinc-950/90 px-1 py-0.5 text-xs shadow"
+        >
+          <button
+            type="button"
+            class="btn-ghost px-1"
+            title="Back (Alt+←, mouse back button)"
+            aria-label="Back"
+            :disabled="focusBack.length === 0"
+            @click="navigateFocus('back')"
+          >
+            <span class="i-mdi-arrow-left" />
+          </button>
+          <button
+            type="button"
+            class="btn-ghost px-1"
+            title="Forward (Alt+→)"
+            aria-label="Forward"
+            :disabled="focusAhead.length === 0"
+            @click="navigateFocus('forward')"
+          >
+            <span class="i-mdi-arrow-right" />
+          </button>
+          <button
+            type="button"
+            class="truncate rounded px-1.5 py-0.5 hover:bg-zinc-800"
+            :class="focusedFunction ? 'text-zinc-400' : 'text-zinc-100'"
+            title="Show all functions"
+            @click="focusFunction(null)"
+          >
+            {{ path.split('/').at(-1) }}
+          </button>
+          <template v-if="focusedFunction">
+            <span class="i-mdi-chevron-right shrink-0 text-zinc-600" />
+            <span class="truncate px-1.5 font-semibold text-zinc-100">{{
+              focusedFunction.name
+            }}</span>
+            <button
+              type="button"
+              class="btn-ghost px-1"
+              title="Show all functions"
+              aria-label="Show all functions"
+              @click="focusFunction(null)"
+            >
+              <span class="i-mdi-close" />
+            </button>
+          </template>
+        </div>
         <GraphCanvas
           ref="canvas"
-          :doc="doc"
+          :doc="shownDoc"
           :text="text"
           :positions="positions"
           :editable="editable"
@@ -1748,6 +1930,8 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           @reset-layout="resetLayout"
           @op="onOp"
           @action-menu="onActionMenu"
+          @open-function="focusFunction"
+          @navigate="navigateFocus"
           @activate="onActivate"
           @go-to-definition="goToDefinition"
           @camera-change="onCameraChange"
@@ -1757,7 +1941,12 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         <button
           v-if="diagnostics.length > 0"
           type="button"
-          class="absolute left-3 top-3 max-w-md rounded-md border border-red-900 bg-red-950/90 px-3 py-1.5 text-left text-xs text-red-200 hover:bg-red-950"
+          class="absolute left-3 max-w-md rounded-md border border-red-900 bg-red-950/90 px-3 py-1.5 text-left text-xs text-red-200 hover:bg-red-950"
+          :class="
+            focusedFunction || focusBack.length > 0 || focusAhead.length > 0
+              ? 'top-12'
+              : 'top-3'
+          "
           @click="workbench.show('problems')"
         >
           {{ diagnostics.length }} syntax error{{

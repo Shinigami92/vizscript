@@ -52,6 +52,14 @@ const GROUPS: ReadonlyArray<{
       { action: 'Toggle selection', input: '{Mod} + click' },
       { action: 'Select a whole function', input: 'Click its frame title' },
       {
+        action: 'Open a function on its own',
+        input: 'Double-click its frame title, or the function in My Script',
+      },
+      {
+        action: 'Back / forward between functions',
+        input: '{Alt}{←} / {Alt}{→}, or the mouse back / forward buttons',
+      },
+      {
         action: 'Move',
         input: 'Drag a node; all selected nodes and reroute points move',
       },
@@ -163,7 +171,10 @@ const GROUPS: ReadonlyArray<{
         action: 'Show uses / details',
         input: 'Click a function or variable (uses are highlighted)',
       },
-      { action: 'Show in graph', input: 'Double-click it, or {Enter}' },
+      {
+        action: 'Open a function / show uses',
+        input: 'Double-click it, or {Enter}',
+      },
       {
         action: 'Call a function',
         input: 'Drag it into a function of the graph',
