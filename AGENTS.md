@@ -45,6 +45,7 @@ Important containers of the web app carry a `data-ui="kebab-name"` attribute (e.
 
 - **Language-agnostic code** stays in `@vizscript/core`. Renderer, layout and persistence must never import a language backend.
 - **Graph edits** are expressed as `GraphOp`s. Each backend turns them into minimal `TextEdit`s on the original source, normally through the shared `applyTextOp` with its own `StatementSyntax`. Never regenerate a whole file from an AST.
+- **Graph-only edits** (a graph the code can't hold yet) are an overlay of id-keyed `GraphEdit`s in core, never a second source of truth: they become code only through `resolveOverlay`, which turns them into ordinary `GraphOp`s.
 - **Node ids** must stay stable across unrelated edits. If you change how ids or `path` are built, update the reconciliation tests.
 - **The web app** only imports language backends inside the worker (`apps/web/src/graph/registry.ts`). This keeps parsers out of the main bundle.
 - **Workbench views** (`apps/web/src/workbench`) are rendered once and teleported into their zone, so moving a view keeps its state. Add new views to `VIEW_IDS` in `@vizscript/workbench`; `normalizeLayout` must keep accepting older stored layouts.
