@@ -20,7 +20,12 @@ import { worldToScreen } from './camera';
 import type { Rect } from './camera';
 import { COMMENT_HEADER, knotId, parseKnotId } from './graph-view-constants';
 import { GraphViewRenderer } from './graph-view-renderer';
-import type { AlignMode, CommentTarget, NodeState } from './graph-view-types';
+import type {
+  AlignMode,
+  CommentTarget,
+  NodeBannerKind,
+  NodeState,
+} from './graph-view-types';
 
 /** The shown document, selection, reroute points, edits and alignment. */
 export abstract class GraphViewDocument extends GraphViewRenderer {
@@ -304,10 +309,11 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
   }
 
   /** Nodes highlighted from outside (e.g. the code editor cursor). */
-  /** Marks nodes with an ERROR / WARNING banner, like Blueprint nodes. */
-  public setProblems(
-    problems: ReadonlyMap<string, 'error' | 'warning' | 'info'>
-  ): void {
+  /**
+   * Marks nodes with an ERROR / WARNING banner, like Blueprint nodes, or
+   * NOT IN CODE for nodes of graph-only edits.
+   */
+  public setProblems(problems: ReadonlyMap<string, NodeBannerKind>): void {
     this.problems = new Map(problems);
     this.framesDirty = true;
     this.requestRender();

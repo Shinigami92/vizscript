@@ -8,6 +8,7 @@ export type {
   ContextTarget,
   GraphViewEvents,
   GraphViewOptions,
+  NodeBannerKind,
 } from './graph-view-types';
 export { GraphView } from './graph-view';
 export * from './selection';

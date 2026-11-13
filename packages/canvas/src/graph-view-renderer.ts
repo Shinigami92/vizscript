@@ -335,7 +335,10 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     ctx.lineWidth = highlighted ? base + 1.5 : base;
     ctx.globalAlpha =
       highlighted || (this.selection.size === 0 && !this.hoverNode) ? 1 : 0.6;
+    // A wire only the graph has (not in the code yet) is dashed.
+    ctx.setLineDash(edge.graphOnly ? [8, 6] : []);
     ctx.stroke();
+    ctx.setLineDash([]);
     ctx.globalAlpha = 1;
   }
 

@@ -53,6 +53,8 @@ export interface Theme {
   errorBanner: string;
   warningBanner: string;
   infoBanner: string;
+  /** Banner and outline of nodes the code doesn't match yet. */
+  syncBanner: string;
   bannerText: string;
   marqueeFill: string;
   marqueeBorder: string;
@@ -106,6 +108,7 @@ export const DARK_THEME: Theme = {
   errorBanner: '#c0262d',
   warningBanner: '#b7791f',
   infoBanner: '#2b6cb0',
+  syncBanner: '#d97706',
   bannerText: '#ffffff',
   marqueeFill: 'rgba(245, 166, 35, 0.08)',
   marqueeBorder: 'rgba(245, 166, 35, 0.8)',
@@ -155,6 +158,7 @@ export const LIGHT_THEME: Theme = {
   errorBanner: '#c0262d',
   warningBanner: '#b7791f',
   infoBanner: '#2b6cb0',
+  syncBanner: '#d97706',
   bannerText: '#ffffff',
   marqueeFill: 'rgba(232, 147, 12, 0.08)',
   marqueeBorder: 'rgba(232, 147, 12, 0.85)',

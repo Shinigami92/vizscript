@@ -195,3 +195,9 @@ export type Drag =
       startMid: Point;
       startCamera: Camera;
     };
+
+/**
+ * A node's banner: a problem of the code (ERROR! / WARNING! / NOTE), or
+ * `sync` for a node the code doesn't match yet (graph-only edits).
+ */
+export type NodeBannerKind = 'error' | 'warning' | 'info' | 'sync';

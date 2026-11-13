@@ -36,6 +36,7 @@ import type {
   FrameState,
   GraphViewEvents,
   GraphViewOptions,
+  NodeBannerKind,
   NodeState,
   Tween,
   WireHit,
@@ -88,7 +89,7 @@ export abstract class GraphViewBase {
   protected selection = new Set<string>();
   protected highlight = new Set<string>();
   /** Nodes with problems (worst severity), shown as banners like UE. */
-  protected problems = new Map<string, 'error' | 'warning' | 'info'>();
+  protected problems = new Map<string, NodeBannerKind>();
   protected hoverNode: string | null = null;
   protected hoverPin: string | null = null;
   protected drag: Drag | null = null;

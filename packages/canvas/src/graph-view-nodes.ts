@@ -184,12 +184,18 @@ export abstract class GraphViewNodes extends GraphViewCamera {
           ? theme.codeHighlight
           : theme.hover;
       ctx.lineWidth = selected || highlighted ? 2.5 : 1.5;
+    } else if (this.problems.get(id) === 'sync') {
+      // Not in the code yet: a dashed outline like the banner.
+      ctx.strokeStyle = theme.syncBanner;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
     } else {
       ctx.strokeStyle = theme.nodeBorder;
       ctx.lineWidth = 1.5;
     }
 
     ctx.stroke();
+    ctx.setLineDash([]);
 
     // Title
     ctx.textBaseline = 'middle';
@@ -562,7 +568,9 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         ? theme.errorBanner
         : severity === 'warning'
           ? theme.warningBanner
-          : theme.infoBanner;
+          : severity === 'sync'
+            ? theme.syncBanner
+            : theme.infoBanner;
     ctx.beginPath();
     ctx.roundRect(ns.x, y, ns.geom.width, BANNER_HEIGHT, 4);
     ctx.fillStyle = color;
@@ -580,7 +588,9 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         ? 'ERROR!'
         : severity === 'warning'
           ? 'WARNING!'
-          : 'NOTE',
+          : severity === 'sync'
+            ? 'NOT IN CODE'
+            : 'NOTE',
       ns.x + 8,
       y + BANNER_HEIGHT / 2 + 0.5
     );
