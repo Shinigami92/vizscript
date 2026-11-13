@@ -2,7 +2,7 @@
 
 Visualize source code as Unreal-Engine-Blueprint-style node graphs.
 
-![A TypeScript function shown as a node graph above its code, with a comment box, comment bubbles and a For Each loop](docs/screenshot.png)
+![A TypeScript function shown as a node graph above its code, with a comment box, a comment bubble and a For Each loop, next to the My Script and Details panels](docs/screenshot.png)
 
 Open a repository and pick a script. vizscript shows it as code, as a node graph, or both side by side, and keeps them in sync. The graph has two kinds of wires:
 
@@ -15,9 +15,9 @@ Editing the graph edits the code: every change becomes a minimal text edit, so f
 
 ## Highlights
 
-- **Blueprint concepts for any script.** Statements become nodes on the exec chain, expressions become pure nodes, and `if`, loops, `switch` and `try` become flow-control nodes. Every function gets its own graph; double-click one to see it on its own, like UE's graph tabs, with a breadcrumb and back / forward (the link keeps it, `?fn=`). Nodes look like UE's: functions start with a purple entry node and events (the module's code, Godot callbacks and signal handlers) with a red one, headers carry ƒ, event, branch and loop icons, `await` gets the latent clock, and variables are set with compact SET nodes.
+- **Blueprint concepts for any script.** Statements become nodes on the exec chain, expressions become pure nodes, and `if`, loops, `switch` and `try` become flow-control nodes. Every function gets its own graph; double-click one to see it on its own, like UE's graph tabs, with a breadcrumb and back / forward (the link keeps it, `?fn=`). Nodes look like UE's: functions start with a purple entry node and events (the module's code, Godot callbacks and signal handlers) with a red one, headers carry ƒ, event, branch and loop icons, `await` gets the latent clock, variables are set with compact SET nodes, Get pills are tinted with their type's color, operators show as one large symbol (`×`, `+`, `==`), and a method's own object shows as a `self` box on the Target pin instead of a wire.
 - **Code and graph stay linked.** Hovering or selecting nodes highlights their code; moving the cursor in the editor highlights the matching node. Double-click a node to jump to its code.
-- **Call nodes show the whole signature.** Calling a function of the file, or one imported from another file of the repository, shows one pin per parameter, named and typed like it; missing arguments are unconnected pins that fill in when you wire or type a value (in Python as `name=value`). Calls of other functions get more pins with "Add argument pin", like UE's Add pin. Right-click a pin for UE's pin menu: remove an argument pin, reset an argument to its parameter's default (the last one is left out), promote an output to a variable, or break one of its several links.
+- **Call nodes show the whole signature.** Calling a function of the file, or one imported from another file of the repository, shows one pin per parameter, named and typed like it; missing arguments are unconnected pins that fill in when you wire or type a value (in Python as `name=value`). Arguments left at their default fold behind a ▼ under the node, like UE's advanced pins. Calls of other functions get more pins with "Add argument pin", like UE's Add pin. Right-click a pin for UE's pin menu: remove an argument pin, reset an argument to its parameter's default (the last one is left out), promote an output to a variable, or break one of its several links.
 - **Use functions of other files.** The action menu also offers the functions and values exported by other files of the repository (nearest folders first). Picking one adds the node and writes the import in the file's own style (`import { a } from './x'`, `from x import a`, `const X = preload("res://x.gd")`), joined into an existing import of that file when there is one; one undo removes both.
 - **Libraries too.** Python's common standard-library modules (`math`, `json`, `os.path`, `re`, …) and the npm packages a TypeScript file imports from get their signatures, so their calls get pins and the action menu offers their other functions (`math.sqrt` adds `import math`, `computed` joins `import { ref } from 'vue'`). npm types are read from the packages' `.d.ts` files on [jsDelivr](https://www.jsdelivr.com/), at the version in your `package.json`.
 - **Flow control from the action menu.** For Each, counting `for`, `while`, `switch` / `match`, `try` / `catch`, `throw`, `break` and `continue`, written in the language's own syntax (GDScript has no `try`, Rust has `match`, `loop` and `while let`).
@@ -60,7 +60,7 @@ On phones the viewer is read-only: you can switch between code and graph, pan an
 - Commit graph edits back to the repository
 - Sign-in through Keycloak with GitHub as identity provider
 - GitLab provider
-- More languages (C#, Rust, Go, C++, Ruby, …)
+- More languages (C#, Go, C++, Ruby, …)
 - Real type information for pins in all typed languages (e.g. through the TypeScript language service), and with it the members of types from libraries and other files in the action menu (`response.ok`, `response.json()`)
 - Events in the action menu, like UE's "Add Event": GDScript callbacks (`_ready`, `_process`, `_input`) and signal handlers, overridable methods of a base class in TypeScript and Python
 - Disable a node, like UE's Enabled State (the statement is commented out)
