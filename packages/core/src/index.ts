@@ -16,6 +16,7 @@ export type * from './ir';
 export * from './language';
 export * from './layout';
 export * from './module-refs';
+export * from './overlay-snippets';
 export * from './overlay-sync';
 export * from './ops';
 export * from './reconcile';

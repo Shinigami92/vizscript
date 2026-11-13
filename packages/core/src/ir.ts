@@ -163,6 +163,11 @@ export interface GraphNode {
   meta?: Record<string, unknown>;
   /** Exists only in the graph, not in the code yet (`GraphOverlay`). */
   graphOnly?: boolean;
+  /**
+   * A graph-only node not wired to any code yet: it floats outside the
+   * function frames until it is wired in.
+   */
+  floating?: boolean;
 }
 
 export interface PinRef {

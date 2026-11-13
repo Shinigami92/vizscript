@@ -22,7 +22,37 @@ export type GraphEdit =
   | { type: 'removeEdge'; from: PinRef; to: PinRef }
   /** An exec-out or data-in that has a wire already loses it. */
   | { type: 'addEdge'; kind: EdgeKind; from: PinRef; to: PinRef }
-  | { type: 'removeNode'; node: string };
+  | { type: 'removeNode'; node: string }
+  /**
+   * Nodes with no place in the code yet (added where no code can go, like
+   * GDScript's class body): they float until they are wired in, then
+   * `code` is written there. Their ids start with `overlay:<id>/`.
+   */
+  | {
+      type: 'addNodes';
+      id: string;
+      /** Function they belong to; wiring them into another moves them. */
+      fnId: string;
+      /** The code the nodes stand for (a statement, or a value). */
+      code: string;
+      nodes: GraphNode[];
+      /** Wires between the nodes. */
+      edges: GraphEdge[];
+    };
+
+/** An `addNodes` edit. */
+export type FloatingNodes = Extract<GraphEdit, { type: 'addNodes' }>;
+
+/** The id prefix of floating nodes (`overlay:<id>/`). */
+export function floatingPrefix(id: string): string {
+  return `overlay:${id}/`;
+}
+
+/** The `addNodes` id of a floating node's id. */
+export function floatingGroup(nodeId: string): string | undefined {
+  const match = /^overlay:([^/]+)\//.exec(nodeId);
+  return match?.[1];
+}
 
 /** Graph-only edits of one file, in the order they were made. */
 export interface GraphOverlay {
@@ -52,6 +82,41 @@ function edgeKey(e: { from: PinRef; to: PinRef }): string {
   return edgeId(e.from, e.to);
 }
 
+/**
+ * Drops floating nodes that were deleted again, with every edit of them:
+ * they never reach the code.
+ */
+export function compactOverlay(overlay: GraphOverlay): GraphOverlay {
+  const removed = new Set(
+    overlay.edits.flatMap((e) =>
+      e.type === 'removeNode' ? [floatingGroup(e.node)] : []
+    )
+  );
+  removed.delete(undefined);
+  if (removed.size === 0) {
+    return overlay;
+  }
+
+  const gone = (id: string): boolean => removed.has(floatingGroup(id));
+  return {
+    edits: overlay.edits.filter((e) => {
+      switch (e.type) {
+        case 'addNodes': {
+          return !removed.has(e.id);
+        }
+
+        case 'removeNode': {
+          return !gone(e.node);
+        }
+
+        default: {
+          return !gone(e.from.node) && !gone(e.to.node);
+        }
+      }
+    }),
+  };
+}
+
 /** Whether the overlay changes nothing. */
 export function isEmptyOverlay(overlay: GraphOverlay | undefined): boolean {
   return !overlay || overlay.edits.length === 0;
@@ -79,6 +144,14 @@ export function applyOverlay(
 
   for (const edit of overlay.edits) {
     switch (edit.type) {
+      case 'addNodes': {
+        const fn =
+          functions.find((f) => f.id === edit.fnId) ?? functions.at(-1);
+        fn?.nodes.push(...edit.nodes.map((n) => ({ ...n, graphOnly: true })));
+        fn?.edges.push(...edit.edges.map((e) => ({ ...e, graphOnly: true })));
+        break;
+      }
+
       case 'removeEdge': {
         const fn = byNode(edit.from.node);
         if (fn) {
@@ -91,8 +164,8 @@ export function applyOverlay(
       }
 
       case 'addEdge': {
-        const fn = byNode(edit.from.node);
-        if (!fn || byNode(edit.to.node) !== fn) {
+        const fn = joinFunctions(functions, edit.from.node, edit.to.node);
+        if (!fn) {
           break;
         }
 
@@ -116,7 +189,16 @@ export function applyOverlay(
       case 'removeNode': {
         const fn = byNode(edit.node);
         const node = fn?.nodes.find((n) => n.id === edit.node);
-        if (fn && node) {
+        const group = floatingGroup(edit.node);
+        if (fn && group !== undefined) {
+          // Floating nodes are one piece of code: they go together.
+          const prefix = floatingPrefix(group);
+          fn.nodes = fn.nodes.filter((n) => !n.id.startsWith(prefix));
+          fn.edges = fn.edges.filter(
+            (e) =>
+              !e.from.node.startsWith(prefix) && !e.to.node.startsWith(prefix)
+          );
+        } else if (fn && node) {
           // Like deleting the statement: what is inside it goes too.
           const gone = new Set(
             fn.nodes
@@ -142,7 +224,91 @@ export function applyOverlay(
     }
   }
 
-  return { ...doc, functions };
+  return { ...doc, functions: functions.map(markFloating) };
+}
+
+/** Floating nodes of a group in a function, by group. */
+function floatingGroups(fn: FunctionGraph): Map<string, GraphNode[]> {
+  const groups = new Map<string, GraphNode[]>();
+  for (const node of fn.nodes) {
+    const group = floatingGroup(node.id);
+    if (group !== undefined) {
+      groups.set(group, [...(groups.get(group) ?? []), node]);
+    }
+  }
+
+  return groups;
+}
+
+/** Whether a group of floating nodes is wired to anything else. */
+function wiredIn(fn: FunctionGraph, group: string): boolean {
+  const prefix = floatingPrefix(group);
+  return fn.edges.some(
+    (e) => e.from.node.startsWith(prefix) !== e.to.node.startsWith(prefix)
+  );
+}
+
+/** The group of a floating node that may still move to another function. */
+function movableGroup(fn: FunctionGraph, nodeId: string): string | undefined {
+  const group = floatingGroup(nodeId);
+  return group !== undefined && !wiredIn(fn, group) ? group : undefined;
+}
+
+/** Marks the floating nodes not wired to anything (drawn outside frames). */
+function markFloating(fn: FunctionGraph): FunctionGraph {
+  const loose = new Set(
+    [...floatingGroups(fn).keys()].filter((g) => !wiredIn(fn, g))
+  );
+  if (loose.size === 0) {
+    return fn;
+  }
+
+  return {
+    ...fn,
+    nodes: fn.nodes.map((n) => {
+      const group = floatingGroup(n.id);
+      return group !== undefined && loose.has(group)
+        ? { ...n, floating: true }
+        : n;
+    }),
+  };
+}
+
+/**
+ * The function a wire between two nodes goes in: theirs, or, when one end
+ * is a group of floating nodes not wired to anything yet, the other end's
+ * (the group moves there).
+ */
+function joinFunctions(
+  functions: FunctionGraph[],
+  from: string,
+  to: string
+): FunctionGraph | undefined {
+  const of = (id: string): FunctionGraph | undefined =>
+    functions.find((f) => f.nodes.some((n) => n.id === id));
+  const a = of(from);
+  const b = of(to);
+  if (!a || !b || a === b) {
+    return a;
+  }
+
+  for (const [node, source, target] of [
+    [from, a, b],
+    [to, b, a],
+  ] as const) {
+    const group = movableGroup(source, node);
+    if (group !== undefined) {
+      const prefix = floatingPrefix(group);
+      const moved = (id: string): boolean => id.startsWith(prefix);
+      target.nodes.push(...source.nodes.filter((n) => moved(n.id)));
+      target.edges.push(...source.edges.filter((e) => moved(e.from.node)));
+      source.nodes = source.nodes.filter((n) => !moved(n.id));
+      source.edges = source.edges.filter((e) => !moved(e.from.node));
+      return target;
+    }
+  }
+
+  return undefined;
 }
 
 function hasExecIn(node: GraphNode): boolean {
@@ -251,6 +417,20 @@ export function overlayIssues(
           message: 'Execution enters this node from more than one place.',
         });
       } else if (
+        floatingGroup(node.id) !== undefined &&
+        !isReachable.has(node.id) &&
+        !fn.edges.some(
+          (e) =>
+            e.kind === 'exec' &&
+            e.to.node === node.id &&
+            floatingGroup(e.from.node) === floatingGroup(node.id)
+        )
+      ) {
+        issues.push({
+          node: node.id,
+          message: 'Not in the code yet: wire its exec input into the flow.',
+        });
+      } else if (
         !isReachable.has(node.id) &&
         wasReachable.has(node.id) &&
         !incoming.has(node.id)
@@ -262,6 +442,37 @@ export function overlayIssues(
             'Not connected to the flow: wire its exec input, or delete it.',
         });
       }
+    }
+
+    issues.push(...valueIssues(fn));
+  }
+
+  return issues;
+}
+
+/** Floating values (no exec pins) must be wired into an input. */
+function valueIssues(fn: FunctionGraph): OverlayIssue[] {
+  const issues: OverlayIssue[] = [];
+  for (const [group, nodes] of floatingGroups(fn)) {
+    if (nodes.some(hasExecIn)) {
+      continue;
+    }
+
+    const prefix = floatingPrefix(group);
+    const used = fn.edges.some(
+      (e) =>
+        e.kind === 'data' &&
+        e.from.node.startsWith(prefix) &&
+        !e.to.node.startsWith(prefix)
+    );
+    const root = nodes.find(
+      (n) => !fn.edges.some((e) => e.from.node === n.id && e.to.node !== n.id)
+    );
+    if (!used && root) {
+      issues.push({
+        node: root.id,
+        message: 'Not in the code yet: wire its output into an input.',
+      });
     }
   }
 
@@ -282,14 +493,21 @@ export function graphEditsFor(
       const from = fn?.nodes
         .find((n) => n.id === op.from.node)
         ?.pins.find((p) => p.id === op.from.pin);
-      const to = fn?.nodes
+      const target = functionOfNode(doc, op.to.node);
+      const to = target?.nodes
         .find((n) => n.id === op.to.node)
         ?.pins.find((p) => p.id === op.to.pin);
+      // Floating nodes not wired yet move to the function they are wired to.
+      const joins =
+        target === fn ||
+        (fn !== undefined && movableGroup(fn, op.from.node) !== undefined) ||
+        (target !== undefined &&
+          movableGroup(target, op.to.node) !== undefined);
       if (
         !fn ||
         !from ||
         !to ||
-        functionOfNode(doc, op.to.node) !== fn ||
+        !joins ||
         from.kind !== to.kind ||
         from.direction !== 'out' ||
         to.direction !== 'in'
@@ -361,9 +579,19 @@ function removeEdge(e: GraphEdge): GraphEdit {
 
 /** Nodes an edit refers to. */
 export function overlayEditNodes(edit: GraphEdit): string[] {
-  return edit.type === 'removeNode'
-    ? [edit.node]
-    : [edit.from.node, edit.to.node];
+  switch (edit.type) {
+    case 'removeNode': {
+      return [edit.node];
+    }
+
+    case 'addNodes': {
+      return edit.nodes.map((n) => n.id);
+    }
+
+    default: {
+      return [edit.from.node, edit.to.node];
+    }
+  }
 }
 
 /**
@@ -385,6 +613,15 @@ export function remapOverlay(
   const present = new Set(
     next.functions.flatMap((f) => f.nodes.map((n) => n.id))
   );
+  // Floating nodes keep their ids while they float.
+  for (const edit of overlay.edits) {
+    if (edit.type === 'addNodes') {
+      for (const node of edit.nodes) {
+        present.add(node.id);
+      }
+    }
+  }
+
   const map = (id: string): string | undefined => {
     const to = renamed.get(id) ?? id;
     return present.has(to) ? to : undefined;
@@ -397,6 +634,14 @@ export function remapOverlay(
   const edits: GraphEdit[] = [];
   let dropped = 0;
   for (const edit of overlay.edits) {
+    if (edit.type === 'addNodes') {
+      // A renamed function: the nodes follow it (else the last one).
+      const fnId =
+        renamedFunction(previous, next, edit.fnId, renamed) ?? edit.fnId;
+      edits.push({ ...edit, fnId });
+      continue;
+    }
+
     if (edit.type === 'removeNode') {
       const node = map(edit.node);
       if (node) {
@@ -418,6 +663,22 @@ export function remapOverlay(
   }
 
   return { overlay: { edits }, dropped };
+}
+
+/** The id of a function after a re-parse, through its entry node. */
+function renamedFunction(
+  previous: GraphDocument,
+  next: GraphDocument,
+  fnId: string,
+  renamed: Map<string, string>
+): string | undefined {
+  const entry = previous.functions
+    .find((f) => f.id === fnId)
+    ?.nodes.find((n) => n.kind === 'entry');
+  const to = entry ? (renamed.get(entry.id) ?? entry.id) : undefined;
+  return to
+    ? next.functions.find((f) => f.nodes.some((n) => n.id === to))?.id
+    : undefined;
 }
 
 /**

@@ -1,26 +1,33 @@
 import type { StatementMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
-import type { GraphEdit, GraphOverlay, OverlayIssue } from './graph-overlay';
+import type {
+  FloatingNodes,
+  GraphEdit,
+  GraphOverlay,
+  OverlayIssue,
+} from './graph-overlay';
 import {
   applyOverlay,
+  compactOverlay,
+  floatingGroup,
   isEmptyOverlay,
   overlayDiff,
   overlayIssues,
   remapOverlay,
 } from './graph-overlay';
 import type { FunctionGraph, GraphDocument, GraphEdge, PinRef } from './ir';
-import type { GraphOp, OpResult } from './ops';
+import type { GraphOp } from './ops';
 import { applyTextEdits } from './ops';
-
-/** What `resolveOverlay` needs from a language backend. */
-export interface OverlayBackend {
-  parse: (text: string) => GraphDocument;
-  applyOp: (text: string, op: GraphOp) => OpResult;
-}
+import type { OverlayBackend } from './overlay-snippets';
+import { placedNodes, withPlacedGroup } from './overlay-snippets';
+import { renamedNodes } from './reconcile';
 
 export type OverlayResolution =
-  /** The graph is code again: `text` (maybe unchanged) holds it all. */
-  | { status: 'synced'; text: string }
+  /**
+   * The graph is code again: `text` (maybe unchanged) holds it all.
+   * `placed`: the ids floating nodes got once written (for their layout).
+   */
+  | { status: 'synced'; text: string; placed?: Record<string, string> }
   /** The graph can't be code yet; the code stays as it is. */
   | { status: 'pending'; issues: OverlayIssue[] };
 
@@ -69,29 +76,77 @@ function execOrder(fn: FunctionGraph): GraphEdge[] {
  */
 function nextStructureOp(
   parsed: GraphDocument,
-  shown: GraphDocument
-): GraphOp | null | undefined {
+  shown: GraphDocument,
+  overlay: GraphOverlay
+): Step | null | undefined {
   const diff = overlayDiff(parsed, shown);
   const [deleted] = diff.deletedNodes;
   if (deleted) {
-    return { type: 'deleteNodes', nodeIds: [deleted] };
+    return { op: { type: 'deleteNodes', nodeIds: [deleted] } };
   }
 
+  const group = (id: string): FloatingNodes | undefined => {
+    const name = floatingGroup(id);
+    return overlay.edits.find(
+      (e): e is FloatingNodes => e.type === 'addNodes' && e.id === name
+    );
+  };
   const added = new Set(
     diff.added.filter((e) => e.kind === 'exec').map((e) => e.id)
   );
   for (const fn of shown.functions) {
     const edge = execOrder(fn).find((e) => added.has(e.id));
-    if (edge) {
-      return {
+    if (!edge) {
+      continue;
+    }
+
+    const floating = group(edge.to.node);
+    if (floating || floatingGroup(edge.from.node) !== undefined) {
+      // Floating nodes wired into the flow: their code goes there.
+      return floating && floatingGroup(edge.from.node) === undefined
+        ? {
+            op: {
+              type: 'addNode',
+              template: { type: 'code', code: floating.code },
+              after: edge.from,
+            },
+            group: floating,
+          }
+        : undefined;
+    }
+
+    return {
+      op: {
         type: 'connect',
         from: edge.from,
         to: { node: statementNode(fn, edge.to.node), pin: edge.to.pin },
+      },
+    };
+  }
+
+  // A floating value wired into an input of the code becomes its value.
+  for (const edge of diff.added) {
+    const floating = group(edge.from.node);
+    if (
+      edge.kind === 'data' &&
+      floating &&
+      floatingGroup(edge.to.node) === undefined
+    ) {
+      return {
+        op: { type: 'setInput', pin: edge.to, expression: floating.code },
+        group: floating,
       };
     }
   }
 
   return diff.removed.some((e) => e.kind === 'exec') ? undefined : null;
+}
+
+/** An op that brings the code closer to the graph (and what it writes). */
+interface Step {
+  op: GraphOp;
+  /** Floating nodes the op writes as code. */
+  group?: FloatingNodes;
 }
 
 /**
@@ -124,7 +179,7 @@ function statementNode(fn: FunctionGraph, id: string): string {
 
 /** Whether an edit is about a data wire (an input's value). */
 function isDataEdit(edit: GraphEdit, doc: GraphDocument): boolean {
-  if (edit.type === 'removeNode') {
+  if (edit.type === 'removeNode' || edit.type === 'addNodes') {
     return false;
   }
 
@@ -195,29 +250,45 @@ export function resolveOverlay(
 
   let source = text;
   let doc = backend.parse(text);
-  let current = overlay;
+  let current = compactOverlay(overlay);
   const issues = overlayIssues(doc, applyOverlay(doc, current));
   if (issues.length > 0) {
     return { status: 'pending', issues };
   }
 
+  /** Ids written floating nodes have now. */
+  const placed = new Map<string, string>();
+
   /** Applies one op; the error when it fails. */
-  const step = (op: GraphOp): string | undefined => {
+  const step = (op: GraphOp, group?: FloatingNodes): string | undefined => {
     const result = backend.applyOp(source, op);
     if (!result.ok) {
       return result.error;
     }
 
     if (result.edits.length === 0) {
-      return undefined;
+      return group
+        ? 'The code of the new nodes could not be written.'
+        : undefined;
     }
 
     const nextText = applyTextEdits(source, result.edits);
     const nextDoc = backend.parse(nextText);
-    current = remapOverlay(doc, nextDoc, current, {
-      before: source,
-      edits: result.edits,
-    }).overlay;
+    const change = { before: source, edits: result.edits };
+    current = remapOverlay(doc, nextDoc, current, change).overlay;
+    const renamed = renamedNodes(doc, nextDoc, change);
+    for (const [from, to] of placed) {
+      placed.set(from, renamed.get(to) ?? to);
+    }
+
+    if (group) {
+      const ids = placedNodes(doc, nextDoc, change, group);
+      current = withPlacedGroup(current, group.id, ids);
+      for (const [from, to] of ids) {
+        placed.set(from, to);
+      }
+    }
+
     doc = nextDoc;
     source = nextText;
     return undefined;
@@ -228,18 +299,18 @@ export function resolveOverlay(
       return pending('', 'Writing the graph as code did not end.');
     }
 
-    const op = nextStructureOp(doc, applyOverlay(doc, current));
-    if (op === null) {
+    const next = nextStructureOp(doc, applyOverlay(doc, current), current);
+    if (next === null) {
       break;
     }
 
-    if (op === undefined) {
+    if (next === undefined) {
       return pending('', 'The code cannot follow these wires yet.');
     }
 
-    const error = step(op);
+    const error = step(next.op, next.group);
     if (error !== undefined) {
-      return pending(nodeOf(op), error);
+      return pending(nodeOf(next.op), error);
     }
   }
 
@@ -250,7 +321,7 @@ export function resolveOverlay(
 
     const index = current.edits.findIndex((e) => isDataEdit(e, doc));
     const edit = current.edits[index];
-    if (!edit || edit.type === 'removeNode') {
+    if (!edit || edit.type === 'removeNode' || edit.type === 'addNodes') {
       break;
     }
 
@@ -270,5 +341,7 @@ export function resolveOverlay(
     }
   }
 
-  return { status: 'synced', text: source };
+  return placed.size > 0
+    ? { status: 'synced', text: source, placed: Object.fromEntries(placed) }
+    : { status: 'synced', text: source };
 }
