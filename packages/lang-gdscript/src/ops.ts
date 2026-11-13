@@ -16,6 +16,7 @@ import {
   replaceKeyword,
 } from '@vizscript/core';
 import { addGDScriptImport } from './add-import';
+import { godotClasses, godotSingletonCalls } from './godot';
 import { setGDScriptSymbolGroup } from './groups';
 import { parseGDScriptDocument } from './lower';
 import { parseGDScript } from './parser';
@@ -55,6 +56,8 @@ const KEYWORDS = new Set(
 const KINDS = ['var', 'const'];
 
 export const GDSCRIPT_TYPES: TypeSystemInfo = {
+  classes: godotClasses(),
+  inferredType: ':=',
   keywords: [...KEYWORDS],
   globals: [
     'print',
@@ -89,6 +92,7 @@ export const GDSCRIPT_TYPES: TypeSystemInfo = {
     'is_instance_valid',
     'load',
     'typeof',
+    ...godotSingletonCalls(),
   ],
   primitives: [
     { name: 'bool', dataType: 'bool', defaultValue: 'false' },

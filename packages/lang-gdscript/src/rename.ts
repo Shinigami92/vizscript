@@ -411,7 +411,13 @@ export function gdscriptCallSites(
 
     const expr = node as unknown as Expr;
     if (expr.type === 'Call') {
-      const callee = expr.callee;
+      // A signal is called with `emit` (`changed.emit(…)`).
+      const callee =
+        symbol.kind === 'signal' &&
+        expr.callee.type === 'Attribute' &&
+        expr.callee.name === 'emit'
+          ? expr.callee.object
+          : expr.callee;
       const start =
         callee.type === 'Identifier'
           ? callee.start
@@ -420,7 +426,7 @@ export function gdscriptCallSites(
             : -1;
       if (uses.has(start)) {
         sites.push({
-          open: text.indexOf('(', callee.end) + 1,
+          open: text.indexOf('(', expr.callee.end) + 1,
           close: expr.end - 1,
           args: expr.args.map((a) => ({ start: a.start, end: a.end })),
         });

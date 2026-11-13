@@ -7,6 +7,7 @@ import type {
 } from '@vizscript/core';
 import {
   attachComments,
+  classMembers,
   completeCallPins,
   functionIdCounter,
   inferTypes,
@@ -15,6 +16,7 @@ import {
 } from '@vizscript/core';
 import type { Stmt } from './ast';
 import { dataTypeOf } from './data-type';
+import { godotClasses } from './godot';
 import type { GraphSource, LoweringContext, Signature } from './lower-utils';
 import { unwrap } from './lower-utils';
 import { parseGDScript } from './parser';
@@ -23,6 +25,9 @@ import { FnGraphBuilder } from './statement-lowering';
 import { gdscriptSymbols } from './symbols';
 
 export const LANGUAGE_ID = 'gdscript';
+
+/** The base class of a script without `extends`. */
+const BASE = 'RefCounted';
 
 class DocumentLowering implements LoweringContext {
   public readonly functions: FunctionGraph[] = [];
@@ -46,6 +51,13 @@ class DocumentLowering implements LoweringContext {
     className: string | undefined,
     extendsName: string | undefined
   ): void {
+    // Properties the script inherits (`position`, `velocity`).
+    for (const member of classMembers(godotClasses(), extendsName ?? BASE)) {
+      if (member.kind === 'variable' && member.type) {
+        this.memberTypes.set(member.name, dataTypeOf(member.type.text));
+      }
+    }
+
     for (const stmt of body) {
       if (stmt.type === 'Var') {
         const value = stmt.value ? unwrap(stmt.value) : undefined;
@@ -116,6 +128,8 @@ export function parseGDScriptDocument(
   completeCallPins(doc, text, {
     placeholder: 'null',
     imports: options.imports,
+    classes: godotClasses(),
+    selfClass: script.extendsName ?? BASE,
   });
   inferTypes(doc);
   return doc;
