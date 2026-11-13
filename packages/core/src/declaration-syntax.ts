@@ -21,6 +21,12 @@ export interface DeclarationSyntax {
   bracedClasses: boolean;
   /** Lines that stay at the top of a file (imports, `extends`, …). */
   header: RegExp;
+  /**
+   * Comment lines right below the header that belong to it, like GDScript's
+   * `##` class description after `extends` (only while no blank line or
+   * code comes between).
+   */
+  headerDoc?: RegExp;
   /** A new empty function or method (lines after the first not indented). */
   fn: (name: string, unit: string, method: boolean) => string;
   /** A new variable declaration. */

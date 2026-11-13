@@ -60,7 +60,7 @@ describe('adding imports', () => {
       'game/player.gd'
     );
     expect(result.ok && applyTextEdits(text, result.edits)).toBe(
-      'extends Node\n\nconst Bullet = preload("res://scenes/bullet.gd")\n\n\nfunc f() -> void:\n\tBullet.new()\n\tpass\n'
+      'extends Node\n\nconst Bullet = preload("res://scenes/bullet.gd")\n\n\nfunc f() -> void:\n\tBullet.new()\n'
     );
   });
 });

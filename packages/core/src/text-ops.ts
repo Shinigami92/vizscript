@@ -26,7 +26,7 @@ import {
 import type { GraphDocument, PinLiteral } from './ir';
 import { setInput, setLiteral } from './literal-ops';
 import { failed, succeeded } from './op-result';
-import type { GraphOp, NodeTemplate, OpResult } from './ops';
+import type { GraphOp, NodeTemplate, OpResult, TextEdit } from './ops';
 import { findNode } from './reconcile';
 import { replaceReference, setAssignOperator } from './reference-ops';
 import {
@@ -377,6 +377,103 @@ export function applyTextOp(
   op: GraphOp,
   syntax: StatementSyntax
 ): OpResult {
+  return withoutPlaceholderBodies(
+    text,
+    applyTextOpEdits(text, doc, op, syntax),
+    syntax
+  );
+}
+
+/** Width of a line's indentation. */
+function indentOf(line: string): number {
+  return /^[ \t]*/.exec(line)?.[0].length ?? 0;
+}
+
+/**
+ * Code inserted into an indented block whose only line is the empty body
+ * (`pass` in Python and GDScript) replaces it: the placeholder isn't needed
+ * once the block has code.
+ */
+function withoutPlaceholderBodies(
+  text: string,
+  result: OpResult,
+  syntax: StatementSyntax
+): OpResult {
+  if (!result.ok || !/^\w+$/.test(syntax.emptyBody)) {
+    return result;
+  }
+
+  const lines: Array<{ start: number; end: number; text: string }> = [];
+  for (let start = 0; start <= text.length;) {
+    const newline = text.indexOf('\n', start);
+    const end = newline === -1 ? text.length : newline;
+    lines.push({ start, end, text: text.slice(start, end) });
+    if (newline === -1) {
+      break;
+    }
+
+    start = newline + 1;
+  }
+
+  const isCode = (line: string): boolean => {
+    const trimmed = line.trim();
+    return trimmed !== '' && !trimmed.startsWith(syntax.comment.line);
+  };
+  const removals: TextEdit[] = [];
+  for (const edit of result.edits) {
+    const inserted = /\n([ \t]*)\S/.exec(edit.text);
+    if (edit.start !== edit.end || !inserted) {
+      continue;
+    }
+
+    // The next code line after the insertion: a lone `pass` of the block.
+    const index = lines.findIndex(
+      (l) => l.start > edit.start && isCode(l.text)
+    );
+    const line = lines[index];
+    if (
+      !line ||
+      line.text.trim() !== syntax.emptyBody ||
+      indentOf(line.text) !== (inserted[1] ?? '').length
+    ) {
+      continue;
+    }
+
+    const next = lines
+      .slice(index + 1)
+      .find((l) => isCode(l.text) && indentOf(l.text) >= indentOf(line.text));
+    const sameBlock =
+      next !== undefined &&
+      indentOf(next.text) === indentOf(line.text) &&
+      lines
+        .slice(index + 1, lines.indexOf(next))
+        .every(
+          (l) => !isCode(l.text) || indentOf(l.text) > indentOf(line.text)
+        );
+    const removal = {
+      start: line.start,
+      end: Math.min(line.end + 1, text.length),
+      text: '',
+    };
+    const overlaps = [...result.edits, ...removals].some(
+      (e) => e.start < removal.end && removal.start < e.end
+    );
+    if (!sameBlock && !overlaps) {
+      removals.push(removal);
+    }
+  }
+
+  return removals.length > 0
+    ? { ok: true, edits: [...result.edits, ...removals] }
+    : result;
+}
+
+function applyTextOpEdits(
+  text: string,
+  doc: GraphDocument,
+  op: GraphOp,
+  syntax: StatementSyntax
+): OpResult {
   switch (op.type) {
     case 'withImport': {
       // One edit (one undo step): the import and what uses the name.
@@ -385,7 +482,7 @@ export function applyTextOp(
         return imported;
       }
 
-      const used = applyTextOp(text, doc, op.op, syntax);
+      const used = applyTextOpEdits(text, doc, op.op, syntax);
       return used.ok
         ? { ok: true, edits: [...imported.edits, ...used.edits] }
         : used;

@@ -303,5 +303,104 @@ export function deleteNodes(
     kept.push(target);
   }
 
-  return succeeded(kept.map((k) => k.edit));
+  return succeeded(
+    keepIndentedBlocks(
+      text,
+      kept.map((k) => k.edit),
+      syntax
+    )
+  );
+}
+
+/** Leading whitespace of the line that starts at `start`. */
+function indentAt(text: string, start: number): string {
+  return /^[ \t]*/.exec(text.slice(start))?.[0] ?? '';
+}
+
+/**
+ * An indented block (Python, GDScript) must keep a statement: when the
+ * deleted statements are all of a block's code, the first removal leaves
+ * the empty body (`pass`) behind. Comments don't count as code.
+ */
+function keepIndentedBlocks(
+  text: string,
+  edits: TextEdit[],
+  syntax: StatementSyntax
+): TextEdit[] {
+  if (!/^\w+$/.test(syntax.emptyBody)) {
+    return edits;
+  }
+
+  const removed = edits.filter((e) => e.text === '');
+  const isRemoved = (offset: number): boolean =>
+    removed.some((e) => e.start <= offset && offset < e.end);
+  const lines: Array<{ start: number; text: string }> = [];
+  for (let start = 0; start <= text.length;) {
+    const end = text.indexOf('\n', start);
+    const stop = end === -1 ? text.length : end;
+    lines.push({ start, text: text.slice(start, stop) });
+    if (end === -1) {
+      break;
+    }
+
+    start = end + 1;
+  }
+
+  const isCode = (line: string): boolean => {
+    const trimmed = line.trim();
+    return trimmed !== '' && !trimmed.startsWith(syntax.comment.line);
+  };
+  const filled = new Set<number>();
+  return edits.map((edit) => {
+    if (edit.text !== '') {
+      return edit;
+    }
+
+    const first = lines.findIndex(
+      (l) => l.start >= edit.start && isCode(l.text)
+    );
+    const indent = indentAt(text, lines[first]?.start ?? edit.start).length;
+    // The block's header: the code line above with less indentation.
+    let header = -1;
+    for (let i = first - 1; i >= 0; i--) {
+      const line = lines[i];
+      if (line && isCode(line.text) && indentAt(line.text, 0).length < indent) {
+        header = i;
+        break;
+      }
+    }
+
+    const headerLine = lines[header];
+    if (
+      first === -1 ||
+      !headerLine ||
+      !headerLine.text.trimEnd().endsWith(':') ||
+      filled.has(header)
+    ) {
+      return edit;
+    }
+
+    const headerIndent = indentAt(headerLine.text, 0).length;
+    for (let i = header + 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line || !isCode(line.text)) {
+        continue;
+      }
+
+      if (indentAt(line.text, 0).length <= headerIndent) {
+        break;
+      }
+
+      if (!isRemoved(line.start)) {
+        return edit;
+      }
+    }
+
+    filled.add(header);
+    const own = lines[first];
+    return {
+      ...edit,
+      text: `${own ? indentAt(own.text, 0) : ''}${syntax.emptyBody}\n`,
+    };
+  });
 }

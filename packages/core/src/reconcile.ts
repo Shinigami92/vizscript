@@ -112,7 +112,8 @@ function movedOffset(
 function movedNodes(
   previous: GraphDocument,
   next: GraphDocument,
-  change: TextChange
+  change: TextChange,
+  functions: ReadonlyMap<string, string>
 ): Map<string, string> {
   const at = new Map<string, string>();
   for (const [fnId, node] of allNodes(next)) {
@@ -120,7 +121,8 @@ function movedNodes(
   }
 
   const result = new Map<string, string>();
-  for (const [fnId, node] of allNodes(previous)) {
+  for (const [previousFn, node] of allNodes(previous)) {
+    const fnId = functions.get(previousFn) ?? previousFn;
     const start = mapOffset(node.range.start, change);
     const match =
       start === undefined ? undefined : at.get(`${fnId}|${node.kind}|${start}`);
@@ -140,12 +142,43 @@ function movedNodes(
  * 2. same function, kind and title, in document order (e.g. a call whose
  *    text changed *and* moved because a statement was inserted before it).
  */
+/**
+ * Functions whose id changed (a renamed function: its id follows the name),
+ * paired by where they start (followed through the change), else by their
+ * order among the changed ones.
+ */
+function renamedFunctions(
+  previous: GraphDocument,
+  next: GraphDocument,
+  change?: TextChange
+): Map<string, string> {
+  const nextIds = new Set(next.functions.map((f) => f.id));
+  const previousIds = new Set(previous.functions.map((f) => f.id));
+  const gone = previous.functions.filter((f) => !nextIds.has(f.id));
+  const added = next.functions.filter((f) => !previousIds.has(f.id));
+  const result = new Map<string, string>();
+  for (const [i, fn] of gone.entries()) {
+    const start = change ? mapOffset(fn.range.start, change) : fn.range.start;
+    const match =
+      added.find((f) => f.range.start === start) ??
+      (gone.length === added.length ? added[i] : undefined);
+    if (match && ![...result.values()].includes(match.id)) {
+      result.set(fn.id, match.id);
+    }
+  }
+
+  return result;
+}
+
 export function renamedNodes(
   previous: GraphDocument,
   next: GraphDocument,
   change?: TextChange
 ): Map<string, string> {
-  const moved = change ? movedNodes(previous, next, change) : new Map();
+  const functions = renamedFunctions(previous, next, change);
+  const moved = change
+    ? movedNodes(previous, next, change, functions)
+    : new Map();
   const previousIds = new Set<string>();
   for (const [, node] of allNodes(previous)) {
     previousIds.add(node.id);
@@ -163,7 +196,7 @@ export function renamedNodes(
   const removed: Array<[string, GraphNode]> = [];
   for (const [fnId, node] of allNodes(previous)) {
     if (!nextIds.has(node.id)) {
-      removed.push([fnId, node]);
+      removed.push([functions.get(fnId) ?? fnId, node]);
     }
   }
 

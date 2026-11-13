@@ -79,12 +79,19 @@ function headerEnd(
 ): number | undefined {
   let end: number | undefined;
   let offset = 0;
+  /** The previous line was part of the header (for `headerDoc`). */
+  let follows = false;
   for (const line of text.split('\n')) {
     const trimmed = line.trim();
     if (syntax.header.test(trimmed)) {
       end = offset;
+      follows = true;
+    } else if (follows && syntax.headerDoc?.test(trimmed)) {
+      end = offset;
     } else if (trimmed !== '' && end !== undefined) {
       break;
+    } else {
+      follows = false;
     }
 
     offset += line.length + 1;

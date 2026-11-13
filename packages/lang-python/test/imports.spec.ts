@@ -131,7 +131,7 @@ describe('adding imports', () => {
     expect(
       useGreet('"""Main."""\n\n\ndef f():\n    pass\n', 'app/util.py')
     ).toBe(
-      '"""Main."""\n\nfrom util import greet\n\n\ndef f():\n    greet()\n    pass\n'
+      '"""Main."""\n\nfrom util import greet\n\n\ndef f():\n    greet()\n'
     );
   });
 
@@ -142,7 +142,7 @@ describe('adding imports', () => {
         'lib/text.py'
       )
     ).toBe(
-      'import os\nfrom lib.text import a, greet\n\n\ndef f():\n    greet()\n    pass\n'
+      'import os\nfrom lib.text import a, greet\n\n\ndef f():\n    greet()\n'
     );
   });
 });
