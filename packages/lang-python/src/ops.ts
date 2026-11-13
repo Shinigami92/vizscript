@@ -428,7 +428,7 @@ export const PYTHON_SYNTAX: StatementSyntax = {
         return IDENTIFIER.test(name) ||
           (template.declaration === 'none' &&
             /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+$/.test(name))
-          ? `${name} = None`
+          ? `${name} = ${template.value?.trim() || 'None'}`
           : undefined;
       }
 

@@ -502,6 +502,11 @@ export const GDSCRIPT_SYNTAX: StatementSyntax = {
   declare: (name, expr) => `var ${name} = ${expr}`,
   declarePrefix: (name) => `var ${name} = `,
   quote: (value, literal) => quote(value, literal.raw),
+  // `900` where `980.0` was keeps the float style.
+  number: (value, previous) =>
+    /^-?\d[\d_]*$/.test(value) && /^-?\d[\d_]*(?:\.\d|[eE])/.test(previous)
+      ? `${value}.0`
+      : value,
   appendToFile: false,
   declarations: DECLARATIONS,
   comment: {
@@ -534,13 +539,14 @@ export const GDSCRIPT_SYNTAX: StatementSyntax = {
 
       case 'setVar': {
         const name = template.name.trim();
+        const value = template.value?.trim() || 'null';
         if (template.declaration === 'none') {
           return /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$/.test(name)
-            ? `${name} = null`
+            ? `${name} = ${value}`
             : undefined;
         }
 
-        return IDENTIFIER.test(name) ? `var ${name} = null` : undefined;
+        return IDENTIFIER.test(name) ? `var ${name} = ${value}` : undefined;
       }
 
       case 'branch': {

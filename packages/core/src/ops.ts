@@ -30,7 +30,16 @@ export type NodeTemplate =
       /** Argument expressions (source text), e.g. a wired value. */
       args?: string[];
     }
-  | { type: 'setVar'; name: string; declaration: 'const' | 'let' | 'none' }
+  /**
+   * `value`: the starting value (the default of the variable's type, `0` for
+   * an `int`); without it the language's placeholder.
+   */
+  | {
+      type: 'setVar';
+      name: string;
+      declaration: 'const' | 'let' | 'none';
+      value?: string;
+    }
   | { type: 'branch' }
   /**
    * `value`: the function returns something, so the statement needs a

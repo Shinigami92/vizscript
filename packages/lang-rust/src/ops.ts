@@ -533,7 +533,7 @@ export const RUST_SYNTAX: StatementSyntax = {
         const name = template.name.trim();
         if (template.declaration === 'none') {
           return /^(?:self\.)?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/.test(name)
-            ? `${name} = todo!();`
+            ? `${name} = ${template.value?.trim() || 'todo!()'};`
             : undefined;
         }
 
