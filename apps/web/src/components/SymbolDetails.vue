@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {
+  GraphDocument,
   GraphOp,
   ScriptSymbol,
   SourceRange,
@@ -45,6 +46,8 @@ const props = defineProps<{
   event?: boolean;
   /** Symbols of the file (enum members for value choices). */
   symbols?: ReadonlyArray<ScriptSymbol>;
+  /** The parsed file (uses of a function's inputs). */
+  doc?: GraphDocument | null;
   /**
    * Value and type in the saved version of the file (last commit, file on
    * disk) for UE's reset ↶; missing for symbols that are new.
@@ -657,6 +660,7 @@ function setModifier(modifier: string, enabled: boolean): void {
       :types="types"
       :declared="declared"
       :language="language"
+      :doc="doc"
       @op="emit('op', $event)"
     />
 

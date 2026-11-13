@@ -140,6 +140,32 @@ export function symbolNodes(
   return ids;
 }
 
+/**
+ * Wires from a function's input (its entry pin) into the body: the uses that
+ * stay behind when the input is removed.
+ */
+export function parameterUses(
+  doc: GraphDocument | null | undefined,
+  fn: ScriptSymbol,
+  name: string
+): number {
+  const graph = doc?.functions.find((f) => f.id === fn.fnId);
+  const entry = graph?.nodes.find((n) => n.kind === 'entry');
+  const pin = entry?.pins.find(
+    (p) =>
+      p.kind === 'data' &&
+      p.direction === 'out' &&
+      p.name.replace(/^\*+/, '') === name
+  );
+  if (!graph || !entry || !pin) {
+    return 0;
+  }
+
+  return graph.edges.filter(
+    (e) => e.from.node === entry.id && e.from.pin === pin.id
+  ).length;
+}
+
 /** Drag data of a symbol dragged from "My Script" into the graph. */
 export const SYMBOL_DRAG_MIME = 'application/x-vizscript-symbol';
 

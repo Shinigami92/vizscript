@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {
+  GraphDocument,
   GraphOp,
   ScriptSymbol,
   SourceRange,
@@ -9,6 +10,7 @@ import { pinColor } from '@vizscript/core';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useTheme } from '../../composables/use-theme';
 import { usesSnakeCase } from '../../graph/languages';
+import { parameterUses } from '../../graph/symbols';
 import DetailsSection from '../DetailsSection.vue';
 import TypePicker from '../TypePicker.vue';
 
@@ -22,6 +24,8 @@ const props = defineProps<{
   /** Types declared in the file, for the type picker. */
   declared: ReadonlyArray<string>;
   language: string;
+  /** The parsed file, to find uses of an input before removing it. */
+  doc?: GraphDocument | null;
 }>();
 
 const emit = defineEmits<{
@@ -84,6 +88,19 @@ watch(
 );
 
 function removeParameter(index: number): void {
+  const param = props.symbol.params?.[index];
+  const uses = param ? parameterUses(props.doc, props.symbol, param.name) : 0;
+  // Like deleting a variable that is in use (My Script).
+  if (
+    param &&
+    uses > 0 &&
+    !globalThis.confirm(
+      `${param.name} is used by ${uses} node${uses === 1 ? '' : 's'}. Remove it anyway? Its uses stay and will show errors.`
+    )
+  ) {
+    return;
+  }
+
   emit('op', { type: 'removeParameter', symbol: props.symbol.id, index });
 }
 
