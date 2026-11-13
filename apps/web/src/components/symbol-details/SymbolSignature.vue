@@ -14,7 +14,7 @@ import { parameterUses } from '../../graph/symbols';
 import DetailsSection from '../DetailsSection.vue';
 import TypePicker from '../TypePicker.vue';
 
-/** Inputs and output of a function symbol (UE: Inputs / Outputs). */
+/** Inputs and output of a function or signal (UE: Inputs / Outputs). */
 const props = defineProps<{
   symbol: ScriptSymbol;
   text: string;
@@ -47,12 +47,14 @@ const typeInfo = computed<TypeSystemInfo>(
   () => props.types ?? { primitives: [], modifiers: {} }
 );
 
-/** Inputs and output are editable for functions and methods. */
+/** Inputs (and outputs) are editable for functions, methods and signals. */
 const editingSignature = computed(
   () =>
     props.editable &&
     props.types !== null &&
-    (props.symbol.kind === 'function' || props.symbol.kind === 'method')
+    (props.symbol.kind === 'function' ||
+      props.symbol.kind === 'method' ||
+      props.symbol.kind === 'signal')
 );
 
 function addParameter(): void {
@@ -224,7 +226,7 @@ function setReturnType(typeText: string | null): void {
             @change="(typeText) => setParameterType(index, typeText)"
           />
           <input
-            v-if="!typeInfo?.noParameterDefaults"
+            v-if="!typeInfo?.noParameterDefaults && symbol.kind !== 'signal'"
             class="input w-24 shrink-0 py-0.5 font-mono text-xs"
             :value="code(param.defaultRange)"
             placeholder="default"

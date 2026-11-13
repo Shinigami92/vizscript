@@ -145,6 +145,19 @@ const typeRequired = computed(
     (props.symbol.kind === 'variable' || props.symbol.kind === 'constant')
 );
 
+/** Declared with the type of its value (GDScript's `var x := 1`). */
+const inferredDeclaration = computed(() => {
+  const operator = props.types?.inferredType;
+  return (
+    operator !== undefined &&
+    !props.symbol.type &&
+    props.text
+      .slice(props.symbol.nameRange.end)
+      .trimStart()
+      .startsWith(operator)
+  );
+});
+
 function color(dataType: string): string {
   return pinColor(dataType, scheme.value);
 }
@@ -416,6 +429,8 @@ function setModifier(modifier: string, enabled: boolean): void {
               :declared="declared"
               :editable="editable"
               :required="typeRequired"
+              :inferable="true"
+              :inferred="inferredDeclaration"
               @change="setType"
             />
             <span

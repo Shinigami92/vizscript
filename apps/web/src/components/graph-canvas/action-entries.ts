@@ -2,6 +2,7 @@ import type { Pin, PinRef, Point } from '@vizscript/core';
 import { isTypeCompatible, qualifiedName } from '@vizscript/core';
 import { shortcut } from '../../graph/source';
 import type { ActionEntry } from '../ActionMenu.vue';
+import { engineMembers, scriptBaseClass } from './engine-entries';
 import {
   callSignature,
   fillTemplate,
@@ -132,6 +133,67 @@ export function createActionEntries(
     });
   }
 
+  /**
+   * Methods and properties the script inherits from its engine class
+   * (`extends CharacterBody2D`: `move_and_slide()`, `velocity`), like UE's
+   * functions and variables of the parent class.
+   */
+  function inheritedEntries(state: MenuState): ActionEntry[] {
+    const base = scriptBaseClass(props.doc, props.types);
+    const own = new Set(callables.value);
+    const category = `Inherited from ${base}`;
+    return engineMembers(props.types, base).flatMap((member): ActionEntry[] => {
+      if (member.method) {
+        return own.has(member.name)
+          ? []
+          : [
+              {
+                label: member.name,
+                category,
+                icon: ICON_CALL,
+                hint: member.owner,
+                ...(member.detail ? { detail: member.detail } : {}),
+                action: () =>
+                  addNode({ type: 'call', callee: member.name }, state),
+              },
+            ];
+      }
+
+      return [
+        ...(state.from
+          ? []
+          : [
+              {
+                label: `Get ${member.name}`,
+                category,
+                icon: ICON_VARIABLE,
+                hint: member.type,
+                keywords: `get read ${member.owner}`,
+                action: () =>
+                  addNode({ type: 'value', expression: member.name }, state),
+              },
+            ]),
+        {
+          label: `Set ${member.name}`,
+          category,
+          icon: ICON_SET,
+          hint: member.type,
+          keywords: `set assign write ${member.owner}`,
+          action: () =>
+            addNode(
+              {
+                type: 'setVar',
+                name: member.name,
+                declaration: 'none',
+                value: typeDefault(props.types, member.type),
+              },
+              state
+            ),
+        },
+      ];
+    });
+  }
+
   /** Add-node actions at an exec pin (or, without one, at the end). */
   function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
     const fnId = state.from
@@ -198,6 +260,7 @@ export function createActionEntries(
             withImport(external, op)
           ),
       })),
+      ...inheritedEntries(state),
       {
         label: 'Branch (if)',
         category: 'Flow control',
@@ -271,7 +334,26 @@ export function createActionEntries(
         )
       : undefined;
     if (!declared) {
-      return [];
+      // A class of the engine (Godot's `Area2D`), with inherited members.
+      return engineMembers(props.types, typeName).map(
+        (member): ActionEntry => ({
+          label: member.method ? `.${member.name}()` : `.${member.name}`,
+          category: `Members of ${typeName}`,
+          icon: member.method ? ICON_CALL : ICON_MEMBER,
+          hint: member.owner === typeName ? member.type : member.owner,
+          ...(member.detail ? { detail: member.detail } : {}),
+          keywords: `${member.name} ${member.owner} member property method`,
+          action: () =>
+            emitOp({
+              type: 'useValue',
+              pin: source,
+              expression: member.method
+                ? `$value.${member.name}()`
+                : `$value.${member.name}`,
+              position: { ...state.world },
+            }),
+        })
+      );
     }
 
     const scope = qualifiedName(declared);

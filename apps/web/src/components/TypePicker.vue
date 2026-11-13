@@ -25,6 +25,10 @@ const props = defineProps<{
   editable: boolean;
   /** The language needs a type here: no "No type" choice. */
   required?: boolean;
+  /** A variable with a value: its type can come from it (GDScript's `:=`). */
+  inferable?: boolean;
+  /** Declared with the type of its value (`var x := 1`). */
+  inferred?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -99,6 +103,32 @@ const basic = computed(() =>
   props.types.primitives.filter((p) => matches(p.name))
 );
 const own = computed(() => props.declared.filter((name) => matches(name)));
+/** Classes the language knows (Godot's `Node2D`), not global objects. */
+const known = computed(() =>
+  (props.types.classes ?? [])
+    .filter((c) => !c.singleton && matches(c.name))
+    .map((c) => c.name)
+);
+
+/** The operator for "type of the value" (`:=`), where it applies. */
+const inferOperator = computed(() =>
+  props.inferable ? props.types.inferredType : undefined
+);
+/** How an untyped value is shown: inferred, `:=`, or untyped. */
+const untypedLabel = computed(() => {
+  if (!props.types.inferredType) {
+    return '(inferred)';
+  }
+
+  return props.inferred ? `(${props.types.inferredType})` : '(untyped)';
+});
+
+function pickInferred(): void {
+  open.value = false;
+  if (inferOperator.value) {
+    emit('change', inferOperator.value, undefined);
+  }
+}
 
 function compose(base: string): string {
   let type = base;
@@ -218,9 +248,9 @@ function color(dataType: DataType): string {
         :class="value ? 'text-zinc-200' : 'text-zinc-500 italic'"
         >{{ value ?? String(dataType) }}</span
       >
-      <span v-if="!value" class="shrink-0 font-sans text-zinc-600"
-        >(inferred)</span
-      >
+      <span v-if="!value" class="shrink-0 font-sans text-zinc-600">{{
+        untypedLabel
+      }}</span>
       <span
         v-if="editable"
         class="i-mdi-chevron-down ml-auto shrink-0 text-zinc-500"
@@ -284,7 +314,23 @@ function color(dataType: DataType): string {
         <div class="min-h-0 flex-1 overflow-y-auto py-1">
           <button v-if="!required" type="button" class="option" @click="clear">
             <span class="size-2 shrink-0 rounded-full bg-zinc-600" />
-            <span class="text-zinc-400 italic">No type (inferred)</span>
+            <span class="text-zinc-400 italic">{{
+              types.inferredType ? 'No type (untyped)' : 'No type (inferred)'
+            }}</span>
+          </button>
+          <button
+            v-if="inferOperator"
+            type="button"
+            class="option"
+            @click="pickInferred"
+          >
+            <span
+              class="size-2 shrink-0 rounded-full"
+              :style="{ background: color(dataType) }"
+            />
+            <span class="text-zinc-400 italic"
+              >Type of the value ({{ inferOperator }})</span
+            >
           </button>
           <p v-if="basic.length > 0" class="group-title">Basic</p>
           <button
@@ -304,6 +350,22 @@ function color(dataType: DataType): string {
             <p class="group-title">In this file</p>
             <button
               v-for="name in own"
+              :key="name"
+              type="button"
+              class="option"
+              @click="pick(name)"
+            >
+              <span
+                class="size-2 shrink-0 rounded-full"
+                :style="{ background: color(name) }"
+              />
+              <span class="font-mono">{{ compose(name) }}</span>
+            </button>
+          </template>
+          <template v-if="known.length > 0">
+            <p class="group-title">Classes</p>
+            <button
+              v-for="name in known"
               :key="name"
               type="button"
               class="option"
