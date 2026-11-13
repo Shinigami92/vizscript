@@ -1,15 +1,35 @@
-import type { LayoutPatch, Point, Positions } from '@vizscript/core';
+import type {
+  GraphOverlay,
+  LayoutPatch,
+  Point,
+  Positions,
+} from '@vizscript/core';
 import { boxColorIndex, boxColorKey, isExtraLayoutKey } from '@vizscript/core';
 import { useDebounceFn } from '@vueuse/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, ref, shallowRef } from 'vue';
 import type { LayoutStore } from '../../graph/layout-store';
 
-interface LayoutStep {
-  before: LayoutPatch;
-  after: LayoutPatch;
-  codeVersion: number;
-}
+/**
+ * One undo step: a layout change, or a change of the graph-only edits
+ * (`code`: it also wrote code, undone together with it).
+ */
+type HistoryStep =
+  | {
+      kind: 'layout';
+      before: LayoutPatch;
+      after: LayoutPatch;
+      codeVersion: number;
+    }
+  | {
+      kind: 'overlay';
+      before: GraphOverlay;
+      after: GraphOverlay;
+      codeVersion: number;
+      code?: boolean;
+      /** Version of the code before the step wrote code (for redo). */
+      beforeVersion?: number;
+    };
 
 export interface EditorHistory {
   canUndo: boolean;
@@ -28,6 +48,8 @@ export interface LayoutHistoryDeps {
   currentPositions: () => Positions | undefined;
   undoCode: () => void;
   redoCode: () => void;
+  /** Restores graph-only edits (undo / redo). */
+  setOverlay: (overlay: GraphOverlay) => void;
   show: (message: string, kind?: 'info' | 'error') => void;
 }
 
@@ -41,6 +63,13 @@ export interface LayoutHistory {
   applyLayoutPatch: (patch: LayoutPatch) => void;
   undo: () => void;
   redo: () => void;
+  /** A change of the graph-only edits, as an undo step. */
+  recordOverlay: (before: GraphOverlay, after: GraphOverlay) => void;
+  /**
+   * The last overlay step also wrote code (synced): one undo for both. Call
+   * after the editor reported the new version.
+   */
+  recordOverlayCode: () => void;
   onLayoutChange: (patch: LayoutPatch) => void;
   /** Colors of comment boxes are layout entries, undone like moves. */
   boxColorOf: (boxId: string) => number;
@@ -108,8 +137,8 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     canRedo: false,
     version: 0,
   });
-  const undoStack = shallowRef<LayoutStep[]>([]);
-  const redoStack = shallowRef<LayoutStep[]>([]);
+  const undoStack = shallowRef<HistoryStep[]>([]);
+  const redoStack = shallowRef<HistoryStep[]>([]);
   const canUndo = computed(
     () => undoStack.value.length > 0 || codeHistory.value.canUndo
   );
@@ -125,10 +154,39 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
 
     undoStack.value = [
       ...undoStack.value.slice(-199),
-      { before, after, codeVersion: codeHistory.value.version },
+      { kind: 'layout', before, after, codeVersion: codeHistory.value.version },
     ];
     redoStack.value = [];
     applyLayoutPatch(after);
+  }
+
+  function recordOverlay(before: GraphOverlay, after: GraphOverlay): void {
+    undoStack.value = [
+      ...undoStack.value.slice(-199),
+      {
+        kind: 'overlay',
+        before,
+        after,
+        codeVersion: codeHistory.value.version,
+      },
+    ];
+    redoStack.value = [];
+  }
+
+  function recordOverlayCode(): void {
+    const step = undoStack.value.at(-1);
+    if (step?.kind === 'overlay') {
+      undoStack.value = [
+        ...undoStack.value.slice(0, -1),
+        {
+          ...step,
+          after: { edits: [] },
+          code: true,
+          beforeVersion: step.codeVersion,
+          codeVersion: codeHistory.value.version,
+        },
+      ];
+    }
   }
 
   function undo(): void {
@@ -140,7 +198,16 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     ) {
       undoStack.value = undoStack.value.slice(0, -1);
       redoStack.value = [...redoStack.value, step];
-      applyLayoutPatch(step.before);
+      if (step.kind === 'layout') {
+        applyLayoutPatch(step.before);
+      } else {
+        if (step.code) {
+          deps.undoCode();
+        }
+
+        deps.setOverlay(step.before);
+      }
+
       return;
     }
 
@@ -149,14 +216,27 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
 
   function redo(): void {
     const step = redoStack.value.at(-1);
+    // A step that wrote code is redone from the code as it was before.
+    const version =
+      step?.kind === 'overlay' && step.code
+        ? step.beforeVersion
+        : step?.codeVersion;
     if (
       step &&
-      (step.codeVersion === codeHistory.value.version ||
-        !codeHistory.value.canRedo)
+      (version === codeHistory.value.version || !codeHistory.value.canRedo)
     ) {
       redoStack.value = redoStack.value.slice(0, -1);
       undoStack.value = [...undoStack.value, step];
-      applyLayoutPatch(step.after);
+      if (step.kind === 'layout') {
+        applyLayoutPatch(step.after);
+      } else {
+        if (step.code) {
+          deps.redoCode();
+        }
+
+        deps.setOverlay(step.after);
+      }
+
       return;
     }
 
@@ -225,6 +305,8 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     applyLayoutPatch,
     undo,
     redo,
+    recordOverlay,
+    recordOverlayCode,
     onLayoutChange,
     boxColorOf,
     setBoxColor,

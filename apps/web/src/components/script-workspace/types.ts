@@ -1,3 +1,4 @@
+import type { GraphOverlay } from '@vizscript/core';
 import type { LayoutStore } from '../../graph/layout-store';
 import type CodeEditor from '../CodeEditor.vue';
 import type GraphCanvas from '../GraphCanvas.vue';
@@ -24,6 +25,8 @@ export interface ScriptWorkspaceProps {
   hideShare?: boolean;
   /** The file is open in a tab: keep its editor state when switching. */
   keepEditor?: boolean;
+  /** Graph-only edits of the file (from its draft), `v-model:overlay`. */
+  overlay?: GraphOverlay;
 }
 
 export type CodeEditorInstance = InstanceType<typeof CodeEditor>;

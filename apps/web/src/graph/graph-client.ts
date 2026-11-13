@@ -1,9 +1,11 @@
 import type {
   GraphDocument,
   GraphOp,
+  GraphOverlay,
   ImportedDeclaration,
   ModuleReference,
   OpResult,
+  OverlayResolution,
   TypeSystemInfo,
 } from '@vizscript/core';
 import type { WorkerRequest, WorkerResponse } from './protocol';
@@ -136,6 +138,38 @@ export class GraphClient {
     }
 
     return response.result;
+  }
+
+  /**
+   * Writes graph-only edits as code once the graph is valid again
+   * (`resolveOverlay` in core, with the file's backend).
+   */
+  public async resolveOverlay(
+    text: string,
+    fileName: string,
+    overlay: GraphOverlay,
+    imports?: ImportedDeclaration[]
+  ): Promise<OverlayResolution> {
+    const response = await this.send({
+      type: 'resolveOverlay',
+      text,
+      fileName,
+      // Plain data for the worker (the overlay may come from reactive state).
+      overlay: JSON.parse(JSON.stringify(overlay)) as GraphOverlay,
+      imports,
+    });
+    if (!response.ok) {
+      return {
+        status: 'pending',
+        issues: [{ node: '', message: response.error }],
+      };
+    }
+
+    if (!('resolution' in response)) {
+      throw new Error('Unexpected worker response');
+    }
+
+    return response.resolution;
   }
 
   public dispose(): void {

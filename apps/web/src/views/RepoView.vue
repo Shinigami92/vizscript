@@ -5,6 +5,8 @@ import type {
   ProviderId,
   TreeResponse,
 } from '@vizscript/api-contract';
+import type { GraphOverlay } from '@vizscript/core';
+import { EMPTY_OVERLAY } from '@vizscript/core';
 import { useDebounceFn } from '@vueuse/core';
 import {
   computed,
@@ -48,6 +50,8 @@ const tree = shallowRef<TreeResponse | null>(null);
 const branches = shallowRef<BranchSummary[]>([]);
 const file = shallowRef<FileResponse | null>(null);
 const text = ref('');
+/** Graph-only edits of the open file (the graph not in sync with the code). */
+const overlay = shallowRef<GraphOverlay>(EMPTY_OVERLAY);
 const loadingTree = ref(false);
 const loadingFile = ref(false);
 const fileError = ref<string | null>(null);
@@ -60,7 +64,9 @@ function draftKeyOf(filePath: string): string {
 /** Draft of the file on screen (not the one still loading). */
 const draftKey = computed(() => draftKeyOf(file.value?.path ?? path.value));
 const dirty = computed(
-  () => file.value !== null && text.value !== file.value.content
+  () =>
+    file.value !== null &&
+    (text.value !== file.value.content || overlay.value.edits.length > 0)
 );
 
 const layoutStore = computed<LayoutStore | null>(() =>
@@ -124,7 +130,7 @@ const fileTabs = useFileTabs(tabsKey);
  * is instant and keeps unsaved changes.
  */
 const buffers = shallowReactive(
-  new Map<string, { file: FileResponse; text: string }>()
+  new Map<string, { file: FileResponse; text: string; overlay: GraphOverlay }>()
 );
 
 /** Tabs with unsaved changes (also those not loaded yet: their drafts). */
@@ -139,7 +145,11 @@ const dirtyTabs = computed(() => {
         return false;
       }
     };
-    if (buffer ? buffer.text !== buffer.file.content : hasDraft()) {
+    if (
+      buffer
+        ? buffer.text !== buffer.file.content || buffer.overlay.edits.length > 0
+        : hasDraft()
+    ) {
       result.add(tab.path);
     }
   }
@@ -256,6 +266,7 @@ async function loadFile(): Promise<void> {
   if (cached) {
     // An open tab: instant, with its unsaved changes.
     text.value = cached.text;
+    overlay.value = cached.overlay;
     file.value = cached.file;
     fileTabs.open(cached.file.path, { after: previousPath });
     loadingFile.value = false;
@@ -276,12 +287,18 @@ async function loadFile(): Promise<void> {
     }
 
     let initial = loaded.content;
+    let initialOverlay = EMPTY_OVERLAY;
     try {
       const draft = JSON.parse(
         localStorage.getItem(draftKeyOf(loaded.path)) ?? 'null'
-      ) as { sha: string; text: string } | null;
-      if (draft?.sha === loaded.sha && draft.text !== loaded.content) {
+      ) as { sha: string; text: string; overlay?: GraphOverlay } | null;
+      if (
+        draft?.sha === loaded.sha &&
+        (draft.text !== loaded.content ||
+          (draft.overlay?.edits.length ?? 0) > 0)
+      ) {
         initial = draft.text;
+        initialOverlay = draft.overlay ?? EMPTY_OVERLAY;
         show('Restored your unsaved changes for this file.');
       }
     } catch {
@@ -290,8 +307,13 @@ async function loadFile(): Promise<void> {
 
     // Both at once: the workspace of the new file gets the new text.
     text.value = initial;
+    overlay.value = initialOverlay;
     file.value = loaded;
-    buffers.set(loaded.path, { file: loaded, text: initial });
+    buffers.set(loaded.path, {
+      file: loaded,
+      text: initial,
+      overlay: initialOverlay,
+    });
     fileTabs.open(loaded.path, { after: previousPath });
   } catch (error) {
     if (request === fileRequest) {
@@ -332,7 +354,11 @@ const saveDraft = useDebounceFn(() => {
     if (dirty.value) {
       localStorage.setItem(
         draftKey.value,
-        JSON.stringify({ sha: file.value.sha, text: text.value })
+        JSON.stringify({
+          sha: file.value.sha,
+          text: text.value,
+          overlay: overlay.value,
+        })
       );
     } else {
       localStorage.removeItem(draftKey.value);
@@ -342,9 +368,13 @@ const saveDraft = useDebounceFn(() => {
   }
 }, 500);
 
-watch(text, (value) => {
+watch([text, overlay], ([value, edits]) => {
   if (file.value) {
-    buffers.set(file.value.path, { file: file.value, text: value });
+    buffers.set(file.value.path, {
+      file: file.value,
+      text: value,
+      overlay: edits,
+    });
   }
 
   void saveDraft();
@@ -353,6 +383,7 @@ watch(text, (value) => {
 function discard(): void {
   if (file.value) {
     text.value = file.value.content;
+    overlay.value = EMPTY_OVERLAY;
     localStorage.removeItem(draftKey.value);
   }
 }
@@ -436,6 +467,7 @@ function switchBranch(event: Event): void {
       v-if="file"
       :key="`${ref_}:${file.path}:${file.sha}`"
       v-model:text="text"
+      v-model:overlay="overlay"
       :path="file.path"
       :layout-store="layoutStore"
       :state-key="`${provider}/${owner}/${repo}@${ref_}:${file.path}`"

@@ -382,9 +382,10 @@ export function createContextEntries(
               label: edges.length > 1 ? 'Break all links' : 'Break link',
               icon: 'i-mdi-link-variant-off',
               shortcut: 'Alt+Click',
+              // Exec wires the code can't drop stay broken in the graph.
               disabled:
-                pin.kind === 'exec' ||
-                (pin.direction === 'in' ? !pin.range : edges.length === 0),
+                edges.length === 0 &&
+                (pin.kind === 'exec' || pin.direction === 'out' || !pin.range),
               action: () => events.op({ type: 'disconnect', pin: source }),
             },
             // UE's "Break link to …": one wire of several.
@@ -396,7 +397,6 @@ export function createContextEntries(
                   return {
                     label: `Break link to ${node?.title ?? 'node'}${name ? ` · ${name}` : ''}`,
                     icon: 'i-mdi-link-variant-minus',
-                    disabled: edge.kind === 'exec',
                     action: () =>
                       events.op({
                         type: 'disconnect',
@@ -463,7 +463,6 @@ export function createContextEntries(
             {
               label: 'Break link',
               icon: 'i-mdi-link-variant-off',
-              disabled: edge.kind === 'exec',
               action: () =>
                 events.op({
                   type: 'disconnect',

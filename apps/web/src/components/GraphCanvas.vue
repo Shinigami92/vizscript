@@ -478,11 +478,18 @@ onMounted(() => {
 });
 
 const severities = computed(() => {
-  const result = new Map<string, ProblemSeverity>();
+  const result = new Map<string, ProblemSeverity | 'sync'>();
   for (const [id, list] of props.problems ?? []) {
     const severity = worstSeverity(list);
     if (severity) {
       result.set(id, severity);
+    }
+  }
+
+  // Not in the code yet (graph-only edits), unless the code has an error.
+  for (const id of props.syncNodes ?? []) {
+    if (result.get(id) !== 'error') {
+      result.set(id, 'sync');
     }
   }
 

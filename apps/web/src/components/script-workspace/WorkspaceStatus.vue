@@ -6,6 +6,8 @@ defineProps<{
   problemCounts: { errors: number; warnings: number };
   /** State of saving the layout; `null` without a layout store. */
   saving: 'idle' | 'saving' | 'saved' | 'error' | null;
+  /** The graph has edits the code doesn't have yet. */
+  outOfSync?: boolean;
 }>();
 
 const workbench = useWorkbenchStore();
@@ -33,6 +35,16 @@ const workbench = useWorkbenchStore();
       <span class="i-mdi-close-circle-outline" />{{ problemCounts.errors }}
       <span class="i-mdi-alert-outline ml-1" />{{ problemCounts.warnings }}
     </button>
+    <span
+      v-if="outOfSync"
+      data-ui="status-graph-sync"
+      class="flex items-center gap-1 px-1.5 text-amber-300"
+      role="status"
+      title="The graph has changes the code doesn't have yet; saving is blocked"
+    >
+      <span class="i-mdi-sync-alert" />
+      Graph not in sync
+    </span>
     <span
       v-if="saving && saving !== 'idle'"
       data-ui="status-layout"

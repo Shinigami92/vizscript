@@ -15,14 +15,18 @@ export interface ProblemDeps {
   canvas: Readonly<ShallowRef<GraphCanvasInstance | null>>;
   codeVisible: ComputedRef<boolean>;
   graphVisible: ComputedRef<boolean>;
+  /** Problems that aren't editor markers (the graph not in sync). */
+  extra?: () => Problem[];
 }
 
 export interface WorkspaceProblems {
   diagnostics: ComputedRef<GraphDocument['diagnostics']>;
   /** Parser problems shown as editor markers (when there is no checker). */
   parserDiagnostics: ComputedRef<GraphDocument['diagnostics']>;
-  /** Every problem of the file, from the editor's markers. */
+  /** The editor's markers. */
   problems: ShallowRef<Problem[]>;
+  /** Every problem of the file: markers and `extra`. */
+  allProblems: ComputedRef<Problem[]>;
   nodeProblems: ComputedRef<ReturnType<typeof problemsByNode>>;
   problemCounts: ComputedRef<{ errors: number; warnings: number }>;
   showProblem: (problem: Problem) => Promise<void>;
@@ -45,12 +49,16 @@ export function useProblems(deps: ProblemDeps): WorkspaceProblems {
   );
   /** Every problem of the file, from the editor's markers. */
   const problems = shallowRef<Problem[]>([]);
+  const allProblems = computed(() => [
+    ...problems.value,
+    ...(deps.extra?.() ?? []),
+  ]);
   const nodeProblems = computed(() =>
-    problemsByNode(doc.value, problems.value)
+    problemsByNode(doc.value, allProblems.value)
   );
   const problemCounts = computed(() => ({
-    errors: problems.value.filter((p) => p.severity === 'error').length,
-    warnings: problems.value.filter((p) => p.severity === 'warning').length,
+    errors: allProblems.value.filter((p) => p.severity === 'error').length,
+    warnings: allProblems.value.filter((p) => p.severity === 'warning').length,
   }));
 
   async function showProblem(problem: Problem): Promise<void> {
@@ -88,6 +96,7 @@ export function useProblems(deps: ProblemDeps): WorkspaceProblems {
     diagnostics,
     parserDiagnostics,
     problems,
+    allProblems,
     nodeProblems,
     problemCounts,
     showProblem,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { GraphOverlay } from '@vizscript/core';
 import { useStorage } from '@vueuse/core';
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -37,7 +38,23 @@ const texts = useStorage<Record<string, string>>(
   'vizscript:playground:texts',
   {}
 );
+/** Graph-only edits per sample (the graph not in sync with the code). */
+const overlays = useStorage<Record<string, GraphOverlay>>(
+  'vizscript:playground:overlays',
+  {}
+);
 const version = ref(0);
+
+function updateOverlay(value: GraphOverlay): void {
+  const next = { ...overlays.value };
+  if (value.edits.length > 0) {
+    next[sampleName.value] = value;
+  } else {
+    delete next[sampleName.value];
+  }
+
+  overlays.value = next;
+}
 
 function textFor(name: string): string {
   return texts.value[name] ?? SAMPLES.find((s) => s.name === name)?.text ?? '';
@@ -51,6 +68,7 @@ async function reset(): Promise<void> {
   const next = { ...texts.value };
   delete next[sampleName.value];
   texts.value = next;
+  updateOverlay({ edits: [] });
   try {
     localStorage.removeItem(`vizscript:layout:playground:${sampleName.value}`);
     // Cameras of earlier resets (the version counter restarts on reload).
@@ -76,10 +94,12 @@ async function reset(): Promise<void> {
       :key="`${sampleName}:${version}`"
       :path="sampleName"
       :text="textFor(sampleName)"
+      :overlay="overlays[sampleName]"
       :base-text="SAMPLES.find((s) => s.name === sampleName)?.text"
       :layout-store="localLayoutStore(`playground:${sampleName}`)"
       :state-key="`playground:${sampleName}:${version}`"
       @update:text="update"
+      @update:overlay="updateOverlay"
     >
       <template #toolbar>
         <span class="i-mdi-flask-outline text-amber-400" />

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { TreeEntry } from '@vizscript/api-contract';
+import type { GraphOverlay } from '@vizscript/core';
+import { EMPTY_OVERLAY } from '@vizscript/core';
 import { useDebounceFn, useEventListener } from '@vueuse/core';
 import {
   computed,
@@ -43,6 +45,10 @@ const loadingTree = ref(false);
 /** Content of the open file on disk (`null` while loading). */
 const saved = ref<string | null>(null);
 const text = ref('');
+/** Graph-only edits of the open file (the graph not in sync with the code). */
+const overlay = shallowRef<GraphOverlay>(EMPTY_OVERLAY);
+/** The graph has edits the code doesn't have yet: saving is blocked. */
+const outOfSync = ref(false);
 const loadingFile = ref(false);
 const fileError = ref<string | null>(null);
 const saving = ref(false);
@@ -60,7 +66,9 @@ const files = computed(
     new Set(entries.value?.filter((e) => e.type === 'file').map((e) => e.path))
 );
 const dirty = computed(
-  () => saved.value !== null && text.value !== saved.value
+  () =>
+    saved.value !== null &&
+    (text.value !== saved.value || overlay.value.edits.length > 0)
 );
 /**
  * Path of the file on screen. It changes only when the next file has been
@@ -130,7 +138,7 @@ const fileTabs = useFileTabs(
 
 /** Read files of the open tabs with their current text. */
 const buffers = shallowReactive(
-  new Map<string, { saved: string; text: string }>()
+  new Map<string, { saved: string; text: string; overlay: GraphOverlay }>()
 );
 
 /** Text of another file: an open tab's current text, else the file's. */
@@ -151,7 +159,10 @@ const dirtyTabs = computed(() => {
   const result = new Set<string>();
   for (const tab of fileTabs.tabs.value) {
     const buffer = buffers.get(tab.path);
-    if (buffer && buffer.text !== buffer.saved) {
+    if (
+      buffer &&
+      (buffer.text !== buffer.saved || buffer.overlay.edits.length > 0)
+    ) {
       result.add(tab.path);
     }
   }
@@ -232,6 +243,7 @@ async function loadFile(): Promise<void> {
     // An open tab: instant, with its unsaved changes.
     text.value = cached.text;
     saved.value = cached.saved;
+    overlay.value = cached.overlay;
     shown.value = next;
     fileTabs.open(next, { after: previous });
     loadingFile.value = false;
@@ -246,12 +258,17 @@ async function loadFile(): Promise<void> {
     }
 
     let initial = content;
+    let initialOverlay = EMPTY_OVERLAY;
     try {
       const draft = JSON.parse(
         localStorage.getItem(draftKeyOf(next)) ?? 'null'
-      ) as { base: string; text: string } | null;
-      if (draft?.base === content && draft.text !== content) {
+      ) as { base: string; text: string; overlay?: GraphOverlay } | null;
+      if (
+        draft?.base === content &&
+        (draft.text !== content || (draft.overlay?.edits.length ?? 0) > 0)
+      ) {
         initial = draft.text;
+        initialOverlay = draft.overlay ?? EMPTY_OVERLAY;
         show('Restored your unsaved changes for this file.');
       }
     } catch {
@@ -260,9 +277,14 @@ async function loadFile(): Promise<void> {
 
     // All at once: the workspace of the new file gets the new text.
     text.value = initial;
+    overlay.value = initialOverlay;
     saved.value = content;
     shown.value = next;
-    buffers.set(next, { saved: content, text: initial });
+    buffers.set(next, {
+      saved: content,
+      text: initial,
+      overlay: initialOverlay,
+    });
     fileTabs.open(next, { after: previous });
   } catch (error) {
     if (request === fileRequest) {
@@ -290,7 +312,11 @@ const saveDraft = useDebounceFn(() => {
     if (dirty.value) {
       localStorage.setItem(
         draftKey.value,
-        JSON.stringify({ base: saved.value, text: text.value })
+        JSON.stringify({
+          base: saved.value,
+          text: text.value,
+          overlay: overlay.value,
+        })
       );
     } else {
       localStorage.removeItem(draftKey.value);
@@ -301,12 +327,12 @@ const saveDraft = useDebounceFn(() => {
 }, 500);
 
 // The open tab keeps the text and what is on disk.
-watch([text, saved], ([value, onDisk]) => {
+watch([text, saved, overlay], ([value, onDisk, edits]) => {
   if (shown.value && onDisk !== null) {
-    buffers.set(shown.value, { saved: onDisk, text: value });
+    buffers.set(shown.value, { saved: onDisk, text: value, overlay: edits });
   }
 });
-watch(text, saveDraft);
+watch([text, overlay], saveDraft);
 
 async function save(): Promise<void> {
   if (!project.value || !dirty.value || saving.value) {
@@ -315,6 +341,14 @@ async function save(): Promise<void> {
 
   if (!project.value.canWrite) {
     show('This browser can only read folders. Use Chrome or Edge to save.');
+    return;
+  }
+
+  if (outOfSync.value) {
+    show(
+      'The graph is not in sync with the code. Wire it so it can be code, or discard the graph-only changes, then save.',
+      'error'
+    );
     return;
   }
 
@@ -334,6 +368,7 @@ async function save(): Promise<void> {
 function discard(): void {
   if (saved.value !== null) {
     text.value = saved.value;
+    overlay.value = EMPTY_OVERLAY;
     localStorage.removeItem(draftKey.value);
   }
 }
@@ -450,6 +485,7 @@ function selectFile(next: string, symbol?: string): void {
       v-if="project && shown !== null && saved !== null"
       :key="`${id}:${shown}:${version}`"
       v-model:text="text"
+      v-model:overlay="overlay"
       :path="shown"
       :layout-store="layoutStore"
       :state-key="`local/${id}:${shown}`"
@@ -459,6 +495,7 @@ function selectFile(next: string, symbol?: string): void {
       hide-share
       keep-editor
       @open="selectFile"
+      @out-of-sync="outOfSync = $event"
     >
       <template #toolbar>
         <button
@@ -491,8 +528,12 @@ function selectFile(next: string, symbol?: string): void {
             v-if="project.canWrite"
             type="button"
             class="btn-ghost shrink-0 px-2 text-xs"
-            :title="`Save to disk (${shortcut('S')})`"
-            :disabled="saving"
+            :title="
+              outOfSync
+                ? 'The graph is not in sync with the code yet'
+                : `Save to disk (${shortcut('S')})`
+            "
+            :disabled="saving || outOfSync"
             @click="save"
           >
             <span class="i-mdi-content-save-outline" /><span

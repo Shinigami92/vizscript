@@ -25,6 +25,8 @@ export interface GraphCanvasProps {
   definitionOf?: (nodeId: string) => string | undefined;
   /** Problems per node, shown as ERROR / WARNING banners. */
   problems?: ReadonlyMap<string, ReadonlyArray<Problem>>;
+  /** Nodes the code doesn't match yet (graph-only edits). */
+  syncNodes?: ReadonlySet<string>;
   /** Names imported into the file (offered in the action menu). */
   imports?: ReadonlyArray<string>;
   /** Operators and values of the language (action menu). */

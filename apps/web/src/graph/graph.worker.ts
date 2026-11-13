@@ -1,3 +1,4 @@
+import { resolveOverlay } from '@vizscript/core';
 import type { WorkerRequest, WorkerResponse } from './protocol';
 /// <reference lib="webworker" />
 import { registry } from './registry';
@@ -54,6 +55,19 @@ function handle(request: WorkerRequest): WorkerResponse {
         ok: true,
         result: backend.applyOp(request.text, request.op, request.fileName, {
           imports: request.imports,
+        }),
+      };
+    }
+
+    case 'resolveOverlay': {
+      const options = { imports: request.imports };
+      return {
+        id: request.id,
+        ok: true,
+        resolution: resolveOverlay(request.text, request.overlay, {
+          parse: (text) => backend.parse(text, request.fileName, options),
+          applyOp: (text, op) =>
+            backend.applyOp(text, op, request.fileName, options),
         }),
       };
     }

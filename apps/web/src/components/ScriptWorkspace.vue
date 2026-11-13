@@ -4,19 +4,23 @@ import type {
   GraphDocument,
   GraphNode,
   GraphOp,
+  GraphOverlay,
   LayoutPatch,
   Positions,
   TextEdit,
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  applyOverlay,
   boxColorEntries,
   diffEdits,
   findDefinition,
   findNode,
+  graphEditsFor,
   layoutDocument,
   reconcilePositions,
   reconcileReroutes,
+  remapOverlay,
   renamedNodes,
   rerouteEntries,
 } from '@vizscript/core';
@@ -61,6 +65,7 @@ import type {
 } from './script-workspace/types';
 import { useCodeGraphSync } from './script-workspace/use-code-graph-sync';
 import { useFocusMode } from './script-workspace/use-focus-mode';
+import { useGraphOverlay } from './script-workspace/use-graph-overlay';
 import { useImports } from './script-workspace/use-imports';
 import { useLayoutHistory } from './script-workspace/use-layout-history';
 import { useProblems } from './script-workspace/use-problems';
@@ -78,6 +83,10 @@ const props = defineProps<ScriptWorkspaceProps>();
 
 const emit = defineEmits<{
   'update:text': [text: string];
+  /** Graph-only edits changed (stored with the draft). */
+  'update:overlay': [overlay: GraphOverlay];
+  /** The graph has edits the code doesn't have yet: saving is blocked. */
+  'out-of-sync': [outOfSync: boolean];
   /**
    * Open another repository file (Ctrl/Cmd+click on an import, "Go to
    * definition"), optionally at the definition of `symbol`.
@@ -115,7 +124,10 @@ const editor = useTemplateRef<CodeEditorInstance>('editor');
 const canvas = useTemplateRef<InstanceType<typeof GraphCanvas>>('canvas');
 
 const text = ref(props.text);
+/** The graph as shown: the parsed code plus graph-only edits. */
 const doc = shallowRef<GraphDocument | null>(null);
+/** The graph of the code alone. */
+const parsedDoc = shallowRef<GraphDocument | null>(null);
 /** Positions stored by the user (or server); everything else is auto-laid. */
 const pinned = shallowRef<Positions>({});
 const positions = shallowRef<Positions>({});
@@ -173,6 +185,8 @@ const {
   applyLayoutPatch,
   undo,
   redo,
+  recordOverlay,
+  recordOverlayCode,
   onLayoutChange,
   boxColorOf,
   setBoxColor,
@@ -186,8 +200,57 @@ const {
   currentPositions: () => canvas.value?.getPositions(),
   undoCode: () => editor.value?.undo(),
   redoCode: () => editor.value?.redo(),
+  setOverlay: (overlay) => setOverlay(overlay),
   show,
 });
+
+const {
+  overlay,
+  issues: syncIssues,
+  outOfSync,
+  syncNodes,
+  syncProblems,
+  addEdits,
+  setOverlay,
+  discard: discardGraphChanges,
+  resolve: resolveOverlay,
+} = useGraphOverlay(
+  {
+    path: () => props.path,
+    text,
+    client,
+    imports: () => importDeclarations(),
+    doc,
+    writeCode: (next) => {
+      const edits = diffEdits(text.value, next);
+      lastOpEdits = { base: text.value, edits };
+      editor.value?.applyEdits(edits);
+    },
+    changed: (next) => {
+      if (parsedDoc.value) {
+        doc.value = applyOverlay(parsedDoc.value, next);
+        relayout();
+      }
+
+      emit('update:overlay', next);
+      void resolveOverlay();
+    },
+    record: (before, after) => recordOverlay(before, after),
+    // The editor reports its new version in a microtask.
+    recordCode: () => queueMicrotask(recordOverlayCode),
+    show,
+  },
+  props.overlay
+);
+watch(outOfSync, (value) => emit('out-of-sync', value), { immediate: true });
+watch(
+  () => props.overlay,
+  (value) => {
+    if (value && value !== overlay.value) {
+      setOverlay(value);
+    }
+  }
+);
 
 const {
   initialCamera,
@@ -315,6 +378,7 @@ const {
   diagnostics,
   parserDiagnostics,
   problems,
+  allProblems,
   nodeProblems,
   problemCounts,
   showProblem,
@@ -325,6 +389,7 @@ const {
   canvas,
   codeVisible,
   graphVisible,
+  extra: () => syncProblems.value,
 });
 
 // ------------------------------------------------------------------ parse
@@ -371,8 +436,7 @@ async function reparse(): Promise<void> {
   }
 
   const previous = doc.value;
-  // A renamed function keeps the focus (its id follows the name).
-  followRename(previous, next);
+  const previousParsed = parsedDoc.value;
 
   // Nodes are followed through the op's edits when this parse is its
   // result, else through the change of the text (typing, undo, redo).
@@ -384,10 +448,29 @@ async function reparse(): Promise<void> {
         : diffEdits(docText.value, source),
   };
   lastOpEdits = null;
+
+  // Graph-only edits follow the code's nodes, like positions do.
+  if (previousParsed && overlay.value.edits.length > 0) {
+    const remapped = remapOverlay(previousParsed, next, overlay.value, change);
+    if (remapped.dropped > 0) {
+      show(
+        `${remapped.dropped} graph-only change${remapped.dropped === 1 ? '' : 's'} no longer match the code and were dropped.`
+      );
+    }
+
+    overlay.value = remapped.overlay;
+    emit('update:overlay', remapped.overlay);
+  }
+
+  const shown = applyOverlay(next, overlay.value);
+  parsedDoc.value = next;
+  // A renamed function keeps the focus (its id follows the name).
+  followRename(previous, shown);
+
   pinned.value = previous
     ? {
-        ...reconcilePositions(previous, next, pinned.value, change),
-        ...reconcileReroutes(previous, next, pinned.value, change),
+        ...reconcilePositions(previous, shown, pinned.value, change),
+        ...reconcileReroutes(previous, shown, pinned.value, change),
         ...boxColorEntries(pinned.value),
       }
     : pinned.value;
@@ -399,7 +482,7 @@ async function reparse(): Promise<void> {
     const result = placeNewNodes(
       placement,
       previous,
-      next,
+      shown,
       change,
       source,
       pinned.value,
@@ -413,9 +496,10 @@ async function reparse(): Promise<void> {
     selectAfter = result.selectAfter;
   }
 
-  doc.value = next;
+  doc.value = shown;
   docText.value = source;
   relayout();
+  void resolveOverlay();
   if (props.files) {
     void updateReferences(seq);
   } else {
@@ -427,11 +511,11 @@ async function reparse(): Promise<void> {
 
   // Keep the selection on nodes whose own text changed (e.g. an edited value).
   if (previous && selection.value.length > 0) {
-    const renamed = renamedNodes(previous, next);
+    const renamed = renamedNodes(previous, shown);
     const before = selection.value;
     const kept = before
       .map((id) => renamed.get(id) ?? id)
-      .filter((id) => findNode(next, id) !== undefined);
+      .filter((id) => findNode(shown, id) !== undefined);
     await nextTick();
     // Unless something else was selected meanwhile (a new symbol of My Script).
     if (selection.value === before) {
@@ -522,8 +606,37 @@ const currentFunction = computed(() =>
   )
 );
 
+/**
+ * Like Blueprints, editing must not move other nodes: pins the current auto
+ * layout first (it looks the same, so no undo step). Otherwise a node
+ * placed relative to an edited one would jump.
+ */
+function freezeLayout(): void {
+  const current = canvas.value?.getPositions() ?? positions.value;
+  const freeze: LayoutPatch = {};
+  for (const [id, p] of Object.entries(current)) {
+    if (!pinned.value[id]) {
+      freeze[id] = p;
+    }
+  }
+
+  if (Object.keys(freeze).length > 0) {
+    applyLayoutPatch(freeze);
+  }
+}
+
 async function onOp(op: GraphOp): Promise<void> {
   if (!editable.value) {
+    return;
+  }
+
+  // Wires and deletions the code can't follow stay in the graph (like UE's
+  // graphs, which may be in states that don't compile). While the graph has
+  // such edits, the next ones join them, so the code follows what is shown.
+  const graphEdits = doc.value ? graphEditsFor(doc.value, op) : undefined;
+  if (outOfSync.value && graphEdits) {
+    freezeLayout();
+    addEdits(graphEdits);
     return;
   }
 
@@ -534,7 +647,13 @@ async function onOp(op: GraphOp): Promise<void> {
     importDeclarations()
   );
   if (!result.ok) {
-    show(result.error, 'error');
+    if (graphEdits) {
+      freezeLayout();
+      addEdits(graphEdits);
+    } else {
+      show(result.error, 'error');
+    }
+
     return;
   }
 
@@ -548,21 +667,7 @@ async function onOp(op: GraphOp): Promise<void> {
     pendingPlacement = placement;
   }
 
-  // Like Blueprints, editing must not move other nodes: pin the current
-  // auto layout first (it looks the same, so no undo step). Otherwise a
-  // node placed relative to an edited one would jump.
-  const current = canvas.value?.getPositions() ?? positions.value;
-  const freeze: LayoutPatch = {};
-  for (const [id, p] of Object.entries(current)) {
-    if (!pinned.value[id]) {
-      freeze[id] = p;
-    }
-  }
-
-  if (Object.keys(freeze).length > 0) {
-    applyLayoutPatch(freeze);
-  }
-
+  freezeLayout();
   lastOpEdits = { base: text.value, edits: result.edits };
   editor.value?.applyEdits(result.edits);
 
@@ -635,6 +740,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
     <WorkspaceStatus
       :problem-counts="problemCounts"
       :saving="layoutStore ? saving : null"
+      :out-of-sync="outOfSync"
     />
 
     <WorkbenchView id="code">
@@ -674,6 +780,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           :initial-camera="initialCamera"
           :definition-of="describeDefinition"
           :problems="nodeProblems"
+          :sync-nodes="syncNodes"
           :imports="importedNames"
           :externals="externals"
           :types="typeSystem"
@@ -705,6 +812,48 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           <span class="text-red-300/80">{{ diagnostics[0]?.message }}</span>
         </button>
         <div
+          v-if="outOfSync"
+          data-ui="graph-sync-warning"
+          role="status"
+          class="absolute left-3 flex max-w-lg items-start gap-2 rounded-md border border-amber-800 bg-amber-950/90 px-3 py-1.5 text-xs text-amber-100"
+          :class="
+            diagnostics.length > 0
+              ? breadcrumbVisible
+                ? 'top-22'
+                : 'top-13'
+              : breadcrumbVisible
+                ? 'top-12'
+                : 'top-3'
+          "
+        >
+          <span class="i-mdi-sync-alert mt-0.5 shrink-0 text-amber-400" />
+          <span class="min-w-0">
+            Graph not in sync with the code —
+            {{ overlay.edits.length }} graph-only change{{
+              overlay.edits.length === 1 ? '' : 's'
+            }}. Saving is blocked until the graph is valid.
+            <span v-if="syncIssues[0]" class="block text-amber-300/80">{{
+              syncIssues[0].message
+            }}</span>
+          </span>
+          <button
+            v-if="syncNodes.size > 0"
+            type="button"
+            class="btn-ghost shrink-0 px-1.5 py-0 text-amber-200"
+            @click="selectNodes([...syncNodes])"
+          >
+            Show
+          </button>
+          <button
+            type="button"
+            class="btn-ghost shrink-0 px-1.5 py-0 text-amber-200"
+            title="Drop the graph-only changes; the graph shows the code again"
+            @click="discardGraphChanges"
+          >
+            Discard
+          </button>
+        </div>
+        <div
           v-if="selection.length > 1"
           class="pointer-events-none absolute bottom-3 left-3 rounded bg-zinc-900/80 px-2 py-1 text-xs text-zinc-400"
         >
@@ -720,7 +869,11 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
     </WorkbenchView>
 
     <WorkbenchView id="problems">
-      <ProblemsPanel :problems="problems" :path="path" @select="showProblem" />
+      <ProblemsPanel
+        :problems="allProblems"
+        :path="path"
+        @select="showProblem"
+      />
     </WorkbenchView>
 
     <WorkbenchView v-if="previewable" id="preview">
