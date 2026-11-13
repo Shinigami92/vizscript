@@ -7,6 +7,7 @@ import {
   fillTemplate,
   fitsType,
   scopeVariables,
+  typeDefault,
   variablesNear,
   withImport,
 } from './graph-helpers';
@@ -175,6 +176,7 @@ export function createActionEntries(
                       type: 'setVar',
                       name: variable.expression,
                       declaration: 'none',
+                      value: typeDefault(props.types, variable.type),
                     },
                     state
                   ),

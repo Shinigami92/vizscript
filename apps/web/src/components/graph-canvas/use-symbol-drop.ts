@@ -5,7 +5,7 @@ import { ref } from 'vue';
 import { isMac } from '../../graph/source';
 import { SYMBOL_DRAG_MIME } from '../../graph/symbols';
 import type { MenuEntry } from '../ContextMenu.vue';
-import { memberAccess } from './graph-helpers';
+import { memberAccess, typeDefault } from './graph-helpers';
 import type { CanvasContext } from './types';
 
 export interface SymbolDrop {
@@ -146,7 +146,13 @@ export function useSymbolDrop(ctx: CanvasContext): SymbolDrop {
     }
 
     const get = (): void => add({ type: 'value', expression: name });
-    const set = (): void => add({ type: 'setVar', name, declaration: 'none' });
+    const set = (): void =>
+      add({
+        type: 'setVar',
+        name,
+        declaration: 'none',
+        value: typeDefault(props.types, symbol.type?.text),
+      });
     // UE: Ctrl-drag gets, Alt-drag sets, otherwise ask.
     if (event.ctrlKey || event.metaKey) {
       get();

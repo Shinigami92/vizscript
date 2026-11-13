@@ -8,6 +8,7 @@ import type {
   Point,
   ScriptSymbol,
   StatementMeta,
+  TypeSystemInfo,
 } from '@vizscript/core';
 import { getMeta, isTypeCompatible, qualifiedName } from '@vizscript/core';
 import type { DocIndex } from '../../graph/doc-index';
@@ -60,6 +61,17 @@ export function fillTemplate(
   return template.replaceAll(/\$(\d)/g, (_, n: string) =>
     n === '1' && first !== undefined ? first : placeholder
   );
+}
+
+/**
+ * The value a new Set of a variable starts with: its type's default (`0` for
+ * an `int`), so the value pin is typed; otherwise the language's placeholder.
+ */
+export function typeDefault(
+  types: TypeSystemInfo | null | undefined,
+  type: string | undefined
+): string | undefined {
+  return types?.primitives.find((t) => t.name === type)?.defaultValue;
 }
 
 /** A value picked for an input from the action menu goes where it opened. */
@@ -243,6 +255,13 @@ export function collectCallables(
       if (node.kind === 'call' && IDENTIFIER_PATH.test(node.title)) {
         names.add(node.title);
       }
+    }
+  }
+
+  // Signals are emitted like a call (`score_changed.emit(…)`).
+  for (const symbol of doc?.symbols ?? []) {
+    if (symbol.kind === 'signal' && /^[A-Za-z_]\w*$/.test(symbol.name)) {
+      names.add(`${symbol.name}.emit`);
     }
   }
 
