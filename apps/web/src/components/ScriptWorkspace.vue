@@ -438,6 +438,12 @@ function relayout(): void {
   };
 }
 
+/**
+ * Positions of nodes that disappeared (deleted, cut): undo and redo bring
+ * them back to where they were.
+ */
+const positionMemory: Positions = {};
+
 let parseSeq = 0;
 /** The text `doc` was parsed from (ranges of `doc` point into it). */
 const docText = ref('');
@@ -494,7 +500,13 @@ async function reparse(): Promise<void> {
 
   pinned.value = previous
     ? {
-        ...reconcilePositions(previous, shown, pinned.value, change),
+        ...reconcilePositions(
+          previous,
+          shown,
+          pinned.value,
+          change,
+          positionMemory
+        ),
         ...reconcileReroutes(previous, shown, pinned.value, change),
         ...boxColorEntries(pinned.value),
       }
