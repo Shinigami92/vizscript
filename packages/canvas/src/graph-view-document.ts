@@ -89,7 +89,8 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
         kind: 'function',
         fnId: fn.id,
         name: fn.name,
-        nodeIds: fn.nodes.map((n) => n.id),
+        // Floating nodes (not wired in yet) stay outside the frame.
+        nodeIds: fn.nodes.filter((n) => !n.floating).map((n) => n.id),
         bounds: null,
       });
       for (const box of fn.comments ?? []) {

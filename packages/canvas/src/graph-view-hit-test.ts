@@ -215,7 +215,8 @@ export abstract class GraphViewHitTest extends GraphViewBase {
       return 'Both pins are on the same node';
     }
 
-    if (a.ns.fnId !== b.ns.fnId) {
+    // Floating nodes (not wired in yet) join the function they are wired to.
+    if (a.ns.fnId !== b.ns.fnId && !a.ns.full.floating && !b.ns.full.floating) {
       return 'The pins are in different functions';
     }
 
