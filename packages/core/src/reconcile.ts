@@ -1,5 +1,6 @@
 import type { GraphDocument, GraphNode, Positions } from './ir';
 import type { TextEdit } from './ops';
+import { applyTextEdits } from './ops';
 
 function* allNodes(
   doc: GraphDocument
@@ -11,9 +12,106 @@ function* allNodes(
   }
 }
 
+/** Words, runs of white space and single other characters. */
+function tokenize(text: string): string[] {
+  return text.match(/\w+|\s+|[^\w\s]/g) ?? [];
+}
+
+/** Lines with their line break. */
+function splitLines(text: string): string[] {
+  return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+}
+
+/** Above this many item pairs a changed part stays one edit. */
+const MAX_DIFF_CELLS = 4_000_000;
+
 /**
- * The change between two texts as one edit (common start and end kept),
- * for changes that are no op: typing, undo, redo.
+ * Edits that turn the items of `a` into those of `b` (longest common
+ * subsequence); `refine` splits a replaced run further. `undefined` when
+ * the texts are too long to compare.
+ */
+function sequenceEdits(
+  a: ReadonlyArray<string>,
+  b: ReadonlyArray<string>,
+  base: number,
+  refine?: (removed: string, inserted: string, at: number) => TextEdit[]
+): TextEdit[] | undefined {
+  if (a.length * b.length > MAX_DIFF_CELLS) {
+    return undefined;
+  }
+
+  // lengths[i][j]: common items of a[i..] and b[j..].
+  const width = b.length + 1;
+  const lengths = new Uint32Array((a.length + 1) * width);
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      lengths[i * width + j] =
+        a[i] === b[j]
+          ? (lengths[(i + 1) * width + j + 1] ?? 0) + 1
+          : Math.max(
+              lengths[(i + 1) * width + j] ?? 0,
+              lengths[i * width + j + 1] ?? 0
+            );
+    }
+  }
+
+  const edits: TextEdit[] = [];
+  let offset = base;
+  let open: TextEdit | undefined;
+  /** The items `open` removes. */
+  const removedItems: string[] = [];
+  const close = (): void => {
+    if (!open) {
+      return;
+    }
+
+    const edit = open;
+    const removed = removedItems.splice(0).join('');
+    open = undefined;
+    edits.push(
+      ...(refine && removed !== '' && edit.text !== ''
+        ? refine(removed, edit.text, edit.start)
+        : [edit])
+    );
+  };
+
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    const ai = a[i];
+    const bj = b[j];
+    if (ai !== undefined && ai === bj) {
+      close();
+      offset += ai.length;
+      i++;
+      j++;
+    } else if (
+      bj === undefined ||
+      (ai !== undefined &&
+        (lengths[(i + 1) * width + j] ?? 0) >=
+          (lengths[i * width + j + 1] ?? 0))
+    ) {
+      open ??= { start: offset, end: offset, text: '' };
+      open.end += ai?.length ?? 0;
+      removedItems.push(ai ?? '');
+      offset += ai?.length ?? 0;
+      i++;
+    } else {
+      open ??= { start: offset, end: offset, text: '' };
+      open.text += bj;
+      j++;
+    }
+  }
+
+  close();
+  return edits;
+}
+
+/**
+ * Minimal edits between two texts: the common start and end are kept, the
+ * middle is compared line by line, and changed lines token by token. Code
+ * that moved shows as a removal and an insertion of the same text, so
+ * nodes can be followed through undo and redo ({@link movedNodes}).
  */
 export function diffEdits(before: string, after: string): TextEdit[] {
   if (before === after) {
@@ -34,13 +132,29 @@ export function diffEdits(before: string, after: string): TextEdit[] {
     end++;
   }
 
-  return [
-    {
+  const removed = before.slice(start, before.length - end);
+  const inserted = after.slice(start, after.length - end);
+  const whole: TextEdit = {
+    start,
+    end: start + removed.length,
+    text: inserted,
+  };
+  if (removed === '' || inserted === '') {
+    return [whole];
+  }
+
+  const byTokens = (from: string, to: string, at: number): TextEdit[] =>
+    sequenceEdits(tokenize(from), tokenize(to), at) ?? [
+      { start: at, end: at + from.length, text: to },
+    ];
+  return (
+    sequenceEdits(
+      splitLines(removed),
+      splitLines(inserted),
       start,
-      end: before.length - end,
-      text: after.slice(start, after.length - end),
-    },
-  ];
+      byTokens
+    ) ?? [whole]
+  );
 }
 
 /** The edits of a change and the text they were made on. */
@@ -88,19 +202,26 @@ function movedOffset(
   change: TextChange
 ): number | undefined {
   const removed = change.before.slice(removal.start, removal.end);
-  const code = removed.trim();
   const codeStart = removal.start + removed.length - removed.trimStart().length;
   const inside = offset - codeStart;
-  if (code === '' || inside < 0 || inside >= code.length) {
-    return undefined;
+  // A statement moved into an expression loses its `;` (and back).
+  const trimmed = removed.trim();
+  for (const code of [trimmed, trimmed.replace(/;$/, '')]) {
+    if (code === '' || inside < 0 || inside >= code.length) {
+      continue;
+    }
+
+    const target = change.edits.find(
+      (e) => e !== removal && e.text.includes(code)
+    );
+    if (target) {
+      return (
+        newStart(target, change.edits) + target.text.indexOf(code) + inside
+      );
+    }
   }
 
-  const target = change.edits.find(
-    (e) => e !== removal && e.text.includes(code)
-  );
-  return target
-    ? newStart(target, change.edits) + target.text.indexOf(code) + inside
-    : undefined;
+  return undefined;
 }
 
 /**
@@ -115,23 +236,102 @@ function movedNodes(
   change: TextChange,
   functions: ReadonlyMap<string, string>
 ): Map<string, string> {
-  const at = new Map<string, string>();
+  // Nested nodes of one kind can start at the same offset (`a * b * 100`
+  // has two `*`): the one of the same length is the same node.
+  const at = new Map<string, GraphNode[]>();
   for (const [fnId, node] of allNodes(next)) {
-    at.set(`${fnId}|${node.kind}|${node.range.start}`, node.id);
+    const key = `${fnId}|${node.kind}|${node.range.start}`;
+    at.set(key, [...(at.get(key) ?? []), node]);
   }
 
+  const after = textAfter(change);
   const result = new Map<string, string>();
   for (const [previousFn, node] of allNodes(previous)) {
     const fnId = functions.get(previousFn) ?? previousFn;
-    const start = mapOffset(node.range.start, change);
-    const match =
-      start === undefined ? undefined : at.get(`${fnId}|${node.kind}|${start}`);
+    const length = node.range.end - node.range.start;
+    const pick = (start: number | undefined): GraphNode | undefined => {
+      const candidates =
+        start === undefined
+          ? []
+          : (at.get(`${fnId}|${node.kind}|${start}`) ?? []);
+      return (
+        candidates.find((n) => n.range.end - n.range.start === length) ??
+        (candidates.length === 1 ? candidates[0] : undefined)
+      );
+    };
+    const match = (
+      pick(nodeStart(node, change)) ??
+      pick(uniqueCodeStart(node, change.before, after))
+    )?.id;
     if (match && match !== node.id) {
       result.set(node.id, match);
     }
   }
 
   return result;
+}
+
+/**
+ * Where a node of the old text starts after the change: shifted, moved
+ * with the code around it, or (inside replaced code) where its own code is
+ * found once in the inserted text. `undefined` for a node whose own code
+ * changed: it reaches out of the replaced text (`a * b` when `a` changes).
+ */
+function nodeStart(node: GraphNode, change: TextChange): number | undefined {
+  const { start, end } = node.range;
+  const inside = change.edits.find((e) => e.start <= start && start < e.end);
+  if (inside && end > inside.end) {
+    return undefined;
+  }
+
+  const mapped = mapOffset(start, change);
+  if (mapped !== undefined || !inside) {
+    return mapped;
+  }
+
+  const code = change.before.slice(start, end).trim();
+  if (code === '') {
+    return undefined;
+  }
+
+  const found = change.edits.flatMap((e) => {
+    const at = e.text.indexOf(code);
+    return at === -1 || e.text.includes(code, at + 1)
+      ? []
+      : [newStart(e, change.edits) + at];
+  });
+  return found.length === 1 ? found[0] : undefined;
+}
+
+/** The text after a change (empty if its edits don't fit together). */
+function textAfter(change: TextChange): string {
+  try {
+    return applyTextEdits(change.before, change.edits);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Where a node's code is after a change, when that code occurs once in the
+ * old and once in the new text (longer code only: short names repeat).
+ */
+function uniqueCodeStart(
+  node: GraphNode,
+  before: string,
+  after: string
+): number | undefined {
+  const code = before.slice(node.range.start, node.range.end);
+  if (
+    code.trim().length < 8 ||
+    before.indexOf(code, node.range.start + 1) !== -1 ||
+    before.lastIndexOf(code, node.range.start - 1) !== -1
+  ) {
+    return undefined;
+  }
+
+  const at = after.indexOf(code);
+  return at !== -1 && after.indexOf(code, at + 1) === -1 ? at : undefined;
 }
 
 /**
@@ -234,13 +434,20 @@ export function renamedNodes(
  *
  * Node ids are content based, so most nodes match by id directly. Nodes
  * whose own text changed get a new id; they are matched with
- * {@link renamedNodes}.
+ * {@link renamedNodes}. Ids count equal code (`total#0`, `total#1`): when
+ * one of two equal nodes goes, the other one takes its id, and its old
+ * position goes with it ({@link movedNodes}).
+ *
+ * `memory` (updated in place) keeps the positions of nodes that disappear
+ * and gives them back when the same node returns, e.g. on undo or redo, so
+ * it comes back where it was instead of on top of its twin.
  */
 export function reconcilePositions(
   previous: GraphDocument | undefined,
   next: GraphDocument,
   positions: Positions,
-  change?: TextChange
+  change?: TextChange,
+  memory?: Positions
 ): Positions {
   const result: Positions = {};
   const renamed = previous
@@ -254,11 +461,33 @@ export function reconcilePositions(
     }
   }
 
-  // An id that now names another node's code takes that node's position.
+  const nextIds = new Set<string>();
   for (const [, node] of allNodes(next)) {
+    nextIds.add(node.id);
+    if (result[node.id]) {
+      continue;
+    }
+
+    // A position stays with its id unless that node took another id; the
+    // node with this id now is another one (its twin came back).
     const own = positions[node.id];
-    if (own && !targets.has(node.id)) {
+    const remembered = memory?.[node.id];
+    if (own && !targets.has(node.id) && !renamed.has(node.id)) {
       result[node.id] = own;
+    } else if (memory && remembered) {
+      result[node.id] = remembered;
+      delete memory[node.id];
+    }
+  }
+
+  // Nodes that are gone (deleted, or their id went to their twin).
+  if (previous && memory) {
+    for (const [, node] of allNodes(previous)) {
+      const p = positions[node.id];
+      const gone = !nextIds.has(node.id) || targets.has(node.id);
+      if (p && gone && !renamed.has(node.id)) {
+        memory[node.id] = p;
+      }
     }
   }
 
