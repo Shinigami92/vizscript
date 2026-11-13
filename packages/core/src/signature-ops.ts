@@ -28,7 +28,8 @@ function succeeded(edits: TextEdit[]): OpResult {
   return { ok: true, edits };
 }
 
-const FUNCTION_KINDS = new Set(['function', 'method']);
+/** Symbols with parameters: functions, methods and signals. */
+const FUNCTION_KINDS = new Set(['function', 'method', 'signal']);
 
 function functionSymbol(doc: GraphDocument, id: string): ScriptSymbol | string {
   const symbol = doc.symbols?.find((s) => s.id === id);
@@ -198,6 +199,20 @@ export function addParameter(
   }
 
   const list = parameterList(text, symbol);
+  if (!list && symbol.kind === 'signal' && params.length === 0) {
+    // `signal changed` → `signal changed(value)`
+    const param = `${name}${type ? `: ${type}` : ''}`;
+    const at = symbol.nameRange.end;
+    const value = argument ?? placeholder;
+    return succeeded([
+      { start: at, end: at, text: `(${param})` },
+      // Emits pass every argument (`changed.emit()` → `changed.emit(null)`).
+      ...callsOf(text, doc, symbol, syntax)
+        .filter((call) => call.args.length === 0)
+        .map((call) => appendItem(text, call, value)),
+    ]);
+  }
+
   if (!list) {
     return failed(`Cannot find the parameters of ${symbol.name}.`);
   }
@@ -431,6 +446,10 @@ export function setReturnType(
   const symbol = functionSymbol(doc, id);
   if (typeof symbol === 'string') {
     return failed(symbol);
+  }
+
+  if (symbol.kind === 'signal') {
+    return failed('Signals have no output.');
   }
 
   const type = typeText?.trim() || null;

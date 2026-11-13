@@ -1,3 +1,4 @@
+import type { EngineClass } from './engine-classes';
 import type { ImportRequest, ParseOptions } from './imports';
 import type { DataType, GraphDocument, PinRef, Point } from './ir';
 import type { ModuleReference } from './module-refs';
@@ -296,6 +297,17 @@ export interface TypeSystemInfo {
     vectors?: Record<string, string[]>;
     color?: string;
   };
+  /**
+   * Classes the language knows without an import (Godot's `Node`,
+   * `Area2D`): the type picker offers them, the action menu their members,
+   * and calls of their methods get named pins.
+   */
+  classes?: EngineClass[];
+  /**
+   * Declares a variable with the type of its value (GDScript's `:=`); the
+   * type picker offers it next to "No type".
+   */
+  inferredType?: string;
   /** Parameters cannot have default values (Rust). */
   noParameterDefaults?: boolean;
   /** Fields of a class cannot have default values (Rust struct fields). */

@@ -1,4 +1,6 @@
 import type { InputPinMeta } from './edit-meta';
+import type { EngineClass } from './engine-classes';
+import { classMethod } from './engine-classes';
 import type { ImportedDeclaration } from './imports';
 import type {
   FunctionGraph,
@@ -8,6 +10,7 @@ import type {
   Pin,
 } from './ir';
 import type { ScriptSymbol, SymbolParam } from './symbols';
+import { qualifiedName } from './symbols';
 
 export interface CallPinOptions {
   /** Argument written for a skipped parameter (`undefined`, `null`). */
@@ -19,6 +22,13 @@ export interface CallPinOptions {
   keywordArguments?: boolean;
   /** Declarations of imported names, read from their files. */
   imports?: ReadonlyArray<ImportedDeclaration>;
+  /** Classes the language knows (`TypeSystemInfo.classes`). */
+  classes?: ReadonlyArray<EngineClass>;
+  /**
+   * The class the script extends (GDScript's `extends CharacterBody2D`):
+   * its methods are called without a target (`move_and_slide()`).
+   */
+  selfClass?: string;
 }
 
 /** Pins of the arguments written in a call (`arg0`, `arg1`, …). */
@@ -61,12 +71,46 @@ function defaultOf(text: string, param: SymbolParam): string {
  * The function a call node calls, when the file declares it or imports it
  * (`fn()`, `ns.fn()`, `module.fn()`).
  */
+/** The type of the value wired into a call's target (`area` → `Area2D`). */
+function targetType(fn: FunctionGraph, node: GraphNode): string | undefined {
+  const edge = fn.edges.find(
+    (e) => e.to.node === node.id && e.to.pin === 'target'
+  );
+  const source = edge
+    ? fn.nodes
+        .find((n) => n.id === edge.from.node)
+        ?.pins.find((p) => p.id === edge.from.pin)
+    : undefined;
+  return source ? String(source.type) : undefined;
+}
+
+/** The declared type of a variable a call is made on (`barrel.look_at()`). */
+function variableType(
+  symbols: ReadonlyArray<ScriptSymbol>,
+  owner: ScriptSymbol | undefined,
+  name: string
+): string | undefined {
+  const scope = owner ? qualifiedName(owner) : undefined;
+  const variable =
+    symbols.find(
+      (s) => s.name === name && s.kind === 'local' && s.scope === scope
+    ) ??
+    symbols.find(
+      (s) =>
+        s.name === name &&
+        s.scope === '' &&
+        (s.kind === 'variable' || s.kind === 'constant')
+    );
+  return variable?.type?.text;
+}
+
 function calledSymbol(
   text: string,
   doc: GraphDocument,
   fn: FunctionGraph,
   node: GraphNode,
-  imports: ReadonlyMap<string, ImportedDeclaration>
+  imports: ReadonlyMap<string, ImportedDeclaration>,
+  options: CallPinOptions
 ): ScriptSymbol | undefined {
   const symbols = doc.symbols ?? [];
   const owner = symbols.find(
@@ -82,25 +126,38 @@ function calledSymbol(
     targetText === 'self' ||
     /^(?:this|self)\./.test(title);
   const name = title.split('.').at(-1) ?? title;
+  const engine = (cls: string | undefined): ScriptSymbol | undefined =>
+    classMethod(options.classes, cls, name);
 
   if (self) {
-    // A method of the class the calling method belongs to.
+    // A method of the class the calling method belongs to (or of the
+    // class the script extends).
     const cls = owner?.kind === 'method' ? owner.scope : '';
-    return symbols.find(
-      (s) =>
-        s.name === name &&
-        s.scope === cls &&
-        (s.kind === 'method' || s.kind === 'function')
+    return (
+      symbols.find(
+        (s) =>
+          s.name === name &&
+          s.scope === cls &&
+          (s.kind === 'method' || s.kind === 'function')
+      ) ?? (cls === '' ? engine(options.selfClass) : undefined)
     );
   }
 
-  // `ns.fn()`: a function of an imported module.
+  // `ns.fn()`: a function of an imported module; `value.fn()`: a method of
+  // the value's class; `Input.fn()`: a method of a global object.
   const module =
     targetText ?? (title.includes('.') ? title.split('.')[0] : undefined);
   if (module) {
-    return imports
-      .get(module)
-      ?.members?.find((s) => s.name === name && s.kind === 'function');
+    return (
+      imports
+        .get(module)
+        ?.members?.find((s) => s.name === name && s.kind === 'function') ??
+      engine(targetType(fn, node)) ??
+      engine(variableType(symbols, owner, module)) ??
+      engine(
+        options.classes?.find((c) => c.singleton && c.name === module)?.name
+      )
+    );
   }
 
   if (title.includes('.') || target) {
@@ -111,7 +168,9 @@ function calledSymbol(
   return (
     symbols.find(
       (s) => s.name === name && s.scope === '' && s.kind === 'function'
-    ) ?? (imported?.kind === 'function' ? imported : undefined)
+    ) ??
+    (imported?.kind === 'function' ? imported : undefined) ??
+    engine(options.selfClass)
   );
 }
 
@@ -161,7 +220,7 @@ export function completeCallPins(
         continue;
       }
 
-      const symbol = calledSymbol(text, doc, fn, node, imports);
+      const symbol = calledSymbol(text, doc, fn, node, imports, options);
       if (symbol && !own.has(symbol)) {
         typeResult(fn, node, symbol);
       }

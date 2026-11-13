@@ -9,6 +9,7 @@ export * from './edit-meta';
 export * from './flow';
 export * from './geometry';
 export * from './graph-builder';
+export * from './engine-classes';
 export * from './graph-overlay';
 export * from './ids';
 export * from './imports';

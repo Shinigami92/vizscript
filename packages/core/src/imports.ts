@@ -111,6 +111,17 @@ function portable(symbol: ScriptSymbol, text: string): ScriptSymbol {
   };
 }
 
+/**
+ * Declarations of another text (a library stub, an engine class), usable
+ * anywhere: ranges point nowhere, default values become text.
+ */
+export function portableSymbols(
+  symbols: ReadonlyArray<ScriptSymbol>,
+  text: string
+): ScriptSymbol[] {
+  return symbols.map((symbol) => portable(symbol, text));
+}
+
 const MEMBER_KINDS = new Set([
   'function',
   'class',

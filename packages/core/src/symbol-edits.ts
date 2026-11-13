@@ -290,6 +290,33 @@ function needsType(symbol: ScriptSymbol, syntax: DeclarationSyntax): boolean {
   );
 }
 
+/**
+ * `var x: int = 1` / `var x = 1` → `var x := 1`: the type comes from the
+ * value (GDScript's `:=`).
+ */
+function inferredTypeEdits(
+  text: string,
+  symbol: ScriptSymbol,
+  operator: string
+): OpResult {
+  if (!symbol.defaultRange) {
+    return failed(`${symbol.name} needs a value to take its type from.`);
+  }
+
+  const at = afterName(text, symbol);
+  const between = text.slice(at, symbol.defaultRange.start);
+  if (between.trim() === operator) {
+    return succeeded([]);
+  }
+
+  const eq = between.lastIndexOf('=');
+  if (eq === -1) {
+    return failed('Cannot find the value of the declaration.');
+  }
+
+  return succeeded([{ start: at, end: at + eq + 1, text: ` ${operator}` }]);
+}
+
 function typeEdits(
   text: string,
   symbol: ScriptSymbol,
@@ -297,6 +324,11 @@ function typeEdits(
   syntax: DeclarationSyntax
 ): OpResult {
   const type = typeText?.trim() || null;
+  const inferOperator = syntax.typeSystem.inferredType;
+  if (inferOperator && type === inferOperator) {
+    return inferredTypeEdits(text, symbol, inferOperator);
+  }
+
   if (type) {
     const error = syntax.validType(type);
     if (error) {
@@ -323,11 +355,21 @@ function typeEdits(
     return succeeded([{ start: colon, end: symbol.type.range.end, text: '' }]);
   }
 
+  const at = afterName(text, symbol);
   if (!type) {
-    return succeeded([]);
+    // `var x := 1` → `var x = 1` (no type at all).
+    const rest = text.slice(at);
+    const space = rest.length - rest.trimStart().length;
+    const declared =
+      inferOperator !== undefined &&
+      rest.slice(space).startsWith(inferOperator);
+    return succeeded(
+      declared
+        ? [{ start: at, end: at + space + inferOperator.length, text: ' =' }]
+        : []
+    );
   }
 
-  const at = afterName(text, symbol);
   // GDScript: `var x := 1` → `var x: int = 1`
   const inferred = text.slice(at).match(/^\s*:=/);
   if (inferred) {
