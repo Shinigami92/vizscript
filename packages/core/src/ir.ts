@@ -161,6 +161,8 @@ export interface GraphNode {
   /** Comment above the node's code, shown as a bubble. */
   comment?: NodeComment;
   meta?: Record<string, unknown>;
+  /** Exists only in the graph, not in the code yet (`GraphOverlay`). */
+  graphOnly?: boolean;
 }
 
 export interface PinRef {
@@ -175,6 +177,8 @@ export interface GraphEdge {
   kind: EdgeKind;
   from: PinRef;
   to: PinRef;
+  /** A wire the code doesn't have yet (`GraphOverlay`). */
+  graphOnly?: boolean;
 }
 
 export interface FunctionGraph {
