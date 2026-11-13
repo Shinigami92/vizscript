@@ -96,14 +96,28 @@ watch(
   { immediate: true }
 );
 
+/**
+ * `220` for a float (its type's default is `0.0`) is written `220.0`, like
+ * the code would be.
+ */
+function floatStyle(value: string): string {
+  const defaultValue = props.types?.primitives.find(
+    (t) => t.name === props.symbol.type?.text
+  )?.defaultValue;
+  return valueKind.value === 'number' &&
+    /^-?\d[\d_]*$/.test(value) &&
+    /^-?\d+\.\d+$/.test(defaultValue ?? '')
+    ? `${value}.0`
+    : value;
+}
+
 function commitValue(): void {
   const current = placeholderValue.value
     ? ''
     : valueKind.value === 'string'
       ? stringValue(valueCode.value)
       : valueCode.value;
-  // `v-model` on a number field gives a number.
-  const next = String(draft.value);
+  const next = floatStyle(draft.value.trim());
   if (next === current) {
     return;
   }
@@ -210,7 +224,8 @@ function resetValue(): void {
       v-model="draft"
       class="input py-0.5 text-xs"
       :class="valueKind === 'string' ? '' : 'font-mono'"
-      :type="valueKind === 'number' ? 'number' : 'text'"
+      type="text"
+      :inputmode="valueKind === 'number' ? 'decimal' : undefined"
       :placeholder="
         placeholderValue || (valueKind === 'string' ? 'Text' : 'No value')
       "
