@@ -17,6 +17,7 @@
     "ignoreCase": true
   },
   "ignorePatterns": [
+    ".claude/skills/**/*.js",
     "pnpm-lock.yaml",
     "CHANGELOG.md",
     "**/__snapshots__/**",

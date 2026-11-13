@@ -88,7 +88,7 @@ Check after each edit:
 - Every node kept its place: no swapped or stacked nodes, no wires suddenly crossing the graph.
 - The problems count in the status bar makes sense.
 
-Every few edits, undo and redo (toolbar buttons; hotkeys: ⌘/Ctrl+Z, ⇧⌘/Ctrl+Shift+Z) and check the graph again.
+Every few edits, undo and redo (toolbar buttons; hotkeys: ⌘/Ctrl+Z, ⇧⌘/Ctrl+Shift+Z) and check the graph again. For a full, exact check of undo (every wire and node removed and undone, compared position by position), use the `viz-undo-check` skill.
 
 Edits to try:
 

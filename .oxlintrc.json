@@ -23,6 +23,7 @@
     "es2024": true
   },
   "ignorePatterns": [
+    ".claude/skills/**/*.js",
     "**/dist/**",
     "**/coverage/**",
     "**/__snapshots__/**",
