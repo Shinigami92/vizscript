@@ -457,6 +457,8 @@ const DECLARATIONS: DeclarationSyntax = {
   blankLines: 2,
   bracedClasses: false,
   header: /^(?:@tool\b|@icon\b|@static_unload\b|class_name\b|extends\b)/,
+  // The class description right after `extends` belongs to the header.
+  headerDoc: /^##/,
   typeDeclaration: (name, unit) => `class ${name}:\n${unit}pass`,
   fn: (name, unit) => `func ${name}() -> void:\n${unit}pass`,
   variable: (name, { constant }) =>
