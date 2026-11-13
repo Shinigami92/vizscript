@@ -1,4 +1,4 @@
-import { resolveOverlay } from '@vizscript/core';
+import { floatingNodes, resolveOverlay } from '@vizscript/core';
 import type { WorkerRequest, WorkerResponse } from './protocol';
 /// <reference lib="webworker" />
 import { registry } from './registry';
@@ -69,6 +69,25 @@ function handle(request: WorkerRequest): WorkerResponse {
           applyOp: (text, op) =>
             backend.applyOp(text, op, request.fileName, options),
         }),
+      };
+    }
+
+    case 'floatingNodes': {
+      const options = { imports: request.imports };
+      return {
+        id: request.id,
+        ok: true,
+        floating: floatingNodes(
+          request.text,
+          request.template,
+          request.fnId,
+          request.group,
+          {
+            parse: (text) => backend.parse(text, request.fileName, options),
+            applyOp: (text, op) =>
+              backend.applyOp(text, op, request.fileName, options),
+          }
+        ),
       };
     }
   }

@@ -113,7 +113,8 @@ const GROUPS: ReadonlyArray<{
       },
       {
         action: 'Add a Branch, For Each loop or Return',
-        input: 'Hold {B}, {L} or {R} and click empty space',
+        input:
+          'Hold {B}, {L} or {R} and click empty space (outside a function it floats until you wire it in)',
       },
       {
         action: 'Favorite an action',

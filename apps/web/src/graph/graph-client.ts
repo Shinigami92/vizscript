@@ -1,9 +1,11 @@
 import type {
+  FloatingResult,
   GraphDocument,
   GraphOp,
   GraphOverlay,
   ImportedDeclaration,
   ModuleReference,
+  NodeTemplate,
   OpResult,
   OverlayResolution,
   TypeSystemInfo,
@@ -170,6 +172,38 @@ export class GraphClient {
     }
 
     return response.resolution;
+  }
+
+  /**
+   * Nodes for a template that has no place in the code yet: they float in
+   * the graph until they are wired in (`floatingNodes` in core).
+   */
+  public async floatingNodes(
+    text: string,
+    fileName: string,
+    template: NodeTemplate,
+    fnId: string | undefined,
+    group: string,
+    imports?: ImportedDeclaration[]
+  ): Promise<FloatingResult> {
+    const response = await this.send({
+      type: 'floatingNodes',
+      text,
+      fileName,
+      template: JSON.parse(JSON.stringify(template)) as NodeTemplate,
+      fnId,
+      group,
+      imports,
+    });
+    if (!response.ok) {
+      return { ok: false, error: response.error };
+    }
+
+    if (!('floating' in response)) {
+      throw new Error('Unexpected worker response');
+    }
+
+    return response.floating;
   }
 
   public dispose(): void {

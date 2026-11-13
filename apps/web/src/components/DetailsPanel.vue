@@ -146,12 +146,15 @@ const single = computed(() =>
 const deletable = computed(() =>
   selected.value.filter((entry) => entry.node.kind !== 'entry')
 );
+// Nodes not in the code yet (graph-only) have no place in it.
 const location = computed(() =>
-  single.value ? lineColumn(props.text, single.value.node.range.start) : null
+  single.value && !single.value.node.graphOnly
+    ? lineColumn(props.text, single.value.node.range.start)
+    : null
 );
 const source = computed(() => {
   const node = single.value?.node;
-  return node && node.range.end > node.range.start
+  return node && !node.graphOnly && node.range.end > node.range.start
     ? snippet(props.text, node.range, 24)
     : '';
 });

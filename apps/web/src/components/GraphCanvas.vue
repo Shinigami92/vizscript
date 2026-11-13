@@ -273,10 +273,14 @@ function commitPrompt(): void {
 
 // ------------------------------------------------------------------- ops
 
+/** Languages whose top level holds declarations only (no statements). */
+const DECLARATIONS_ONLY: ReadonlySet<string> = new Set(['gdscript', 'rust']);
+
 /**
  * Where new code for a point of the graph goes: the end of the function
- * whose frame contains it (else the module). `undefined` in a GDScript
- * file's top level, which is its class body.
+ * whose frame contains it (else the module). `undefined` in the top level
+ * of a GDScript file (its class body) or a Rust one: nodes added there
+ * float until they are wired in.
  */
 function placeAt(world: Point): Place | undefined {
   const v = view.value;
@@ -288,7 +292,11 @@ function placeAt(world: Point): Place | undefined {
   const top = topLevelGraph(doc, props.text);
   const fnId = v.functionAt(world) ?? top?.id;
   const anchor = fnId ? endOfFunction(doc, fnId) : undefined;
-  if (!fnId || !anchor || (doc.language === 'gdscript' && fnId === top?.id)) {
+  if (
+    !fnId ||
+    !anchor ||
+    (DECLARATIONS_ONLY.has(doc.language) && fnId === top?.id)
+  ) {
     return undefined;
   }
 

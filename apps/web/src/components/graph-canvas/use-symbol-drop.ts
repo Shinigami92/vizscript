@@ -47,13 +47,16 @@ export function useSymbolDrop(ctx: CanvasContext): SymbolDrop {
     }
 
     const world = v.worldAt(event.clientX, event.clientY);
+    // Without a place in the code (a GDScript class body), the node floats
+    // until it is wired in.
     const place = ctx.placeAt(world);
-    if (!place) {
-      show('Drop it into a function.');
+    if (!place && symbol.kind === 'local') {
+      show(`Drop ${symbol.name} into its function.`);
       return;
     }
 
-    const { fnId, anchor } = place;
+    const fnId = place?.fnId;
+    const anchor = place?.anchor ?? {};
 
     const owner = doc.symbols?.find(
       (s) => s.fnId === fnId && (s.kind === 'function' || s.kind === 'method')

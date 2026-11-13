@@ -40,7 +40,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useToasts } from '../composables/use-toasts';
 import { GraphClient } from '../graph/graph-client';
 import { isPreviewable, isVisualizable } from '../graph/languages';
-import { symbolNodes } from '../graph/symbols';
+import { symbolNodes, topLevelGraph } from '../graph/symbols';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
 import WorkbenchView from '../workbench/WorkbenchView.vue';
@@ -51,7 +51,11 @@ import ProblemsPanel from './ProblemsPanel.vue';
 import EditorActions from './script-workspace/EditorActions.vue';
 import GraphBreadcrumb from './script-workspace/GraphBreadcrumb.vue';
 import type { PendingPlacement } from './script-workspace/placement';
-import { placementFor, placeNewNodes } from './script-workspace/placement';
+import {
+  floatingLayout,
+  placementFor,
+  placeNewNodes,
+} from './script-workspace/placement';
 import {
   currentFunctionOf,
   describeTarget,
@@ -211,6 +215,7 @@ const {
   syncNodes,
   syncProblems,
   addEdits,
+  addFloating,
   setOverlay,
   discard: discardGraphChanges,
   resolve: resolveOverlay,
@@ -238,10 +243,30 @@ const {
     record: (before, after) => recordOverlay(before, after),
     // The editor reports its new version in a microtask.
     recordCode: () => queueMicrotask(recordOverlayCode),
+    placeFloating: (edit, world) => movePinned(floatingLayout(edit, world)),
+    placed: (ids) => {
+      const moved: Positions = {};
+      for (const [from, to] of Object.entries(ids)) {
+        const p = pinned.value[from];
+        if (p) {
+          moved[to] = p;
+        }
+      }
+
+      movePinned(moved);
+    },
     show,
   },
   props.overlay
 );
+
+/** Pins positions without an undo step (like placing new nodes). */
+function movePinned(patch: Positions): void {
+  if (Object.keys(patch).length > 0) {
+    pinned.value = { ...pinned.value, ...patch };
+    void persist(patch);
+  }
+}
 watch(outOfSync, (value) => emit('out-of-sync', value), { immediate: true });
 watch(
   () => props.overlay,
@@ -650,6 +675,18 @@ async function onOp(op: GraphOp): Promise<void> {
     if (graphEdits) {
       freezeLayout();
       addEdits(graphEdits);
+    } else if (op.type === 'addNode' && !op.after && !op.before) {
+      // No place in the code (e.g. a GDScript class body): it floats in
+      // the graph until it is wired in, like a new node in UE.
+      freezeLayout();
+      await addFloating(
+        op.template,
+        op.position ?? { x: 0, y: 0 },
+        // Shown with the function in focus, else with the class body.
+        focusFn.value ?? topLevelGraph(parsedDoc.value, text.value)?.id
+      );
+    } else if (JSON.stringify(op).includes('"overlay:')) {
+      show('This node is not in the code yet: wire it in first.', 'error');
     } else {
       show(result.error, 'error');
     }

@@ -115,19 +115,15 @@ export function createActionEntries(
         {
           ...base,
           action: () => {
+            // Without a place in the code, it floats until it is wired in.
             const place = ctx.placeAt(state.world);
-            if (!place) {
-              ctx.show('Add it inside a function.');
-              return;
-            }
-
             emitOp({
               type: 'addNode',
               template: {
                 type: 'value',
                 expression: fill(expression.template),
               },
-              ...place.anchor,
+              ...place?.anchor,
               position: { ...state.world },
             });
           },

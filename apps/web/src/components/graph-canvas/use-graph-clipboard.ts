@@ -126,13 +126,9 @@ export function useGraphClipboard(
       return;
     }
 
+    // Without a place in the code, the nodes float until they are wired in.
     const place = ctx.placeAt(world);
-    if (!place) {
-      show('Paste inside a function.');
-      return;
-    }
-
-    emitOp({ type: 'addNode', template, ...place.anchor, position: world });
+    emitOp({ type: 'addNode', template, ...place?.anchor, position: world });
   }
 
   function onPaste(event: ClipboardEvent): void {

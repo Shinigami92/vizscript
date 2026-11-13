@@ -1,11 +1,19 @@
 import type {
+  FloatingNodes,
   GraphDocument,
   GraphEdit,
   GraphOverlay,
   ImportedDeclaration,
+  NodeTemplate,
   OverlayIssue,
+  Point,
 } from '@vizscript/core';
-import { EMPTY_OVERLAY, findNode, isEmptyOverlay } from '@vizscript/core';
+import {
+  compactOverlay,
+  EMPTY_OVERLAY,
+  findNode,
+  isEmptyOverlay,
+} from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
 import type { GraphClient } from '../../graph/graph-client';
@@ -26,6 +34,10 @@ export interface GraphOverlayDeps {
   record: (before: GraphOverlay, after: GraphOverlay) => void;
   /** The last recorded step also wrote code (one undo for both). */
   recordCode: () => void;
+  /** Positions for new floating nodes (where they were dropped). */
+  placeFloating: (edit: FloatingNodes, world: Point) => void;
+  /** Floating nodes were written as code: their nodes got these ids. */
+  placed: (ids: Record<string, string>) => void;
   show: (message: string, kind?: 'info' | 'error') => void;
 }
 
@@ -39,6 +51,15 @@ export interface WorkspaceGraphOverlay {
   syncProblems: ComputedRef<Problem[]>;
   /** Keeps edits in the graph only; writes code once it is valid. */
   addEdits: (edits: ReadonlyArray<GraphEdit>) => void;
+  /**
+   * Nodes with no place in the code yet: they float where they were dropped
+   * until they are wired in.
+   */
+  addFloating: (
+    template: NodeTemplate,
+    world: Point,
+    fnId: string | undefined
+  ) => Promise<void>;
   /** Replaces the overlay (draft loaded, undo, remapped after a parse). */
   setOverlay: (overlay: GraphOverlay) => void;
   discard: () => void;
@@ -75,7 +96,8 @@ export function useGraphOverlay(
 
   function addEdits(edits: ReadonlyArray<GraphEdit>): void {
     const before = overlay.value;
-    const after = { edits: [...before.edits, ...edits] };
+    // Floating nodes deleted again leave nothing behind.
+    const after = compactOverlay({ edits: [...before.edits, ...edits] });
     deps.record(before, after);
     userEdit = true;
     if (!told) {
@@ -87,6 +109,30 @@ export function useGraphOverlay(
 
     setOverlay(after);
     void resolve();
+  }
+
+  let groups = 0;
+  async function addFloating(
+    template: NodeTemplate,
+    world: Point,
+    fnId: string | undefined
+  ): Promise<void> {
+    const group = `${Date.now().toString(36)}${(groups++).toString(36)}`;
+    const result = await deps.client.floatingNodes(
+      deps.text.value,
+      deps.path(),
+      template,
+      fnId,
+      group,
+      deps.imports()
+    );
+    if (!result.ok) {
+      deps.show(result.error, 'error');
+      return;
+    }
+
+    deps.placeFloating(result.edit, world);
+    addEdits([result.edit]);
   }
 
   function discard(): void {
@@ -129,6 +175,10 @@ export function useGraphOverlay(
     }
 
     const wrote = result.text !== source;
+    if (result.placed) {
+      deps.placed(result.placed);
+    }
+
     if (wrote) {
       deps.writeCode(result.text);
     }
@@ -181,6 +231,7 @@ export function useGraphOverlay(
     syncNodes,
     syncProblems,
     addEdits,
+    addFloating,
     setOverlay,
     discard,
     resolve,

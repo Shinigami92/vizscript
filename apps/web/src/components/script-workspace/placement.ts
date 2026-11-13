@@ -1,4 +1,5 @@
 import type {
+  FloatingNodes,
   FlowTemplate,
   GraphDocument,
   GraphNode,
@@ -193,4 +194,51 @@ export function placeNewNodes(
   }
 
   return { placed, selectAfter };
+}
+
+function runs(n: GraphNode): boolean {
+  return n.pins.some((p) => p.kind === 'exec' && p.direction === 'in');
+}
+
+/**
+ * Where floating nodes go: their statements in a row from the drop point,
+ * each value left of the node it feeds.
+ */
+export function floatingLayout(edit: FloatingNodes, world: Point): Positions {
+  const positions: Positions = {};
+  const statements = edit.nodes.filter(runs);
+  for (const [i, node] of statements.entries()) {
+    positions[node.id] = { x: world.x + i * 260, y: world.y };
+  }
+
+  const values = edit.nodes.filter((n) => !runs(n)).toReversed();
+  if (statements.length === 0 && values[0]) {
+    positions[values[0].id] = { ...world };
+  }
+
+  // Values feed nodes placed before them (code order is inside out).
+  const below = new Map<string, number>();
+  for (let pass = 0; pass < values.length; pass++) {
+    for (const node of values) {
+      if (positions[node.id]) {
+        continue;
+      }
+
+      const target = edit.edges.find(
+        (e) => e.from.node === node.id && positions[e.to.node]
+      )?.to.node;
+      const at = target ? positions[target] : undefined;
+      if (target && at) {
+        const k = below.get(target) ?? 0;
+        below.set(target, k + 1);
+        positions[node.id] = { x: at.x - 200, y: at.y + 40 + k * 70 };
+      }
+    }
+  }
+
+  for (const [i, node] of values.entries()) {
+    positions[node.id] ??= { x: world.x - 200 * (i + 1), y: world.y };
+  }
+
+  return positions;
 }

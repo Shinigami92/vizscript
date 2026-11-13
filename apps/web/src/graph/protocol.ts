@@ -1,9 +1,11 @@
 import type {
+  FloatingResult,
   GraphDocument,
   GraphOp,
   GraphOverlay,
   ImportedDeclaration,
   ModuleReference,
+  NodeTemplate,
   OpResult,
   OverlayResolution,
   TypeSystemInfo,
@@ -36,12 +38,25 @@ export type WorkerRequest =
       fileName: string;
       overlay: GraphOverlay;
       imports?: ImportedDeclaration[];
+    }
+  | {
+      id: number;
+      type: 'floatingNodes';
+      text: string;
+      fileName: string;
+      template: NodeTemplate;
+      /** Function the nodes belong to until they are wired in. */
+      fnId?: string;
+      /** Id of the group (`overlay:<group>/…` node ids). */
+      group: string;
+      imports?: ImportedDeclaration[];
     };
 
 export type WorkerResponse =
   | { id: number; ok: true; doc: GraphDocument }
   | { id: number; ok: true; result: OpResult }
   | { id: number; ok: true; resolution: OverlayResolution }
+  | { id: number; ok: true; floating: FloatingResult }
   | { id: number; ok: true; references: ModuleReference[] }
   | { id: number; ok: true; typeSystem: TypeSystemInfo | null }
   | {
