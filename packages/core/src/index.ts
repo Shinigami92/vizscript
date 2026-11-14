@@ -9,6 +9,7 @@ export * from './edit-meta';
 export * from './flow';
 export * from './conversions';
 export * from './geometry';
+export * from './via-wires';
 export * from './graph-builder';
 export * from './engine-classes';
 export * from './graph-overlay';

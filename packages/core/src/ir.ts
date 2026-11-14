@@ -184,6 +184,11 @@ export interface GraphEdge {
   to: PinRef;
   /** A wire the code doesn't have yet (`GraphOverlay`). */
   graphOnly?: boolean;
+  /**
+   * Drawn from a SET's output in place of this Get node, which reads the
+   * variable in the code (`foldVias`).
+   */
+  via?: string;
 }
 
 export interface FunctionGraph {

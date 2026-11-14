@@ -176,7 +176,7 @@ export function isBoxColorKey(key: string): boolean {
 
 /** Layout entries that are not node positions (reroutes, box colors). */
 export function isExtraLayoutKey(key: string): boolean {
-  return isRerouteKey(key) || isBoxColorKey(key);
+  return isRerouteKey(key) || isBoxColorKey(key) || key.startsWith('~via|');
 }
 
 /** The box color entries of a layout. */
