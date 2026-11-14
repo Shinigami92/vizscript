@@ -1,4 +1,4 @@
-import type { TypeInfo, TypeMap } from '@vizscript/core';
+import type { SymbolParam, TypeInfo, TypeMap } from '@vizscript/core';
 import { rangeKey } from '@vizscript/core';
 import type {
   Block,
@@ -16,6 +16,7 @@ import {
   builtinMembers,
   builtinMethod,
   callableOf,
+  signatureOf,
   sliceOf,
   stubOf,
   substitute,
@@ -63,6 +64,8 @@ class Scope {
 interface Result {
   type: string | undefined;
   isAsync?: boolean;
+  /** Parameters of what a call calls. */
+  params?: ReadonlyArray<SymbolParam>;
 }
 
 /**
@@ -75,6 +78,8 @@ interface Result {
  */
 class TypeLookup {
   public readonly types = new Map<string, string>();
+  /** Parameters of what calls reach, by the call's range. */
+  public readonly signatures = new Map<string, ReadonlyArray<SymbolParam>>();
   private readonly typesOfFile = new Map<string, TypeScope>();
   private readonly enums = new Set<string>();
   private readonly functions = new Map<string, Callable>();
@@ -451,13 +456,22 @@ class TypeLookup {
   private method(type: string, name: string): Result | undefined {
     const own = this.typesOfFile.get(generic(type).name)?.methods.get(name);
     if (own) {
-      return { type: own.returns, isAsync: own.isAsync };
+      return {
+        type: own.returns,
+        isAsync: own.isAsync,
+        params: signatureOf(own, type),
+      };
     }
 
     const builtin = builtinMethod(type, name);
     if (builtin) {
       const target = stubOf(type);
       return {
+        params: signatureOf(
+          builtin,
+          concrete(type) ?? type,
+          target?.args ?? []
+        ),
         type: builtin.returns
           ? substitute(
               builtin.returns,
@@ -516,6 +530,10 @@ class TypeLookup {
       case 'Call': {
         const args = expr.args.map((arg) => this.infer(arg, scope));
         const result = this.call(expr, args, scope);
+        if (result?.params && result.params.length > 0) {
+          this.signatures.set(rangeKey(expr), result.params);
+        }
+
         if (result?.isAsync) {
           if (result.type !== undefined) {
             this.awaited.set(rangeKey(expr), result.type);
@@ -715,7 +733,11 @@ class TypeLookup {
 
       const fn = this.functions.get(first);
       if (fn) {
-        return { type: normalize(fn.returns) ?? '()', isAsync: fn.isAsync };
+        return {
+          type: normalize(fn.returns) ?? '()',
+          isAsync: fn.isAsync,
+          params: signatureOf(fn, ''),
+        };
       }
 
       if (first === 'Some') {
@@ -744,7 +766,11 @@ class TypeLookup {
 
     const method = this.typesOfFile.get(base)?.methods.get(fnName);
     if (method) {
-      return { type: method.returns ?? '()', isAsync: method.isAsync };
+      return {
+        type: method.returns ?? '()',
+        isAsync: method.isAsync,
+        params: signatureOf(method, typeName),
+      };
     }
 
     if (base === 'String' && (fnName === 'from' || fnName === 'new')) {
@@ -784,16 +810,16 @@ class TypeLookup {
  */
 export function rustTypes(text: string, items: ReadonlyArray<Item>): TypeMap {
   const types = new Map<string, TypeInfo>();
-  let found: ReadonlyMap<string, string>;
+  let lookup: TypeLookup;
   try {
-    found = new TypeLookup(text, items).types;
+    lookup = new TypeLookup(text, items);
   } catch {
     // Code the parser recovered from in an unexpected shape: the graph
     // keeps the parser's types.
     return types;
   }
 
-  for (const [key, type] of found) {
+  for (const [key, type] of lookup.types) {
     if (type.includes('_') && /(?:^|[<(,\s])_(?:[>),]|$)/.test(type)) {
       continue;
     }
@@ -807,6 +833,15 @@ export function rustTypes(text: string, items: ReadonlyArray<Item>): TypeMap {
       text: type,
       dataType: dataTypeOf(type),
       ...(members ? { members } : {}),
+    });
+  }
+
+  // Calls: the parameters of what they call, also when the result is
+  // unknown (`any` keeps the parser's type).
+  for (const [key, signature] of lookup.signatures) {
+    types.set(key, {
+      ...(types.get(key) ?? { text: '_', dataType: 'any' }),
+      signature,
     });
   }
 

@@ -1,4 +1,4 @@
-import type { TypeMember } from '@vizscript/core';
+import type { SymbolParam, TypeMember } from '@vizscript/core';
 import type { FunctionItem, Span } from './ast';
 import { RUST_BUILTINS } from './builtins';
 import { parseRust } from './convert';
@@ -15,12 +15,20 @@ import {
 
 // ------------------------------------------------------------- built-ins
 
+/** A parameter of a stub or of the file's own functions. */
+export interface StubParam {
+  name: string;
+  /** Type as written, with the stub's placeholders (`T`, `Self`). */
+  type?: string;
+}
+
 export interface Callable {
   /** Result as written, `undefined` for `()`. */
   returns: string | undefined;
   /** Signature for the action menu (`len() -> usize`). */
   detail: string;
   isAsync: boolean;
+  params: ReadonlyArray<StubParam>;
 }
 
 export function sliceOf(
@@ -37,7 +45,37 @@ export function callableOf(text: string, fn: FunctionItem): Callable {
     returns,
     detail: `${fn.name}(${params})${returns ? ` -> ${returns}` : ''}`,
     isAsync: fn.modifiers.includes('async'),
+    params: fn.params.map((p): StubParam => {
+      const type = sliceOf(text, p.type);
+      return {
+        name: p.name ?? text.slice(p.pattern.start, p.pattern.end),
+        ...(type ? { type } : {}),
+      };
+    }),
   };
+}
+
+const NOWHERE = { start: 0, end: 0 };
+
+/**
+ * The parameters of a callable as the call pins need them, with the
+ * placeholders filled from the value it is called on (`Vec<Item>::push`
+ * takes an `Item`).
+ */
+export function signatureOf(
+  callable: Callable,
+  self: string,
+  args: ReadonlyArray<string> = []
+): SymbolParam[] {
+  return callable.params.map((param): SymbolParam => {
+    const type = param.type ? substitute(param.type, self, args) : undefined;
+    return {
+      name: param.name,
+      nameRange: NOWHERE,
+      ...(type ? { type: { text: type, range: NOWHERE } } : {}),
+      dataType: dataTypeOf(type),
+    };
+  });
 }
 
 let builtins: Map<string, Map<string, Callable>> | undefined;

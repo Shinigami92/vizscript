@@ -110,4 +110,18 @@ describe('the Rust type lookup', () => {
       detail: 'unwrap() -> Item',
     });
   });
+
+  it('names and types the arguments of std methods', () => {
+    const get = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.title === 'get');
+    expect(
+      get?.pins
+        .filter((p) => p.direction === 'in' && p.kind === 'data')
+        .map((p) => [p.id, p.name, p.type])
+    ).toEqual([
+      ['target', 'Target', 'object'],
+      ['arg0', 'key', 'string'],
+    ]);
+  });
 });

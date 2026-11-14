@@ -168,5 +168,8 @@ export function parseRustDocument(
   inferTypes(doc);
   // Types followed through the file (`items.len()` is a `usize`,
   // `println!` gives nothing).
-  return applyTypes(doc, rustTypes(text, items));
+  return applyTypes(doc, rustTypes(text, items), {
+    text,
+    options: { placeholder: 'todo!()' },
+  });
 }
