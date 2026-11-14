@@ -51,6 +51,7 @@ import MyScriptPanel from './MyScriptPanel.vue';
 import ProblemsPanel from './ProblemsPanel.vue';
 import EditorActions from './script-workspace/EditorActions.vue';
 import GraphBreadcrumb from './script-workspace/GraphBreadcrumb.vue';
+import LanguageStatus from './script-workspace/LanguageStatus.vue';
 import type { PendingPlacement } from './script-workspace/placement';
 import {
   floatingLayout,
@@ -73,6 +74,7 @@ import { useCodeGraphSync } from './script-workspace/use-code-graph-sync';
 import { useFocusMode } from './script-workspace/use-focus-mode';
 import { useGraphOverlay } from './script-workspace/use-graph-overlay';
 import { useImports } from './script-workspace/use-imports';
+import { useLanguageVersion } from './script-workspace/use-language-version';
 import { useLayoutHistory } from './script-workspace/use-layout-history';
 import { useProblems } from './script-workspace/use-problems';
 import { useViaWires } from './script-workspace/use-via-wires';
@@ -148,6 +150,13 @@ const router = useRouter();
 
 const client = new GraphClient();
 onBeforeUnmount(() => client.dispose());
+
+const { version: languageVersion, versionFiles } = useLanguageVersion({
+  client,
+  path: () => props.path,
+  files: () => props.files,
+  readFile: () => props.readFile,
+});
 
 const {
   resolveReference,
@@ -876,6 +885,13 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
       :problem-counts="problemCounts"
       :saving="layoutStore ? saving : null"
       :out-of-sync="outOfSync"
+    />
+    <LanguageStatus
+      :path="path"
+      :version="languageVersion"
+      :version-files="versionFiles"
+      :has-project="files !== undefined"
+      @open="emit('open', $event)"
     />
 
     <WorkbenchView id="code">

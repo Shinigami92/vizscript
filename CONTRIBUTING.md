@@ -148,6 +148,11 @@ Like UE, a graph may be in states the code can't hold yet: an exec wire broken w
   - GDScript: `"res://…"` paths and relative `preload()` / `load()` paths.
   - Python: modules next to the file, in the repository root or relative (`from .utils import x`).
   - Rust: `mod x;` (`x.rs`, `x/mod.rs`) and `use crate::…` / `self::` / `super::` paths; `crate::` starts in the `src` folder next to the nearest `Cargo.toml`.
+- **Language version** (status bar, like VS Code) comes from the optional `LanguageBackend.versionFiles` and `version()`. The web app reads those files in the folder of the open file and every folder above it (`projectFilesAbove`), and the backend picks the version from the nearest one that states it. The playground has no project files, so it shows the language only.
+  - TypeScript/JavaScript: `typescript` in `package.json` (also through pnpm catalogs in `pnpm-workspace.yaml`).
+  - Python: `.python-version`, then `pyproject.toml` (`[tool.pyright] pythonVersion`, `[tool.mypy] python_version`, `requires-python`, Poetry's `python`), `setup.cfg` `python_requires`, `runtime.txt`.
+  - GDScript: the feature tag in `project.godot` (`config/features`), else its `config_version` (5 = Godot 4).
+  - Rust: `edition` and `rust-version` of the crate's `Cargo.toml` (inherited from `[workspace.package]`, 2015 when missing), or a version pinned in `rust-toolchain(.toml)`.
 
 ### Persistence
 

@@ -49,6 +49,22 @@ function handle(request: WorkerRequest): WorkerResponse {
       };
     }
 
+    case 'versionFiles': {
+      return {
+        id: request.id,
+        ok: true,
+        versionFiles: backend.versionFiles ?? [],
+      };
+    }
+
+    case 'version': {
+      return {
+        id: request.id,
+        ok: true,
+        version: backend.version?.(request.files) ?? null,
+      };
+    }
+
     case 'applyOp': {
       return {
         id: request.id,

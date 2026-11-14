@@ -45,10 +45,12 @@ const workbench = useWorkbenchStore();
       <span class="i-mdi-sync-alert" />
       Graph not in sync
     </span>
+    <!-- Pushes the layout state and the language to the right. -->
+    <span class="flex-1" aria-hidden="true" />
     <span
       v-if="saving && saving !== 'idle'"
       data-ui="status-layout"
-      class="ml-auto flex items-center gap-1 px-1.5"
+      class="flex items-center gap-1 px-1.5"
       :class="saving === 'error' ? 'text-red-400' : ''"
       role="status"
     >

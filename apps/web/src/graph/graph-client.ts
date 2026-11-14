@@ -4,10 +4,12 @@ import type {
   GraphOp,
   GraphOverlay,
   ImportedDeclaration,
+  LanguageVersion,
   ModuleReference,
   NodeTemplate,
   OpResult,
   OverlayResolution,
+  ProjectFile,
   TypeSystemInfo,
 } from '@vizscript/core';
 import type { WorkerRequest, WorkerResponse } from './protocol';
@@ -99,6 +101,23 @@ export class GraphClient {
   public async typeSystem(fileName: string): Promise<TypeSystemInfo | null> {
     const response = await this.send({ type: 'typeSystem', fileName });
     return response.ok && 'typeSystem' in response ? response.typeSystem : null;
+  }
+
+  /** Names of the project files that state the language's version. */
+  public async versionFiles(fileName: string): Promise<ReadonlyArray<string>> {
+    const response = await this.send({ type: 'versionFiles', fileName });
+    return response.ok && 'versionFiles' in response
+      ? response.versionFiles
+      : [];
+  }
+
+  /** The language version stated by `files` (nearest folder first). */
+  public async version(
+    fileName: string,
+    files: ProjectFile[]
+  ): Promise<LanguageVersion | null> {
+    const response = await this.send({ type: 'version', fileName, files });
+    return response.ok && 'version' in response ? response.version : null;
   }
 
   /**

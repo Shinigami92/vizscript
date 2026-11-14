@@ -4,10 +4,12 @@ import type {
   GraphOp,
   GraphOverlay,
   ImportedDeclaration,
+  LanguageVersion,
   ModuleReference,
   NodeTemplate,
   OpResult,
   OverlayResolution,
+  ProjectFile,
   TypeSystemInfo,
 } from '@vizscript/core';
 
@@ -23,6 +25,14 @@ export type WorkerRequest =
   | { id: number; type: 'references'; text: string; fileName: string }
   | { id: number; type: 'typeSystem'; fileName: string }
   | { id: number; type: 'library'; fileName: string; module?: string }
+  | { id: number; type: 'versionFiles'; fileName: string }
+  | {
+      id: number;
+      type: 'version';
+      fileName: string;
+      /** The language's version files, nearest folder first. */
+      files: ProjectFile[];
+    }
   | {
       id: number;
       type: 'applyOp';
@@ -59,6 +69,8 @@ export type WorkerResponse =
   | { id: number; ok: true; floating: FloatingResult }
   | { id: number; ok: true; references: ModuleReference[] }
   | { id: number; ok: true; typeSystem: TypeSystemInfo | null }
+  | { id: number; ok: true; versionFiles: ReadonlyArray<string> }
+  | { id: number; ok: true; version: LanguageVersion | null }
   | {
       id: number;
       ok: true;

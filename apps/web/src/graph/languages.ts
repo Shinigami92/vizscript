@@ -44,6 +44,33 @@ export function languageOf(
     : 'typescript';
 }
 
+/** Name of a backend's language for the status bar (`TypeScript JSX`). */
+export function languageName(path: string): string | undefined {
+  const lower = path.toLowerCase();
+  switch (languageOf(path)) {
+    case 'typescript': {
+      const script = /\.[cm]?tsx?$/.test(lower) ? 'TypeScript' : 'JavaScript';
+      return lower.endsWith('x') ? `${script} JSX` : script;
+    }
+
+    case 'python': {
+      return 'Python';
+    }
+
+    case 'gdscript': {
+      return 'GDScript';
+    }
+
+    case 'rust': {
+      return 'Rust';
+    }
+
+    default: {
+      return undefined;
+    }
+  }
+}
+
 /** Languages that name things in snake_case (Python, GDScript, Rust). */
 export function usesSnakeCase(language: string | undefined): boolean {
   return (
