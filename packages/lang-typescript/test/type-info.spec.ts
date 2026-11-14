@@ -75,6 +75,7 @@ describe('type information from a checker', () => {
   it('refines pins, symbols and collects members', async () => {
     const provider = fakeProvider({
       'fetch(url)': RESPONSE,
+      response: RESPONSE,
       'response.ok': { text: 'boolean', dataType: 'bool' },
       'response.json()': { text: 'Promise<any>', dataType: 'any' },
       TAX_RATE: { text: 'number', dataType: 'number' },
@@ -89,6 +90,15 @@ describe('type information from a checker', () => {
       (p) => p.direction === 'out' && p.kind === 'data'
     );
     expect(fetchOut).toMatchObject({ type: 'Response', typeText: 'Response' });
+
+    // The SET of the variable: its value takes the variable's type.
+    const set = nodeTitled(nodes, 'Set response');
+    expect(
+      set.pins.filter((p) => p.kind === 'data').map((p) => [p.id, p.type])
+    ).toEqual([
+      ['value', 'Response'],
+      ['out', 'Response'],
+    ]);
 
     const ok = nodes
       .flatMap((n) => n.pins)

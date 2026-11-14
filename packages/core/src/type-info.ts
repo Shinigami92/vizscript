@@ -133,6 +133,18 @@ function typedNode(
     changed ||= next !== pin;
     return [next];
   });
+  // A SET takes the type of its variable: its value input too, unless the
+  // parser knew better (`const response = await fetch(url)`).
+  const out =
+    node.kind === 'setVar' ? pins.find((p) => p.id === 'out') : undefined;
+  const value = pins.find(
+    (p) => p.id === 'value' && p.direction === 'in' && p.type === 'any'
+  );
+  if (out?.typeText !== undefined && value) {
+    pins[pins.indexOf(value)] = { ...value, type: out.type };
+    changed = true;
+  }
+
   return changed ? { ...node, pins } : node;
 }
 
