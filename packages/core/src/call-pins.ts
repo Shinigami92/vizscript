@@ -202,6 +202,116 @@ function typeResult(
 }
 
 /**
+ * The pins of a call node completed from the parameters it calls, like
+ * UE's call nodes: given arguments get their parameter's name, type and
+ * default ("Reset to default"); missing ones become unconnected pins that
+ * insert the argument when they get a value or a wire. Returns new pins;
+ * the node's own are left alone.
+ */
+export function withParamPins(
+  text: string,
+  node: GraphNode,
+  params: ReadonlyArray<SymbolParam>,
+  options: Pick<CallPinOptions, 'placeholder' | 'keywordArguments'>
+): Pin[] {
+  const pins = node.pins.map((p) => ({ ...p }));
+  const args = pins.filter(
+    (p) => p.direction === 'in' && p.kind === 'data' && ARG_PIN.test(p.id)
+  );
+  const keywords = new Set(
+    args
+      .map((p) => p.name)
+      .filter((n) => n.endsWith('='))
+      .map((n) => n.slice(0, -1))
+  );
+  const positional = args.filter(
+    (p) => !p.name.endsWith('=') && p.name !== '...' && !p.name.startsWith('*')
+  );
+
+  // Positional arguments from a `*rest` parameter on all belong to it.
+  const restAt = params.findIndex((p) => p.rest);
+  const paramAt = (index: number): SymbolParam | undefined =>
+    restAt !== -1 && index >= restAt ? params[restAt] : params[index];
+
+  // Given arguments know their parameter's default ("Reset to default").
+  for (const pin of args) {
+    const param = pin.name.endsWith('=')
+      ? params.find((p) => `${p.name}=` === pin.name)
+      : paramAt(positional.indexOf(pin));
+    const value = param && !param.rest ? defaultOf(text, param) : '';
+    if (value !== '') {
+      pin.meta = { ...pin.meta, defaultValue: value };
+    }
+  }
+
+  // Types of the given arguments come from the parameters.
+  for (const [index, pin] of positional.entries()) {
+    const param = paramAt(index);
+    if (param && !param.rest && pin.type === 'any') {
+      pin.type = param.dataType;
+    }
+
+    // Functions declared elsewhere are unknown while lowering: name them.
+    if (param && !param.rest && pin.name === '') {
+      pin.name = param.name;
+    }
+  }
+
+  const close = callClose(text, node);
+  if (close === undefined || positional.length < args.length - keywords.size) {
+    return pins;
+  }
+
+  const added: Pin[] = [];
+  for (const [index, param] of params.entries()) {
+    // After a `*rest` parameter only keywords reach a parameter.
+    const afterRest = restAt !== -1 && index > restAt;
+    if (
+      param.rest ||
+      keywords.has(param.name) ||
+      (afterRest ? !options.keywordArguments : index < positional.length)
+    ) {
+      continue;
+    }
+
+    let prefix: string;
+    if (options.keywordArguments) {
+      prefix = `${args.length > 0 ? ', ' : ''}${param.name}=`;
+    } else {
+      // Skipped parameters before this one get a placeholder.
+      const gap = index - positional.length;
+      const fill = Array.from({ length: gap }, () => options.placeholder);
+      prefix = `${args.length > 0 ? ', ' : ''}${fill.map((v) => `${v}, `).join('')}`;
+    }
+
+    const meta: InputPinMeta = {
+      insertInitAt: close,
+      insertPrefix: prefix,
+      optional: true,
+    };
+    added.push({
+      id: `param:${param.name}`,
+      name: param.name,
+      direction: 'in',
+      kind: 'data',
+      type: param.dataType,
+      literal: {
+        value: defaultOf(text, param),
+        raw: '',
+        kind: literalKind(param),
+        editable: true,
+      },
+      meta: { ...meta },
+    });
+  }
+
+  // After the last input, before the outputs.
+  const at = pins.findLastIndex((p) => p.direction === 'in') + 1;
+  pins.splice(at, 0, ...added);
+  return pins;
+}
+
+/**
  * Completes the input pins of calls to functions of the same file, like
  * UE's call nodes: every parameter is a pin, named and typed like it.
  * Missing arguments become unconnected pins that insert the argument when
@@ -226,101 +336,9 @@ export function completeCallPins(
       }
 
       const params = symbol?.params;
-      if (!symbol || !params) {
-        continue;
+      if (symbol && params) {
+        node.pins = withParamPins(text, node, params, options);
       }
-
-      const args = node.pins.filter(
-        (p) => p.direction === 'in' && p.kind === 'data' && ARG_PIN.test(p.id)
-      );
-      const keywords = new Set(
-        args
-          .map((p) => p.name)
-          .filter((n) => n.endsWith('='))
-          .map((n) => n.slice(0, -1))
-      );
-      const positional = args.filter(
-        (p) =>
-          !p.name.endsWith('=') && p.name !== '...' && !p.name.startsWith('*')
-      );
-
-      // Given arguments know their parameter's default ("Reset to default").
-      for (const pin of args) {
-        const param = pin.name.endsWith('=')
-          ? params.find((p) => `${p.name}=` === pin.name)
-          : params[positional.indexOf(pin)];
-        const value = param && !param.rest ? defaultOf(text, param) : '';
-        if (value !== '') {
-          pin.meta = { ...pin.meta, defaultValue: value };
-        }
-      }
-
-      // Types of the given arguments come from the parameters.
-      for (const [index, pin] of positional.entries()) {
-        const param = params[index];
-        if (param && !param.rest && pin.type === 'any') {
-          pin.type = param.dataType;
-        }
-
-        // Imported functions are unknown while lowering: name them here.
-        if (param && !param.rest && pin.name === '') {
-          pin.name = param.name;
-        }
-      }
-
-      const close = callClose(text, node);
-      if (
-        close === undefined ||
-        positional.length < args.length - keywords.size
-      ) {
-        continue;
-      }
-
-      const added: Pin[] = [];
-      for (const [index, param] of params.entries()) {
-        if (
-          index < positional.length ||
-          param.rest ||
-          keywords.has(param.name)
-        ) {
-          continue;
-        }
-
-        let prefix: string;
-        if (options.keywordArguments) {
-          prefix = `${args.length > 0 ? ', ' : ''}${param.name}=`;
-        } else {
-          // Skipped parameters before this one get a placeholder.
-          const gap = index - positional.length;
-          const fill = Array.from({ length: gap }, () => options.placeholder);
-          prefix = `${args.length > 0 ? ', ' : ''}${fill.map((v) => `${v}, `).join('')}`;
-        }
-
-        const meta: InputPinMeta = {
-          insertInitAt: close,
-          insertPrefix: prefix,
-          optional: true,
-        };
-        const defaultText = defaultOf(text, param);
-        added.push({
-          id: `param:${param.name}`,
-          name: param.name,
-          direction: 'in',
-          kind: 'data',
-          type: param.dataType,
-          literal: {
-            value: defaultText,
-            raw: '',
-            kind: literalKind(param),
-            editable: true,
-          },
-          meta: { ...meta },
-        });
-      }
-
-      // After the last input, before the outputs.
-      const at = node.pins.findLastIndex((p) => p.direction === 'in') + 1;
-      node.pins.splice(at, 0, ...added);
     }
   }
 }

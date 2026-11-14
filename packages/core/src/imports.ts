@@ -1,5 +1,6 @@
 import type { GraphDocument, Reexport, SourceRange } from './ir';
 import type { ScriptSymbol, SymbolParam, TypeRef } from './symbols';
+import type { TypeMap } from './type-info';
 
 /**
  * What an import of the parsed file refers to, read from the imported file:
@@ -62,6 +63,12 @@ export function relativePath(from: string, to: string): string {
 /** Context of a parse beyond the file itself. */
 export interface ParseOptions {
   imports?: ReadonlyArray<ImportedDeclaration>;
+  /**
+   * Types a checker outside the backend found for `text` (TypeScript's, in
+   * the editor's worker). A backend applies them when it parses that very
+   * text, so graph edits see the pins the graph shows (`applyTypes`).
+   */
+  checked?: { text: string; types: TypeMap };
 }
 
 const NOWHERE: SourceRange = { start: 0, end: 0 };

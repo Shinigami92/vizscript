@@ -1,3 +1,5 @@
+import type { CallPinOptions } from './call-pins';
+import { withParamPins } from './call-pins';
 import type {
   DataType,
   FunctionGraph,
@@ -27,6 +29,19 @@ export interface TypeInfo {
   dataType: DataType;
   /** Fields and methods of the type, when it has any. */
   members?: ReadonlyArray<TypeMember>;
+  /**
+   * At a call: the parameters of what it calls (`headers.get(name)`), so
+   * the call node gets a pin for each, like calls of the file's functions.
+   * Portable: default values are text.
+   */
+  signature?: ReadonlyArray<SymbolParam>;
+}
+
+/** What `applyTypes` needs to give calls pins for their parameters. */
+export interface CallTyping {
+  /** The text the document was parsed from. */
+  text: string;
+  options: Pick<CallPinOptions, 'placeholder' | 'keywordArguments'>;
 }
 
 /**
@@ -116,13 +131,36 @@ function typedPin(pin: Pin, types: TypeMap): Pin {
   return { ...pin, type: info.dataType, typeText: info.text };
 }
 
+/**
+ * The parameters a call node calls, from the answer for its result, when
+ * the parser couldn't complete its pins (no `param:` pins yet).
+ */
+function calledParams(
+  node: GraphNode,
+  types: TypeMap
+): ReadonlyArray<SymbolParam> | undefined {
+  if (
+    node.kind !== 'call' ||
+    node.pins.some((p) => p.id.startsWith('param:'))
+  ) {
+    return undefined;
+  }
+
+  const result = node.pins.find((p) => p.id === 'return' && p.range);
+  return result?.range
+    ? types.get(rangeKey(result.range))?.signature
+    : undefined;
+}
+
 function typedNode(
   node: GraphNode,
   types: TypeMap,
-  wired: ReadonlySet<string>
+  wired: ReadonlySet<string>,
+  calls: CallTyping | undefined
 ): GraphNode {
   let changed = false;
-  const pins = node.pins.flatMap((pin) => {
+  const params = calls ? calledParams(node, types) : undefined;
+  let pins = node.pins.flatMap((pin) => {
     const next = typedPin(pin, types);
     // A result of nothing (`void`) has no pin, like a UE function without
     // outputs, unless the code uses it anyway.
@@ -146,10 +184,19 @@ function typedNode(
     changed = true;
   }
 
+  if (calls && params && params.length > 0) {
+    pins = withParamPins(calls.text, { ...node, pins }, params, calls.options);
+    changed = true;
+  }
+
   return changed ? { ...node, pins } : node;
 }
 
-function typedFunction(fn: FunctionGraph, types: TypeMap): FunctionGraph {
+function typedFunction(
+  fn: FunctionGraph,
+  types: TypeMap,
+  calls: CallTyping | undefined
+): FunctionGraph {
   const wired = new Map<string, Set<string>>();
   for (const edge of fn.edges) {
     const pins = wired.get(edge.from.node) ?? new Set<string>();
@@ -159,7 +206,7 @@ function typedFunction(fn: FunctionGraph, types: TypeMap): FunctionGraph {
 
   let changed = false;
   const nodes = fn.nodes.map((node) => {
-    const next = typedNode(node, types, wired.get(node.id) ?? new Set());
+    const next = typedNode(node, types, wired.get(node.id) ?? new Set(), calls);
     changed ||= next !== node;
     return next;
   });
@@ -197,9 +244,16 @@ function typedSymbol(symbol: ScriptSymbol, types: TypeMap): ScriptSymbol {
  * their wires (`typeWildcardPins`). Answers of `any` keep what the
  * parser found. Unchanged parts are shared, not copied.
  *
+ * With `calls`, calls whose answer has a `signature` get a pin for each
+ * parameter (`withParamPins`).
+ *
  * `types` must come from the same text the document was parsed from.
  */
-export function applyTypes(doc: GraphDocument, types: TypeMap): GraphDocument {
+export function applyTypes(
+  doc: GraphDocument,
+  types: TypeMap,
+  calls?: CallTyping
+): GraphDocument {
   if (types.size === 0) {
     return doc;
   }
@@ -216,7 +270,7 @@ export function applyTypes(doc: GraphDocument, types: TypeMap): GraphDocument {
   return {
     ...doc,
     functions: doc.functions.map((fn) =>
-      typeWildcardPins(typedFunction(fn, types))
+      typeWildcardPins(typedFunction(fn, types, calls))
     ),
     ...(doc.symbols
       ? { symbols: doc.symbols.map((s) => typedSymbol(s, types)) }
@@ -233,18 +287,35 @@ export async function resolveTypes(
   doc: GraphDocument,
   text: string,
   fileName: string,
-  provider: TypeProvider
+  provider: TypeProvider,
+  options?: CallTyping['options']
 ): Promise<GraphDocument> {
+  const types = await checkTypes(doc, text, fileName, provider);
+  return types
+    ? applyTypes(doc, types, options ? { text, options } : undefined)
+    : doc;
+}
+
+/**
+ * Asks `provider` for the types of `doc` (parsed from `text`), by range;
+ * `undefined` when there is nothing to ask or the provider failed.
+ */
+export async function checkTypes(
+  doc: GraphDocument,
+  text: string,
+  fileName: string,
+  provider: TypeProvider
+): Promise<TypeMap | undefined> {
   const ranges = typeQueries(doc);
   if (ranges.length === 0) {
-    return doc;
+    return undefined;
   }
 
   let answers: ReadonlyArray<TypeInfo | undefined>;
   try {
     answers = await provider.typesAt(text, fileName, ranges);
   } catch {
-    return doc;
+    return undefined;
   }
 
   const types = new Map<string, TypeInfo>();
@@ -255,5 +326,5 @@ export async function resolveTypes(
     }
   }
 
-  return applyTypes(doc, types);
+  return types;
 }

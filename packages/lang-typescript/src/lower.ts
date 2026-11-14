@@ -12,6 +12,7 @@ import type {
 } from '@vizscript/core';
 import type { InsertPoint } from '@vizscript/core';
 import {
+  applyTypes,
   attachComments,
   completeCallPins,
   inferTypes,
@@ -311,5 +312,11 @@ export function parseTypeScript(
     imports: options.imports,
   });
   inferTypes(doc);
-  return doc;
+  // The checker's types, as the graph shows them (argument pins of calls).
+  return options.checked?.text === text
+    ? applyTypes(doc, options.checked.types, {
+        text,
+        options: { placeholder: 'undefined' },
+      })
+    : doc;
 }

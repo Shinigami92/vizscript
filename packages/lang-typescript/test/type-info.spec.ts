@@ -165,4 +165,49 @@ describe('type information from a checker', () => {
     };
     expect(await resolveTypes(doc, TEXT, 'load.ts', failing)).toBe(doc);
   });
+
+  it('gives calls a pin per parameter of what they call', async () => {
+    const provider = fakeProvider({
+      'fetch(url)': {
+        ...RESPONSE,
+        signature: [
+          {
+            name: 'input',
+            nameRange: { start: 0, end: 0 },
+            dataType: 'string',
+          },
+          {
+            name: 'init',
+            nameRange: { start: 0, end: 0 },
+            dataType: 'RequestInit',
+            defaultText: 'undefined',
+          },
+        ],
+      },
+    });
+    const typed = await resolveTypes(doc, TEXT, 'load.ts', provider, {
+      placeholder: 'undefined',
+    });
+    const call = nodeTitled(
+      typed.functions.flatMap((f) => f.nodes),
+      'fetch'
+    );
+    expect(
+      call.pins
+        .filter((p) => p.direction === 'in' && p.kind === 'data')
+        .map((p) => [p.id, p.name, p.type, p.literal?.value])
+    ).toEqual([
+      ['arg0', 'input', 'string', undefined],
+      ['param:init', 'init', 'RequestInit', 'undefined'],
+    ]);
+
+    // Without call options, pins stay as parsed.
+    const plain = await resolveTypes(doc, TEXT, 'load.ts', provider);
+    expect(
+      nodeTitled(
+        plain.functions.flatMap((f) => f.nodes),
+        'fetch'
+      ).pins.some((p) => p.id === 'param:init')
+    ).toBe(false);
+  });
 });
