@@ -141,9 +141,13 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
       this.execIn(),
       iterPin,
       this.execOut('body', 'Loop Body', this.blockInsert(stmt.body)),
-      this.dataOut('element', truncate(elementName, 20), elementType, {
-        sourceText: elementName,
-      }),
+      this.dataOut(
+        'element',
+        truncate(elementName, 20),
+        elementType,
+        { sourceText: elementName },
+        rangeOf(target)
+      ),
     ];
     if (stmt.orelse) {
       pins.push(this.execOut('else', 'Else', this.blockInsert(stmt.orelse)));
@@ -201,7 +205,15 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
     for (const [i, item] of stmt.items.entries()) {
       if (item.target) {
         const name = this.src(rangeOf(item.target));
-        outputs.push(this.dataOut(`as${i}`, name, 'any', { sourceText: name }));
+        outputs.push(
+          this.dataOut(
+            `as${i}`,
+            name,
+            'any',
+            { sourceText: name },
+            rangeOf(item.target)
+          )
+        );
       }
     }
 
