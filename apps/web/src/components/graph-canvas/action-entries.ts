@@ -1,6 +1,7 @@
 import type { Pin, PinRef, Point } from '@vizscript/core';
 import { isTypeCompatible, qualifiedName } from '@vizscript/core';
 import { shortcut } from '../../graph/source';
+import { topLevelGraph } from '../../graph/symbols';
 import type { ActionEntry } from '../ActionMenu.vue';
 import { engineMembers, scriptBaseClass } from './engine-entries';
 import {
@@ -50,6 +51,13 @@ export function createActionEntries(
   const index = ctx.index;
   const callables = ctx.callables;
   const externalNames = ctx.externalNames;
+  /** `new X()` of classes this file imports already (TypeScript). */
+  const importedClasses = (): string[] =>
+    props.doc?.language === 'typescript'
+      ? (props.doc.symbols ?? [])
+          .filter((s) => s.kind === 'import' && s.importedKind === 'class')
+          .map((s) => `new ${s.name}()`)
+      : [];
   const signatureOf = (callee: string): ReturnType<typeof callSignature> =>
     callSignature(props.doc, props.text, callee);
   const fill = (template: string, first?: string): string =>
@@ -248,18 +256,44 @@ export function createActionEntries(
         detail: signatureOf(callee).detail,
         action: () => addNode({ type: 'call', callee }, state),
       })),
-      ...externalNames.value.map((external): ActionEntry => ({
-        label: external.callee,
-        category: 'Call function',
-        icon: ICON_IMPORT,
-        detail: external.detail,
-        hint: external.where,
-        keywords: `${external.path} import`,
-        action: () =>
-          addNode({ type: 'call', callee: external.callee }, state, (op) =>
-            withImport(external, op)
-          ),
+      ...importedClasses().map((expression): ActionEntry => ({
+        label: expression,
+        category: 'Construct',
+        icon: ICON_CALL,
+        keywords: 'new construct create',
+        action: () => addNode({ type: 'value', expression }, state),
       })),
+      ...externalNames.value.map((external): ActionEntry =>
+        external.kind === 'class'
+          ? {
+              // UE's "Construct Object": a new instance, with its import.
+              label: external.expression,
+              category: 'Construct',
+              icon: ICON_IMPORT,
+              hint: external.where,
+              keywords: `${external.name} new construct create ${external.path} import`,
+              action: () =>
+                addNode(
+                  { type: 'value', expression: external.expression },
+                  state,
+                  (op) => withImport(external, op)
+                ),
+            }
+          : {
+              label: external.callee,
+              category: 'Call function',
+              icon: ICON_IMPORT,
+              detail: external.detail,
+              hint: external.where,
+              keywords: `${external.path} import`,
+              action: () =>
+                addNode(
+                  { type: 'call', callee: external.callee },
+                  state,
+                  (op) => withImport(external, op)
+                ),
+            }
+      ),
       ...inheritedEntries(state),
       {
         label: 'Branch (if)',
@@ -268,7 +302,8 @@ export function createActionEntries(
         keywords: 'if condition',
         action: () => addNode({ type: 'branch' }, state),
       },
-      ...(after
+      // No `return` in the file's top level (a module).
+      ...(after && fnId !== topLevelGraph(props.doc, props.text)?.id
         ? [
             {
               label: 'Return',
@@ -589,6 +624,13 @@ export function createActionEntries(
         action: () =>
           emitOp({ type: 'setInput', pin: source, expression: `${callee}()` }),
       })),
+      ...importedClasses().map((expression): ActionEntry => ({
+        label: expression,
+        category: 'Construct',
+        icon: ICON_CALL,
+        keywords: 'new construct create',
+        action: () => emitOp({ type: 'setInput', pin: source, expression }),
+      })),
       ...externalNames.value.map((external): ActionEntry => {
         const expression =
           external.kind === 'function'
@@ -597,7 +639,11 @@ export function createActionEntries(
         return {
           label: expression,
           category:
-            external.kind === 'function' ? 'Call function' : 'Variables',
+            external.kind === 'function'
+              ? 'Call function'
+              : external.kind === 'class'
+                ? 'Construct'
+                : 'Variables',
           icon: ICON_IMPORT,
           detail: external.detail,
           hint: external.where,
@@ -605,7 +651,7 @@ export function createActionEntries(
             external.kind === 'function'
               ? fitsType(external.returns, pin.type)
               : undefined,
-          keywords: `${external.name} ${external.path} import`,
+          keywords: `${external.name} ${external.kind === 'class' ? 'new construct create ' : ''}${external.path} import`,
           action: () =>
             emitOp(
               withImport(external, {
@@ -694,22 +740,54 @@ export function createActionEntries(
     }
 
     if (found.pin.direction === 'out') {
-      return callable
+      // A member of the value (`.description()`), also for types the
+      // editor doesn't know; on a call's unused result it continues the
+      // chain (`program.name('x').description()`).
+      const member = query.replace(/^\./, '');
+      const useMember = (expression: string): void =>
+        emitOp({
+          type: 'useValue',
+          pin: source,
+          expression,
+          position: { ...state.world },
+        });
+      const members: ActionEntry[] = /^[A-Za-z_$][\w$]*$/.test(member)
         ? [
             {
-              label: `Call ${query}(value)`,
+              label: `.${member}()`,
               category: 'Typed',
               icon: ICON_CALL,
-              action: () =>
-                emitOp({
-                  type: 'callWith',
-                  pin: source,
-                  callee: query,
-                  position: { ...state.world },
-                }),
+              hint: 'call on the value',
+              action: () => useMember(`$value.${member}()`),
+            },
+            {
+              label: `.${member}`,
+              category: 'Typed',
+              icon: ICON_MEMBER,
+              hint: 'member of the value',
+              action: () => useMember(`$value.${member}`),
             },
           ]
         : [];
+      return [
+        ...members,
+        ...(callable
+          ? [
+              {
+                label: `Call ${query}(value)`,
+                category: 'Typed',
+                icon: ICON_CALL,
+                action: () =>
+                  emitOp({
+                    type: 'callWith',
+                    pin: source,
+                    callee: query,
+                    position: { ...state.world },
+                  }),
+              },
+            ]
+          : []),
+      ];
     }
 
     // A value written by hand: not an operator alone ("+"), not a variable

@@ -71,8 +71,12 @@ export function topLevelGraph(
   doc: GraphDocument | null,
   text: string
 ): FunctionGraph | undefined {
+  // A function spanning the whole file is still a function: it has a symbol.
   return doc?.functions.find(
-    (f) => f.range.start === 0 && f.range.end >= text.trimEnd().length
+    (f) =>
+      f.range.start === 0 &&
+      f.range.end >= text.trimEnd().length &&
+      !doc.symbols?.some((s) => s.fnId === f.id)
   );
 }
 
@@ -99,6 +103,8 @@ export function symbolNodes(
       ? new RegExp(String.raw`^${name}(?:$|\.)`)
       : new RegExp(String.raw`(?:^|[.\s])${name}$`);
   const sets = new RegExp(String.raw`^Set (?:\w+\.)?${name}$`);
+  // A method called on it: `program.command()`, `this.items.push()`.
+  const calledOn = new RegExp(String.raw`^(?:this\.|self\.)?${name}\.`);
   const graphs =
     symbol.kind === 'local'
       ? doc.functions.filter(
@@ -127,10 +133,10 @@ export function symbolNodes(
             uses.test(node.title)
           : symbol.kind === 'function' || symbol.kind === 'method'
             ? node.kind === 'call' && uses.test(node.title)
-            : (node.kind === 'getVar' || node.kind === 'getProperty') &&
-                uses.test(node.title)
-              ? true
-              : node.kind === 'setVar' && sets.test(node.title);
+            : ((node.kind === 'getVar' || node.kind === 'getProperty') &&
+                uses.test(node.title)) ||
+              (node.kind === 'call' && calledOn.test(node.title)) ||
+              (node.kind === 'setVar' && sets.test(node.title));
       if (matches) {
         ids.push(node.id);
       }

@@ -15,8 +15,11 @@ export interface ExternalName {
   path: string;
   /** The file relative to the importing one (`./util.ts`), for hints. */
   where: string;
-  /** Called (`fn()`, `Script.new()`) or read (`LIMIT`). */
-  kind: 'function' | 'value';
+  /**
+   * Called (`fn()`, `Script.new()`), read (`LIMIT`), or constructed
+   * (`new Command()`, a TypeScript class).
+   */
+  kind: 'function' | 'value' | 'class';
   /** What a call node calls (`fn`, `Bullet.new`, `math.sqrt`). */
   callee: string;
   /** The value as an input (`LIMIT`, `Bullet`, `math.pi`). */
@@ -162,7 +165,7 @@ export function externalNames(
       taken.add(entry.name);
       result.push({
         ...entry,
-        expression: entry.name,
+        expression: entry.kind === 'class' ? `new ${entry.name}()` : entry.name,
         where: relativePath(from, entry.path),
         request: { path: entry.path, from, name: entry.name, imported, root },
       });
@@ -196,12 +199,23 @@ export function externalNames(
           { name: symbol.name, path, kind: 'value', callee: symbol.name },
           imported
         );
+      } else if (
+        symbol.kind === 'class' &&
+        CONSTRUCTED.has(languageOf(path) ?? '')
+      ) {
+        add(
+          { name: symbol.name, path, kind: 'class', callee: symbol.name },
+          imported
+        );
       }
     }
   }
 
   return result.toSorted((a, b) => a.name.localeCompare(b.name));
 }
+
+/** Languages whose classes are made with `new` (offered as `new X()`). */
+const CONSTRUCTED: ReadonlySet<string> = new Set(['typescript']);
 
 /**
  * Names of a library module for the action menu. Python uses the module
@@ -222,7 +236,9 @@ export function libraryNames(
         ? 'function'
         : symbol.kind === 'variable' || symbol.kind === 'constant'
           ? 'value'
-          : undefined;
+          : symbol.kind === 'class' && style === 'named'
+            ? 'class'
+            : undefined;
     if (!kind || symbol.modifiers.includes('export default')) {
       continue;
     }
@@ -248,7 +264,7 @@ export function libraryNames(
             where: module,
             kind,
             callee: symbol.name,
-            expression: symbol.name,
+            expression: kind === 'class' ? `new ${symbol.name}()` : symbol.name,
             request: {
               path: '',
               from,
