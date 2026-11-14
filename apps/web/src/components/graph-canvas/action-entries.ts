@@ -351,10 +351,28 @@ export function createActionEntries(
     ];
   }
 
+  /** An action that reads `member` of the value at `source`. */
+  function readMember(
+    source: PinRef,
+    state: MenuState,
+    member: { name: string; method: boolean }
+  ): () => void {
+    return () =>
+      emitOp({
+        type: 'useValue',
+        pin: source,
+        expression: member.method
+          ? `$value.${member.name}()`
+          : `$value.${member.name}`,
+        position: { ...state.world },
+      });
+  }
+
   /**
    * Fields and methods of a value's type, like UE's "Target is …" actions:
-   * the fields of an interface or object type of the file, the public members
-   * of a class of the file.
+   * those a type checker saw (with inherited ones, also of library types),
+   * else the fields of an interface or object type of the file, the public
+   * members of a class of the file, or the members of an engine class.
    */
   function memberEntries(
     pin: Pin,
@@ -362,6 +380,25 @@ export function createActionEntries(
     state: MenuState
   ): ActionEntry[] {
     const typeName = String(pin.type);
+    const checked =
+      pin.typeText === undefined
+        ? undefined
+        : props.doc?.typeMembers?.[pin.typeText];
+    if (checked && checked.length > 0) {
+      return checked.map((member): ActionEntry => {
+        const method = member.kind === 'method';
+        return {
+          label: method ? `.${member.name}()` : `.${member.name}`,
+          category: `Members of ${typeName}`,
+          icon: method ? ICON_CALL : ICON_MEMBER,
+          hint: String(member.type),
+          ...(member.detail ? { detail: member.detail } : {}),
+          keywords: `${member.name} member property method field`,
+          action: readMember(source, state, { name: member.name, method }),
+        };
+      });
+    }
+
     const symbols = props.doc?.symbols ?? [];
     const declared = /^[A-Za-z_$][\w$]*$/.test(typeName)
       ? symbols.find(
@@ -381,15 +418,7 @@ export function createActionEntries(
           hint: member.owner === typeName ? member.type : member.owner,
           ...(member.detail ? { detail: member.detail } : {}),
           keywords: `${member.name} ${member.owner} member property method`,
-          action: () =>
-            emitOp({
-              type: 'useValue',
-              pin: source,
-              expression: member.method
-                ? `$value.${member.name}()`
-                : `$value.${member.name}`,
-              position: { ...state.world },
-            }),
+          action: readMember(source, state, member),
         })
       );
     }
@@ -425,15 +454,7 @@ export function createActionEntries(
       icon: member.method ? ICON_CALL : ICON_MEMBER,
       ...(member.method ? {} : { hint: member.type }),
       keywords: `${member.name} get member property field`,
-      action: () =>
-        emitOp({
-          type: 'useValue',
-          pin: source,
-          expression: member.method
-            ? `$value.${member.name}()`
-            : `$value.${member.name}`,
-          position: { ...state.world },
-        }),
+      action: readMember(source, state, member),
     }));
   }
 
