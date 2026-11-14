@@ -315,7 +315,23 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
    * NOT IN CODE for nodes of graph-only edits.
    */
   public setProblems(problems: ReadonlyMap<string, NodeBannerKind>): void {
+    const before = this.problems;
     this.problems = new Map(problems);
+    // Nodes that got or lost a banner change their height.
+    let resized = false;
+    for (const [id, ns] of this.nodes) {
+      if (before.has(id) !== this.problems.has(id)) {
+        const shown = this.nodeGeometry(ns.full);
+        ns.node = shown.node;
+        ns.geom = shown.geom;
+        resized = true;
+      }
+    }
+
+    if (resized) {
+      this.rebuildIndex();
+    }
+
     this.framesDirty = true;
     this.requestRender();
   }

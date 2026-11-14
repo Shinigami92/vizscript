@@ -2,6 +2,7 @@ import type { Conversion } from '@vizscript/core';
 import {
   computeNodeGeometry,
   isAdvancedPin,
+  isCompact,
   literalWidth,
   NODE_METRICS,
   pinKey,
@@ -193,7 +194,21 @@ export abstract class GraphViewBase {
       advanced === 0 || this.expandedNodes.has(node.id)
         ? node
         : { ...node, pins: node.pins.filter((p) => !isAdvancedPin(p)) };
-    const geom = computeNodeGeometry(shown, this.measure);
+    let geom = computeNodeGeometry(shown, this.measure);
+    // UE's ERROR! / WARNING! band sits under the header: the rows move down.
+    if (this.problems.has(node.id) && !isCompact(shown)) {
+      geom = {
+        ...geom,
+        height: geom.height + BANNER_HEIGHT,
+        pins: new Map(
+          [...geom.pins].map(([id, pg]) => [
+            id,
+            { ...pg, y: pg.y + BANNER_HEIGHT },
+          ])
+        ),
+      };
+    }
+
     return {
       node: shown,
       advanced,
@@ -234,7 +249,9 @@ export abstract class GraphViewBase {
         maxY,
         y +
           ns.geom.height +
-          (this.problems.has(id) ? BANNER_GAP + BANNER_HEIGHT : 0)
+          (this.problems.has(id) && isCompact(ns.node)
+            ? BANNER_GAP + BANNER_HEIGHT
+            : 0)
       );
     }
 

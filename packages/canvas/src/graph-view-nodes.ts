@@ -270,7 +270,10 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     const id = node.id;
 
     this.drawBubble(ns, lod);
-    this.drawProblemBanner(ns, lod);
+    if (compact) {
+      // Below a compact node: drawn before it.
+      this.drawProblemBanner(ns, lod);
+    }
 
     // A soft drop shadow like UE's (not at overview zoom), only outside the
     // node: the body is see-through and must not darken over it.
@@ -369,6 +372,11 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       ctx.strokeStyle = `${theme.categories[node.category]}cc`;
       ctx.lineWidth = 1.5;
       ctx.stroke();
+    }
+
+    if (!compact) {
+      // Under the header, over the body.
+      this.drawProblemBanner(ns, lod);
     }
 
     // Outline
@@ -795,7 +803,12 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     }
 
     const { ctx, theme } = this;
-    const y = ns.y + ns.geom.height + BANNER_GAP;
+    // Like UE: a band across the node right under its header; compact
+    // nodes (no header) get it below them.
+    const inside = !isCompact(ns.node);
+    const y = inside
+      ? ns.y + ns.geom.headerHeight
+      : ns.y + ns.geom.height + BANNER_GAP;
     const color =
       severity === 'error'
         ? theme.errorBanner
@@ -805,17 +818,23 @@ export abstract class GraphViewNodes extends GraphViewCamera {
             ? theme.syncBanner
             : theme.infoBanner;
     ctx.beginPath();
-    ctx.roundRect(ns.x, y, ns.geom.width, BANNER_HEIGHT, 4);
+    if (inside) {
+      ctx.rect(ns.x, y, ns.geom.width, BANNER_HEIGHT);
+    } else {
+      ctx.roundRect(ns.x, y, ns.geom.width, BANNER_HEIGHT, 4);
+    }
+
     ctx.fillStyle = color;
     ctx.fill();
     if (lod) {
       return;
     }
 
-    ctx.fillStyle = theme.bannerText;
-    ctx.font = `700 10px ${theme.fontFamily}`;
+    ctx.fillStyle =
+      severity === 'warning' ? theme.warningBannerText : theme.bannerText;
+    ctx.font = `700 11px ${theme.fontFamily}`;
     ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
+    ctx.textAlign = 'center';
     ctx.fillText(
       severity === 'error'
         ? 'ERROR!'
@@ -824,7 +843,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
           : severity === 'sync'
             ? 'NOT IN CODE'
             : 'NOTE',
-      ns.x + 8,
+      ns.x + ns.geom.width / 2,
       y + BANNER_HEIGHT / 2 + 0.5
     );
   }

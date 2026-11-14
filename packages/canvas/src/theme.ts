@@ -70,6 +70,8 @@ export interface Theme {
   /** Banner and outline of nodes the code doesn't match yet. */
   syncBanner: string;
   bannerText: string;
+  /** Dark text on the orange WARNING! band, like UE's. */
+  warningBannerText: string;
   marqueeFill: string;
   marqueeBorder: string;
   categories: Record<NodeCategory, string>;
@@ -129,11 +131,12 @@ export const DARK_THEME: Theme = {
   commentTitle: '#e4e4e7',
   bubbleFill: 'rgba(228, 228, 231, 0.92)',
   bubbleText: '#18181b',
-  errorBanner: '#c0262d',
-  warningBanner: '#b7791f',
+  errorBanner: '#a3151a',
+  warningBanner: '#f0a30a',
   infoBanner: '#2b6cb0',
   syncBanner: '#d97706',
   bannerText: '#ffffff',
+  warningBannerText: '#18181b',
   marqueeFill: 'rgba(245, 166, 35, 0.08)',
   marqueeBorder: 'rgba(245, 166, 35, 0.8)',
   categories: CATEGORY_COLORS,
@@ -187,11 +190,12 @@ export const LIGHT_THEME: Theme = {
   commentTitle: '#27272a',
   bubbleFill: 'rgba(254, 243, 199, 0.96)',
   bubbleText: '#18181b',
-  errorBanner: '#c0262d',
-  warningBanner: '#b7791f',
+  errorBanner: '#a3151a',
+  warningBanner: '#f0a30a',
   infoBanner: '#2b6cb0',
   syncBanner: '#d97706',
   bannerText: '#ffffff',
+  warningBannerText: '#18181b',
   marqueeFill: 'rgba(232, 147, 12, 0.08)',
   marqueeBorder: 'rgba(232, 147, 12, 0.85)',
   categories: CATEGORY_COLORS,
