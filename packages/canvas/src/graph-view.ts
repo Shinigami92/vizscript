@@ -219,7 +219,7 @@ export class GraphView extends GraphViewDocument {
         currentWorld: world,
         target: null,
         problem: null,
-        replaces: false,
+        replaces: null,
         empty: false,
         convert: null,
       };
@@ -457,15 +457,25 @@ export class GraphView extends GraphViewDocument {
             ? { ns: hit.ns, pg: hit.pg }
             : null;
         drag.problem = problem;
-        // A data input takes one wire: the new one replaces it.
-        const input =
-          drag.target?.pg.pin.direction === 'in' ? drag.target : drag.from;
-        drag.replaces =
-          drag.target !== null &&
-          input.pg.pin.kind === 'data' &&
+        // A data input and an exec output take one wire: the new one
+        // replaces it.
+        const [output, input] =
+          drag.target?.pg.pin.direction === 'in'
+            ? [drag.from, drag.target]
+            : [drag.target, drag.from];
+        const wired = (end: typeof input | null): boolean =>
+          end !== null &&
           this.connectedPins.has(
-            pinKey({ node: input.ns.node.id, pin: input.pg.pin.id })
+            pinKey({ node: end.ns.node.id, pin: end.pg.pin.id })
           );
+        drag.replaces =
+          drag.target === null
+            ? null
+            : input.pg.pin.kind === 'data' && wired(input)
+              ? 'input'
+              : output?.pg.pin.kind === 'exec' && wired(output)
+                ? 'output'
+                : null;
         // A frame or comment box title counts as empty space too.
         drag.empty = (hit?.type ?? 'frame') === 'frame';
         drag.convert = drag.target

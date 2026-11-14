@@ -395,10 +395,13 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       } else if (drag.replaces) {
         this.drawWireMessage(
           drag.currentWorld,
-          'Replaces the current wire',
+          `Replace existing ${drag.replaces} connections`,
           'ok'
         );
-      } else if (!drag.target && drag.empty) {
+      } else if (drag.target) {
+        // UE's plain ✓ for a pin that fits.
+        this.drawWireMessage(drag.currentWorld, '', 'ok');
+      } else if (drag.empty) {
         this.drawWireMessage(drag.currentWorld, 'Place a new node.', 'place');
       }
     } else if (this.pendingWire) {
@@ -423,7 +426,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.font = `12px ${theme.fontFamily}`;
     const icon = 14;
-    const width = ctx.measureText(text).width + icon + 22;
+    const width = text ? ctx.measureText(text).width + icon + 22 : icon + 14;
     const x = Math.min(at.x + 16, this.width - width - 4);
     const y = at.y + 18;
     ctx.beginPath();
@@ -453,10 +456,10 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       ctx.lineTo(cx - 1.5, cy + 4);
       ctx.lineTo(cx + 5, cy - 4);
     } else {
-      ctx.moveTo(cx - 4, cy - 4);
-      ctx.lineTo(cx + 4, cy + 4);
-      ctx.moveTo(cx + 4, cy - 4);
-      ctx.lineTo(cx - 4, cy + 4);
+      // UE's ⊘
+      ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
+      ctx.moveTo(cx - 3.9, cy + 3.9);
+      ctx.lineTo(cx + 3.9, cy - 3.9);
     }
 
     ctx.strokeStyle =
@@ -465,7 +468,12 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
         : kind === 'ok' || kind === 'convert'
           ? '#16a34a'
           : theme.errorBanner;
-    ctx.lineWidth = kind === 'place' || kind === 'convert' ? 1.4 : 2.2;
+    ctx.lineWidth =
+      kind === 'place' || kind === 'convert'
+        ? 1.4
+        : kind === 'error'
+          ? 1.8
+          : 2.2;
     ctx.lineCap = 'round';
     ctx.stroke();
     ctx.fillStyle = theme.bubbleText;

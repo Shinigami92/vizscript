@@ -182,8 +182,11 @@ export type Drag =
       target: { ns: NodeState; pg: PinGeometry } | null;
       /** Why the pin under the cursor doesn't fit (UE's red ✕ message). */
       problem: string | null;
-      /** The target input has a wire that the new one replaces. */
-      replaces: boolean;
+      /**
+       * The new wire replaces another: a data input and an exec output take
+       * one wire each.
+       */
+      replaces: 'input' | 'output' | null;
       /** Over empty space: dropping opens the actions for the pin. */
       empty: boolean;
       /** The conversion the wire goes through (UE's autocast node). */

@@ -185,13 +185,13 @@ export abstract class GraphViewHitTest extends GraphViewBase {
     const from = drag.from.pg.pin;
     const to = target.pg.pin;
     if (from.kind === 'exec') {
-      return 'Only data wires can be moved together';
+      return 'Only data wires can be moved together.';
     }
 
     if (to.kind !== from.kind || to.direction !== from.direction) {
       return from.direction === 'out'
-        ? 'Move the wires to another output'
-        : 'Move the wire to another input';
+        ? 'Move the wires to another output.'
+        : 'Move the wire to another input.';
     }
 
     for (const end of drag.ends) {
@@ -232,21 +232,24 @@ export abstract class GraphViewHitTest extends GraphViewBase {
   ): string | null {
     const pa = a.pg.pin;
     const pb = b.pg.pin;
+    // UE's wording: "Exec is not compatible with Boolean."
+    const label = (pin: typeof pa): string =>
+      pin.kind === 'exec' ? 'Exec' : String(pin.type);
     if (a.ns === b.ns) {
-      return 'Both pins are on the same node';
+      return 'Both are on the same node.';
     }
 
     // Floating nodes (not wired in yet) join the function they are wired to.
     if (a.ns.fnId !== b.ns.fnId && !a.ns.full.floating && !b.ns.full.floating) {
-      return 'The pins are in different functions';
+      return 'The pins are in different functions.';
     }
 
     if (pa.kind !== pb.kind) {
-      return 'Exec and data pins don’t connect';
+      return `${label(pa)} is not compatible with ${label(pb)}.`;
     }
 
     if (pa.direction === pb.direction) {
-      return pa.direction === 'in' ? 'Both are inputs' : 'Both are outputs';
+      return 'Directions are not compatible.';
     }
 
     if (pa.kind === 'data') {
@@ -256,7 +259,7 @@ export abstract class GraphViewHitTest extends GraphViewBase {
         !isTypeCompatible(out.type, input.type) &&
         !(convert && this.conversionOf(a, b))
       ) {
-        return `${String(out.type)} is not compatible with ${String(input.type)}`;
+        return `${label(pa)} is not compatible with ${label(pb)}.`;
       }
     }
 
