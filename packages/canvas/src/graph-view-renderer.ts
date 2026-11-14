@@ -1,4 +1,4 @@
-import { pinColor } from '@vizscript/core';
+import { conversionLabel, pinColor } from '@vizscript/core';
 import type { GraphEdge, PinGeometry, Point } from '@vizscript/core';
 import { wireCurve } from './bezier';
 import type { WireShape } from './bezier';
@@ -386,6 +386,12 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       );
       if (drag.problem) {
         this.drawWireMessage(drag.currentWorld, drag.problem, 'error');
+      } else if (drag.convert) {
+        this.drawWireMessage(
+          drag.currentWorld,
+          conversionLabel(drag.convert),
+          'convert'
+        );
       } else if (drag.replaces) {
         this.drawWireMessage(
           drag.currentWorld,
@@ -409,7 +415,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
   private drawWireMessage(
     world: Point,
     text: string,
-    kind: 'ok' | 'error' | 'place'
+    kind: 'ok' | 'error' | 'place' | 'convert'
   ): void {
     const { ctx, theme } = this;
     const at = worldToScreen(this.camera, world);
@@ -432,6 +438,16 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       ctx.roundRect(cx - 6, cy - 5, 12, 10, 2);
       ctx.moveTo(cx - 6, cy - 1.5);
       ctx.lineTo(cx + 6, cy - 1.5);
+    } else if (kind === 'convert') {
+      // Two pins with an arrow between them, like UE's conversion icon.
+      ctx.arc(cx - 4.5, cy, 2.2, 0, Math.PI * 2);
+      ctx.moveTo(cx + 6.7, cy);
+      ctx.arc(cx + 4.5, cy, 2.2, 0, Math.PI * 2);
+      ctx.moveTo(cx - 1.5, cy);
+      ctx.lineTo(cx + 1.8, cy);
+      ctx.moveTo(cx + 0.3, cy - 1.5);
+      ctx.lineTo(cx + 1.8, cy);
+      ctx.lineTo(cx + 0.3, cy + 1.5);
     } else if (kind === 'ok') {
       ctx.moveTo(cx - 5, cy);
       ctx.lineTo(cx - 1.5, cy + 4);
@@ -446,10 +462,10 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     ctx.strokeStyle =
       kind === 'place'
         ? theme.bubbleText
-        : kind === 'ok'
+        : kind === 'ok' || kind === 'convert'
           ? '#16a34a'
           : theme.errorBanner;
-    ctx.lineWidth = kind === 'place' ? 1.4 : 2.2;
+    ctx.lineWidth = kind === 'place' || kind === 'convert' ? 1.4 : 2.2;
     ctx.lineCap = 'round';
     ctx.stroke();
     ctx.fillStyle = theme.bubbleText;

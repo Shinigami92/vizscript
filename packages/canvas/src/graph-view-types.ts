@@ -1,4 +1,5 @@
 import type {
+  Conversion,
   GraphEdge,
   GraphNode,
   GraphOp,
@@ -88,6 +89,11 @@ export interface GraphViewOptions {
    * because of an edit. Pass `false` for `prefers-reduced-motion: reduce`.
    */
   motion?: boolean;
+  /**
+   * Conversions of the file's language (UE's autocast): a wire between
+   * pins of different types that one of them converts is allowed.
+   */
+  conversions?: () => ReadonlyArray<Conversion> | undefined;
 }
 
 /** A position change drawn as a short slide. */
@@ -180,6 +186,8 @@ export type Drag =
       replaces: boolean;
       /** Over empty space: dropping opens the actions for the pin. */
       empty: boolean;
+      /** The conversion the wire goes through (UE's autocast node). */
+      convert: Conversion | null;
     }
   | {
       /** Ctrl+drag of a pin: all its wires move to another pin (UE). */

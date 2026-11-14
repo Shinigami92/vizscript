@@ -1,5 +1,5 @@
-import { isTypeCompatible } from '@vizscript/core';
-import type { PinGeometry, Point } from '@vizscript/core';
+import { findConversion, isTypeCompatible } from '@vizscript/core';
+import type { Conversion, PinGeometry, Point } from '@vizscript/core';
 import { rectContains, rectsIntersect, screenToWorld } from './camera';
 import { GraphViewBase } from './graph-view-base';
 import {
@@ -195,7 +195,8 @@ export abstract class GraphViewHitTest extends GraphViewBase {
     }
 
     for (const end of drag.ends) {
-      const problem = this.connectProblem(end, target);
+      // Moved wires keep their values as they are: no conversion.
+      const problem = this.connectProblem(end, target, false);
       if (problem) {
         return problem;
       }
@@ -204,10 +205,30 @@ export abstract class GraphViewHitTest extends GraphViewBase {
     return null;
   }
 
+  /** The conversion a data wire from `a` to `b` needs (UE's autocast). */
+  protected conversionOf(
+    a: { ns: NodeState; pg: PinGeometry },
+    b: { ns: NodeState; pg: PinGeometry }
+  ): Conversion | undefined {
+    const pa = a.pg.pin;
+    const pb = b.pg.pin;
+    if (
+      pa.kind !== 'data' ||
+      pb.kind !== 'data' ||
+      pa.direction === pb.direction
+    ) {
+      return undefined;
+    }
+
+    const [out, input] = pa.direction === 'out' ? [pa, pb] : [pb, pa];
+    return findConversion(this.conversions(), out.type, input.type);
+  }
+
   /** Why two pins can't be wired, like UE's messages; `null` if they can. */
   protected connectProblem(
     a: { ns: NodeState; pg: PinGeometry },
-    b: { ns: NodeState; pg: PinGeometry }
+    b: { ns: NodeState; pg: PinGeometry },
+    convert = true
   ): string | null {
     const pa = a.pg.pin;
     const pb = b.pg.pin;
@@ -231,7 +252,10 @@ export abstract class GraphViewHitTest extends GraphViewBase {
     if (pa.kind === 'data') {
       const out = pa.direction === 'out' ? pa : pb;
       const input = pa.direction === 'out' ? pb : pa;
-      if (!isTypeCompatible(out.type, input.type)) {
+      if (
+        !isTypeCompatible(out.type, input.type) &&
+        !(convert && this.conversionOf(a, b))
+      ) {
         return `${String(out.type)} is not compatible with ${String(input.type)}`;
       }
     }

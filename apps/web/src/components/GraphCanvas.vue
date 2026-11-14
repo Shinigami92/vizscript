@@ -425,6 +425,7 @@ onMounted(() => {
     editable: props.editable,
     theme: canvasTheme.value,
     motion: motion.value,
+    conversions: () => props.types?.conversions,
   });
   view.value = v;
   if (props.initialCamera) {

@@ -1,3 +1,4 @@
+import type { Conversion } from '@vizscript/core';
 import {
   computeNodeGeometry,
   isAdvancedPin,
@@ -79,6 +80,7 @@ export abstract class GraphViewBase {
 
   protected camera: Camera = { x: -40, y: -40, zoom: 1 };
   protected motion: boolean;
+  protected conversions: () => ReadonlyArray<Conversion> | undefined;
   protected cameraTween: Tween<Camera> | null = null;
   /** Time of the frame being drawn (for fades and pulses). */
   protected frameTime = 0;
@@ -111,6 +113,7 @@ export abstract class GraphViewBase {
     this.theme = options.theme ?? DARK_THEME;
     this.editable = options.editable ?? true;
     this.motion = options.motion ?? false;
+    this.conversions = options.conversions ?? ((): undefined => undefined);
   }
 
   public on<K extends keyof GraphViewEvents>(

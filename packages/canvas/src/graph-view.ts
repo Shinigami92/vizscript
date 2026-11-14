@@ -221,6 +221,7 @@ export class GraphView extends GraphViewDocument {
         problem: null,
         replaces: false,
         empty: false,
+        convert: null,
       };
       this.requestRender();
       return;
@@ -467,6 +468,9 @@ export class GraphView extends GraphViewDocument {
           );
         // A frame or comment box title counts as empty space too.
         drag.empty = (hit?.type ?? 'frame') === 'frame';
+        drag.convert = drag.target
+          ? (this.conversionOf(drag.from, drag.target) ?? null)
+          : null;
         this.requestRender();
       }
     }
@@ -606,6 +610,7 @@ export class GraphView extends GraphViewDocument {
             type: 'connect',
             from: { node: out.ns.node.id, pin: out.pg.pin.id },
             to: { node: input.ns.node.id, pin: input.pg.pin.id },
+            ...(drag.convert ? { convert: drag.convert.template } : {}),
           });
         } else if (
           // A frame or comment box title counts as empty space too.
