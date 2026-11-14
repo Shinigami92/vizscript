@@ -1,6 +1,7 @@
 import type {
   EngineClass,
   ScriptSymbol,
+  SymbolParam,
   TypeInfo,
   TypeMap,
   TypeMember,
@@ -220,6 +221,8 @@ interface Member {
   kind: 'value' | 'method';
   /** Type of the value, or result of the method. */
   type: string | undefined;
+  /** Parameters of a method of Godot's classes or built-in types. */
+  params?: ReadonlyArray<SymbolParam>;
 }
 
 function engineMember(type: string, name: string): Member | undefined {
@@ -238,6 +241,7 @@ function engineMember(type: string, name: string): Member | undefined {
         returns === 'Variant' && ELEMENT_METHODS.has(name)
           ? elementOf(type)
           : returns,
+      ...(symbol.params ? { params: symbol.params } : {}),
     };
   }
 
@@ -296,6 +300,8 @@ function isCollection(expr: Expr | undefined): boolean {
  */
 class TypeLookup {
   public readonly types = new Map<string, string>();
+  /** Parameters of the Godot methods and functions calls reach. */
+  public readonly signatures = new Map<string, ReadonlyArray<SymbolParam>>();
   private readonly classes = new Map<string, ClassScope>();
   private readonly enums = new Set<string>();
   private current: ClassScope;
@@ -744,6 +750,15 @@ class TypeLookup {
     return member.kind === 'value' ? member.type : 'Callable';
   }
 
+  private called(
+    call: Span,
+    params: ReadonlyArray<SymbolParam> | undefined
+  ): void {
+    if (params && params.length > 0) {
+      this.signatures.set(rangeKey(call), params);
+    }
+  }
+
   private callType(
     expr: Extract<Expr, { type: 'Call' }>,
     scope: Scope
@@ -764,7 +779,12 @@ class TypeLookup {
       }
 
       const member = this.member(cls ?? object, callee.name);
-      return member?.kind === 'method' ? member.type : undefined;
+      if (member?.kind !== 'method') {
+        return undefined;
+      }
+
+      this.called(expr, member.params);
+      return member.type;
     }
 
     if (callee.type !== 'Identifier') {
@@ -780,6 +800,7 @@ class TypeLookup {
 
     const member = this.member(this.current.name, name);
     if (member?.kind === 'method') {
+      this.called(expr, member.params);
       return member.type;
     }
 
@@ -793,6 +814,7 @@ class TypeLookup {
 
     const global = godotGlobals().get(name);
     if (global) {
+      this.called(expr, global.params);
       return global.returns?.text;
     }
 
@@ -844,16 +866,16 @@ function builtinMembers(type: string): ReadonlyArray<TypeMember> | undefined {
  */
 export function gdscriptTypes(script: Script): TypeMap {
   const types = new Map<string, TypeInfo>();
-  let found: ReadonlyMap<string, string>;
+  let lookup: TypeLookup;
   try {
-    found = new TypeLookup(script).types;
+    lookup = new TypeLookup(script);
   } catch {
     // Code the parser recovered from in an unexpected shape: the graph
     // keeps the parser's types.
     return types;
   }
 
-  for (const [key, text] of found) {
+  for (const [key, text] of lookup.types) {
     if (
       text.startsWith(CLASS) ||
       text.startsWith('@') ||
@@ -869,6 +891,15 @@ export function gdscriptTypes(script: Script): TypeMap {
       text,
       dataType: dataTypeOf(text),
       ...(members ? { members } : {}),
+    });
+  }
+
+  // Calls: the parameters of what they call, also when the result is
+  // unknown (`any` keeps the parser's type).
+  for (const [key, params] of lookup.signatures) {
+    types.set(key, {
+      ...(types.get(key) ?? { text: 'Variant', dataType: 'any' }),
+      signature: params,
     });
   }
 

@@ -22,6 +22,7 @@ func _physics_process(delta):
 	var direction := Input.get_axis(&"left", &"right")
 	velocity.x = direction * SPEED
 	var top = velocity.normalized()
+	var gap = top.distance_to(Vector2.ZERO)
 	print(top.length())
 	for item in items:
 		var total = item.price * 2
@@ -100,5 +101,16 @@ describe('the GDScript type lookup', () => {
       type: 'Vector2',
       detail: 'move_toward(to: Vector2, delta: float) -> Vector2',
     });
+  });
+
+  it('names and types the arguments of Godot methods', () => {
+    const call = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.title === 'top.distance_to');
+    expect(
+      call?.pins
+        .filter((p) => p.direction === 'in' && p.kind === 'data')
+        .map((p) => [p.name, p.type])
+    ).toEqual([['to', 'Vector2']]);
   });
 });

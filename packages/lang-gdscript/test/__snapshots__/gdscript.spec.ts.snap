@@ -21,7 +21,7 @@ exports[`parseGDScriptDocument > lowers the fixture 1`] = `
   ==> #7.then -> #8.exec
 function ammo.set
   #0 entry "ammo.set" (setter) [>then:▶ >param0:number]
-  #1 call "clampi" [<exec:▶ >then:▶ <arg0:any <arg1:number=0 <arg2:number=99 >return:number]
+  #1 call "clampi" [<exec:▶ >then:▶ <arg0:number <arg1:number=0 <arg2:number=99 >return:number]
   #2 setVar "Set ammo" [<exec:▶ >then:▶ <value:number >out:number]
   --> #0.param0 -> #1.arg0
   ==> #0.then -> #1.exec

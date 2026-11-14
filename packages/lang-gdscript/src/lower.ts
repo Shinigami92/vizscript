@@ -136,5 +136,8 @@ export function parseGDScriptDocument(
   inferTypes(doc);
   // Godot's own types, followed through the script (`velocity.x` is a
   // `float`, `print()` returns nothing).
-  return applyTypes(doc, gdscriptTypes(script));
+  return applyTypes(doc, gdscriptTypes(script), {
+    text,
+    options: { placeholder: 'null' },
+  });
 }
