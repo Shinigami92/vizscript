@@ -20,8 +20,34 @@ self.MonacoEnvironment = {
   },
 };
 
+/**
+ * Node.js globals in short (`@types/node` is not loaded in the browser):
+ * known names, so callbacks like `process.on('exit', (code) => …)` don't
+ * report implicit `any` parameters.
+ */
+const NODE_GLOBALS = `
+interface VizNodeProcess {
+  argv: string[];
+  env: Record<string, string | undefined>;
+  exitCode: number | undefined;
+  platform: string;
+  cwd(): string;
+  exit(code?: number): never;
+  on(event: string, listener: (...args: any[]) => void): VizNodeProcess;
+  once(event: string, listener: (...args: any[]) => void): VizNodeProcess;
+  [key: string]: any;
+}
+declare var process: VizNodeProcess;
+declare var __dirname: string;
+declare var __filename: string;
+declare var require: (id: string) => any;
+declare var module: { exports: any; [key: string]: any };
+declare var Buffer: any;
+`;
+
 const ts = monaco.typescript;
 for (const defaults of [ts.typescriptDefaults, ts.javascriptDefaults]) {
+  defaults.addExtraLib(NODE_GLOBALS, 'file:///vizscript/node-globals.d.ts');
   defaults.setCompilerOptions({
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
