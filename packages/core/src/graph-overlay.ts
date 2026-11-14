@@ -574,6 +574,13 @@ function withCutReceivers(doc: GraphDocument, edits: GraphEdit[]): GraphEdit[] {
         continue;
       }
 
+      // Cut by deleting its value: the wire goes too (written as code, the
+      // call starts with empty arguments then).
+      if (!removed.has(edgeKey(edge))) {
+        removed.add(edgeKey(edge));
+        extra.push(removeEdge(edge));
+      }
+
       const call = edge.to.node;
       for (const other of fn.edges) {
         const key = edgeKey(other);

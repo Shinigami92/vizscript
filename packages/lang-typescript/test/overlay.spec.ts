@@ -441,6 +441,35 @@ describe('a method without its receiver', () => {
     );
   });
 
+  it('takes a new Get of the deleted receiver as the receiver', () => {
+    const code = 'console.log("x");\n';
+    const before = parseTypeScript(code);
+    const get = before.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'getVar');
+    let overlay = edit(code, EMPTY_OVERLAY, {
+      type: 'deleteNodes',
+      nodeIds: [get?.id ?? ''],
+    });
+    // A new Get placed from the action menu (written as `console;`).
+    const next = `${code}console;\n`;
+    const after = parseTypeScript(next);
+    overlay = remapOverlay(before, after, overlay, {
+      before: code,
+      edits: [{ start: code.length, end: code.length, text: 'console;\n' }],
+    }).overlay;
+    const nodes = after.functions.flatMap((f) => f.nodes);
+    const added = nodes.filter((n) => n.kind === 'getVar').at(-1);
+    const log = nodes.find((n) => n.title === 'log');
+    overlay = edit(next, overlay, {
+      type: 'connect',
+      from: { node: added?.id ?? '', pin: 'value' },
+      to: { node: log?.id ?? '', pin: 'target' },
+    });
+    const result = resolveOverlay(next, overlay, backend);
+    expect(result.status === 'synced' && result.text).toBe('console.log();\n');
+  });
+
   it('drops the wires of its result, and calls it on the new value', () => {
     const indexOf = node('indexOf');
     const entry = node('f');

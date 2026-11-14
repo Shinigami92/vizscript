@@ -143,6 +143,34 @@ function nextStructureOp(
   return diff.removed.some((e) => e.kind === 'exec') ? undefined : null;
 }
 
+/**
+ * The overlay once a receiver gets its new value: the old one is replaced
+ * in the code (its graph-only deletion is done by that), and a value that
+ * stands alone as a statement (`console;`, a Get placed in the graph) moves
+ * into the receiver, so its statement goes.
+ */
+function replacedReceiver(
+  doc: GraphDocument,
+  overlay: GraphOverlay,
+  edit: { from: PinRef; to: PinRef }
+): GraphOverlay {
+  const fn = doc.functions.find((f) =>
+    f.nodes.some((n) => n.id === edit.to.node)
+  );
+  const old = fn?.edges.find(
+    (e) => e.to.node === edit.to.node && e.to.pin === edit.to.pin
+  )?.from.node;
+  const source = fn?.nodes.find((n) => n.id === edit.from.node);
+  const edits = overlay.edits.filter(
+    (e) => !(e.type === 'removeNode' && e.node === old)
+  );
+  if (source && getMeta<StatementMeta>(source).unused) {
+    edits.push({ type: 'removeNode', node: source.id });
+  }
+
+  return { edits };
+}
+
 /** An op that brings the code closer to the graph (and what it writes). */
 interface Step {
   op: GraphOp;
@@ -314,6 +342,10 @@ export function resolveOverlay(
     }
 
     current = { edits: current.edits.filter((_, j) => j !== index) };
+    if (edit.type === 'addEdge') {
+      current = replacedReceiver(doc, current, edit);
+    }
+
     // A value added in the graph (floating) is written as the receiver.
     const name = floatingGroup(edit.from.node);
     const group = current.edits.find(
