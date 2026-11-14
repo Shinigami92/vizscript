@@ -8,6 +8,8 @@ import {
   applyOverlay,
   applyTextEdits,
   EMPTY_OVERLAY,
+  floatingNodes,
+  floatingOutput,
   graphEditsFor,
   overlayIssues,
   remapOverlay,
@@ -396,6 +398,46 @@ describe('a method without its receiver', () => {
     });
     expect(result.ok && applyTextEdits(code, result.edits)).toBe(
       'function g(items: string[]): void {\n  items.join(",");\n  console.log();\n}\n'
+    );
+  });
+
+  it('writes a value added in the graph as the new receiver', () => {
+    const log = node('log');
+    const floating = floatingNodes(
+      source,
+      { type: 'value', expression: 'JSON' },
+      log.id.split('/')[0],
+      'g1',
+      backend
+    );
+    if (!floating.ok) {
+      throw new Error(floating.error);
+    }
+
+    const out = floatingOutput(floating.edit);
+    let overlay = edit(source, EMPTY_OVERLAY, {
+      type: 'disconnect',
+      pin: { node: log.id, pin: 'target' },
+    });
+    overlay = {
+      edits: [
+        ...overlay.edits,
+        floating.edit,
+        ...(out
+          ? [
+              {
+                type: 'addEdge' as const,
+                kind: 'data' as const,
+                from: out,
+                to: { node: log.id, pin: 'target' },
+              },
+            ]
+          : []),
+      ],
+    };
+    const result = resolveOverlay(source, overlay, backend);
+    expect(result.status === 'synced' && result.text).toBe(
+      source.replace('console.log("x", items);', 'JSON.log();')
     );
   });
 

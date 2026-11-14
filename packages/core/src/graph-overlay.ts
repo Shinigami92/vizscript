@@ -55,6 +55,20 @@ export function floatingGroup(nodeId: string): string | undefined {
   return match?.[1];
 }
 
+/**
+ * The output of floating value nodes: the data output of the node that
+ * feeds no other node of the group (`console` of a Get `console`).
+ */
+export function floatingOutput(edit: FloatingNodes): PinRef | undefined {
+  const root = edit.nodes.find(
+    (n) => !edit.edges.some((e) => e.from.node === n.id)
+  );
+  const pin = root?.pins.find(
+    (p) => p.kind === 'data' && p.direction === 'out'
+  );
+  return root && pin ? { node: root.id, pin: pin.id } : undefined;
+}
+
 /** Graph-only edits of one file, in the order they were made. */
 export interface GraphOverlay {
   edits: GraphEdit[];

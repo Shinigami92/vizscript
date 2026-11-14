@@ -314,12 +314,19 @@ export function resolveOverlay(
     }
 
     current = { edits: current.edits.filter((_, j) => j !== index) };
+    // A value added in the graph (floating) is written as the receiver.
+    const name = floatingGroup(edit.from.node);
+    const group = current.edits.find(
+      (e): e is FloatingNodes => e.type === 'addNodes' && e.id === name
+    );
     const op: GraphOp =
       edit.type === 'removeEdge'
         ? { type: 'clearArguments', node: edit.to.node }
-        : { type: 'connect', from: edit.from, to: edit.to };
+        : group
+          ? { type: 'setInput', pin: edit.to, expression: group.code }
+          : { type: 'connect', from: edit.from, to: edit.to };
     const done = edit.type === 'addEdge' && hasEdge(doc, edit.from, edit.to);
-    const error = done ? undefined : step(op);
+    const error = done ? undefined : step(op, group);
     if (error !== undefined) {
       return pending(edit.to.node, error);
     }

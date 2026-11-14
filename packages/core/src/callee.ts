@@ -110,3 +110,15 @@ export function receiverMissing(fn: FunctionGraph, node: GraphNode): boolean {
     !fn.edges.some((e) => e.to.node === node.id && e.to.pin === pin.id)
   );
 }
+
+/** A method's receiver whose wire was broken in the graph (shown empty). */
+export function isCutReceiver(doc: GraphDocument, ref: PinRef): boolean {
+  const fn = doc.functions.find((f) => f.nodes.some((n) => n.id === ref.node));
+  const node = fn?.nodes.find((n) => n.id === ref.node);
+  return (
+    fn !== undefined &&
+    node !== undefined &&
+    ref.pin === 'target' &&
+    receiverMissing(fn, node)
+  );
+}

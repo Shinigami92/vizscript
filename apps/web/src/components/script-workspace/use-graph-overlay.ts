@@ -6,12 +6,14 @@ import type {
   ImportedDeclaration,
   NodeTemplate,
   OverlayIssue,
+  PinRef,
   Point,
 } from '@vizscript/core';
 import {
   compactOverlay,
   EMPTY_OVERLAY,
   findNode,
+  floatingOutput,
   isEmptyOverlay,
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
@@ -58,7 +60,8 @@ export interface WorkspaceGraphOverlay {
   addFloating: (
     template: NodeTemplate,
     world: Point,
-    fnId: string | undefined
+    fnId: string | undefined,
+    wireTo?: PinRef
   ) => Promise<void>;
   /** Replaces the overlay (draft loaded, undo, remapped after a parse). */
   setOverlay: (overlay: GraphOverlay) => void;
@@ -115,7 +118,9 @@ export function useGraphOverlay(
   async function addFloating(
     template: NodeTemplate,
     world: Point,
-    fnId: string | undefined
+    fnId: string | undefined,
+    /** An input the new value is wired into (a method's empty `this`). */
+    wireTo?: PinRef
   ): Promise<void> {
     const group = `${Date.now().toString(36)}${(groups++).toString(36)}`;
     const result = await deps.client.floatingNodes(
@@ -132,7 +137,15 @@ export function useGraphOverlay(
     }
 
     deps.placeFloating(result.edit, world);
-    addEdits([result.edit]);
+    const out = wireTo ? floatingOutput(result.edit) : undefined;
+    addEdits(
+      out && wireTo
+        ? [
+            result.edit,
+            { type: 'addEdge', kind: 'data', from: out, to: wireTo },
+          ]
+        : [result.edit]
+    );
   }
 
   function discard(): void {
