@@ -171,11 +171,43 @@ export function moveWires(
     );
   }
 
-  // An input's wire goes to another input; the old one becomes empty.
+  // An input's wire goes to another input; the old one becomes empty (its
+  // value moved: not kept as a statement).
+  const node = findNode(doc, from.node);
+  if (!node) {
+    return failed('Unknown pin.');
+  }
+
+  if (isReceiver(doc, from)) {
+    return failed(RECEIVER_NEEDED);
+  }
+
+  const target = findNode(doc, to.node);
+  const cleared = clearInput(text, doc, node, fromPin, syntax, null);
+  const range = toPin.range;
+  const inTarget = (edit: TextEdit): boolean =>
+    range !== undefined && range.start <= edit.start && edit.end <= range.end;
+  // The target's old value stays as a statement (UE: its node stays,
+  // unwired), without the moved value when it sat inside it.
+  const kept = target
+    ? keptValue(text, doc, target, toPin, syntax, (r) =>
+        applyTextEdits(
+          text.slice(r.start, r.end),
+          cleared.filter(inTarget).map((edit) => ({
+            ...edit,
+            start: edit.start - r.start,
+            end: edit.end - r.start,
+          }))
+        )
+      )
+    : null;
   return mergeEdits(
     edges.flatMap((e) => [
       connectData(text, doc, e.from, to, syntax),
-      disconnect(text, doc, from, syntax),
+      succeeded([
+        ...(kept ? [kept] : []),
+        ...cleared.filter((edit) => !inTarget(edit)),
+      ]),
     ])
   );
 }
@@ -450,14 +482,56 @@ function withLeadingComment(
  * then `return;`, `foo(a + b)` → `a + b;` then `foo(undefined)`), like
  * Blueprint nodes that just lose their wire.
  */
+/**
+ * The value node wired into an input, kept as a statement before its
+ * consumer (UE: a node whose wire is cut stays in the graph). `null` when
+ * the input holds no node of its own (a literal, a parameter).
+ */
+function keptValue(
+  text: string,
+  doc: GraphDocument,
+  target: GraphNode,
+  pin: Pin,
+  syntax: StatementSyntax,
+  keep: (r: SourceRange) => string
+): TextEdit | null {
+  const range = pin.range;
+  const edge = edgesOf(doc, target.id).find(
+    (e) => e.to.node === target.id && e.to.pin === pin.id
+  );
+  const source = edge ? findNode(doc, edge.from.node) : undefined;
+  const consumer = owningStatement(target);
+  if (
+    !range ||
+    !source ||
+    source.kind === 'entry' ||
+    !contains(range, source.range) ||
+    !consumer ||
+    consumer.meta.inline ||
+    range.end <= range.start
+  ) {
+    return null;
+  }
+
+  const indent = lineIndent(text, consumer.stmt.start);
+  return {
+    start: consumer.stmt.start,
+    end: consumer.stmt.start,
+    text: `${asStatement(keep(range), syntax)}\n${indent}`,
+  };
+}
+
 function clearInput(
   text: string,
   doc: GraphDocument,
   target: GraphNode,
   pin: Pin,
   syntax: StatementSyntax,
-  /** The code kept as a statement (default: the input's code as it is). */
-  keep = (r: SourceRange): string => text.slice(r.start, r.end)
+  /**
+   * The code kept as a statement (default: the input's code as it is);
+   * `null` keeps nothing (the value moved elsewhere).
+   */
+  keep: ((r: SourceRange) => string) | null = (r) => text.slice(r.start, r.end)
 ): TextEdit[] {
   const range = pin.range;
   if (!range) {
@@ -465,25 +539,9 @@ function clearInput(
   }
 
   const edits: TextEdit[] = [];
-  const edge = edgesOf(doc, target.id).find(
-    (e) => e.to.node === target.id && e.to.pin === pin.id
-  );
-  const source = edge ? findNode(doc, edge.from.node) : undefined;
-  const consumer = owningStatement(target);
-  if (
-    source &&
-    source.kind !== 'entry' &&
-    contains(range, source.range) &&
-    consumer &&
-    !consumer.meta.inline &&
-    range.end > range.start
-  ) {
-    const indent = lineIndent(text, consumer.stmt.start);
-    edits.push({
-      start: consumer.stmt.start,
-      end: consumer.stmt.start,
-      text: `${asStatement(keep(range), syntax)}\n${indent}`,
-    });
+  const kept = keep ? keptValue(text, doc, target, pin, syntax, keep) : null;
+  if (kept) {
+    edits.push(kept);
   }
 
   if (getMeta<InputPinMeta>(pin).optional) {

@@ -42,6 +42,44 @@ describe('moving wires (Ctrl+drag)', () => {
     ).toBe('function f(x: number) {\n  g(undefined, x);\n}\n');
   });
 
+  it('moves a value to another input without keeping a copy', () => {
+    const text =
+      'const RATE = 0.19;\nfunction f(d: number) {\n  return d * (1 + RATE);\n}\n';
+    const plus = parseTypeScript(text, 't.ts')
+      .functions.find((fn) => fn.name === 'f')
+      ?.nodes.find((n) => n.kind === 'operator' && n.title === '+');
+    const [a, b] = plus?.pins.filter((p) => p.direction === 'in') ?? [];
+    expect(
+      apply(text, {
+        type: 'moveWires',
+        from: { node: plus?.id ?? '', pin: b?.id ?? '' },
+        to: { node: plus?.id ?? '', pin: a?.id ?? '' },
+      })
+    ).toBe(
+      'const RATE = 0.19;\nfunction f(d: number) {\n  return d * (RATE + undefined);\n}\n'
+    );
+  });
+
+  it('keeps the node it replaces, without the moved value', () => {
+    const text =
+      'const RATE = 0.19;\nfunction f(d: number) {\n  return d * (1 + RATE);\n}\n';
+    const nodes =
+      parseTypeScript(text, 't.ts').functions.find((fn) => fn.name === 'f')
+        ?.nodes ?? [];
+    const plus = nodes.find((n) => n.kind === 'operator' && n.title === '+');
+    const times = nodes.find((n) => n.kind === 'operator' && n.title === '*');
+    // RATE moves from `+` onto `*`'s lower input: `1 + …` stays unwired.
+    expect(
+      apply(text, {
+        type: 'moveWires',
+        from: { node: plus?.id ?? '', pin: 'b' },
+        to: { node: times?.id ?? '', pin: 'b' },
+      })
+    ).toBe(
+      'const RATE = 0.19;\nfunction f(d: number) {\n  1 + undefined;\n  return d * (RATE);\n}\n'
+    );
+  });
+
   it('refuses exec pins', () => {
     const text = 'function f() {\n  g();\n}\n';
     const call = parseTypeScript(text, 't.ts')
