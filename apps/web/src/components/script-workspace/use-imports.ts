@@ -13,7 +13,11 @@ import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
 import type { GraphClient } from '../../graph/graph-client';
 import { languageOf } from '../../graph/languages';
-import { NpmTypes, packageName } from '../../graph/npm-types';
+import {
+  nearestPackageRange,
+  NpmTypes,
+  packageName,
+} from '../../graph/npm-types';
 import type { ExternalName } from '../../graph/project-index';
 import {
   candidateFiles,
@@ -305,44 +309,8 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
   );
   const libraryCache = new Map<string, Promise<ScriptSymbol[]>>();
 
-  /**
-   * Version range of an npm package in the nearest `package.json`: `latest`
-   * when none lists it, `''` for packages of the repository (`workspace:`).
-   */
-  async function packageRange(name: string): Promise<string> {
-    const files = props.files;
-    const read = props.readFile;
-    if (!files || !read) {
-      return 'latest';
-    }
-
-    const dirs = props.path.split('/').slice(0, -1);
-    for (;;) {
-      const manifest = [...dirs, 'package.json'].join('/');
-      if (files.has(manifest)) {
-        try {
-          const json = JSON.parse(await read(manifest)) as Record<
-            string,
-            Record<string, string> | undefined
-          >;
-          const range =
-            json.dependencies?.[name] ??
-            json.devDependencies?.[name] ??
-            json.peerDependencies?.[name];
-          if (range !== undefined) {
-            return /^(?:workspace|file|link|portal):/.test(range) ? '' : range;
-          }
-        } catch {
-          // not JSON: look further up
-        }
-      }
-
-      if (dirs.length === 0) {
-        return 'latest';
-      }
-
-      dirs.pop();
-    }
+  function packageRange(name: string): Promise<string> {
+    return nearestPackageRange(props.files, props.readFile, props.path, name);
   }
 
   /**
