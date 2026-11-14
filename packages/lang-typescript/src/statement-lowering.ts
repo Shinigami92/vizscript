@@ -429,14 +429,20 @@ export abstract class StatementLowering extends ControlFlowLowering {
             this.execIn(),
             this.execOut('then', '', insert),
             pin,
-            this.dataOut('result', 'Result', 'any', {
-              bind: {
-                expr: rangeOf(expr),
-                stmt: rangeOf(stmt),
-                isStatement: true,
-                nameHint: 'result',
+            this.dataOut(
+              'result',
+              'Result',
+              'any',
+              {
+                bind: {
+                  expr: rangeOf(expr),
+                  stmt: rangeOf(stmt),
+                  isStatement: true,
+                  nameHint: 'result',
+                },
               },
-            }),
+              rangeOf(expr)
+            ),
           ],
           path,
           meta: statementMeta,
@@ -529,7 +535,8 @@ export abstract class StatementLowering extends ControlFlowLowering {
         'out',
         '',
         scoped?.type ?? 'any',
-        varName ? { sourceText: varName } : {}
+        varName ? { sourceText: varName } : {},
+        rangeOf(left)
       )
     );
 
@@ -619,7 +626,9 @@ export abstract class StatementLowering extends ControlFlowLowering {
             'out',
             '',
             type,
-            decl.id.type === 'Identifier' ? { sourceText: name } : {}
+            decl.id.type === 'Identifier' ? { sourceText: name } : {},
+            // The variable: a type checker tells its type.
+            decl.id.type === 'Identifier' ? rangeOf(decl.id) : undefined
           ),
         ],
         path: `${path}.${index}`,

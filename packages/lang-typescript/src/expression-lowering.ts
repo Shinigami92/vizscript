@@ -427,14 +427,20 @@ export abstract class ExpressionLowering extends GraphBuilder {
             this.execIn(),
             this.execOut('then', ''),
             pin,
-            this.dataOut('result', 'Result', 'any', {
-              bind: {
-                expr: range,
-                stmt: this.currentStatement ?? range,
-                isStatement: false,
-                nameHint: 'result',
+            this.dataOut(
+              'result',
+              'Result',
+              'any',
+              {
+                bind: {
+                  expr: range,
+                  stmt: this.currentStatement ?? range,
+                  isStatement: false,
+                  nameHint: 'result',
+                },
               },
-            }),
+              range
+            ),
           ],
           path,
         });
