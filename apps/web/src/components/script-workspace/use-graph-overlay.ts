@@ -2,19 +2,24 @@ import type {
   FloatingNodes,
   GraphDocument,
   GraphEdit,
+  GraphOp,
   GraphOverlay,
   ImportedDeclaration,
   NodeTemplate,
   OverlayIssue,
   PinRef,
   Point,
+  Positions,
 } from '@vizscript/core';
 import {
   compactOverlay,
   EMPTY_OVERLAY,
+  feedFloating,
   findNode,
+  floatingGroup,
   floatingOutput,
   isEmptyOverlay,
+  sameFloatingNodes,
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
@@ -37,10 +42,21 @@ export interface GraphOverlayDeps {
   /** The last recorded step also wrote code (one undo for both). */
   recordCode: () => void;
   /** Positions for new floating nodes (where they were dropped). */
-  placeFloating: (edit: FloatingNodes, world: Point) => void;
+  placeFloating: (edit: FloatingNodes, world: Point, fixed?: Positions) => void;
+  /** Where a node is shown. */
+  positionOf: (id: string) => Point | undefined;
   /** Floating nodes were written as code: their nodes got these ids. */
   placed: (ids: Record<string, string>) => void;
   show: (message: string, kind?: 'info' | 'error') => void;
+}
+
+export interface FloatingOptions {
+  /** An input the new value is wired into (a method's empty `this`). */
+  wireTo?: PinRef;
+  /** Floating nodes the new ones take over (with their places). */
+  replaces?: FloatingNodes;
+  /** A value of the code wired where the placeholder was written. */
+  feed?: { from: PinRef; placeholder: string };
 }
 
 export interface WorkspaceGraphOverlay {
@@ -61,8 +77,18 @@ export interface WorkspaceGraphOverlay {
     template: NodeTemplate,
     world: Point,
     fnId: string | undefined,
-    wireTo?: PinRef
+    options?: FloatingOptions
   ) => Promise<void>;
+  /**
+   * A node made from a dragged value (`.log()`, "Call … with this value")
+   * floats unwired, like UE's: a floating value joins it (the same Get),
+   * a value of the code is wired to it in the graph. `false` when it is
+   * written as code instead (a lone value of a value of the code).
+   */
+  floatValueUse: (
+    op: Extract<GraphOp, { type: 'useValue' | 'callWith' }>,
+    placeholder: string
+  ) => Promise<boolean>;
   /** Replaces the overlay (draft loaded, undo, remapped after a parse). */
   setOverlay: (overlay: GraphOverlay) => void;
   discard: () => void;
@@ -119,9 +145,9 @@ export function useGraphOverlay(
     template: NodeTemplate,
     world: Point,
     fnId: string | undefined,
-    /** An input the new value is wired into (a method's empty `this`). */
-    wireTo?: PinRef
+    options: FloatingOptions = {}
   ): Promise<void> {
+    const { wireTo, replaces, feed } = options;
     const group = `${Date.now().toString(36)}${(groups++).toString(36)}`;
     const result = await deps.client.floatingNodes(
       deps.text.value,
@@ -136,16 +162,102 @@ export function useGraphOverlay(
       return;
     }
 
-    deps.placeFloating(result.edit, world);
-    const out = wireTo ? floatingOutput(result.edit) : undefined;
-    addEdits(
-      out && wireTo
+    let edit = result.edit;
+    const edits: GraphEdit[] = [];
+    if (feed) {
+      const fed = feedFloating(edit, feed.placeholder, feed.from);
+      if (!fed) {
+        deps.show('The value cannot be wired into the new node.', 'error');
+        return;
+      }
+
+      edit = fed.edit;
+      edits.push(fed.edge);
+    }
+
+    // Nodes taken over keep their places (the same Get, not a second one).
+    const fixed: Positions = {};
+    if (replaces) {
+      for (const [from, to] of sameFloatingNodes(replaces, edit)) {
+        const p = deps.positionOf(from);
+        if (p) {
+          fixed[to] = p;
+        }
+      }
+    }
+
+    deps.placeFloating(edit, world, fixed);
+    const out = wireTo ? floatingOutput(edit) : undefined;
+    addEdits([
+      // Removing one node of a floating group drops all of it.
+      ...(replaces?.nodes[0]
+        ? [{ type: 'removeNode' as const, node: replaces.nodes[0].id }]
+        : []),
+      edit,
+      ...edits,
+      ...(out && wireTo
         ? [
-            result.edit,
-            { type: 'addEdge', kind: 'data', from: out, to: wireTo },
+            {
+              type: 'addEdge' as const,
+              kind: 'data' as const,
+              from: out,
+              to: wireTo,
+            },
           ]
-        : [result.edit]
+        : []),
+    ]);
+  }
+
+  async function floatValueUse(
+    op: Extract<GraphOp, { type: 'useValue' | 'callWith' }>,
+    placeholder: string
+  ): Promise<boolean> {
+    const shown = deps.doc.value;
+    const fnId = shown?.functions.find((f) =>
+      f.nodes.some((n) => n.id === op.pin.node)
+    )?.id;
+    const write = (value: string): string =>
+      op.type === 'callWith'
+        ? `${op.callee}(${value})`
+        : op.expression.replaceAll('$value', value);
+    const world = op.position ?? { x: 0, y: 0 };
+    const name = floatingGroup(op.pin.node);
+    if (name !== undefined) {
+      const group = overlay.value.edits.find(
+        (e): e is FloatingNodes => e.type === 'addNodes' && e.id === name
+      );
+      // A floating value: one group with the new node (the same Get).
+      if (
+        !group ||
+        group.nodes.some((n) => n.pins.some((p) => p.kind === 'exec'))
+      ) {
+        return false;
+      }
+
+      await addFloating(
+        { type: 'value', expression: write(group.code.replace(/;\s*$/, '')) },
+        world,
+        fnId ?? group.fnId,
+        { replaces: group }
+      );
+      return true;
+    }
+
+    // Only calls float; a lone value of the code's value (`.length`) is
+    // written as code.
+    if (op.type === 'useValue' && !/\)\s*$/.test(op.expression)) {
+      return false;
+    }
+
+    await addFloating(
+      { type: 'value', expression: write(placeholder) },
+      world,
+      fnId,
+      {
+        feed: { from: op.pin, placeholder },
+      }
     );
+    return true;
   }
 
   function discard(): void {
@@ -245,6 +357,7 @@ export function useGraphOverlay(
     syncProblems,
     addEdits,
     addFloating,
+    floatValueUse,
     setOverlay,
     discard,
     resolve,

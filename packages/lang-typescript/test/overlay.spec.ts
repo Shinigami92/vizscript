@@ -8,6 +8,7 @@ import {
   applyOverlay,
   applyTextEdits,
   EMPTY_OVERLAY,
+  feedFloating,
   floatingNodes,
   floatingOutput,
   graphEditsFor,
@@ -493,6 +494,106 @@ describe('a method without its receiver', () => {
         '  return items.indexOf("a");',
         '  other.indexOf();\n  return;'
       )
+    );
+  });
+});
+
+/** A graph-only exec wire. */
+const execWire = (from: PinRef, to: PinRef): GraphOverlay['edits'][number] => ({
+  type: 'addEdge',
+  kind: 'exec',
+  from,
+  to,
+});
+
+describe('nodes made from a dragged value', () => {
+  const source =
+    'function f(items: string[], d: number): number {\n  const x = d * 2;\n  return Math.round(x * 100) / 100;\n}\n';
+  const doc = parseTypeScript(source);
+  const nodes = doc.functions.flatMap((f) => f.nodes);
+  const byTitle = (title: string): GraphNode => {
+    const found = nodes.find((n) => n.title === title);
+    if (!found) {
+      throw new Error(`no node ${title}`);
+    }
+
+    return found;
+  };
+
+  it('writes a floating call after a nested call', () => {
+    const floating = floatingNodes(
+      source,
+      { type: 'value', expression: 'console.log()' },
+      'fn:f',
+      'g1',
+      backend
+    );
+    if (!floating.ok) {
+      throw new Error(floating.error);
+    }
+
+    const log = floating.edit.nodes.find((n) => n.title === 'log');
+    const round = byTitle('round');
+    const ret = nodes.find((n) => n.kind === 'return');
+    const overlay = {
+      edits: [
+        floating.edit,
+        execWire(
+          { node: round.id, pin: 'then' },
+          { node: log?.id ?? '', pin: 'exec' }
+        ),
+        execWire(
+          { node: log?.id ?? '', pin: 'then' },
+          { node: ret?.id ?? '', pin: 'exec' }
+        ),
+      ],
+    };
+    const result = resolveOverlay(source, overlay, backend);
+    expect(result.status === 'synced' && result.text).toBe(
+      source.replace(
+        '  return Math.round(x * 100) / 100;',
+        '  const roundResult = Math.round(x * 100);\n  console.log();\n  return roundResult / 100;'
+      )
+    );
+  });
+
+  it('wires a value of the code into the call it was dragged to', () => {
+    const entry = byTitle('f');
+    const floating = floatingNodes(
+      source,
+      { type: 'value', expression: 'undefined.pop()' },
+      'fn:f',
+      'g2',
+      backend
+    );
+    if (!floating.ok) {
+      throw new Error(floating.error);
+    }
+
+    const fed = feedFloating(floating.edit, 'undefined', {
+      node: entry.id,
+      pin: 'param0',
+    });
+    const pop = fed?.edit.nodes.find((n) => n.title === 'pop');
+    expect(fed?.edge).toMatchObject({ to: { node: pop?.id, pin: 'target' } });
+    const setX = byTitle('Set x');
+    const overlay = {
+      edits: [
+        fed?.edit ?? floating.edit,
+        ...(fed ? [fed.edge] : []),
+        execWire(
+          { node: setX.id, pin: 'then' },
+          { node: pop?.id ?? '', pin: 'exec' }
+        ),
+        execWire(
+          { node: pop?.id ?? '', pin: 'then' },
+          { node: byTitle('round').id, pin: 'exec' }
+        ),
+      ],
+    };
+    const result = resolveOverlay(source, overlay, backend);
+    expect(result.status === 'synced' && result.text).toContain(
+      '  const x = d * 2;\n  items.pop();\n'
     );
   });
 });

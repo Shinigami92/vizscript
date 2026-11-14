@@ -235,6 +235,7 @@ const {
   syncProblems,
   addEdits,
   addFloating,
+  floatValueUse,
   setOverlay,
   discard: discardGraphChanges,
   resolve: resolveOverlay,
@@ -262,8 +263,8 @@ const {
     record: (before, after) => recordOverlay(before, after),
     // The editor reports its new version in a microtask.
     recordCode: () => queueMicrotask(recordOverlayCode),
-    placeFloating: (edit, world) => {
-      movePinned(floatingLayout(edit, world));
+    placeFloating: (edit, world, fixed) => {
+      movePinned({ ...floatingLayout(edit, world), ...fixed });
       // Selected like any node just placed (once the overlay shows them).
       const ids = edit.nodes.map((n) => n.id);
       void nextTick(() => {
@@ -271,6 +272,7 @@ const {
         onSelectionChange(ids);
       });
     },
+    positionOf: (id) => canvas.value?.getPositions()[id] ?? positions.value[id],
     placed: (ids) => {
       const moved: Positions = {};
       for (const [from, to] of Object.entries(ids)) {
@@ -864,11 +866,19 @@ async function onOp(requested: GraphOp): Promise<void> {
         { type: 'value', expression: op.expression },
         op.position ?? { x: 0, y: 0 },
         fn?.id,
-        op.pin
+        { wireTo: op.pin }
       );
     }
 
     return;
+  }
+
+  // A node made from a dragged value floats unwired, like UE's.
+  if (op.type === 'useValue' || op.type === 'callWith') {
+    freezeLayout();
+    if (await floatValueUse(op, typeSystem.value?.placeholder ?? 'undefined')) {
+      return;
+    }
   }
 
   const graphEdits = doc.value ? graphEditsFor(doc.value, op) : undefined;

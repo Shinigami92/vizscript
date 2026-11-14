@@ -4,7 +4,7 @@ import { endOfFunction } from './flow';
 import type { FloatingNodes, GraphEdit, GraphOverlay } from './graph-overlay';
 import { floatingGroup, floatingPrefix } from './graph-overlay';
 import { edgeId } from './ids';
-import type { GraphDocument, GraphNode, SourceRange } from './ir';
+import type { GraphDocument, GraphNode, PinRef, SourceRange } from './ir';
 import type { GraphOp, NodeTemplate, OpResult, TextEdit } from './ops';
 import { applyTextEdits } from './ops';
 import type { TextChange } from './reconcile';
@@ -293,10 +293,92 @@ export function withPlacedGroup(
 }
 
 /**
- * Nodes with exec pins added on empty space float until their exec input
- * is wired, like a new node in UE; values (a Get) and pasted code are
- * written right away.
+ * Nodes added on empty space float until they are wired in, like a new
+ * node in UE: a statement until its exec input is wired, a value (a Get)
+ * until its output feeds an input; then they join that function. Pasted
+ * code is written right away.
  */
 export function floatsUntilWired(template: NodeTemplate): boolean {
-  return template.type !== 'value' && template.type !== 'code';
+  return template.type !== 'code';
+}
+
+/**
+ * Floating nodes made for a value in the code (UE: dragging from an output
+ * and picking a node): the template was written with the language's
+ * placeholder where the value goes (`undefined.log()`); that placeholder
+ * (a literal, or a node like Rust's `todo!()`) becomes a graph-only wire
+ * from the value instead. The code keeps the placeholder until the wire
+ * is written (`connect`).
+ */
+export function feedFloating(
+  edit: FloatingNodes,
+  placeholder: string,
+  from: PinRef
+): { edit: FloatingNodes; edge: GraphEdit } | undefined {
+  const holder = edit.nodes.find(
+    (n) => edit.code.slice(n.range.start, n.range.end) === placeholder
+  );
+  if (holder) {
+    const out = edit.edges.find((e) => e.from.node === holder.id);
+    if (!out) {
+      return undefined;
+    }
+
+    return {
+      edit: {
+        ...edit,
+        nodes: edit.nodes.filter((n) => n.id !== holder.id),
+        edges: edit.edges.filter(
+          (e) => e.from.node !== holder.id && e.to.node !== holder.id
+        ),
+      },
+      edge: { type: 'addEdge', kind: 'data', from, to: out.to },
+    };
+  }
+
+  for (const node of edit.nodes) {
+    const pin = node.pins.find(
+      (p) =>
+        p.kind === 'data' &&
+        p.direction === 'in' &&
+        p.literal?.raw === placeholder
+    );
+    if (pin) {
+      return {
+        edit,
+        edge: {
+          type: 'addEdge',
+          kind: 'data',
+          from,
+          to: { node: node.id, pin: pin.id },
+        },
+      };
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Nodes of a floating group that stand for nodes of an earlier one (a
+ * floating Get used in a new call: the same Get, same kind and title), by
+ * id: they take the earlier nodes' places.
+ */
+export function sameFloatingNodes(
+  earlier: FloatingNodes,
+  next: FloatingNodes
+): Map<string, string> {
+  const result = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const node of earlier.nodes) {
+    const match = next.nodes.find(
+      (n) => !taken.has(n.id) && n.kind === node.kind && n.title === node.title
+    );
+    if (match) {
+      taken.add(match.id);
+      result.set(node.id, match.id);
+    }
+  }
+
+  return result;
 }

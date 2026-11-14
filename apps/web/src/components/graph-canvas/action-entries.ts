@@ -125,17 +125,13 @@ export function createActionEntries(
         {
           ...base,
           action: () => {
-            // Without a place in the code, it floats until it is wired in.
-            const place = ctx.placeAt(state.world);
-            emitOp({
-              type: 'addNode',
-              template: {
-                type: 'value',
-                expression: fill(expression.template),
-              },
-              ...place?.anchor,
-              position: { ...state.world },
-            });
+            // It floats until it is wired in.
+            emitOp(
+              ctx.looseNode(
+                { type: 'value', expression: fill(expression.template) },
+                state.world
+              )
+            );
           },
         },
       ];
@@ -556,23 +552,57 @@ export function createActionEntries(
 
     if (pin.direction === 'out') {
       const named = node.kind === 'setVar' || node.kind === 'entry';
+      const members = memberEntries(pin, source, state);
+      // Functions of the dragged object itself (`console` → `console.log`)
+      // are its methods: `.log()` on it, not `console.log(console)`.
+      const owner = node.kind === 'getVar' ? `${node.title}.` : undefined;
+      const ownMethod = (callee: string): string | undefined => {
+        const name =
+          owner && callee.startsWith(owner) ? callee.slice(owner.length) : '';
+        return /^[A-Za-z_$][\w$]*$/.test(name) ? name : undefined;
+      };
+      const methods = callables.value.flatMap((callee): ActionEntry[] => {
+        const name = ownMethod(callee);
+        const label = `.${name}()`;
+        return name === undefined || members.some((m) => m.label === label)
+          ? []
+          : [
+              {
+                label,
+                category: `Members of ${node.title}`,
+                icon: ICON_CALL,
+                detail: signatureOf(callee).detail,
+                keywords: callee,
+                action: () =>
+                  emitOp({
+                    type: 'useValue',
+                    pin: source,
+                    expression: `$value.${name}()`,
+                    position: { ...state.world },
+                  }),
+              },
+            ];
+      });
       return [
-        ...memberEntries(pin, source, state),
-        ...callables.value.map((callee): ActionEntry => ({
-          label: `${callee}(value)`,
-          category: 'Call function with this value',
-          icon: ICON_CALL,
-          detail: signatureOf(callee).detail,
-          keywords: callee,
-          fits: fitsType(pin.type, signatureOf(callee).first),
-          action: () =>
-            emitOp({
-              type: 'callWith',
-              pin: source,
-              callee,
-              position: { ...state.world },
-            }),
-        })),
+        ...members,
+        ...methods,
+        ...callables.value
+          .filter((callee) => ownMethod(callee) === undefined)
+          .map((callee): ActionEntry => ({
+            label: `${callee}(value)`,
+            category: 'Call function with this value',
+            icon: ICON_CALL,
+            detail: signatureOf(callee).detail,
+            keywords: callee,
+            fits: fitsType(pin.type, signatureOf(callee).first),
+            action: () =>
+              emitOp({
+                type: 'callWith',
+                pin: source,
+                callee,
+                position: { ...state.world },
+              }),
+          })),
         ...externalNames.value
           .filter((external) => external.kind === 'function')
           .map((external): ActionEntry => ({

@@ -11,6 +11,7 @@ import {
   applyOverlay,
   compactOverlay,
   floatingGroup,
+  floatingPrefix,
   isEmptyOverlay,
   overlayDiff,
   overlayIssues,
@@ -376,6 +377,27 @@ export function resolveOverlay(
 
     if (next === undefined) {
       return pending('', 'The code cannot follow these wires yet.');
+    }
+
+    // The wire that placed floating nodes is done once they are written:
+    // after a nested call the code binds its result first (`const
+    // roundResult = …`), so the wire would not be found in the code.
+    const placedAfter =
+      next.group && next.op.type === 'addNode' ? next.op.after : undefined;
+    if (placedAfter && next.group) {
+      const prefix = floatingPrefix(next.group.id);
+      current = {
+        edits: current.edits.filter(
+          (e) =>
+            !(
+              e.type === 'addEdge' &&
+              e.kind === 'exec' &&
+              e.from.node === placedAfter.node &&
+              e.from.pin === placedAfter.pin &&
+              e.to.node.startsWith(prefix)
+            )
+        ),
+      };
     }
 
     const error = step(next.op, next.group);
