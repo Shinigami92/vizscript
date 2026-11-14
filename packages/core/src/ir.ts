@@ -6,6 +6,7 @@
  */
 
 import type { ScriptSymbol } from './symbols';
+import type { TypeMember } from './type-info';
 
 /** Half-open character offset range `[start, end)` into the source text. */
 export interface SourceRange {
@@ -68,6 +69,11 @@ export interface Pin {
   direction: PinDirection;
   kind: PinKind;
   type: DataType;
+  /**
+   * The type as the language writes it (`Promise<User[]>`), when a type
+   * checker gave it (`applyTypes`).
+   */
+  typeText?: string;
   /** Source range of the expression feeding (in) or produced by (out) this pin. */
   range?: SourceRange;
   literal?: PinLiteral;
@@ -220,6 +226,11 @@ export interface GraphDocument {
    * `@tool`, `class_name` and `extends`.
    */
   settings?: ScriptSetting[];
+  /**
+   * Fields and methods of the types a type checker saw, by pin type
+   * (`applyTypes`), for the action menu of a pin of that type.
+   */
+  typeMembers?: Record<string, ReadonlyArray<TypeMember>>;
 }
 
 /** A setting of the whole script, edited with `setScriptSetting`. */

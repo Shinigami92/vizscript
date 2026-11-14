@@ -33,5 +33,6 @@ export * from './symbol-ops';
 export * from './symbols';
 export * from './text-ops';
 export * from './text-utils';
+export * from './type-info';
 export * from './types';
 export * from './value-fields';
