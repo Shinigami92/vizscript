@@ -1,5 +1,5 @@
 import type { GraphDocument, GraphNode } from '@vizscript/core';
-import { foldVias, viaSetter } from '@vizscript/core';
+import { adjacentVias, foldVias, viaSetter } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { parseTypeScript } from '../src';
 
@@ -39,5 +39,21 @@ describe('wires from a SET (UE)', () => {
     const fn = doc.functions[0];
     expect(fn && viaSetter(fn, get)).toBeUndefined();
     expect(foldVias(doc, new Set([get.id]))).toBe(doc);
+  });
+
+  it('draws a Get right after its SET as a wire, like UE', () => {
+    const doc = parseTypeScript(
+      'const cart = [];\nconst total = totalPrice(cart, 0.1);\n',
+      'a.ts'
+    );
+    expect(adjacentVias(doc)).toEqual(new Set([node(doc, 'cart').id]));
+  });
+
+  it('keeps reads after a loop that changes the variable', () => {
+    const doc = parseTypeScript(
+      'let total = 0;\nfor (const item of items) {\n  total += item;\n}\nlog(total);\n',
+      'a.ts'
+    );
+    expect(adjacentVias(doc).size).toBe(0);
   });
 });

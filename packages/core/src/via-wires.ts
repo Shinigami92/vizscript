@@ -94,14 +94,58 @@ export function viaSetter(
 }
 
 /**
- * The graph as drawn: remembered Gets become wires from their SET's output
- * (`GraphEdge.via` names the hidden Get). Gets without a SET before them
- * stay nodes.
+ * Gets drawn as wires without being remembered: those that feed the node
+ * right after their variable's SET on the exec chain (`const cart = …;`
+ * then `totalPrice(cart)`), as one would wire it in UE. Reads further away
+ * stay Get nodes; the variable could have changed by then.
+ */
+export function adjacentVias(doc: GraphDocument): Set<string> {
+  const result = new Set<string>();
+  for (const fn of doc.functions) {
+    const nodes = new Map(fn.nodes.map((n) => [n.id, n]));
+    for (const setter of fn.nodes) {
+      if (
+        setter.kind !== 'setVar' ||
+        !setter.title.startsWith('Set ') ||
+        !setter.pins.some((p) => p.id === 'out')
+      ) {
+        continue;
+      }
+
+      const variable = setter.title.slice('Set '.length);
+      const next = new Set(
+        fn.edges
+          .filter((e) => e.kind === 'exec' && e.from.node === setter.id)
+          .map((e) => e.to.node)
+      );
+      for (const edge of fn.edges) {
+        const get = nodes.get(edge.from.node);
+        if (
+          edge.kind === 'data' &&
+          next.has(edge.to.node) &&
+          get?.kind === 'getVar' &&
+          get.title === variable &&
+          viaSetter(fn, get) === setter
+        ) {
+          result.add(get.id);
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * The graph as drawn: remembered Gets and those right after their SET
+ * (`adjacentVias`) become wires from the SET's output (`GraphEdge.via`
+ * names the hidden Get). Gets without a SET before them stay nodes.
  */
 export function foldVias(
   doc: GraphDocument,
-  gets: ReadonlySet<string>
+  remembered: ReadonlySet<string>
 ): GraphDocument {
+  const gets = new Set([...remembered, ...adjacentVias(doc)]);
   if (gets.size === 0) {
     return doc;
   }
