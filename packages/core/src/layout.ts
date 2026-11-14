@@ -1,4 +1,6 @@
 import { withImplicitSelf } from './display';
+import type { StatementMeta } from './edit-meta';
+import { getMeta } from './edit-meta';
 import { NODE_METRICS } from './geometry';
 import type {
   FunctionGraph,
@@ -6,6 +8,7 @@ import type {
   GraphNode,
   Point,
   Positions,
+  SourceRange,
 } from './ir';
 
 export interface Size {
@@ -70,6 +73,8 @@ interface FunctionIndex {
   /** Pure data sources feeding a node, in pin order. */
   dataInputs: Map<string, string[]>;
   dataConsumer: Map<string, string>;
+  /** The first node any value of a node feeds (pure or not). */
+  valueConsumer: Map<string, string>;
 }
 
 function indexFunction(fn: FunctionGraph): FunctionIndex {
@@ -81,6 +86,7 @@ function indexFunction(fn: FunctionGraph): FunctionIndex {
   const execParent = new Map<string, string>();
   const dataInputs = new Map<string, string[]>();
   const dataConsumer = new Map<string, string>();
+  const valueConsumer = new Map<string, string>();
 
   const execEdges = fn.edges
     .filter((e) => e.kind === 'exec')
@@ -105,6 +111,10 @@ function indexFunction(fn: FunctionGraph): FunctionIndex {
       (a, b) => pinOrder(a.to.node, a.to.pin) - pinOrder(b.to.node, b.to.pin)
     );
   for (const edge of dataEdges) {
+    if (!valueConsumer.has(edge.from.node)) {
+      valueConsumer.set(edge.from.node, edge.to.node);
+    }
+
     const source = nodes.get(edge.from.node);
     if (
       !source ||
@@ -120,7 +130,14 @@ function indexFunction(fn: FunctionGraph): FunctionIndex {
     dataInputs.set(edge.to.node, list);
   }
 
-  return { nodes, execChildren, execParent, dataInputs, dataConsumer };
+  return {
+    nodes,
+    execChildren,
+    execParent,
+    dataInputs,
+    dataConsumer,
+    valueConsumer,
+  };
 }
 
 /**
@@ -147,6 +164,7 @@ export function layoutDocument(
 
   const result: Positions = {};
   const boxes: FunctionBox[] = [];
+  const hasSaved = Object.keys(saved).length > 0;
   let offsetY = 0;
 
   // Laid out as drawn: implicit `self` Gets take no space.
@@ -189,6 +207,13 @@ export function layoutDocument(
 
     mergeSaved(fn, index, auto, saved, result);
     avoidSavedNodes(fn, saved, result, options.sizeOf, gapY);
+    if (hasSaved && boxes.length > 0 && !fn.nodes.some((n) => saved[n.id])) {
+      // A new function (e.g. a callback just written) goes right below the
+      // others as they are placed, not where the auto layout of the other
+      // functions would end.
+      placeBelow(fn, above, result, boxes, functionGap);
+    }
+
     separateFunction(fn, above, result, boxes, options);
   }
 
@@ -201,6 +226,36 @@ interface FunctionBox {
   top: number;
   right: number;
   bottom: number;
+}
+
+/** Moves a function's nodes so its top is `gap` below the lowest box. */
+function placeBelow(
+  fn: FunctionGraph,
+  above: ReadonlyMap<string, number>,
+  positions: Positions,
+  boxes: ReadonlyArray<FunctionBox>,
+  gap: number
+): void {
+  let top = Number.POSITIVE_INFINITY;
+  for (const node of fn.nodes) {
+    const p = positions[node.id];
+    if (p) {
+      top = Math.min(top, p.y - (above.get(node.id) ?? 0));
+    }
+  }
+
+  if (!Number.isFinite(top)) {
+    return;
+  }
+
+  const bottom = Math.max(...boxes.map((b) => b.bottom));
+  const shift = bottom + gap - top;
+  for (const node of fn.nodes) {
+    const p = positions[node.id];
+    if (p) {
+      positions[node.id] = { x: p.x, y: p.y + shift };
+    }
+  }
 }
 
 /**
@@ -284,7 +339,12 @@ function mergeSaved(
     if (own && autoPos) {
       delta = { x: own.x - autoPos.x, y: own.y - autoPos.y };
     } else if (depth < 512) {
-      const parent = index.dataConsumer.get(id) ?? index.execParent.get(id);
+      // A new node goes with what it feeds (`new X()` with its SET), else
+      // with what runs before it.
+      const parent =
+        index.dataConsumer.get(id) ??
+        index.valueConsumer.get(id) ??
+        index.execParent.get(id);
       delta = parent ? deltaOf(parent, depth + 1) : null;
     }
 
@@ -324,6 +384,39 @@ function layoutFunction(
   const size = (id: string): Size => {
     const node = index.nodes.get(id);
     return node ? sizeOf(node) : { width: 0, height: 0 };
+  };
+
+  // The statement of each node: the smallest statement range around it.
+  const statements = fn.nodes.flatMap((n) => {
+    const stmt = getMeta<StatementMeta>(n).stmt;
+    return stmt ? [stmt] : [];
+  });
+  const statementCache = new Map<string, SourceRange | undefined>();
+  const statementOf = (id: string): SourceRange | undefined => {
+    if (statementCache.has(id)) {
+      return statementCache.get(id);
+    }
+
+    const node = index.nodes.get(id);
+    let best: SourceRange | undefined;
+    for (const stmt of statements) {
+      if (
+        node &&
+        node.kind !== 'entry' &&
+        stmt.start <= node.range.start &&
+        node.range.end <= stmt.end &&
+        (!best || stmt.end - stmt.start < best.end - best.start)
+      ) {
+        best = stmt;
+      }
+    }
+
+    statementCache.set(id, best);
+    return best;
+  };
+  const sameStatement = (a: string, b: string): boolean => {
+    const stmt = statementOf(a);
+    return stmt !== undefined && stmt === statementOf(b);
   };
 
   const isContinuationPin = (id: string, pinId: string): boolean =>
@@ -371,6 +464,30 @@ function layoutFunction(
         : Math.max(0, ...inputs.map((c) => dataSubtreeWidth(c, depth + 1)));
     const width = size(id).width + (inputs.length > 0 ? gapX + childWidth : 0);
     widthCache.set(id, width);
+    return width;
+  };
+
+  /** Width of a node and the nodes after it in the same statement. */
+  const statementWidth = (id: string): number => {
+    let width = 0;
+    let current: string | undefined = id;
+    const seen = new Set<string>();
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      const inputs: string[] = index.dataInputs.get(current) ?? [];
+      width +=
+        size(current).width +
+        gapX +
+        (inputs.length > 0
+          ? Math.max(...inputs.map((c) => dataSubtreeWidth(c))) + gapX * 0.6
+          : 0);
+      const from: string = current;
+      const next: string | undefined = (
+        index.execChildren.get(from) ?? []
+      ).find(([pin]) => !isContinuationPin(from, pin))?.[1];
+      current = next && sameStatement(from, next) ? next : undefined;
+    }
+
     return width;
   };
 
@@ -435,7 +552,10 @@ function layoutFunction(
     const branches = children.filter(([pin]) => !isContinuationPin(id, pin));
     const continuation = children.find(([pin]) => isContinuationPin(id, pin));
 
-    /** Places a successor, wrapping to a new row when it gets too wide. */
+    /**
+     * Places a successor, wrapping to a new row when it gets too wide. Rows
+     * break between statements: a chain (`a.b().c().d()`) stays together.
+     */
     const placeNext = (
       child: string,
       cx: number,
@@ -446,7 +566,15 @@ function layoutFunction(
       const ends = !index.nodes
         .get(child)
         ?.pins.some((p) => p.kind === 'exec' && p.direction === 'out');
-      if (cx - rowStart > maxRowWidth && !positions.has(child) && !ends) {
+      const inside = sameStatement(id, child);
+      const run = inside ? 0 : statementWidth(child);
+      const wrap = inside
+        ? cx - rowStart > maxRowWidth * 2
+        : cx - rowStart > maxRowWidth ||
+          (cx > rowStart &&
+            run > size(child).width &&
+            cx + run - rowStart > maxRowWidth);
+      if (wrap && !positions.has(child) && !ends) {
         return placeExec(
           child,
           rowStart,
