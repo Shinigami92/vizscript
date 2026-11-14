@@ -10,7 +10,7 @@ import type {
   Positions,
   TextChange,
 } from '@vizscript/core';
-import { layoutDocument, renamedNodes } from '@vizscript/core';
+import { layoutDocument, renamedNodes, snapToGrid } from '@vizscript/core';
 
 /** Where the node of an op goes once the op's result is parsed. */
 export interface PendingPlacement {
@@ -146,7 +146,9 @@ export function placeNewNodes(
   pinned: Positions,
   layoutOptions: LayoutOptions
 ): { placed?: Positions; selectAfter?: string[] } {
-  const { world, known, matches, code, select } = placement;
+  const { known, matches, code, select } = placement;
+  // On the grid, like a node placed in UE.
+  const world = snapToGrid(placement.world);
   // Old nodes whose id changed with their text (an `if` around the new
   // statement) are followed, not new.
   const followed = new Set(
@@ -239,6 +241,10 @@ export function floatingLayout(edit: FloatingNodes, world: Point): Positions {
 
   for (const [i, node] of values.entries()) {
     positions[node.id] ??= { x: world.x - 200 * (i + 1), y: world.y };
+  }
+
+  for (const [id, p] of Object.entries(positions)) {
+    positions[id] = snapToGrid(p);
   }
 
   return positions;
