@@ -9,6 +9,7 @@ import type {
   NodeTemplate,
   OpResult,
   OverlayResolution,
+  ParseOptions,
   ProjectFile,
   TypeSystemInfo,
 } from '@vizscript/core';
@@ -141,7 +142,8 @@ export class GraphClient {
     text: string,
     fileName: string,
     op: GraphOp,
-    imports?: ImportedDeclaration[]
+    imports?: ImportedDeclaration[],
+    checked?: ParseOptions['checked']
   ): Promise<OpResult> {
     const response = await this.send({
       type: 'applyOp',
@@ -149,6 +151,7 @@ export class GraphClient {
       fileName,
       op,
       imports,
+      checked,
     });
     if (!response.ok) {
       return { ok: false, error: response.error };

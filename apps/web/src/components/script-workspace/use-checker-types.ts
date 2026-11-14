@@ -1,5 +1,5 @@
-import type { GraphDocument } from '@vizscript/core';
-import { resolveTypes } from '@vizscript/core';
+import type { GraphDocument, ParseOptions, TypeMap } from '@vizscript/core';
+import { applyTypes, checkTypes } from '@vizscript/core';
 import type { Ref, ShallowRef } from 'vue';
 import { onBeforeUnmount } from 'vue';
 import { languageOf } from '../../graph/languages';
@@ -20,6 +20,12 @@ interface CheckerTypeDeps {
   apply: (typed: GraphDocument) => void;
 }
 
+function withoutMembers(types: TypeMap): TypeMap {
+  return new Map(
+    [...types].map(([key, { members: _members, ...info }]) => [key, info])
+  );
+}
+
 /**
  * Exact pin types from TypeScript's checker: after each parse the graph is
  * drawn at once with the parser's types, then again with the checker's
@@ -27,7 +33,11 @@ interface CheckerTypeDeps {
  */
 export function useCheckerTypes(deps: CheckerTypeDeps): {
   refineTypes: (seq: number, source: string, parsed: GraphDocument) => void;
+  checkedFor: (text: string) => ParseOptions['checked'];
 } {
+  /** The latest answers, without members (graph edits don't need them). */
+  let checked: ParseOptions['checked'];
+
   async function refine(
     seq: number,
     source: string,
@@ -37,17 +47,23 @@ export function useCheckerTypes(deps: CheckerTypeDeps): {
       return;
     }
 
-    const typed = await resolveTypes(
+    const types = await checkTypes(
       parsed,
       source,
       deps.path(),
       typescriptTypes
     );
-    if (
-      typed !== parsed &&
-      seq === deps.parseSeq() &&
-      deps.parsedDoc.value === parsed
-    ) {
+    if (!types || seq !== deps.parseSeq() || deps.parsedDoc.value !== parsed) {
+      return;
+    }
+
+    // Calls get a pin per parameter; skipped ones are written `undefined`.
+    checked = { text: source, types: withoutMembers(types) };
+    const typed = applyTypes(parsed, types, {
+      text: source,
+      options: { placeholder: 'undefined' },
+    });
+    if (typed !== parsed) {
       deps.apply(typed);
     }
   }
@@ -62,5 +78,8 @@ export function useCheckerTypes(deps: CheckerTypeDeps): {
 
   return {
     refineTypes: (seq, source, parsed) => void refine(seq, source, parsed),
+    // Sent with graph edits of that text, so the worker's parse has the
+    // argument pins the graph shows.
+    checkedFor: (text) => (checked?.text === text ? checked : undefined),
   };
 }

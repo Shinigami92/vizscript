@@ -71,6 +71,7 @@ function handle(request: WorkerRequest): WorkerResponse {
         ok: true,
         result: backend.applyOp(request.text, request.op, request.fileName, {
           imports: request.imports,
+          checked: request.checked,
         }),
       };
     }

@@ -1,10 +1,13 @@
 import type {
   DataType,
   SourceRange,
+  SymbolParam,
   TypeInfo,
   TypeMember,
 } from '@vizscript/core';
 import type * as TS from 'typescript';
+
+const NOWHERE: SourceRange = { start: 0, end: 0 };
 
 /** Members listed per type, at most (big DOM types have hundreds). */
 const MEMBER_LIMIT = 150;
@@ -215,6 +218,45 @@ class TypeMapper {
     return members;
   }
 
+  /**
+   * The parameters of the function a call resolves to (the matching
+   * overload), with optional ones defaulting to `undefined`.
+   */
+  public signature(
+    call: TS.CallExpression | TS.NewExpression
+  ): SymbolParam[] | undefined {
+    const { ts, checker } = this;
+    const resolved = checker.getResolvedSignature(call);
+    const params = resolved?.getParameters() ?? [];
+    if (params.length === 0) {
+      return undefined;
+    }
+
+    return params.map((symbol): SymbolParam => {
+      const declaration = symbol.valueDeclaration;
+      const parameter =
+        declaration && ts.isParameter(declaration) ? declaration : undefined;
+      const type = checker.getTypeOfSymbolAtLocation(symbol, call);
+      const optional =
+        parameter !== undefined &&
+        (parameter.questionToken !== undefined ||
+          parameter.initializer !== undefined);
+      const defaultText = parameter?.initializer
+        ? parameter.initializer.getText(parameter.getSourceFile())
+        : optional
+          ? 'undefined'
+          : undefined;
+      return {
+        name: symbol.getName(),
+        nameRange: NOWHERE,
+        type: { text: this.text(type), range: NOWHERE },
+        dataType: this.dataType(this.widen(type)),
+        ...(defaultText === undefined ? {} : { defaultText }),
+        ...(parameter?.dotDotDotToken ? { rest: true } : {}),
+      };
+    });
+  }
+
   public info(type: TS.Type): TypeInfo {
     const widened = this.widen(type);
     const dataType = this.dataType(widened);
@@ -251,7 +293,12 @@ export function checkerTypesAt(
     }
 
     try {
-      return mapper.info(checker.getTypeAtLocation(node));
+      const info = mapper.info(checker.getTypeAtLocation(node));
+      const signature =
+        ts.isCallExpression(node) || ts.isNewExpression(node)
+          ? mapper.signature(node)
+          : undefined;
+      return signature ? { ...info, signature } : info;
     } catch {
       return undefined;
     }

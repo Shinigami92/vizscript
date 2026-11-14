@@ -9,6 +9,7 @@ import type {
   NodeTemplate,
   OpResult,
   OverlayResolution,
+  ParseOptions,
   ProjectFile,
   TypeSystemInfo,
 } from '@vizscript/core';
@@ -40,6 +41,7 @@ export type WorkerRequest =
       fileName: string;
       op: GraphOp;
       imports?: ImportedDeclaration[];
+      checked?: ParseOptions['checked'];
     }
   | {
       id: number;

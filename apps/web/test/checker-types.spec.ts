@@ -44,8 +44,10 @@ async function load(url: string, retries = 3) {
   if (!response.ok) {
     return null;
   }
+  retry(retries);
   return { body: await response.json(), names };
 }
+function retry(times: number, delay?: number, label = 'x'): void {}
 `;
 
 function types(...ranges: SourceRange[]): ReturnType<typeof checkerTypesAt> {
@@ -128,5 +130,22 @@ describe('type texts', () => {
     );
     expect(made).toMatchObject({ text: 'Thing', dataType: 'Thing' });
     expect(made?.members?.map((m) => m.name)).toEqual(['size']);
+  });
+
+  it('reads the parameters a call resolves to', () => {
+    const [call] = types(at(TEXT, 'retry(retries)'));
+    expect(call?.signature).toEqual([
+      expect.objectContaining({ name: 'times', dataType: 'number' }),
+      expect.objectContaining({
+        name: 'delay',
+        dataType: 'number',
+        defaultText: 'undefined',
+      }),
+      expect.objectContaining({
+        name: 'label',
+        dataType: 'string',
+        defaultText: "'x'",
+      }),
+    ]);
   });
 });

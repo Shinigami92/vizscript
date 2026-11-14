@@ -536,7 +536,7 @@ let parseSeq = 0;
 /** The text `doc` was parsed from (ranges of `doc` point into it). */
 const docText = ref('');
 
-const { refineTypes } = useCheckerTypes({
+const { refineTypes, checkedFor } = useCheckerTypes({
   path: () => props.path,
   parsedDoc,
   docText,
@@ -793,7 +793,8 @@ async function onOp(requested: GraphOp): Promise<void> {
     text.value,
     props.path,
     op,
-    importDeclarations()
+    importDeclarations(),
+    checkedFor(text.value)
   );
   if (!result.ok) {
     if (graphEdits) {
