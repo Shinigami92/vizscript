@@ -376,12 +376,54 @@ export function connectExec(
     return succeeded([]);
   }
 
+  // The comment above the statement goes with it.
+  const comment = target.comment;
+  const leading =
+    comment &&
+    comment.range.end <= stmt.start &&
+    /^\s*$/.test(text.slice(comment.range.end, stmt.start)) &&
+    !(comment.range.start < insert.at && insert.at < comment.range.end)
+      ? comment.range
+      : undefined;
+  const codeStart = leading
+    ? leading.start + lineIndent(text, leading.start).length
+    : stmt.start;
   const snippet = reindent(
-    text.slice(stmt.start, stmt.end),
+    text.slice(codeStart, stmt.end),
     lineIndent(text, stmt.start),
     insert.indent
   );
-  return succeeded([removal, insertText(insert, snippet)]);
+  return succeeded([
+    ...withLeadingComment(text, removal, leading),
+    insertText(insert, snippet, text),
+  ]);
+}
+
+/**
+ * The removal of a moved statement, with its comment above it. Where blank
+ * lines were before and after them, one stays.
+ */
+function withLeadingComment(
+  text: string,
+  removal: TextEdit,
+  leading: SourceRange | undefined
+): TextEdit[] {
+  if (!leading || leading.end > removal.start) {
+    return [removal];
+  }
+
+  if (removal.text !== '') {
+    return [{ start: leading.start, end: leading.end, text: '' }, removal];
+  }
+
+  let end = removal.end;
+  const blankBefore = /\n[ \t]*\n$/.test(text.slice(0, leading.start));
+  const blankAfter = text.slice(end).match(/^[ \t]*\n/);
+  if (blankBefore && blankAfter) {
+    end += blankAfter[0].length;
+  }
+
+  return [{ start: leading.start, end, text: '' }];
 }
 
 /**

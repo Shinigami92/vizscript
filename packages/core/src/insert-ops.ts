@@ -8,7 +8,7 @@ import type {
 import { getMeta, owningStatement } from './edit-meta';
 import type { GraphDocument, GraphNode, Pin, PinRef, SourceRange } from './ir';
 import { failed, succeeded } from './op-result';
-import type { NodeTemplate, OpResult } from './ops';
+import type { NodeTemplate, OpResult, TextEdit } from './ops';
 import { findNode } from './reconcile';
 import { removeListItem } from './symbol-edits';
 import {
@@ -29,6 +29,28 @@ function afterStatement(text: string, stmt: SourceRange): InsertPoint {
   return { at: stmt.end, indent: lineIndent(text, stmt.start), mode: 'after' };
 }
 
+/**
+ * Whether new code goes into the file's top level (a module), where a
+ * `return` is not allowed. Without an anchor, code is appended there.
+ */
+function inTopLevel(
+  text: string,
+  doc: GraphDocument,
+  anchor: { after?: PinRef; before?: PinRef }
+): boolean {
+  const id = anchor.after?.node ?? anchor.before?.node;
+  const fn = id
+    ? doc.functions.find((f) => f.nodes.some((n) => n.id === id))
+    : undefined;
+  // A function spanning the whole file is still a function: it has a symbol.
+  return (
+    !fn ||
+    (fn.range.start === 0 &&
+      fn.range.end >= text.trimEnd().length &&
+      !(doc.symbols ?? []).some((s) => s.fnId === fn.id))
+  );
+}
+
 export function addNode(
   text: string,
   doc: GraphDocument,
@@ -36,6 +58,10 @@ export function addNode(
   anchor: { after?: PinRef; before?: PinRef },
   syntax: StatementSyntax
 ): OpResult {
+  if (template.type === 'return' && inTopLevel(text, doc, anchor)) {
+    return failed('Return can only be used inside a function.');
+  }
+
   const unit = detectIndentUnit(text);
   let insert: InsertPoint | undefined;
   if (anchor.after) {
@@ -82,7 +108,7 @@ export function addNode(
     return failed('Invalid name.');
   }
 
-  return succeeded([insertText(insert, snippet)]);
+  return succeeded([insertText(insert, snippet, text)]);
 }
 
 /**
@@ -271,10 +297,48 @@ export function useValue(
   expression: string,
   syntax: StatementSyntax
 ): OpResult {
+  const chained = chainedCall(text, doc, ref, expression);
+  if (chained) {
+    return succeeded([chained]);
+  }
+
   return afterValue(text, doc, ref, syntax, (value) => ({
     type: 'value',
     expression: expression.replaceAll('$value', value),
   }));
+}
+
+/**
+ * A member of an unused call result, written onto the call itself like a
+ * fluent chain (`program.name('x');` → `program.name('x').version();`)
+ * instead of binding the result to a variable first. Multi-line chains get
+ * the member on a line of its own.
+ */
+function chainedCall(
+  text: string,
+  doc: GraphDocument,
+  ref: PinRef,
+  expression: string
+): TextEdit | undefined {
+  const member = /^\$value(\.[A-Za-z_$][\w$]*(?:\(.*\))?)$/s.exec(expression);
+  const pin = findPin(findNode(doc, ref.node), ref.pin);
+  const bind = pin ? getMeta<OutputPinMeta>(pin).bind : undefined;
+  if (!member?.[1] || !bind?.isStatement) {
+    return undefined;
+  }
+
+  const code = text.slice(bind.expr.start, bind.expr.end);
+  const lastLine = code.split('\n').at(-1) ?? '';
+  const onItsOwnLine =
+    code.includes('\n') && lastLine.trimStart().startsWith('.');
+  const prefix = onItsOwnLine
+    ? `\n${lastLine.slice(0, lastLine.length - lastLine.trimStart().length)}`
+    : '';
+  return {
+    start: bind.expr.end,
+    end: bind.expr.end,
+    text: `${prefix}${member[1]}`,
+  };
 }
 
 /** A new statement right after a value exists, made from the value. */
@@ -320,7 +384,7 @@ function afterValue(
     return failed('Invalid name.');
   }
 
-  return succeeded([...reference.edits, insertText(insert, snippet)]);
+  return succeeded([...reference.edits, insertText(insert, snippet, text)]);
 }
 
 /**

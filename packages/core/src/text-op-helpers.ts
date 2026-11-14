@@ -9,6 +9,7 @@ import type {
 } from './ir';
 import type { NodeTemplate, TextEdit } from './ops';
 import type { StatementSyntax } from './text-ops';
+import { lineIndent } from './text-utils';
 import { lineAwareRange } from './text-utils';
 
 /**
@@ -70,12 +71,28 @@ export function functionOf(
   return doc.functions.find((fn) => fn.nodes.some((n) => n.id === nodeId))?.id;
 }
 
-export function insertText(point: InsertPoint, snippet: string): TextEdit {
-  const text =
-    point.mode === 'after'
-      ? `\n${point.indent}${snippet}`
-      : `${snippet}\n${point.indent}`;
-  return { start: point.at, end: point.at, text };
+export function insertText(
+  point: InsertPoint,
+  snippet: string,
+  source?: string
+): TextEdit {
+  if (point.mode !== 'after') {
+    return {
+      start: point.at,
+      end: point.at,
+      text: `${snippet}\n${point.indent}`,
+    };
+  }
+
+  // Into an empty block on one line (`() => {}`): the `}` gets its own line.
+  const closes =
+    source !== undefined && /^[ \t]*\}/.test(source.slice(point.at));
+  const close = closes ? `\n${lineIndent(source, point.at)}` : '';
+  return {
+    start: point.at,
+    end: point.at,
+    text: `\n${point.indent}${snippet}${close}`,
+  };
 }
 
 /** Leading whitespace of a line. */
