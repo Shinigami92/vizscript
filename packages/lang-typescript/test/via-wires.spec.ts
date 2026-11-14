@@ -22,6 +22,17 @@ function node(doc: GraphDocument, title: string): GraphNode {
   return found;
 }
 
+const SOURCES = new WeakMap<GraphDocument, string>();
+function parse(source: string): GraphDocument {
+  const doc = parseTypeScript(source, 'a.ts');
+  SOURCES.set(doc, source);
+  return doc;
+}
+
+function codeOf(doc: GraphDocument, n: GraphNode): string {
+  return (SOURCES.get(doc) ?? '').slice(n.range.start, n.range.end);
+}
+
 describe('wires from a SET (UE)', () => {
   const text = 'const rate = 0.19;\nconst item = { price: rate };\n';
 
@@ -65,9 +76,48 @@ describe('wires from a SET (UE)', () => {
     expect(adjacentVias(doc)).toEqual(new Set([node(doc, 'response').id]));
   });
 
-  it('keeps reads after a loop that changes the variable', () => {
+  it('draws reads after a loop from the loop, not from before it', () => {
+    const doc = parse(
+      'let total = 0;\nfor (const item of items) {\n  total += item;\n}\nlog(total);\n'
+    );
+    const fn = doc.functions[0];
+    const read = node(doc, 'total');
+    expect(adjacentVias(doc)).toEqual(new Set([read.id]));
+    // `total += item`, a SET without a declaration keyword.
+    const setter = fn && viaSetter(fn, read);
+    expect(setter && codeOf(doc, setter)).toBe('total += item;');
+  });
+
+  it('draws reads after a loop from the SET that ends its body', () => {
     const doc = parseTypeScript(
-      'let total = 0;\nfor (const item of items) {\n  total += item;\n}\nlog(total);\n',
+      'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    total += item;\n  }\n  const half = total - total / 2;\n  return half;\n}\n',
+      'a.ts'
+    );
+    const reads = doc.functions
+      .flatMap((f) => f.nodes)
+      .filter((n) => n.kind === 'getVar' && n.title === 'total');
+    expect(reads).toHaveLength(2);
+    const vias = adjacentVias(doc);
+    expect(reads.every((n) => vias.has(n.id))).toBe(true);
+  });
+
+  it('draws reads after a loop that skips items before its SET', () => {
+    const doc = parse(
+      'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    if (item <= 0) {\n      continue;\n    }\n    total += item;\n  }\n  return total;\n}\n'
+    );
+    expect(adjacentVias(doc)).toEqual(new Set([node(doc, 'total').id]));
+  });
+
+  it('keeps reads after a loop with two SETs of the variable', () => {
+    const doc = parse(
+      'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    if (item <= 0) {\n      total = 0;\n    } else {\n      total += item;\n    }\n  }\n  return total;\n}\n'
+    );
+    expect(adjacentVias(doc).size).toBe(0);
+  });
+
+  it('keeps reads after a loop whose body ends in a branch', () => {
+    const doc = parseTypeScript(
+      'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    total += item;\n    if (item > 2) {\n      log(item);\n    }\n  }\n  return total;\n}\n',
       'a.ts'
     );
     expect(adjacentVias(doc).size).toBe(0);

@@ -156,6 +156,68 @@ function withPureInputs(
   return result;
 }
 
+function isLoop(n: GraphNode | undefined): boolean {
+  return n?.kind === 'forEach' || n?.kind === 'loop';
+}
+
+/**
+ * The exec nodes that run right after a node: those its exec outputs lead
+ * to, or, for a SET that ends a loop body (nothing runs after it in the
+ * body, and it is the body's only SET of its variable), those after the
+ * loop (UE: that SET wired to the node after Completed).
+ */
+function nextAfter(fn: FunctionGraph, id: string): Set<string> {
+  const execs = fn.edges.filter((e) => e.kind === 'exec');
+  const out = (node: string, pin?: string): string[] =>
+    execs
+      .filter((e) => e.from.node === node && (!pin || e.from.pin === pin))
+      .map((e) => e.to.node);
+  const own = out(id);
+  const node = fn.nodes.find((n) => n.id === id);
+  if (own.length > 0 || !node) {
+    return new Set(own);
+  }
+
+  const nodes = new Map(fn.nodes.map((n) => [n.id, n]));
+  for (const loop of fn.nodes) {
+    if (!isLoop(loop)) {
+      continue;
+    }
+
+    // The loop's own body: nested loops' bodies are theirs.
+    const body = new Set<string>();
+    const queue = out(loop.id, 'body');
+    for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
+      if (body.has(next)) {
+        continue;
+      }
+
+      body.add(next);
+      queue.push(
+        ...execs
+          .filter(
+            (e) =>
+              e.from.node === next &&
+              !(isLoop(nodes.get(next)) && e.from.pin === 'body')
+          )
+          .map((e) => e.to.node)
+      );
+    }
+
+    const setters = [...body].filter((b) => {
+      const n = nodes.get(b);
+      return n?.kind === 'setVar' && n.title === node.title;
+    });
+    if (body.has(id)) {
+      return setters.length === 1
+        ? new Set(out(loop.id, 'completed'))
+        : new Set();
+    }
+  }
+
+  return new Set();
+}
+
 /**
  * Gets drawn as wires without being remembered: those that feed the node
  * right after their variable's SET on the exec chain (`const cart = …;`
@@ -177,14 +239,7 @@ export function adjacentVias(doc: GraphDocument): Set<string> {
       }
 
       const variable = setter.title.slice('Set '.length);
-      const next = withPureInputs(
-        fn,
-        new Set(
-          fn.edges
-            .filter((e) => e.kind === 'exec' && e.from.node === setter.id)
-            .map((e) => e.to.node)
-        )
-      );
+      const next = withPureInputs(fn, nextAfter(fn, setter.id));
       for (const edge of fn.edges) {
         const get = nodes.get(edge.from.node);
         if (
