@@ -6,6 +6,7 @@ import type {
   ParseOptions,
 } from '@vizscript/core';
 import {
+  applyTypes,
   attachComments,
   completeCallPins,
   functionIdCounter,
@@ -20,6 +21,7 @@ import { rustImports } from './imports';
 import type { GraphSource, LoweringContext, Signature } from './lower-utils';
 import { FnGraphBuilder } from './statement-lowering';
 import { rustSymbols } from './symbols';
+import { rustTypes } from './type-lookup';
 
 export const LANGUAGE_ID = 'rust';
 
@@ -164,5 +166,7 @@ export function parseRustDocument(
     imports: options.imports,
   });
   inferTypes(doc);
-  return doc;
+  // Types followed through the file (`items.len()` is a `usize`,
+  // `println!` gives nothing).
+  return applyTypes(doc, rustTypes(text, items));
 }

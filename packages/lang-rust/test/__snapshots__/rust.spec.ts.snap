@@ -14,12 +14,12 @@ exports[`parseRustDocument > collects symbols 1`] = `
   "method Item.total: function",
   "function total_price: function",
   "local total_price.total: number",
-  "local total_price.item: any",
+  "local total_price.item: Item",
   "local total_price.discounted: number",
   "function find: function",
   "function label: function",
   "function main: function",
-  "local main.cart: array",
+  "local main.cart: Item[]",
   "local main.by_name: object",
 ]
 `;
@@ -31,7 +31,7 @@ exports[`parseRustDocument > lowers the fixture 1`] = `
   ==> #0.then -> #1.exec
 function Item::new
   #0 entry "new" (associated fn of Item) [>then:▶ >param0:string >param1:number]
-  #1 call "to_string" [<exec:▶ >then:▶ <target:object >return:any]
+  #1 call "to_string" [<exec:▶ >then:▶ <target:object >return:string]
   #2 makeObject "Make Self" [<p0:any <p1:number <p2:number=1 >value:Item]
   #3 return "Return" (value) [<exec:▶ <value:Item]
   --> #0.param0 -> #1.target
@@ -42,8 +42,8 @@ function Item::new
   ==> #1.then -> #3.exec
 function Item::total
   #0 entry "total" (method of Item) [>then:▶ >self:Item]
-  #1 getProperty ".price" [<target:object >value:any]
-  #2 getProperty ".quantity" [<target:object >value:any]
+  #1 getProperty ".price" [<target:object >value:number]
+  #2 getProperty ".quantity" [<target:object >value:number]
   #3 operator "as f64" [<a:any >value:number]
   #4 operator "*" [<a:any <b:number >value:number]
   #5 return "Return" (value) [<exec:▶ <value:number]
@@ -58,11 +58,11 @@ function total_price
   #0 entry "total_price" (fn) [>then:▶ >param0:Item[] >param1:number]
   #1 setVar "Set total" (let mut) [<exec:▶ >then:▶ <value:number=0.0 >out:number]
   #2 forEach "For Each" [<exec:▶ <array:Item[] >body:▶ >element:Item >completed:▶]
-  #3 getProperty ".quantity" [<target:object >value:any]
+  #3 getProperty ".quantity" [<target:object >value:number]
   #4 operator "==" [<a:any <b:number=0 >value:bool]
   #5 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
   #6 continue "Continue" [<exec:▶]
-  #7 call "total" [<exec:▶ >then:▶ <target:object >return:any]
+  #7 call "total" [<exec:▶ >then:▶ <target:object >return:number]
   #8 setVar "Set total" (+=) [<exec:▶ >then:▶ <value:number >out:number]
   #9 getVar "total" [>value:number]
   #10 getVar "total" [>value:number]
@@ -102,12 +102,12 @@ function total_price
   ==> #18.then -> #19.exec
 function find
   #0 entry "find" (fn) [>then:▶ >param0:Item[] >param1:string]
-  #1 call "iter" [<exec:▶ >then:▶ <target:object >return:any]
+  #1 call "iter" [<exec:▶ >then:▶ <target:object >return:Iter]
   #2 functionRef "ƒ position callback" [>value:function]
-  #3 call "position" [<exec:▶ >then:▶ <target:object <arg0:function >return:any]
-  #4 branch "If Let" (Some(index)) [<exec:▶ <condition:any >true:▶ >false:▶ >bind0:any >completed:▶]
+  #3 call "position" [<exec:▶ >then:▶ <target:object <arg0:function >return:number]
+  #4 branch "If Let" (Some(index)) [<exec:▶ <condition:any >true:▶ >false:▶ >bind0:number >completed:▶]
   #5 call "println!" [<exec:▶ >then:▶ <arg0:string="found {} at {}" <arg1:string <arg2:any]
-  #6 call "Some" [<exec:▶ >then:▶ <arg0:any >return:any]
+  #6 call "Some" [<exec:▶ >then:▶ <arg0:any >return:number]
   #7 return "Return" [<exec:▶ <value:number]
   #8 getVar "None" [>value:any]
   #9 return "Return" (value) [<exec:▶ <value:number]
@@ -151,9 +151,9 @@ function main
   #9 call "total_price" [<exec:▶ >then:▶ <arg0:Item[] <arg1:number=0.1 >return:number]
   #10 call "println!" [<exec:▶ >then:▶ <arg0:string="Total: {} EUR" <arg1:number]
   #11 getVar "cart" [>value:Item[]]
-  #12 call "last" [<exec:▶ >then:▶ <target:object >return:any]
-  #13 loop "While Let" (Some(item)) [<exec:▶ <condition:any >body:▶ >bind0:any >completed:▶]
-  #14 getProperty ".name" [<target:object >value:any]
+  #12 call "last" [<exec:▶ >then:▶ <target:object >return:Item]
+  #13 loop "While Let" (Some(item)) [<exec:▶ <condition:any >body:▶ >bind0:Item >completed:▶]
+  #14 getProperty ".name" [<target:object >value:string]
   #15 call "println!" [<exec:▶ >then:▶ <arg0:string="{}" <arg1:any]
   #16 break "Break" [<exec:▶]
   ==> #0.then -> #1.exec
@@ -181,7 +181,7 @@ function main
 function position callback
   #0 entry "position callback" (closure) [>then:▶ >param0:any]
   #1 getProperty ".name" [<target:object >value:any]
-  #2 getVar "name" [>value:any]
+  #2 getVar "name" [>value:string]
   #3 operator "==" [<a:any <b:any >value:bool]
   #4 return "Return" (value) [<exec:▶ <value:bool]
   --> #0.param0 -> #1.target
