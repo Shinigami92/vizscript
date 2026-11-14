@@ -80,6 +80,25 @@ describe('moving wires (Ctrl+drag)', () => {
     );
   });
 
+  it('keeps the node a new wire replaces, like UE', () => {
+    const text =
+      'const RATE = 0.19;\nfunction f(d: number) {\n  return d * (1 + RATE);\n}\n';
+    const nodes =
+      parseTypeScript(text, 't.ts').functions.find((fn) => fn.name === 'f')
+        ?.nodes ?? [];
+    const rate = nodes.find((n) => n.kind === 'getVar' && n.title === 'RATE');
+    const times = nodes.find((n) => n.kind === 'operator' && n.title === '*');
+    expect(
+      apply(text, {
+        type: 'connect',
+        from: { node: rate?.id ?? '', pin: 'value' },
+        to: { node: times?.id ?? '', pin: 'b' },
+      })
+    ).toBe(
+      'const RATE = 0.19;\nfunction f(d: number) {\n  1 + RATE;\n  return d * (RATE);\n}\n'
+    );
+  });
+
   it('refuses exec pins', () => {
     const text = 'function f() {\n  g();\n}\n';
     const call = parseTypeScript(text, 't.ts')

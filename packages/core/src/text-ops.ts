@@ -59,6 +59,7 @@ import {
   clearArguments,
   connectData,
   connectExec,
+  connectReplacing,
   disconnect,
   disconnectNode,
   moveWires,
@@ -520,7 +521,9 @@ function applyTextOpEdits(
             text,
             connectExec(text, doc, op.from, op.to, syntax)
           )
-        : connectData(text, doc, op.from, op.to, syntax, op.convert);
+        : op.drop
+          ? connectData(text, doc, op.from, op.to, syntax, op.convert)
+          : connectReplacing(text, doc, op.from, op.to, syntax, op.convert);
     }
 
     case 'disconnect': {

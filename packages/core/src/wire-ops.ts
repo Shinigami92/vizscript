@@ -213,6 +213,39 @@ export function moveWires(
 }
 
 /**
+ * Wires a value into a data input (UE's connect): a node wired into it
+ * before stays, unwired, as a statement of its own.
+ */
+export function connectReplacing(
+  text: string,
+  doc: GraphDocument,
+  from: PinRef,
+  to: PinRef,
+  syntax: StatementSyntax,
+  convert?: string
+): OpResult {
+  const result = connectData(text, doc, from, to, syntax, convert);
+  const target = findNode(doc, to.node);
+  const pin = findPin(target, to.pin);
+  const wired = edgesOf(doc, to.node).find(
+    (e) => e.to.node === to.node && e.to.pin === to.pin
+  );
+  if (
+    !result.ok ||
+    !target ||
+    !pin ||
+    (wired?.from.node === from.node && wired.from.pin === from.pin)
+  ) {
+    return result;
+  }
+
+  const kept = keptValue(text, doc, target, pin, syntax, (r) =>
+    text.slice(r.start, r.end)
+  );
+  return kept ? mergeEdits([succeeded([kept]), result]) : result;
+}
+
+/**
  * Wires a value into a data input. `convert` (a conversion template like
  * `String($value)`) wraps the value, like UE's autocast node.
  */

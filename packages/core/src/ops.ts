@@ -75,6 +75,11 @@ export type GraphOp =
       to: PinRef;
       /** Conversion template (`String($value)`) for a value of another type. */
       convert?: string;
+      /**
+       * The node wired into the input before goes too (deleted in the
+       * graph); by default it stays as a statement, like UE's node.
+       */
+      drop?: boolean;
     }
   | { type: 'disconnect'; pin: PinRef }
   /** The operator of an assignment: `=`, `+=`, `-=` … (not of declarations). */

@@ -154,7 +154,7 @@ function replacedReceiver(
   doc: GraphDocument,
   overlay: GraphOverlay,
   edit: { from: PinRef; to: PinRef }
-): GraphOverlay {
+): { overlay: GraphOverlay; dropped: boolean } {
   const fn = doc.functions.find((f) =>
     f.nodes.some((n) => n.id === edit.to.node)
   );
@@ -165,11 +165,12 @@ function replacedReceiver(
   const edits = overlay.edits.filter(
     (e) => !(e.type === 'removeNode' && e.node === old)
   );
+  const dropped = edits.length < overlay.edits.length;
   if (source && getMeta<StatementMeta>(source).unused) {
     edits.push({ type: 'removeNode', node: source.id });
   }
 
-  return { edits };
+  return { overlay: { edits }, dropped };
 }
 
 /** An op that brings the code closer to the graph (and what it writes). */
@@ -343,8 +344,12 @@ export function resolveOverlay(
     }
 
     current = { edits: current.edits.filter((_, j) => j !== index) };
+    // The old receiver deleted in the graph is not kept by the connect.
+    let drop = false;
     if (edit.type === 'addEdge') {
-      current = replacedReceiver(doc, current, edit);
+      const replaced = replacedReceiver(doc, current, edit);
+      current = replaced.overlay;
+      drop = replaced.dropped;
     }
 
     // A value added in the graph (floating) is written as the receiver.
@@ -357,7 +362,12 @@ export function resolveOverlay(
         ? { type: 'clearArguments', node: edit.to.node }
         : group
           ? { type: 'setInput', pin: edit.to, expression: group.code }
-          : { type: 'connect', from: edit.from, to: edit.to };
+          : {
+              type: 'connect',
+              from: edit.from,
+              to: edit.to,
+              ...(drop ? { drop } : {}),
+            };
     const done = edit.type === 'addEdge' && hasEdge(doc, edit.from, edit.to);
     const error = done ? undefined : step(op, group);
     if (error !== undefined) {
