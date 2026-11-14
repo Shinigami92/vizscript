@@ -62,7 +62,7 @@ export class GraphView extends GraphViewDocument {
     this.listen(canvas, 'pointerup', (e) => this.onPointerUp(e));
     this.listen(canvas, 'pointercancel', (e) => this.onPointerUp(e));
     this.listen(canvas, 'pointerleave', () => {
-      this.hoverEdge = null;
+      this.setHoverEdge(null);
       this.setHover(null, null);
     });
     this.listen(canvas, 'dblclick', (e) => this.onDoubleClick(e));
@@ -504,11 +504,7 @@ export class GraphView extends GraphViewDocument {
     const hit = this.hitTest(world);
     let cursor = 'default';
     const edge = hit ? null : this.hitWire(world, this.wireTolerance());
-    const hoverEdge = edge?.edge.id ?? null;
-    if (hoverEdge !== this.hoverEdge) {
-      this.hoverEdge = hoverEdge;
-      this.requestRender();
-    }
+    this.setHoverEdge(edge?.edge.id ?? null);
 
     if (!hit) {
       this.setHover(null, null);

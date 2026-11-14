@@ -45,6 +45,8 @@ export type AlignMode =
 export interface GraphViewEvents {
   selectionChange: { nodeIds: string[] };
   hoverChange: { nodeId: string | null; pin: string | null };
+  /** The wire under the pointer changed (`null`: none). */
+  wireHoverChange: { edge: GraphEdge | null };
   /**
    * Fired once at the end of a drag or when reroute points change. Node ids
    * map to positions; reroute keys (see `rerouteKey`) to knot positions.

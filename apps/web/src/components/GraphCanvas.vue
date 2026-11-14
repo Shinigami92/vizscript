@@ -2,6 +2,7 @@
 import type { Camera, CommentTarget, GraphViewEvents } from '@vizscript/canvas';
 import { DARK_THEME, GraphView, LIGHT_THEME } from '@vizscript/canvas';
 import type {
+  GraphEdge,
   GraphNode,
   GraphOp,
   LayoutPatch,
@@ -55,6 +56,7 @@ import { useSymbolDrop } from './graph-canvas/use-symbol-drop';
 import ZoomControls from './graph-canvas/ZoomControls.vue';
 import GraphSearch from './GraphSearch.vue';
 import NodeTooltip from './NodeTooltip.vue';
+import WireTooltip from './WireTooltip.vue';
 
 const props = defineProps<GraphCanvasProps>();
 const emit = defineEmits<{
@@ -178,23 +180,37 @@ const tooltip = ref<{
   x: number;
   y: number;
 } | null>(null);
+/** The wire under the pointer and its tooltip (UE: the type it carries). */
+const hoverWire = shallowRef<GraphEdge | null>(null);
+const wireTip = shallowRef<{ edge: GraphEdge; x: number; y: number } | null>(
+  null
+);
 let tooltipTimer: ReturnType<typeof setTimeout> | undefined;
 
 function hideTooltip(): void {
   clearTimeout(tooltipTimer);
   tooltip.value = null;
+  wireTip.value = null;
 }
 
 function scheduleTooltip(): void {
   hideTooltip();
   const current = hover.value;
-  if (!current || menu.value || literal.value || commentEdit.value) {
+  const wire = hoverWire.value;
+  if ((!current && !wire) || menu.value || literal.value || commentEdit.value) {
     return;
   }
 
-  tooltipTimer = setTimeout(() => {
-    tooltip.value = { ...current, x: pointer.x, y: pointer.y };
-  }, 550);
+  tooltipTimer = setTimeout(
+    () => {
+      if (current) {
+        tooltip.value = { ...current, x: pointer.x, y: pointer.y };
+      } else if (wire) {
+        wireTip.value = { edge: wire, x: pointer.x, y: pointer.y };
+      }
+    },
+    current ? 550 : 300
+  );
 }
 
 // ---------------------------------------------------------------- search
@@ -465,6 +481,10 @@ onMounted(() => {
     hover.value = nodeId ? { nodeId, pin } : null;
     scheduleTooltip();
   });
+  v.on('wireHoverChange', ({ edge }) => {
+    hoverWire.value = edge;
+    scheduleTooltip();
+  });
   v.on('layoutChange', ({ patch }) => emit('layoutChange', patch));
   v.on('op', (op) => emit('op', op));
   v.on('activate', ({ nodeId }) => emit('activate', nodeId));
@@ -649,6 +669,13 @@ defineExpose({
       :problems="problems?.get(tooltip.nodeId)"
       :x="tooltip.x"
       :y="tooltip.y"
+    />
+    <WireTooltip
+      v-if="wireTip"
+      :index="index"
+      :edge="wireTip.edge"
+      :x="wireTip.x"
+      :y="wireTip.y"
     />
 
     <input

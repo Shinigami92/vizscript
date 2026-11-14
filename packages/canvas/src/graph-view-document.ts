@@ -147,7 +147,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     }
 
     if (this.hoverEdge && !this.edgesById.has(this.hoverEdge)) {
-      this.hoverEdge = null;
+      this.setHoverEdge(null);
     }
 
     this.fadeInNewNodes(previous, now);

@@ -75,3 +75,55 @@ export function pinPeers(
 export function describeType(pin: Pin): string {
   return pin.kind === 'exec' ? 'exec' : String(pin.type);
 }
+
+const TYPE_NAMES: Record<string, string> = {
+  any: 'Any',
+  bool: 'Boolean',
+  number: 'Number',
+  bigint: 'BigInt',
+  string: 'String',
+  object: 'Object',
+  array: 'Array',
+  function: 'Function',
+  null: 'Null',
+  void: 'Void',
+  regexp: 'RegExp',
+};
+
+/** A type's name for people (`number` → Number, `Item[]` → Array of Item). */
+function typeName(type: string): string {
+  return type.endsWith('[]')
+    ? `Array of ${typeName(type.slice(0, -2))}`
+    : (TYPE_NAMES[type] ?? type);
+}
+
+/**
+ * What a wire carries, like UE's wire tooltip: the type's name, then the
+ * type as the language writes it (when a checker gave a more exact one).
+ */
+export function wireType(
+  index: DocIndex,
+  edge: GraphEdge
+): { name: string; detail?: string } {
+  if (edge.kind === 'exec') {
+    return { name: 'Exec' };
+  }
+
+  const pinOf = (ref: GraphEdge['from']): Pin | undefined =>
+    index.nodes.get(ref.node)?.node.pins.find((p) => p.id === ref.pin);
+  const from = pinOf(edge.from);
+  const to = pinOf(edge.to);
+  // The value's own type; an untyped output takes the input's.
+  const pin =
+    from && (from.type !== 'any' || from.typeText) ? from : (to ?? from);
+  if (!pin) {
+    return { name: 'Value' };
+  }
+
+  const type = String(pin.type);
+  const name = typeName(type);
+  const detail = pin.typeText?.trim();
+  return detail && detail !== type && detail !== name
+    ? { name, detail }
+    : { name };
+}

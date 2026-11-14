@@ -464,6 +464,18 @@ export abstract class GraphViewBase {
     this.requestRender();
   }
 
+  protected setHoverEdge(edgeId: string | null): void {
+    if (edgeId === this.hoverEdge) {
+      return;
+    }
+
+    this.hoverEdge = edgeId;
+    this.emitter.emit('wireHoverChange', {
+      edge: edgeId ? (this.edgesById.get(edgeId) ?? null) : null,
+    });
+    this.requestRender();
+  }
+
   protected clientPoint(e: MouseEvent): Point {
     const rect = this.canvas.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
