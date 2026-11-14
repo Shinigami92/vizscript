@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
-import { githubLimit } from '../api/github-public';
 import { useSessionStore } from '../stores/session';
 
 const props = defineProps<{
@@ -15,34 +13,11 @@ const props = defineProps<{
 const session = useSessionStore();
 const route = useRoute();
 
-const timeFormat = new Intl.DateTimeFormat(undefined, {
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-const limit = computed(() => {
-  const value = githubLimit.value;
-  if (!value || value.reset < Date.now()) {
-    return null;
-  }
-
-  return {
-    ...value,
-    low: value.remaining < 10,
-    text: `${value.remaining} of ${value.limit} GitHub requests left until ${timeFormat.format(value.reset)}`,
-  };
-});
-
-const signedOutTitle = computed(() =>
-  [
-    'Signed out: public repositories only.',
-    limit.value
-      ? `${limit.value.text}.`
-      : 'GitHub allows 60 requests per hour without signing in.',
-    'Your node moves, recent repositories and unsaved changes are kept in this browser only.',
-    'Sign in to share layouts on repositories you can push to.',
-  ].join('\n')
-);
+const SIGNED_OUT_TITLE = [
+  "Signed out: public repositories only, with GitHub's limit for signed-out use (see the status bar).",
+  'Your node moves, recent repositories and unsaved changes are kept in this browser only.',
+  'Sign in to share layouts on repositories you can push to.',
+].join('\n');
 </script>
 
 <template>
@@ -52,19 +27,11 @@ const signedOutTitle = computed(() =>
     class="flex shrink-0 items-center gap-1.5 text-xs"
   >
     <span
-      class="flex items-center gap-1 rounded px-1.5 py-0.5"
-      :class="
-        limit?.low
-          ? 'bg-amber-500/15 text-amber-300'
-          : 'bg-zinc-800 text-zinc-400'
-      "
-      :title="signedOutTitle"
+      class="flex items-center gap-1 rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-400"
+      :title="SIGNED_OUT_TITLE"
     >
       <span class="i-mdi-account-off-outline" />
       <span class="hidden lg:inline">Signed out</span>
-      <span v-if="limit" class="tabular-nums"
-        >· {{ limit.remaining }}/{{ limit.limit }}</span
-      >
     </span>
     <RouterLink
       :to="{ name: 'login', query: { redirect: route.fullPath } }"

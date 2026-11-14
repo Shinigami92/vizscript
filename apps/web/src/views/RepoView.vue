@@ -20,6 +20,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { repoSource } from '../api/repo-source';
 import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
+import GithubLimitStatus from '../components/GithubLimitStatus.vue';
 import RepoAccessHint from '../components/RepoAccessHint.vue';
 import ScriptWorkspace from '../components/ScriptWorkspace.vue';
 import { useFileTabs } from '../composables/use-file-tabs';
@@ -422,6 +423,7 @@ function switchBranch(event: Event): void {
 
 <template>
   <Workbench>
+    <GithubLimitStatus v-if="!session.me" />
     <WorkbenchView id="explorer">
       <div data-ui="explorer" class="flex h-full min-h-0 flex-col">
         <div

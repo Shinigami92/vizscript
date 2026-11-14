@@ -301,13 +301,24 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
       </div>
     </div>
 
-    <!-- Status bar like VS Code's; views teleport their items into it. -->
+    <!--
+      Status bar like VS Code's; views teleport their items into it: file
+      items to #workbench-status, page items to #workbench-status-end.
+    -->
     <footer
-      id="workbench-status"
       data-ui="status-bar"
       class="flex h-6 shrink-0 items-center gap-1 border-t border-zinc-800 bg-zinc-950 px-1 text-xs text-zinc-400"
       aria-label="Status bar"
-    />
+    >
+      <div
+        id="workbench-status"
+        class="flex h-full min-w-0 flex-1 items-center gap-1"
+      />
+      <div
+        id="workbench-status-end"
+        class="flex h-full shrink-0 items-center gap-1"
+      />
+    </footer>
 
     <div ref="parking" class="hidden" aria-hidden="true" />
   </div>

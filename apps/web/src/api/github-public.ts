@@ -51,6 +51,40 @@ function trackLimit(response: Response): void {
   }
 }
 
+/**
+ * Asks GitHub for the current limit of this IP address. The request itself
+ * doesn't count, and it sees requests of other tabs too.
+ */
+export async function refreshGithubLimit(): Promise<void> {
+  try {
+    const { apiUrl } = await githubConfig();
+    const response = await fetch(`${apiUrl}/rate_limit`, {
+      headers: { accept: 'application/vnd.github+json' },
+      credentials: 'omit',
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      return;
+    }
+
+    const data = (await response.json()) as {
+      resources?: {
+        core?: { limit: number; remaining: number; reset: number };
+      };
+    };
+    const core = data.resources?.core;
+    if (core) {
+      githubLimit.value = {
+        remaining: core.remaining,
+        limit: core.limit,
+        reset: core.reset * 1000,
+      };
+    }
+  } catch {
+    // keep the last known value
+  }
+}
+
 const timeFormat = new Intl.DateTimeFormat(undefined, {
   hour: '2-digit',
   minute: '2-digit',
