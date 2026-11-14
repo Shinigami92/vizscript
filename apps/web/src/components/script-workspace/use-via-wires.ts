@@ -6,6 +6,7 @@ import type {
   TextChange,
 } from '@vizscript/core';
 import {
+  adjacentVias,
   findNode,
   foldVias,
   joinKey,
@@ -53,6 +54,29 @@ function sourceOf(op: GraphOp): PinRef | undefined {
       return undefined;
     }
   }
+}
+
+/**
+ * `~via|` entries for Gets that were drawn as wires from their SET before
+ * an edit and would be Get nodes after it (no longer right after it).
+ */
+function stillDrawn(
+  next: GraphDocument,
+  before: ReadonlySet<string>,
+  rename: ReadonlyMap<string, string>
+): Positions {
+  const ids = new Set([...before].map((id) => rename.get(id) ?? id));
+  const adjacent = adjacentVias(next);
+  const patch: Positions = {};
+  for (const fn of next.functions) {
+    for (const node of fn.nodes) {
+      if (ids.has(node.id) && !adjacent.has(node.id) && viaSetter(fn, node)) {
+        patch[viaKey(node.id)] = { x: 0, y: 0 };
+      }
+    }
+  }
+
+  return patch;
 }
 
 /** The Gets of a variable. */
@@ -171,8 +195,16 @@ export function useViaWires(deps: {
     return result;
   }
 
+  /**
+   * Gets drawn as wires from their SET before an edit (right after it):
+   * they stay wires afterwards, like UE's wires don't change when the
+   * graph around them does.
+   */
+  let drawnBefore: Set<string> | null = null;
+
   function beforeOp(op: GraphOp, doc: GraphDocument | null): void {
     pending = null;
+    drawnBefore = doc ? adjacentVias(doc) : null;
     const source = sourceOf(op);
     const setter = source && doc ? findNode(doc, source.node) : undefined;
     // Wired from a Get: the new read joins it (UE uses the same node).
@@ -204,14 +236,20 @@ export function useViaWires(deps: {
     change?: TextChange
   ): Positions {
     const wired = pending;
+    const drawn = drawnBefore;
     pending = null;
-    if (!wired || !previous) {
+    drawnBefore = null;
+    if (!previous || (!wired && !drawn)) {
       return {};
     }
 
     const rename = renamedNodes(previous, next, change);
+    const patch: Positions = drawn ? stillDrawn(next, drawn, rename) : {};
+    if (!wired) {
+      return patch;
+    }
+
     const before = new Set([...wired.before].map((id) => rename.get(id) ?? id));
-    const patch: Positions = {};
     const host = wired.host
       ? (rename.get(wired.host) ?? wired.host)
       : undefined;
