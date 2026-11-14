@@ -220,6 +220,7 @@ export class GraphView extends GraphViewDocument {
         target: null,
         problem: null,
         replaces: false,
+        empty: false,
       };
       this.requestRender();
       return;
@@ -464,6 +465,8 @@ export class GraphView extends GraphViewDocument {
           this.connectedPins.has(
             pinKey({ node: input.ns.node.id, pin: input.pg.pin.id })
           );
+        // A frame or comment box title counts as empty space too.
+        drag.empty = (hit?.type ?? 'frame') === 'frame';
         this.requestRender();
       }
     }

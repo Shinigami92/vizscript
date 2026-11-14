@@ -178,6 +178,8 @@ export type Drag =
       problem: string | null;
       /** The target input has a wire that the new one replaces. */
       replaces: boolean;
+      /** Over empty space: dropping opens the actions for the pin. */
+      empty: boolean;
     }
   | {
       /** Ctrl+drag of a pin: all its wires move to another pin (UE). */

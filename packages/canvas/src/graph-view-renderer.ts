@@ -366,12 +366,12 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
 
       const count = drag.ends.length;
       if (drag.problem) {
-        this.drawWireMessage(drag.currentWorld, drag.problem, false);
+        this.drawWireMessage(drag.currentWorld, drag.problem, 'error');
       } else if (drag.target) {
         this.drawWireMessage(
           drag.currentWorld,
           `Moves ${count} wire${count === 1 ? '' : 's'} here`,
-          true
+          'ok'
         );
       }
     }
@@ -385,13 +385,15 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
         drag.target !== null
       );
       if (drag.problem) {
-        this.drawWireMessage(drag.currentWorld, drag.problem, false);
+        this.drawWireMessage(drag.currentWorld, drag.problem, 'error');
       } else if (drag.replaces) {
         this.drawWireMessage(
           drag.currentWorld,
           'Replaces the current wire',
-          true
+          'ok'
         );
+      } else if (!drag.target && drag.empty) {
+        this.drawWireMessage(drag.currentWorld, 'Place a new node.', 'place');
       }
     } else if (this.pendingWire) {
       this.drawLooseWire(this.pendingWire.from, this.pendingWire.world, false);
@@ -400,10 +402,15 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
 
   /**
    * The message next to the cursor while a wire is dragged, like UE's: why
-   * the pin under it doesn't fit, or that the wire replaces another one.
-   * Drawn in screen space so it stays readable at any zoom.
+   * the pin under it doesn't fit, that the wire replaces another one, or
+   * that dropping it places a new node. Drawn in screen space so it stays
+   * readable at any zoom.
    */
-  private drawWireMessage(world: Point, text: string, ok: boolean): void {
+  private drawWireMessage(
+    world: Point,
+    text: string,
+    kind: 'ok' | 'error' | 'place'
+  ): void {
     const { ctx, theme } = this;
     const at = worldToScreen(this.camera, world);
     ctx.save();
@@ -417,11 +424,15 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     ctx.roundRect(x, y, width, 24, 4);
     ctx.fillStyle = theme.bubbleFill;
     ctx.fill();
-    // ✓ or ✕
+    // ✓, ✕ or a new node
     const cx = x + 8 + icon / 2;
     const cy = y + 12;
     ctx.beginPath();
-    if (ok) {
+    if (kind === 'place') {
+      ctx.roundRect(cx - 6, cy - 5, 12, 10, 2);
+      ctx.moveTo(cx - 6, cy - 1.5);
+      ctx.lineTo(cx + 6, cy - 1.5);
+    } else if (kind === 'ok') {
       ctx.moveTo(cx - 5, cy);
       ctx.lineTo(cx - 1.5, cy + 4);
       ctx.lineTo(cx + 5, cy - 4);
@@ -432,8 +443,13 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       ctx.lineTo(cx - 4, cy + 4);
     }
 
-    ctx.strokeStyle = ok ? '#16a34a' : theme.errorBanner;
-    ctx.lineWidth = 2.2;
+    ctx.strokeStyle =
+      kind === 'place'
+        ? theme.bubbleText
+        : kind === 'ok'
+          ? '#16a34a'
+          : theme.errorBanner;
+    ctx.lineWidth = kind === 'place' ? 1.4 : 2.2;
     ctx.lineCap = 'round';
     ctx.stroke();
     ctx.fillStyle = theme.bubbleText;
