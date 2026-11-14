@@ -719,7 +719,8 @@ defineExpose({
         :title="actionTitle(menu)"
         :entries="actionEntries(menu)"
         :suggest="(query) => (menu ? suggestActions(menu, query) : [])"
-        :context-toggle="Boolean(menu.from)"
+        context-toggle
+        :fold-by-default="!menu.from"
         @close="prompt || closeMenu()"
       />
       <ContextMenu

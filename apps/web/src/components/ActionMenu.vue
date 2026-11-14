@@ -2,7 +2,10 @@
 /** An action of the searchable action menu (like Blueprint's palette). */
 export interface ActionEntry {
   label: string;
-  /** Group heading, e.g. `Call function` or `Variables`. */
+  /**
+   * Group heading, e.g. `Call function` or `Variables`; `''` lists it at
+   * the end without a heading, like UE's "Add Comment…".
+   */
   category: string;
   icon?: string;
   /** Extra words that find the action. */
@@ -16,6 +19,8 @@ export interface ActionEntry {
    * Hidden while "Context Sensitive" is on; default `true`.
    */
   fits?: boolean;
+  /** Why the action can't run now; shown dimmed with the reason. */
+  disabled?: string;
   /** Runs the action; `query` is the search text (e.g. a name to use). */
   action: (query: string) => void;
 }
@@ -46,8 +51,13 @@ const props = defineProps<{
   entries: ReadonlyArray<ActionEntry>;
   /** Actions made from the search text (e.g. call a typed name). */
   suggest?: (query: string) => ActionEntry[];
-  /** Show the "Context Sensitive" checkbox (when a wire was dragged). */
+  /** Show the "Context Sensitive" checkbox (hides `fits: false` actions). */
   contextToggle?: boolean;
+  /**
+   * Categories start folded until opened (UE's right-click menu); opened
+   * ones are remembered.
+   */
+  foldByDefault?: boolean;
 }>();
 
 const emit = defineEmits<{ close: [] }>();
@@ -60,12 +70,15 @@ const list = useTemplateRef<HTMLUListElement>('list');
 const { width, height } = useElementBounding(menu);
 const viewport = useWindowSize();
 const query = ref('');
-const active = ref(0);
+/** Keyboard row; none while all is folded and nothing is typed. */
+const active = ref(props.foldByDefault ? -1 : 0);
 const contextSensitive = useStorage('vizscript:context-sensitive', true);
 /** UE's favorites (★): pinned at the top, per browser. */
 const favorites = useStorage<string[]>('vizscript:action-favorites', []);
 /** Categories folded away (open again while searching). */
 const collapsed = useStorage<string[]>('vizscript:action-collapsed', []);
+/** Categories opened in menus that fold by default. */
+const expanded = useStorage<string[]>('vizscript:action-expanded', []);
 
 const FAVORITES = 'Favorites';
 
@@ -81,10 +94,34 @@ function toggleFavorite(entry: ActionEntry): void {
   input.value?.focus({ preventScroll: true });
 }
 
+function toggle(items: string[], item: string): string[] {
+  return items.includes(item)
+    ? items.filter((c) => c !== item)
+    : [...items, item];
+}
+
+/** Favorites stay open unless folded, like in the other menus. */
+function foldsByDefault(category: string): boolean {
+  return props.foldByDefault === true && category !== FAVORITES;
+}
+
+function isFolded(category: string): boolean {
+  if (category === '') {
+    return false;
+  }
+
+  return foldsByDefault(category)
+    ? !expanded.value.includes(category)
+    : collapsed.value.includes(category);
+}
+
 function toggleCategory(category: string): void {
-  collapsed.value = collapsed.value.includes(category)
-    ? collapsed.value.filter((c) => c !== category)
-    : [...collapsed.value, category];
+  if (foldsByDefault(category)) {
+    expanded.value = toggle(expanded.value, category);
+  } else {
+    collapsed.value = toggle(collapsed.value, category);
+  }
+
   input.value?.focus({ preventScroll: true });
 }
 
@@ -146,7 +183,12 @@ const groups = computed(() => {
     .filter((entry) => starred.has(keyOf(entry)));
   const sorted = [...byCategory.entries()]
     .map(([category, g]) => ({ category, ...g }))
-    .toSorted((a, b) => a.best - b.best || a.order - b.order);
+    .toSorted(
+      (a, b) =>
+        Number(a.category === '') - Number(b.category === '') ||
+        a.best - b.best ||
+        a.order - b.order
+    );
   const all =
     pinned.length > 0
       ? [{ category: FAVORITES, best: -1, order: -1, items: pinned }, ...sorted]
@@ -155,7 +197,7 @@ const groups = computed(() => {
   // Rows get their place in the keyboard order; folded groups have none.
   let index = 0;
   return all.map((group) => {
-    const folded = !text && collapsed.value.includes(group.category);
+    const folded = !text && isFolded(group.category);
     return {
       category: group.category,
       count: group.items.length,
@@ -174,7 +216,7 @@ const flat = computed(() =>
 const activeEntry = computed(() => flat.value[active.value]);
 
 watch([query, contextSensitive], () => {
-  active.value = 0;
+  active.value = props.foldByDefault && !query.value.trim() ? -1 : 0;
 });
 
 async function scrollToActive(): Promise<void> {
@@ -185,7 +227,7 @@ async function scrollToActive(): Promise<void> {
 }
 
 function run(entry: ActionEntry | undefined): void {
-  if (!entry) {
+  if (!entry || entry.disabled) {
     return;
   }
 
@@ -207,7 +249,12 @@ function onKeydown(event: KeyboardEvent): void {
       event.preventDefault();
       if (total > 0) {
         const step = event.key === 'ArrowDown' ? 1 : -1;
-        active.value = (active.value + step + total) % total;
+        active.value =
+          active.value < 0
+            ? step > 0
+              ? 0
+              : total - 1
+            : (active.value + step + total) % total;
         void scrollToActive();
       }
 
@@ -304,7 +351,12 @@ onMounted(async () => {
         No matching actions.
       </li>
       <template v-for="group in groups" :key="group.category">
-        <li role="presentation">
+        <li
+          v-if="group.category === ''"
+          role="presentation"
+          class="mx-1.5 mt-1.5 border-t border-zinc-800"
+        />
+        <li v-else role="presentation">
           <button
             type="button"
             tabindex="-1"
@@ -337,21 +389,31 @@ onMounted(async () => {
                 :key="`${group.category}|${keyOf(row.entry)}`"
                 role="option"
                 :aria-selected="row.index === active"
+                :aria-disabled="row.entry.disabled ? true : undefined"
                 :data-active="row.index === active"
-                class="group flex cursor-pointer items-center gap-2 rounded px-2.5 py-1 text-zinc-200"
-                :class="
-                  row.index === active ? 'bg-amber-500/20' : 'hover:bg-zinc-800'
-                "
+                :title="row.entry.disabled"
+                class="group flex items-center gap-2 rounded px-2.5 py-1 text-zinc-200"
+                :class="[
+                  row.index === active
+                    ? 'bg-amber-500/20'
+                    : 'hover:bg-zinc-800',
+                  row.entry.disabled ? 'cursor-default' : 'cursor-pointer',
+                ]"
                 @mousemove="active = row.index"
                 @click="run(row.entry)"
               >
                 <span
                   class="shrink-0"
-                  :class="row.entry.icon ?? 'i-mdi-circle-small text-zinc-500'"
+                  :class="[
+                    row.entry.icon ?? 'i-mdi-circle-small text-zinc-500',
+                    { 'opacity-40': row.entry.disabled },
+                  ]"
                 />
-                <span class="min-w-0 flex-1 truncate">{{
-                  row.entry.label
-                }}</span>
+                <span
+                  class="min-w-0 flex-1 truncate"
+                  :class="{ 'text-zinc-500': row.entry.disabled }"
+                  >{{ row.entry.label }}</span
+                >
                 <span
                   v-if="row.entry.hint"
                   class="shrink-0 font-mono text-[11px] text-zinc-500"
@@ -386,7 +448,14 @@ onMounted(async () => {
     </ul>
     <!-- UE's action tooltip: signature and description of the active one. -->
     <div
-      v-if="activeEntry?.detail"
+      v-if="activeEntry?.disabled"
+      data-ui="action-detail"
+      class="border-t border-zinc-800 px-3 py-2 text-xs text-zinc-400"
+    >
+      {{ activeEntry.disabled }}
+    </div>
+    <div
+      v-else-if="activeEntry?.detail"
       data-ui="action-detail"
       class="border-t border-zinc-800 px-3 py-2 text-xs whitespace-pre-wrap text-zinc-400"
     >

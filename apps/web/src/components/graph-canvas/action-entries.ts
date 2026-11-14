@@ -271,6 +271,8 @@ export function createActionEntries(
               category: 'Construct',
               icon: ICON_IMPORT,
               hint: external.where,
+              // Context Sensitive on empty space: this file and its imports.
+              ...(state.from ? {} : { fits: false }),
               keywords: `${external.name} new construct create ${external.path} import`,
               action: () =>
                 addNode(
@@ -285,6 +287,7 @@ export function createActionEntries(
               icon: ICON_IMPORT,
               detail: external.detail,
               hint: external.where,
+              ...(state.from ? {} : { fits: false }),
               keywords: `${external.path} import`,
               action: () =>
                 addNode(
@@ -452,23 +455,6 @@ export function createActionEntries(
             },
           ]
         : []),
-      ...(props.editable && ctx.selection.value.length > 0
-        ? [
-            {
-              // UE's "Add Comment…" around the selected nodes.
-              label: 'Add comment box around selection…',
-              category: 'Graph',
-              icon: 'i-mdi-comment-multiple-outline',
-              hint: 'C',
-              keywords: 'comment box region group',
-              action: () =>
-                commands.createCommentBox(
-                  [...ctx.selection.value],
-                  state.client
-                ),
-            },
-          ]
-        : []),
       {
         label: 'Find…',
         category: 'Graph',
@@ -490,6 +476,29 @@ export function createActionEntries(
         hint: 'Home',
         action: () => v?.frameAll(),
       },
+      ...(props.editable
+        ? [
+            {
+              // UE's "Add Comment…": a comment box around the selection.
+              label: 'Add Comment…',
+              category: '',
+              icon: 'i-mdi-comment-multiple-outline',
+              hint: 'C',
+              keywords: 'comment box region group',
+              ...(ctx.selection.value.length === 0
+                ? {
+                    disabled:
+                      'Select the nodes first: a comment box wraps them in the code.',
+                  }
+                : {}),
+              action: () =>
+                commands.createCommentBox(
+                  [...ctx.selection.value],
+                  state.client
+                ),
+            },
+          ]
+        : []),
     ];
   }
 
@@ -851,13 +860,11 @@ export function createActionEntries(
   function actionTitle(state: MenuState): string {
     const found = state.from ? pinOf(state.from) : undefined;
     if (!found) {
-      return 'All actions';
+      return 'All Actions for this Script';
     }
 
     if (found.pin.kind === 'exec') {
-      return found.pin.direction === 'out'
-        ? 'Add node after'
-        : 'Add node before';
+      return 'Executable actions';
     }
 
     return found.pin.direction === 'out'
