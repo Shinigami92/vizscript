@@ -3,8 +3,10 @@ import { LANGUAGE_ID, parsePythonDocument } from './lower';
 import { applyPythonOp, PYTHON_TYPES } from './ops';
 import { pythonReferences } from './references';
 import { PYTHON_LIBRARIES, pythonLibrary } from './stdlib';
+import { PYTHON_VERSION_FILES, pythonVersion } from './version';
 
 export type * from './ast';
+export { pythonVersion } from './version';
 export { parsePython } from './convert';
 export { parsePythonDocument } from './lower';
 export { dataTypeOf } from './lower-utils';
@@ -21,5 +23,7 @@ export const pythonBackend: LanguageBackend = {
   typeSystem: PYTHON_TYPES,
   library: pythonLibrary,
   libraries: PYTHON_LIBRARIES,
+  versionFiles: PYTHON_VERSION_FILES,
+  version: pythonVersion,
 };
 export * from './stdlib';

@@ -2,6 +2,7 @@ import type { Conversion } from './conversions';
 import type { EngineClass } from './engine-classes';
 import type { ImportRequest, ParseOptions } from './imports';
 import type { DataType, GraphDocument, PinRef, Point } from './ir';
+import type { LanguageVersion, ProjectFile } from './language-version';
 import type { ModuleReference } from './module-refs';
 
 /** A text replacement on the original source. */
@@ -404,6 +405,16 @@ export interface LanguageBackend {
   library?(module: string): { text: string; fileName: string } | undefined;
   /** Library modules the backend knows (offered by the action menu). */
   libraries?: ReadonlyArray<string>;
+  /**
+   * Names of project files that state the language version
+   * (`package.json`, `pyproject.toml`), most telling first.
+   */
+  versionFiles?: ReadonlyArray<string>;
+  /**
+   * The version stated by those files, given nearest folder first
+   * (`projectFilesAbove`); `undefined` when none states one.
+   */
+  version?(files: ReadonlyArray<ProjectFile>): LanguageVersion | undefined;
 }
 
 /**

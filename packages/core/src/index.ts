@@ -17,6 +17,7 @@ export * from './ids';
 export * from './imports';
 export type * from './ir';
 export * from './language';
+export * from './language-version';
 export * from './layout';
 export * from './module-refs';
 export * from './overlay-snippets';

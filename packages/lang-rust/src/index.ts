@@ -2,8 +2,10 @@ import type { LanguageBackend } from '@vizscript/core';
 import { LANGUAGE_ID, parseRustDocument } from './lower';
 import { applyRustOp, RUST_TYPES } from './ops';
 import { rustReferences } from './references';
+import { RUST_VERSION_FILES, rustVersion } from './version';
 
 export type * from './ast';
+export { rustVersion } from './version';
 export { parseRust } from './convert';
 export { dataTypeOf } from './data-type';
 export { modulePathOf, rustUses } from './imports';
@@ -19,4 +21,6 @@ export const rustBackend: LanguageBackend = {
   applyOp: applyRustOp,
   references: rustReferences,
   typeSystem: RUST_TYPES,
+  versionFiles: RUST_VERSION_FILES,
+  version: rustVersion,
 };
