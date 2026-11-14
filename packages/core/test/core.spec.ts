@@ -11,6 +11,7 @@ import {
   isArrayType,
   isTypeCompatible,
   layoutDocument,
+  makeRoomFor,
   NodeIdFactory,
   pinColor,
   reconcilePositions,
@@ -220,6 +221,28 @@ describe('layoutDocument', () => {
         110
     );
     expect(moved.b1?.x).toBe(saved.b1?.x);
+  });
+
+  it('keeps a node dropped into an earlier function where it was dropped', () => {
+    const doc: GraphDocument = {
+      language: 'test',
+      diagnostics: [],
+      functions: [fnOf('a'), fnOf('b')],
+    };
+    const auto = layoutDocument(doc, { sizeOf });
+    // `b1` dragged up to where `a` is.
+    const dropped = { x: auto.b1?.x ?? 0, y: auto.a0?.y ?? 0 };
+    const shown = { ...auto, b1: dropped };
+    const room = makeRoomFor(doc, shown, new Set(['b1']), { sizeOf });
+    // `a` moves up, `b` stays.
+    expect(room.a0?.y).toBeLessThan(auto.a0?.y ?? 0);
+    expect(room.b0).toBeUndefined();
+
+    const saved: Positions = { ...shown, ...room };
+    const laid = layoutDocument(doc, { sizeOf }, saved);
+    expect(laid.b1).toEqual(dropped);
+    expect(laid.b0).toEqual(auto.b0);
+    expect(laid.a0).toEqual(room.a0);
   });
 
   it('leaves room above nodes for bubbles and comment boxes', () => {

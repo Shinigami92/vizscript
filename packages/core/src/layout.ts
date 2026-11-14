@@ -258,19 +258,13 @@ function placeBelow(
   }
 }
 
-/**
- * A function that grew into an earlier one below or beside it (nodes added
- * where there was room, all positions saved) moves down until their frames
- * no longer overlap, like separate graphs in UE.
- */
-function separateFunction(
+/** Outline of a function's nodes at `positions` (with the room above them). */
+function functionBox(
   fn: FunctionGraph,
   above: ReadonlyMap<string, number>,
   positions: Positions,
-  boxes: FunctionBox[],
   options: LayoutOptions
-): void {
-  const gap = options.frameGap ?? 110;
+): FunctionBox | undefined {
   let box: FunctionBox | undefined;
   for (const node of fn.nodes) {
     const p = positions[node.id];
@@ -290,6 +284,80 @@ function separateFunction(
       : { left: p.x, top, right: p.x + size.width, bottom: p.y + size.height };
   }
 
+  return box;
+}
+
+/**
+ * Room for nodes the user placed. The layout moves a function down when
+ * it reaches into an earlier one, which would carry the nodes away from
+ * where they were dropped when they belong to the later function. So the
+ * earlier functions move up instead, out of the way of the functions with
+ * `moved` nodes. Returns the new positions of the nodes to move (none when
+ * nothing overlaps), to save with the move.
+ */
+export function makeRoomFor(
+  doc: GraphDocument,
+  positions: Positions,
+  moved: ReadonlySet<string>,
+  options: LayoutOptions
+): Positions {
+  const gap = options.frameGap ?? 110;
+  const fns = doc.functions.map(withImplicitSelf);
+  const boxes = fns.map((fn) =>
+    functionBox(fn, spaceAboveNodes(fn, options), positions, options)
+  );
+  const patch: Positions = {};
+  const last = fns.findLastIndex((fn) => fn.nodes.some((n) => moved.has(n.id)));
+  // Functions that stay, from the last moved one up.
+  const fixed: FunctionBox[] = [];
+  for (let i = last; i >= 0; i--) {
+    const fn = fns[i];
+    const box = boxes[i];
+    if (!fn || !box) {
+      continue;
+    }
+
+    let shift = 0;
+    if (!fn.nodes.some((n) => moved.has(n.id))) {
+      for (const other of fixed) {
+        const sideBySide =
+          box.right + gap <= other.left || other.right + gap <= box.left;
+        const reaches = box.bottom + gap - shift > other.top;
+        if (!sideBySide && reaches) {
+          shift = box.bottom + gap - other.top;
+        }
+      }
+    }
+
+    if (shift > 0) {
+      for (const node of fn.nodes) {
+        const p = positions[node.id];
+        if (p) {
+          patch[node.id] = { x: p.x, y: p.y - shift };
+        }
+      }
+    }
+
+    fixed.push({ ...box, top: box.top - shift, bottom: box.bottom - shift });
+  }
+
+  return patch;
+}
+
+/**
+ * A function that grew into an earlier one below or beside it (nodes added
+ * where there was room, all positions saved) moves down until their frames
+ * no longer overlap, like separate graphs in UE.
+ */
+function separateFunction(
+  fn: FunctionGraph,
+  above: ReadonlyMap<string, number>,
+  positions: Positions,
+  boxes: FunctionBox[],
+  options: LayoutOptions
+): void {
+  const gap = options.frameGap ?? 110;
+  const box = functionBox(fn, above, positions, options);
   if (!box) {
     return;
   }
