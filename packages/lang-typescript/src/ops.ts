@@ -14,6 +14,7 @@ import {
   removeListItem,
   removeModifier,
   replaceKeyword,
+  withStartValue,
 } from '@vizscript/core';
 import { addTypeScriptImport } from './add-import';
 import { parseFile, parseTypeScript } from './lower';
@@ -420,11 +421,10 @@ function setModifier(
       return { ok: true, edits: [] };
     }
 
-    if (modifier === 'const' && !symbol.defaultRange) {
-      return { ok: false, error: `A const needs a value; set one first.` };
-    }
-
-    return replaceKeyword(text, symbol, KINDS, modifier);
+    const keyword = replaceKeyword(text, symbol, KINDS, modifier);
+    return modifier === 'const' && !symbol.defaultRange
+      ? withStartValue(keyword, symbol, TYPESCRIPT_TYPES, 'undefined')
+      : keyword;
   }
 
   if (modifier === 'constructor') {

@@ -2,7 +2,7 @@ import type { CommentSyntax } from './comment-ops';
 import type { DeclarationSyntax } from './declaration-syntax';
 import type { GraphDocument, SourceRange } from './ir';
 import { failed, succeeded } from './op-result';
-import type { OpResult, TextEdit, ValueKind } from './ops';
+import type { OpResult, TextEdit, TypeSystemInfo, ValueKind } from './ops';
 import { findSymbol, isBlank, lineEndOf } from './symbol-helpers';
 import { checkName, classOf } from './symbol-ops';
 import type { ScriptSymbol } from './symbols';
@@ -538,4 +538,28 @@ export function removeModifier(
 
   const at = start + match.index;
   return succeeded([{ start: at, end: at + match[0].length, text: '' }]);
+}
+
+/**
+ * A keyword change that needs a value (`let x` → `const x`) also writes
+ * one: the default of the variable's type (`0`), else the placeholder.
+ */
+export function withStartValue(
+  result: OpResult,
+  symbol: ScriptSymbol,
+  types: TypeSystemInfo,
+  placeholder: string
+): OpResult {
+  if (!result.ok || symbol.defaultRange) {
+    return result;
+  }
+
+  const value =
+    types.primitives.find((p) => p.name === symbol.type?.text)?.defaultValue ??
+    placeholder;
+  const at = symbol.type?.range.end ?? symbol.nameRange.end;
+  return {
+    ok: true,
+    edits: [...result.edits, { start: at, end: at, text: ` = ${value}` }],
+  };
 }

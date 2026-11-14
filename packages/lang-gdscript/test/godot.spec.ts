@@ -155,3 +155,17 @@ describe('inferred types', () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe('const without a value', () => {
+  it('gets the default of its type', () => {
+    const text = 'var speed: float\n';
+    expect(
+      apply(text, {
+        type: 'setModifier',
+        symbol: symbolId(parseGDScriptDocument(text, 'x.gd'), 'speed'),
+        modifier: 'const',
+        enabled: true,
+      })
+    ).toBe('const speed: float = 0.0\n');
+  });
+});

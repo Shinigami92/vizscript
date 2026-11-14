@@ -14,6 +14,7 @@ import {
   lineStart,
   removeModifier,
   replaceKeyword,
+  withStartValue,
 } from '@vizscript/core';
 import { addGDScriptImport } from './add-import';
 import { godotClasses, godotSingletonCalls } from './godot';
@@ -351,10 +352,6 @@ function setModifier(
       return { ok: true, edits: [] };
     }
 
-    if (modifier === 'const' && !symbol.defaultRange) {
-      return { ok: false, error: 'A const needs a value; set one first.' };
-    }
-
     if (
       modifier === 'const' &&
       symbol.modifiers.some((m) => m.startsWith('@') || m === 'static')
@@ -365,7 +362,10 @@ function setModifier(
       };
     }
 
-    return replaceKeyword(text, symbol, KINDS, modifier);
+    const keyword = replaceKeyword(text, symbol, KINDS, modifier);
+    return modifier === 'const' && !symbol.defaultRange
+      ? withStartValue(keyword, symbol, GDSCRIPT_TYPES, 'null')
+      : keyword;
   }
 
   // `@export`, `@export_range(0, 10)` …: one export annotation per variable.

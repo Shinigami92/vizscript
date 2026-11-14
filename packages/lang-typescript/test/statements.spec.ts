@@ -122,3 +122,23 @@ describe('fluent chains', () => {
     );
   });
 });
+
+describe('const without a value', () => {
+  it('gets the default of its type, else undefined', () => {
+    for (const [text, expected] of [
+      ['let count: number;\n', 'const count: number = 0;\n'],
+      ['let item;\n', 'const item = undefined;\n'],
+    ] as const) {
+      const doc = parseTypeScript(text, 'a.ts');
+      const symbol = doc.symbols?.[0]?.id ?? '';
+      expect(
+        apply(text, {
+          type: 'setModifier',
+          symbol,
+          modifier: 'const',
+          enabled: true,
+        })
+      ).toBe(expected);
+    }
+  });
+});
