@@ -227,8 +227,8 @@ export interface GraphDocument {
    */
   settings?: ScriptSetting[];
   /**
-   * Fields and methods of the types a type checker saw, by pin type
-   * (`applyTypes`), for the action menu of a pin of that type.
+   * Fields and methods of the types a type checker saw, by the type's text
+   * (`Pin.typeText`; `applyTypes`), for the action menu of such a pin.
    */
   typeMembers?: Record<string, ReadonlyArray<TypeMember>>;
 }

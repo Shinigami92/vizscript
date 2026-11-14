@@ -115,20 +115,38 @@ function typedPin(pin: Pin, types: TypeMap): Pin {
   return { ...pin, type: info.dataType, typeText: info.text };
 }
 
-function typedNode(node: GraphNode, types: TypeMap): GraphNode {
+function typedNode(
+  node: GraphNode,
+  types: TypeMap,
+  wired: ReadonlySet<string>
+): GraphNode {
   let changed = false;
-  const pins = node.pins.map((pin) => {
+  const pins = node.pins.flatMap((pin) => {
     const next = typedPin(pin, types);
+    // A result of nothing (`void`) has no pin, like a UE function without
+    // outputs, unless the code uses it anyway.
+    if (next.type === 'void' && next !== pin && !wired.has(pin.id)) {
+      changed = true;
+      return [];
+    }
+
     changed ||= next !== pin;
-    return next;
+    return [next];
   });
   return changed ? { ...node, pins } : node;
 }
 
 function typedFunction(fn: FunctionGraph, types: TypeMap): FunctionGraph {
+  const wired = new Map<string, Set<string>>();
+  for (const edge of fn.edges) {
+    const pins = wired.get(edge.from.node) ?? new Set<string>();
+    pins.add(edge.from.pin);
+    wired.set(edge.from.node, pins);
+  }
+
   let changed = false;
   const nodes = fn.nodes.map((node) => {
-    const next = typedNode(node, types);
+    const next = typedNode(node, types, wired.get(node.id) ?? new Set());
     changed ||= next !== node;
     return next;
   });
@@ -160,9 +178,10 @@ function typedSymbol(symbol: ScriptSymbol, types: TypeMap): ScriptSymbol {
 
 /**
  * The document with the checker's types: data outputs get the exact type
- * (and `Pin.typeText`), untyped variables and parameters their inferred
- * one, and `typeMembers` the members of every type seen. Answers of `any`
- * keep what the parser found. Unchanged parts are shared, not copied.
+ * (and `Pin.typeText`), unwired `void` results lose their pin, untyped
+ * variables and parameters get their inferred type, and `typeMembers` the
+ * members of every type seen, by its text. Answers of `any` keep what the
+ * parser found. Unchanged parts are shared, not copied.
  *
  * `types` must come from the same text the document was parsed from.
  */
@@ -175,8 +194,8 @@ export function applyTypes(doc: GraphDocument, types: TypeMap): GraphDocument {
     ...doc.typeMembers,
   };
   for (const info of types.values()) {
-    if (useful(info) && info.members && !(info.dataType in typeMembers)) {
-      typeMembers[info.dataType] = info.members;
+    if (useful(info) && info.members && !(info.text in typeMembers)) {
+      typeMembers[info.text] = info.members;
     }
   }
 

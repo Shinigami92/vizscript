@@ -6,6 +6,8 @@ import { parseTypeScript } from '../src';
 const TEXT = `const TAX_RATE = 0.2;
 
 async function load(url: string, retries = 3) {
+  console.log(url);
+  const logged = console.log(retries);
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error('failed');
@@ -77,6 +79,8 @@ describe('type information from a checker', () => {
       'response.json()': { text: 'Promise<any>', dataType: 'any' },
       TAX_RATE: { text: 'number', dataType: 'number' },
       retries: { text: 'number', dataType: 'number' },
+      'console.log(url)': { text: 'void', dataType: 'void' },
+      'console.log(retries)': { text: 'void', dataType: 'void' },
     });
     const typed = await resolveTypes(doc, TEXT, 'load.ts', provider);
     const nodes = typed.functions.flatMap((f) => f.nodes);
@@ -109,6 +113,14 @@ describe('type information from a checker', () => {
       ['url', 'string'],
       ['retries', 'number'],
     ]);
+
+    // Results of nothing lose their pin, unless the code uses them.
+    const logs = nodes.filter((n) => n.title === 'console.log');
+    expect(
+      logs.map((n) =>
+        n.pins.filter((p) => p.id === 'return').map((p) => p.type)
+      )
+    ).toEqual([[], ['void']]);
 
     expect(typed.typeMembers?.Response?.map((m) => m.name)).toEqual([
       'ok',
