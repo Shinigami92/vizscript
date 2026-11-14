@@ -74,6 +74,14 @@ export function isCompact(node: GraphNode): boolean {
   return node.compact === true || node.kind === 'setVar';
 }
 
+/**
+ * UE's compact math node: an operator or conversion drawn as a box with a
+ * large faded glyph or word (`+`, `×`, `SIN`, `String`).
+ */
+export function isMathNode(node: GraphNode): boolean {
+  return isCompact(node) && (node.kind === 'operator' || node.kind === 'call');
+}
+
 /** UE's SET node: `SET` sits in the exec row, above the value. */
 export function isSetter(node: GraphNode): boolean {
   return node.kind === 'setVar' && node.title.startsWith('Set ');
@@ -254,7 +262,7 @@ export function computeNodeGeometry(
       measure(compactTitle(node), 'compact') +
       (node.subtitle ? 6 + measure(node.subtitle, 'subtitle') : 0);
     width = Math.max(
-      title + (NODE_METRICS.pinInset + NODE_METRICS.pinRadius * 2 + 10) * 2,
+      title + (NODE_METRICS.pinInset + NODE_METRICS.pinRadius * 2 + 16) * 2,
       leftWidth +
         rightWidth +
         NODE_METRICS.paddingX * 2 +
@@ -262,9 +270,22 @@ export function computeNodeGeometry(
     );
     height =
       rows * NODE_METRICS.rowHeight + NODE_METRICS.compactPaddingY * 2 - 4;
+  } else if (isMathNode(node)) {
+    // UE: the glyph sits in the middle of the node, behind the pins and
+    // values, so it only needs room between the pin circles.
+    width = Math.max(
+      leftWidth +
+        rightWidth +
+        NODE_METRICS.paddingX * 2 +
+        (leftWidth && rightWidth ? 8 : 4),
+      measure(compactTitle(node), 'glyph') +
+        (NODE_METRICS.pinInset + NODE_METRICS.pinRadius * 2 + 8) * 2
+    );
+    height =
+      rows * NODE_METRICS.rowHeight + NODE_METRICS.compactPaddingY * 2 - 4;
   } else if (compact) {
     const titleWidth = Math.max(
-      measure(compactTitle(node), isOperatorGlyph(node) ? 'glyph' : 'compact'),
+      measure(compactTitle(node), 'compact'),
       node.subtitle ? measure(node.subtitle, 'subtitle') : 0
     );
     width =

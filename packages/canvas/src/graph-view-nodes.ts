@@ -5,7 +5,7 @@ import {
   isArrayType,
   isCompact,
   isLatent,
-  isOperatorGlyph,
+  isMathNode,
   isSetter,
   NODE_METRICS,
   pinColor,
@@ -254,14 +254,19 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     const compact = isCompact(node);
     // UE's Get pill: a dark capsule lit by its type's color.
     const getPill =
-      compact && node.category === 'variable' && node.kind !== 'setVar';
+      compact &&
+      ((node.category === 'variable' && node.kind !== 'setVar') ||
+        node.kind === 'getProperty');
     const setter = isSetter(node);
+    const math = isMathNode(node);
     // UE's pills are rounded rectangles, not full capsules.
     const r = getPill
       ? Math.min(geom.height * 0.36, 14)
-      : compact
-        ? Math.min(geom.height / 2, 14)
-        : NODE_METRICS.cornerRadius;
+      : math
+        ? 4
+        : compact
+          ? Math.min(geom.height / 2, 14)
+          : NODE_METRICS.cornerRadius;
     const id = node.id;
 
     this.drawBubble(ns, lod);
@@ -296,7 +301,17 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     ctx.save();
     ctx.beginPath();
     ctx.roundRect(ns.x, ns.y, geom.width, geom.height, r);
-    if (compact) {
+    if (math) {
+      const body = ctx.createLinearGradient(
+        ns.x,
+        ns.y,
+        ns.x,
+        ns.y + geom.height
+      );
+      body.addColorStop(0, theme.mathTop);
+      body.addColorStop(1, theme.mathBottom);
+      ctx.fillStyle = body;
+    } else if (compact) {
       ctx.fillStyle = getPill
         ? theme.pillBody
         : node.category === 'variable'
@@ -348,7 +363,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       ctx.fillStyle = theme.headerDivider;
       ctx.fillRect(ns.x, ns.y + geom.headerHeight - 1, geom.width, 1);
       ctx.restore();
-    } else if (node.category !== 'variable') {
+    } else if (node.category !== 'variable' && !math && !getPill) {
       ctx.beginPath();
       ctx.roundRect(ns.x, ns.y, geom.width, geom.height, r);
       ctx.strokeStyle = `${theme.categories[node.category]}cc`;
@@ -395,11 +410,15 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         geom.leftColumn > 0 ? geom.leftColumn + 4 : NODE_METRICS.paddingX;
       const right =
         geom.rightColumn > 0 ? geom.rightColumn + 4 : NODE_METRICS.paddingX;
-      const centerX = ns.x + (left + geom.width - right) / 2;
+      // Math glyphs sit in the middle of the node, behind pins and values.
+      const centerX = math
+        ? ns.x + geom.width / 2
+        : ns.x + (left + geom.width - right) / 2;
       // A setter shows `SET` and, small below, how it declares (`const`).
       const sub = node.subtitle && !lod ? node.subtitle : '';
       const centerY = ns.y + geom.height / 2 - (sub ? 6 : 0);
-      if (isOperatorGlyph(node)) {
+      if (math) {
+        // UE's big faded glyph or word, behind the pins and values.
         ctx.font = this.font('glyph');
         ctx.fillStyle = theme.operatorGlyph;
       }
@@ -677,10 +696,14 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     if (lr && pin.literal?.kind === 'boolean') {
       this.drawCheckbox(lr, isChecked(pin.literal.value));
     } else if (lr && pin.literal) {
+      // UE's value box: dark, nearly square, with a thin light border.
       ctx.beginPath();
-      ctx.roundRect(lr.x, lr.y, lr.width, lr.height, 4);
+      ctx.roundRect(lr.x + 0.5, lr.y + 0.5, lr.width - 1, lr.height - 1, 2);
       ctx.fillStyle = theme.literalBackground;
       ctx.fill();
+      ctx.strokeStyle = theme.literalBorder;
+      ctx.lineWidth = 1;
+      ctx.stroke();
       ctx.save();
       ctx.beginPath();
       ctx.rect(lr.x + 4, lr.y, lr.width - 8, lr.height);

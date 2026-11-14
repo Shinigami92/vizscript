@@ -21,6 +21,9 @@ export interface Theme {
   compactSubtext: string;
   /** Large faded symbol of operator nodes (`*`, `==`). */
   operatorGlyph: string;
+  /** Body of UE's math nodes: lighter at the top, darker at the bottom. */
+  mathTop: string;
+  mathBottom: string;
   /** Drop shadow under nodes. */
   nodeShadow: string;
   /** Light top edge of headers (UE's gloss). */
@@ -46,6 +49,7 @@ export interface Theme {
   exec: string;
   pinLabel: string;
   literalBackground: string;
+  literalBorder: string;
   literalText: string;
   literalString: string;
   selection: string;
@@ -92,7 +96,9 @@ export const DARK_THEME: Theme = {
   compactVariable: 'rgba(38, 38, 43, 0.86)',
   compactPure: 'rgba(31, 42, 26, 0.86)',
   compactSubtext: '#a1a1aa',
-  operatorGlyph: 'rgba(244, 244, 245, 0.55)',
+  operatorGlyph: 'rgba(255, 255, 255, 0.26)',
+  mathTop: 'rgba(56, 56, 60, 0.9)',
+  mathBottom: 'rgba(28, 28, 31, 0.9)',
   nodeShadow: 'rgba(0, 0, 0, 0.55)',
   headerShine: 'rgba(255, 255, 255, 0.16)',
   headerDivider: 'rgba(0, 0, 0, 0.45)',
@@ -106,7 +112,9 @@ export const DARK_THEME: Theme = {
   headerFade: '33',
   exec: execColor('dark'),
   pinLabel: '#d4d4d8',
-  literalBackground: '#2b2b30',
+  // UE's value boxes are see-through: only the border shows.
+  literalBackground: 'rgba(0, 0, 0, 0)',
+  literalBorder: 'rgba(212, 212, 216, 0.7)',
   literalText: '#e8e8ea',
   literalString: '#f0a5e3',
   selection: '#f5a623',
@@ -147,7 +155,9 @@ export const LIGHT_THEME: Theme = {
   compactVariable: 'rgba(228, 228, 231, 0.9)',
   compactPure: 'rgba(226, 237, 217, 0.9)',
   compactSubtext: '#71717a',
-  operatorGlyph: 'rgba(24, 24, 27, 0.45)',
+  operatorGlyph: 'rgba(24, 24, 27, 0.28)',
+  mathTop: 'rgba(252, 252, 253, 0.92)',
+  mathBottom: 'rgba(222, 222, 226, 0.92)',
   nodeShadow: 'rgba(24, 24, 27, 0.18)',
   headerShine: 'rgba(255, 255, 255, 0.22)',
   headerDivider: 'rgba(0, 0, 0, 0.18)',
@@ -161,7 +171,8 @@ export const LIGHT_THEME: Theme = {
   headerFade: 'aa',
   exec: execColor('light'),
   pinLabel: '#27272a',
-  literalBackground: '#e4e4e7',
+  literalBackground: 'rgba(255, 255, 255, 0)',
+  literalBorder: 'rgba(24, 24, 27, 0.35)',
   literalText: '#18181b',
   literalString: '#b0108f',
   selection: '#e8930c',
