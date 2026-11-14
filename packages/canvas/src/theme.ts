@@ -29,8 +29,18 @@ export interface Theme {
   headerDivider: string;
   /** Shadow behind header titles. */
   titleShadow: string;
-  /** Alpha (hex) of the type tint at the left of Get pills. */
+  /** Body of Get pills (UE: near black, lit by the type's glow). */
+  pillBody: string;
+  /** Alpha (hex) of the type's glow in Get pills, at its center. */
   pillTint: string;
+  /** Alpha (hex) of the glow halfway out. */
+  pillTintMid: string;
+  /** Gloss over the top half of Get pills. */
+  pillShine: string;
+  /** UE's light top rim of nodes, fading downward. */
+  rimLight: string;
+  /** The brighter glare on the top left of a Get pill's rim. */
+  pillGlare: string;
   /** Alpha (hex) at the right end of the header gradient. */
   headerFade: string;
   exec: string;
@@ -73,20 +83,26 @@ export const DARK_THEME: Theme = {
   background: '#161618',
   gridMinor: '#1f1f22',
   gridMajor: '#0c0c0d',
-  nodeBody: 'rgba(24, 24, 27, 0.94)',
+  // Slightly see-through like UE's nodes: the grid shows behind them.
+  nodeBody: 'rgba(24, 24, 27, 0.84)',
   nodeBorder: '#050506',
   nodeTitle: '#f2f2f2',
   nodeText: '#f2f2f2',
   nodeSubtext: '#a8a8b0',
-  compactVariable: '#26262b',
-  compactPure: '#1f2a1a',
+  compactVariable: 'rgba(38, 38, 43, 0.86)',
+  compactPure: 'rgba(31, 42, 26, 0.86)',
   compactSubtext: '#a1a1aa',
   operatorGlyph: 'rgba(244, 244, 245, 0.55)',
   nodeShadow: 'rgba(0, 0, 0, 0.55)',
   headerShine: 'rgba(255, 255, 255, 0.16)',
   headerDivider: 'rgba(0, 0, 0, 0.45)',
   titleShadow: 'rgba(0, 0, 0, 0.7)',
-  pillTint: '40',
+  pillBody: 'rgba(16, 16, 18, 0.86)',
+  pillTint: '5c',
+  pillTintMid: '1c',
+  pillShine: 'rgba(255, 255, 255, 0.08)',
+  rimLight: 'rgba(255, 255, 255, 0.24)',
+  pillGlare: 'rgba(255, 255, 255, 0.55)',
   headerFade: '33',
   exec: execColor('dark'),
   pinLabel: '#d4d4d8',
@@ -123,20 +139,25 @@ export const LIGHT_THEME: Theme = {
   background: '#f4f4f5',
   gridMinor: '#e7e7ea',
   gridMajor: '#dadade',
-  nodeBody: 'rgba(255, 255, 255, 0.96)',
+  nodeBody: 'rgba(255, 255, 255, 0.88)',
   nodeBorder: 'rgba(24, 24, 27, 0.28)',
   nodeTitle: '#ffffff',
   nodeText: '#18181b',
   nodeSubtext: 'rgba(255, 255, 255, 0.72)',
-  compactVariable: '#e4e4e7',
-  compactPure: '#e2edd9',
+  compactVariable: 'rgba(228, 228, 231, 0.9)',
+  compactPure: 'rgba(226, 237, 217, 0.9)',
   compactSubtext: '#71717a',
   operatorGlyph: 'rgba(24, 24, 27, 0.45)',
   nodeShadow: 'rgba(24, 24, 27, 0.18)',
   headerShine: 'rgba(255, 255, 255, 0.22)',
   headerDivider: 'rgba(0, 0, 0, 0.18)',
   titleShadow: 'rgba(0, 0, 0, 0.35)',
-  pillTint: '33',
+  pillBody: 'rgba(236, 236, 239, 0.9)',
+  pillTint: '66',
+  pillTintMid: '24',
+  pillShine: 'rgba(255, 255, 255, 0.7)',
+  rimLight: 'rgba(255, 255, 255, 0.85)',
+  pillGlare: 'rgba(255, 255, 255, 1)',
   headerFade: 'aa',
   exec: execColor('light'),
   pinLabel: '#27272a',

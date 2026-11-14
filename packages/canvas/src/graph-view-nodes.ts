@@ -72,33 +72,149 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     }
   }
 
+  /**
+   * The glow of a Get pill: its type's color around the middle right,
+   * fading out to the edges, and a gloss over the top half (UE).
+   */
+  private drawPillGlow(ns: NodeState, radius: number): void {
+    const { ctx, theme } = this;
+    const { node, geom } = ns;
+    const out = node.pins.find(
+      (p) => p.direction === 'out' && p.kind === 'data'
+    );
+    if (!out) {
+      return;
+    }
+
+    const color = pinColor(out.type, theme.scheme);
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(ns.x, ns.y, geom.width, geom.height, radius);
+    ctx.clip();
+    ctx.save();
+    // An ellipse: as wide as the pill, a little taller than it.
+    ctx.translate(ns.x + geom.width * 0.64, ns.y + geom.height * 0.55);
+    ctx.scale(1, Math.min(1, (geom.height * 1.5) / geom.width));
+    const reach = geom.width * 0.62;
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, reach);
+    glow.addColorStop(0, `${color}${theme.pillTint}`);
+    glow.addColorStop(0.5, `${color}${theme.pillTintMid}`);
+    glow.addColorStop(1, `${color}00`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(-reach, -reach, reach * 2, reach * 2);
+    ctx.restore();
+    const shine = ctx.createLinearGradient(
+      ns.x,
+      ns.y,
+      ns.x,
+      ns.y + geom.height
+    );
+    shine.addColorStop(0, theme.pillShine);
+    shine.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = shine;
+    ctx.fillRect(ns.x, ns.y, geom.width, geom.height);
+    ctx.restore();
+  }
+
+  /**
+   * UE's light rim inside the outline: along the top of every node, fading
+   * downward, and as a glare on the top left of Get pills.
+   */
+  private drawRim(ns: NodeState, radius: number, pill: boolean): void {
+    const { ctx, theme } = this;
+    const { geom } = ns;
+    const inset = 1.25;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(
+      ns.x + inset,
+      ns.y + inset,
+      geom.width - inset * 2,
+      geom.height - inset * 2,
+      Math.max(0, radius - inset)
+    );
+    // The faint rim along the top, fading downward.
+    const rim = ctx.createLinearGradient(
+      ns.x,
+      ns.y,
+      ns.x,
+      ns.y + Math.min(geom.height, 14)
+    );
+    rim.addColorStop(0, theme.rimLight);
+    rim.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.strokeStyle = rim;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    if (pill) {
+      // A short glare around the top-left corner, fading smoothly into the
+      // top edge and down the left side.
+      const corner = Math.max(radius, 6);
+      const cx = ns.x + corner * 0.9;
+      const cy = ns.y + corner * 0.4;
+      const glare = ctx.createRadialGradient(cx, cy, 0, cx, cy, corner * 1.6);
+      glare.addColorStop(0, theme.pillGlare);
+      glare.addColorStop(0.3, theme.pillGlare);
+      glare.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.strokeStyle = glare;
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
   private drawNode(ns: NodeState): void {
     const { ctx, theme } = this;
     const { node, geom } = ns;
     const lod = this.camera.zoom < 0.4;
     const compact = isCompact(node);
-    const r = compact
-      ? Math.min(geom.height / 2, 14)
-      : NODE_METRICS.cornerRadius;
+    // UE's Get pill: a dark capsule lit by its type's color.
+    const getPill =
+      compact && node.category === 'variable' && node.kind !== 'setVar';
+    // UE's pills are rounded rectangles, not full capsules.
+    const r = getPill
+      ? Math.min(geom.height * 0.36, 14)
+      : compact
+        ? Math.min(geom.height / 2, 14)
+        : NODE_METRICS.cornerRadius;
     const id = node.id;
 
     this.drawBubble(ns, lod);
     this.drawProblemBanner(ns, lod);
 
-    // Body, with a soft drop shadow like UE's (not at overview zoom).
-    ctx.save();
+    // A soft drop shadow like UE's (not at overview zoom), only outside the
+    // node: the body is see-through and must not darken over it.
     if (!lod) {
       const scale = this.camera.zoom * this.dpr;
+      const margin = 40;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(
+        ns.x - margin,
+        ns.y - margin,
+        geom.width + margin * 2,
+        geom.height + margin * 2
+      );
+      ctx.roundRect(ns.x, ns.y, geom.width, geom.height, r);
+      ctx.clip('evenodd');
       ctx.shadowColor = theme.nodeShadow;
       ctx.shadowBlur = 14 * scale;
       ctx.shadowOffsetY = 3 * scale;
+      ctx.beginPath();
+      ctx.roundRect(ns.x, ns.y, geom.width, geom.height, r);
+      ctx.fillStyle = theme.background;
+      ctx.fill();
+      ctx.restore();
     }
 
+    // Body
+    ctx.save();
     ctx.beginPath();
     ctx.roundRect(ns.x, ns.y, geom.width, geom.height, r);
     if (compact) {
-      ctx.fillStyle =
-        node.category === 'variable'
+      ctx.fillStyle = getPill
+        ? theme.pillBody
+        : node.category === 'variable'
           ? theme.compactVariable
           : node.purity === 'pure'
             ? theme.compactPure
@@ -110,26 +226,8 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     ctx.fill();
     ctx.restore();
 
-    // Like UE's Get pills: a tint of the value's type from the left.
-    if (compact && node.category === 'variable' && node.kind !== 'setVar') {
-      const out = node.pins.find(
-        (p) => p.direction === 'out' && p.kind === 'data'
-      );
-      if (out) {
-        const color = pinColor(out.type, theme.scheme);
-        const tint = ctx.createLinearGradient(
-          ns.x,
-          ns.y,
-          ns.x + geom.width,
-          ns.y
-        );
-        tint.addColorStop(0, `${color}${theme.pillTint}`);
-        tint.addColorStop(1, `${color}00`);
-        ctx.beginPath();
-        ctx.roundRect(ns.x, ns.y, geom.width, geom.height, r);
-        ctx.fillStyle = tint;
-        ctx.fill();
-      }
+    if (getPill && !lod) {
+      this.drawPillGlow(ns, r);
     }
 
     // Header
@@ -196,6 +294,9 @@ export abstract class GraphViewNodes extends GraphViewCamera {
 
     ctx.stroke();
     ctx.setLineDash([]);
+    if (!lod && !selected && !highlighted) {
+      this.drawRim(ns, r, getPill);
+    }
 
     // Title
     ctx.textBaseline = 'middle';
@@ -216,7 +317,26 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         ctx.fillStyle = theme.operatorGlyph;
       }
 
-      ctx.fillText(compactTitle(node), centerX, centerY);
+      if (getPill) {
+        // The name sits next to the pin, with a shadow like UE's.
+        ctx.save();
+        ctx.textAlign = 'right';
+        // UE's pill names are regular weight.
+        ctx.font = `500 13px ${theme.fontFamily}`;
+        // Light text on the dark pill; dark text needs no shadow.
+        if (!lod && theme.scheme === 'dark') {
+          const scale = this.camera.zoom * this.dpr;
+          ctx.shadowColor = theme.titleShadow;
+          ctx.shadowBlur = 2 * scale;
+          ctx.shadowOffsetY = 1 * scale;
+        }
+
+        ctx.fillText(compactTitle(node), ns.x + geom.width - right, centerY);
+        ctx.restore();
+      } else {
+        ctx.fillText(compactTitle(node), centerX, centerY);
+      }
+
       if (sub) {
         ctx.font = this.font('subtitle');
         ctx.fillStyle = theme.compactSubtext;
