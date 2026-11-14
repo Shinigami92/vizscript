@@ -40,3 +40,4 @@ export * from './type-info';
 export * from './wildcard-pins';
 export * from './types';
 export * from './value-fields';
+export * from './wired';

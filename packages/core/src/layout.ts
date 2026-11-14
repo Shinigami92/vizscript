@@ -11,6 +11,7 @@ import type {
   Positions,
   SourceRange,
 } from './ir';
+import { wiredNodes } from './wired';
 
 export interface Size {
   width: number;
@@ -182,11 +183,14 @@ export function layoutDocument(
       maxRowWidth
     );
 
+    // Only wired nodes take room: a node not wired in yet (a Get just
+    // placed) doesn't push the functions after it.
+    const wired = wiredNodes(fn);
     let minY = Number.POSITIVE_INFINITY;
     let maxY = Number.NEGATIVE_INFINITY;
     for (const node of fn.nodes) {
       const p = auto.get(node.id);
-      if (!p) {
+      if (!p || !wired.has(node.id)) {
         continue;
       }
 
@@ -215,7 +219,10 @@ export function layoutDocument(
       placeBelow(fn, above, result, boxes, functionGap);
     }
 
-    separateFunction(fn, above, result, boxes, options);
+    // Grown by the code (wired nodes without a saved place), not by nodes
+    // the user placed or moved: only that moves other functions.
+    const grew = fn.nodes.some((n) => wired.has(n.id) && !saved[n.id]);
+    separateFunction(fn, above, result, boxes, options, wired, grew);
   }
 
   // Laid out nodes sit on the grid, like UE's; saved ones stay where they
@@ -235,6 +242,8 @@ interface FunctionBox {
   top: number;
   right: number;
   bottom: number;
+  /** Has nodes the code added (no saved place yet). */
+  grew?: boolean;
 }
 
 /** Moves a function's nodes so its top is `gap` below the lowest box. */
@@ -272,12 +281,14 @@ function functionBox(
   fn: FunctionGraph,
   above: ReadonlyMap<string, number>,
   positions: Positions,
-  options: LayoutOptions
+  options: LayoutOptions,
+  /** Only these nodes (those wired in: the frame). */
+  only?: ReadonlySet<string>
 ): FunctionBox | undefined {
   let box: FunctionBox | undefined;
   for (const node of fn.nodes) {
     const p = positions[node.id];
-    if (!p) {
+    if (!p || (only && !only.has(node.id))) {
       continue;
     }
 
@@ -297,76 +308,23 @@ function functionBox(
 }
 
 /**
- * Room for nodes the user placed. The layout moves a function down when
- * it reaches into an earlier one, which would carry the nodes away from
- * where they were dropped when they belong to the later function. So the
- * earlier functions move up instead, out of the way of the functions with
- * `moved` nodes. Returns the new positions of the nodes to move (none when
- * nothing overlaps), to save with the move.
- */
-export function makeRoomFor(
-  doc: GraphDocument,
-  positions: Positions,
-  moved: ReadonlySet<string>,
-  options: LayoutOptions
-): Positions {
-  const gap = options.frameGap ?? 110;
-  const fns = doc.functions.map(withImplicitSelf);
-  const boxes = fns.map((fn) =>
-    functionBox(fn, spaceAboveNodes(fn, options), positions, options)
-  );
-  const patch: Positions = {};
-  const last = fns.findLastIndex((fn) => fn.nodes.some((n) => moved.has(n.id)));
-  // Functions that stay, from the last moved one up.
-  const fixed: FunctionBox[] = [];
-  for (let i = last; i >= 0; i--) {
-    const fn = fns[i];
-    const box = boxes[i];
-    if (!fn || !box) {
-      continue;
-    }
-
-    let shift = 0;
-    if (!fn.nodes.some((n) => moved.has(n.id))) {
-      for (const other of fixed) {
-        const sideBySide =
-          box.right + gap <= other.left || other.right + gap <= box.left;
-        const reaches = box.bottom + gap - shift > other.top;
-        if (!sideBySide && reaches) {
-          shift = box.bottom + gap - other.top;
-        }
-      }
-    }
-
-    if (shift > 0) {
-      for (const node of fn.nodes) {
-        const p = positions[node.id];
-        if (p) {
-          patch[node.id] = { x: p.x, y: p.y - shift };
-        }
-      }
-    }
-
-    fixed.push({ ...box, top: box.top - shift, bottom: box.bottom - shift });
-  }
-
-  return patch;
-}
-
-/**
- * A function that grew into an earlier one below or beside it (nodes added
- * where there was room, all positions saved) moves down until their frames
- * no longer overlap, like separate graphs in UE.
+ * A function the code grew into an earlier one below or beside it (or that
+ * an earlier one grew into) moves down until their frames no longer
+ * overlap, like separate graphs in UE. Frames of nodes the user placed or
+ * moved may overlap: dragging a node never pushes other functions away.
+ * Only wired nodes count and move; nodes not wired in stay where they are.
  */
 function separateFunction(
   fn: FunctionGraph,
   above: ReadonlyMap<string, number>,
   positions: Positions,
   boxes: FunctionBox[],
-  options: LayoutOptions
+  options: LayoutOptions,
+  wired: ReadonlySet<string>,
+  grew: boolean
 ): void {
   const gap = options.frameGap ?? 110;
-  const box = functionBox(fn, above, positions, options);
+  const box = functionBox(fn, above, positions, options, wired);
   if (!box) {
     return;
   }
@@ -379,7 +337,7 @@ function separateFunction(
     const clear =
       box.top + shift >= other.bottom + gap ||
       box.bottom + shift + gap <= other.top;
-    if (!sideBySide && !clear) {
+    if (!sideBySide && !clear && (grew || other.grew === true)) {
       shift = other.bottom + gap - box.top;
     }
   }
@@ -387,13 +345,18 @@ function separateFunction(
   if (shift > 0) {
     for (const node of fn.nodes) {
       const p = positions[node.id];
-      if (p) {
+      if (p && wired.has(node.id)) {
         positions[node.id] = { x: p.x, y: p.y + shift };
       }
     }
   }
 
-  boxes.push({ ...box, top: box.top + shift, bottom: box.bottom + shift });
+  boxes.push({
+    ...box,
+    top: box.top + shift,
+    bottom: box.bottom + shift,
+    grew,
+  });
 }
 
 function mergeSaved(

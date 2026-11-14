@@ -4,6 +4,7 @@ import {
   extractReroutes,
   pinKey,
   reroutePatch,
+  wiredNodes,
   withImplicitSelf,
 } from '@vizscript/core';
 import type {
@@ -85,12 +86,16 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
         this.connectedPins.add(pinKey(edge.to));
       }
 
+      const wired = wiredNodes(fn);
       this.frames.push({
         kind: 'function',
         fnId: fn.id,
         name: fn.name,
-        // Floating nodes (not wired in yet) stay outside the frame.
-        nodeIds: fn.nodes.filter((n) => !n.floating).map((n) => n.id),
+        // Nodes not wired in yet (a Get just placed, floating nodes) stay
+        // outside the frame, so moving them never moves the frame.
+        nodeIds: fn.nodes
+          .filter((n) => !n.floating && wired.has(n.id))
+          .map((n) => n.id),
         bounds: null,
       });
       for (const box of fn.comments ?? []) {

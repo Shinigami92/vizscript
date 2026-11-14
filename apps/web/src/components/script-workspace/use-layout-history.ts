@@ -46,11 +46,6 @@ export interface LayoutHistoryDeps {
   relayout: () => void;
   /** Where the canvas has its nodes right now. */
   currentPositions: () => Positions | undefined;
-  /**
-   * Positions of nodes that make room for moved ones (`makeRoomFor`):
-   * saved with the move, so the dropped nodes stay where they are.
-   */
-  makeRoom: (positions: Positions, moved: ReadonlySet<string>) => Positions;
   undoCode: () => void;
   redoCode: () => void;
   /** Restores graph-only edits (undo / redo). */
@@ -254,22 +249,18 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     const full: LayoutPatch = { ...patch };
     const moved = Object.keys(patch).filter((key) => !isExtraLayoutKey(key));
     if (moved.length > 0) {
-      const current = deps.currentPositions() ?? deps.positions.value;
+      // All shown nodes keep their place, also those the canvas doesn't
+      // draw (a Get shown as a wire from its SET): unsaved, they would
+      // count as new and move their function.
+      const current = {
+        ...deps.positions.value,
+        ...deps.currentPositions(),
+      };
       for (const [id, p] of Object.entries(current)) {
-        if (!pinned.value[id] && !(id in full)) {
+        if (!pinned.value[id] && !(id in full) && !isExtraLayoutKey(id)) {
           full[id] = p;
         }
       }
-
-      // Other functions make room, so the moved nodes stay where dropped.
-      const shown: Positions = { ...deps.positions.value, ...current };
-      for (const [id, p] of Object.entries(full)) {
-        if (p && !isExtraLayoutKey(id)) {
-          shown[id] = p;
-        }
-      }
-
-      Object.assign(full, deps.makeRoom(shown, new Set(moved)));
     }
 
     recordLayout(full);

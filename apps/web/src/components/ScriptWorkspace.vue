@@ -19,8 +19,8 @@ import {
   floatsUntilWired,
   graphEditsFor,
   isCutReceiver,
+  isExtraLayoutKey,
   layoutDocument,
-  makeRoomFor,
   reconcilePositions,
   reconcileReroutes,
   reconcileVias,
@@ -221,8 +221,6 @@ const {
   positions,
   relayout,
   currentPositions: () => canvas.value?.getPositions(),
-  makeRoom: (shown, moved) =>
-    doc.value ? makeRoomFor(doc.value, shown, moved, layoutOptions) : {},
   undoCode: () => editor.value?.undo(),
   redoCode: () => editor.value?.redo(),
   setOverlay: (overlay) => setOverlay(overlay),
@@ -290,11 +288,30 @@ const {
 );
 
 /** Pins positions without an undo step (like placing new nodes). */
+/** Whether any node has a saved place (not only reroutes and colors). */
+function hasPinnedNodes(): boolean {
+  return Object.keys(pinned.value).some((key) => !isExtraLayoutKey(key));
+}
+
+/** Node positions only (no reroutes, box colors or vias). */
+function nodePositions(all: Positions): Positions {
+  return Object.fromEntries(
+    Object.entries(all).filter(([key]) => !isExtraLayoutKey(key))
+  );
+}
+
 function movePinned(patch: Positions): void {
-  if (Object.keys(patch).length > 0) {
-    pinned.value = { ...pinned.value, ...patch };
-    void persist(patch);
+  if (Object.keys(patch).length === 0) {
+    return;
   }
+
+  // The first node placed keeps the rest of the graph where it is shown
+  // (else the other functions are laid out anew around a saved node).
+  const full: Positions = hasPinnedNodes()
+    ? patch
+    : { ...nodePositions(positions.value), ...patch };
+  pinned.value = { ...pinned.value, ...full };
+  void persist(full);
 }
 watch(outOfSync, (value) => emit('out-of-sync', value), { immediate: true });
 watch(
@@ -762,7 +779,13 @@ const currentFunction = computed(() =>
  * placed relative to an edited one would jump.
  */
 function freezeLayout(): void {
-  const current = canvas.value?.getPositions() ?? positions.value;
+  // Also nodes the canvas doesn't draw (a Get shown as a wire from its SET,
+  // an implicit `self`): unsaved, they would count as new and move their
+  // function.
+  const current = {
+    ...nodePositions(positions.value),
+    ...canvas.value?.getPositions(),
+  };
   const freeze: LayoutPatch = {};
   for (const [id, p] of Object.entries(current)) {
     if (!pinned.value[id]) {
