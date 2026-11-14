@@ -1,16 +1,22 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
 import type {
   LayoutResponse,
   LayoutUpdateRequest,
   Point,
   ProviderId,
+  RepoSummary,
 } from '@vizscript/api-contract';
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
-import { AuthService } from '../auth/auth.service';
+import type { SessionUser } from '../auth/auth.service';
 import { DB } from '../database/database.module';
 import type { Database } from '../database/schema';
-import { ScmRegistry } from '../scm/scm.registry';
+import { RepoAccessService } from '../scm/repo-access.service';
 
 export interface LayoutKey {
   provider: ProviderId;
@@ -59,38 +65,30 @@ export function parseLayoutUpdate(body: unknown): {
   return { set, remove };
 }
 
+/**
+ * Shared node layouts of repository files. Everyone who can read a
+ * repository sees them (signed-out visitors: public repositories); only users
+ * with write access change them.
+ */
 @Injectable()
 export class LayoutService {
   public constructor(
     @Inject(DB) private readonly db: Kysely<Database>,
-    @Inject(ScmRegistry) private readonly registry: ScmRegistry,
-    @Inject(AuthService) private readonly auth: AuthService
+    @Inject(RepoAccessService) private readonly access: RepoAccessService
   ) {}
 
   /**
-   * Resolves the internal repository id. Layouts are keyed by the provider's
-   * stable repository id so they survive renames.
+   * Internal repository id. Layouts are keyed by the provider's stable
+   * repository id so they survive renames.
    */
-  private async repositoryId(userId: string, key: LayoutKey): Promise<string> {
-    const fullName = `${key.owner}/${key.repo}`;
-    const cached = await this.db
-      .selectFrom('repositories')
-      .select('id')
-      .where('provider', '=', key.provider)
-      .where(sql`lower(full_name)`, '=', fullName.toLowerCase())
-      .executeTakeFirst();
-    if (cached) {
-      return cached.id;
-    }
-
-    const token = await this.auth.providerToken(userId, key.provider);
-    const repo = await this.registry
-      .get(key.provider)
-      .getRepo(token, key.owner, key.repo);
+  private async repositoryId(
+    provider: ProviderId,
+    repo: RepoSummary
+  ): Promise<string> {
     const row = await this.db
       .insertInto('repositories')
       .values({
-        provider: key.provider,
+        provider,
         external_id: repo.id,
         full_name: repo.fullName,
       })
@@ -105,8 +103,17 @@ export class LayoutService {
     return row.id;
   }
 
-  public async get(userId: string, key: LayoutKey): Promise<LayoutResponse> {
-    const repositoryId = await this.repositoryId(userId, key);
+  public async get(
+    user: SessionUser | null,
+    key: LayoutKey
+  ): Promise<LayoutResponse> {
+    const repo = await this.access.repo(
+      user,
+      key.provider,
+      key.owner,
+      key.repo
+    );
+    const repositoryId = await this.repositoryId(key.provider, repo);
     const row = await this.db
       .selectFrom('file_layouts')
       .select(['positions', 'updated_at'])
@@ -117,16 +124,29 @@ export class LayoutService {
     return {
       positions: row?.positions ?? {},
       updatedAt: row?.updated_at.toISOString() ?? null,
+      canWrite: user !== null && repo.canWrite,
     };
   }
 
   public async update(
-    userId: string,
+    user: SessionUser,
     key: LayoutKey,
     body: unknown
   ): Promise<LayoutResponse> {
     const { set, remove } = parseLayoutUpdate(body);
-    const repositoryId = await this.repositoryId(userId, key);
+    const repo = await this.access.repo(
+      user,
+      key.provider,
+      key.owner,
+      key.repo
+    );
+    if (!repo.canWrite) {
+      throw new ForbiddenException(
+        'Changing the shared layout needs write access to the repository'
+      );
+    }
+
+    const repositoryId = await this.repositoryId(key.provider, repo);
     const patch = JSON.stringify(set);
     const removeArray = sql`${sql.val(remove)}::text[]`;
 
@@ -137,12 +157,12 @@ export class LayoutService {
         ref: key.ref,
         path: key.path,
         positions: patch,
-        updated_by: userId,
+        updated_by: user.userId,
       })
       .onConflict((oc) =>
         oc.columns(['repository_id', 'ref', 'path']).doUpdateSet({
           positions: sql<string>`(file_layouts.positions || ${patch}::jsonb) - ${removeArray}`,
-          updated_by: userId,
+          updated_by: user.userId,
           updated_at: new Date(),
         })
       )
@@ -152,6 +172,7 @@ export class LayoutService {
     return {
       positions: row.positions,
       updatedAt: row.updated_at.toISOString(),
+      canWrite: true,
     };
   }
 }

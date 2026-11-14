@@ -2,6 +2,7 @@ import {
   ForbiddenException,
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -13,6 +14,8 @@ import type {
   RepoSummary,
   TreeResponse,
 } from '@vizscript/api-contract';
+import type { AppConfig } from '../config/config';
+import { APP_CONFIG } from '../config/config';
 import type { ProviderIdentity, ScmProvider } from './scm-provider';
 
 interface GitHubRepo {
@@ -24,6 +27,7 @@ interface GitHubRepo {
   private: boolean;
   default_branch?: string;
   updated_at?: string | null;
+  permissions?: { push?: boolean };
 }
 
 function toRepo(repo: GitHubRepo): RepoSummary {
@@ -36,6 +40,7 @@ function toRepo(repo: GitHubRepo): RepoSummary {
     private: repo.private,
     defaultBranch: repo.default_branch ?? 'main',
     updatedAt: repo.updated_at ?? null,
+    canWrite: repo.permissions?.push === true,
   };
 }
 
@@ -71,8 +76,14 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
 export class GitHubProvider implements ScmProvider {
   public readonly id = 'github' as const;
 
-  private client(token: string): Octokit {
-    return new Octokit({ auth: token, userAgent: 'vizscript' });
+  public constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
+
+  private client(token: string | null): Octokit {
+    return new Octokit({
+      ...(token ? { auth: token } : {}),
+      baseUrl: this.config.githubApiUrl,
+      userAgent: 'vizscript',
+    });
   }
 
   public async verifyToken(token: string): Promise<ProviderIdentity> {
@@ -120,7 +131,7 @@ export class GitHubProvider implements ScmProvider {
   }
 
   public async getRepo(
-    token: string,
+    token: string | null,
     owner: string,
     repo: string
   ): Promise<RepoSummary> {

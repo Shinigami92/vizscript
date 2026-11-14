@@ -21,7 +21,39 @@ const repo: RepoSummary = {
   private: false,
   defaultBranch: 'main',
   updatedAt: null,
+  canWrite: true,
 };
+
+/** A public repository the test user can read but not push to. */
+const readOnly: RepoSummary = {
+  ...repo,
+  id: `readonly-${runId}`,
+  name: `readonly-${runId}`,
+  fullName: `octo/readonly-${runId}`,
+  canWrite: false,
+};
+
+const privateRepo: RepoSummary = {
+  ...repo,
+  id: `private-${runId}`,
+  name: `private-${runId}`,
+  fullName: `octo/private-${runId}`,
+  private: true,
+};
+
+/** The repository as the provider reports it (`null` token: signed out). */
+async function fakeRepo(
+  token: string | null,
+  name: string
+): Promise<RepoSummary> {
+  const found = [repo, readOnly, privateRepo].find((r) => r.name === name);
+  if (!found || (found.private && !token)) {
+    const { NotFoundException } = await import('@nestjs/common');
+    throw new NotFoundException('Not found on GitHub');
+  }
+
+  return token ? found : { ...found, canWrite: false };
+}
 
 const fakeProvider: ScmProvider = {
   id: 'github',
@@ -40,7 +72,7 @@ const fakeProvider: ScmProvider = {
     };
   },
   listRepos: async () => [repo],
-  getRepo: async () => repo,
+  getRepo: async (token, _owner, name) => fakeRepo(token, name),
   listBranches: async () => [{ name: 'main' }],
   getTree: async (_t, _o, _r, ref) => ({
     ref,
@@ -54,6 +86,10 @@ const fakeProvider: ScmProvider = {
     content: 'console.log(1);',
   }),
 };
+
+function layoutUrl(name: string): string {
+  return `/api/layouts/github/octo/${name}?ref=main&path=src/index.ts`;
+}
 
 describe('SecretBox', () => {
   it('round-trips secrets and rejects tampering', () => {
@@ -80,6 +116,8 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
       secureCookies: false,
       sessionTtlDays: 1,
       runMigrations: true,
+      githubApiUrl: 'https://api.github.com',
+      githubRawUrl: 'https://raw.githubusercontent.com',
     };
     await runMigrations(
       config.databaseUrl,
@@ -97,7 +135,7 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
     const db = createDatabase(databaseUrl ?? '');
     await db
       .deleteFrom('repositories')
-      .where('external_id', '=', repo.id)
+      .where('external_id', 'in', [repo.id, readOnly.id, privateRepo.id])
       .execute();
     await db
       .deleteFrom('users')
@@ -171,7 +209,11 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
   it('stores and merges layouts', async () => {
     const url = `/api/layouts/github/${repo.owner}/${repo.name}?ref=main&path=src/index.ts`;
     const empty = await app.inject({ method: 'GET', url, headers: { cookie } });
-    expect(empty.json()).toEqual({ positions: {}, updatedAt: null });
+    expect(empty.json()).toEqual({
+      positions: {},
+      updatedAt: null,
+      canWrite: true,
+    });
 
     await app.inject({
       method: 'PUT',
@@ -197,6 +239,55 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
       payload: { positions: { a: { x: 'nope' } } },
     });
     expect(invalid.statusCode).toBe(400);
+  });
+
+  it('shows layouts of public repositories to signed-out visitors', async () => {
+    const shared = await app.inject({
+      method: 'GET',
+      url: layoutUrl(repo.name),
+    });
+    expect(shared.statusCode).toBe(200);
+    expect(shared.json()).toMatchObject({
+      positions: { b: { x: 3, y: 4 } },
+      canWrite: false,
+    });
+
+    const hidden = await app.inject({
+      method: 'GET',
+      url: layoutUrl(privateRepo.name),
+    });
+    expect(hidden.statusCode).toBe(404);
+
+    const write = await app.inject({
+      method: 'PUT',
+      url: layoutUrl(repo.name),
+      payload: { positions: { z: { x: 1, y: 1 } } },
+    });
+    expect(write.statusCode).toBe(401);
+  });
+
+  it('needs write access to change a shared layout', async () => {
+    const url = `/api/layouts/github/octo/${readOnly.name}?ref=main&path=a.ts`;
+    const read = await app.inject({ method: 'GET', url, headers: { cookie } });
+    expect(read.json()).toMatchObject({ canWrite: false });
+
+    const write = await app.inject({
+      method: 'PUT',
+      url,
+      headers: { cookie },
+      payload: { positions: { z: { x: 1, y: 1 } } },
+    });
+    expect(write.statusCode).toBe(403);
+  });
+
+  it('serves the client config without a session', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/config' });
+    expect(response.json()).toEqual({
+      github: {
+        apiUrl: 'https://api.github.com',
+        rawUrl: 'https://raw.githubusercontent.com',
+      },
+    });
   });
 
   it('stores per-user preferences', async () => {

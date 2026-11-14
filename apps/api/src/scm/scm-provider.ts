@@ -16,7 +16,8 @@ export interface ProviderIdentity {
 
 /**
  * A source code host (GitHub today; GitLab or a local folder later).
- * All calls receive the user's provider token.
+ * All calls receive the user's provider token; `getRepo` also works without
+ * one (`null`) for public repositories.
  */
 export interface ScmProvider {
   readonly id: ProviderId;
@@ -25,7 +26,11 @@ export interface ScmProvider {
     token: string,
     options: { page: number; query?: string }
   ): Promise<RepoSummary[]>;
-  getRepo(token: string, owner: string, repo: string): Promise<RepoSummary>;
+  getRepo(
+    token: string | null,
+    owner: string,
+    repo: string
+  ): Promise<RepoSummary>;
   listBranches(
     token: string,
     owner: string,

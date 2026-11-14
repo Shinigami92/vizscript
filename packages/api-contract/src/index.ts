@@ -36,6 +36,8 @@ export interface RepoSummary {
   private: boolean;
   defaultBranch: string;
   updatedAt: string | null;
+  /** The requesting user may push (always `false` when signed out). */
+  canWrite: boolean;
 }
 
 export interface BranchSummary {
@@ -64,6 +66,11 @@ export interface FileResponse {
 export interface LayoutResponse {
   positions: Record<string, Point>;
   updatedAt: string | null;
+  /**
+   * The requesting user may change the shared layout (signed in with write
+   * access to the repository).
+   */
+  canWrite: boolean;
 }
 
 export interface LayoutUpdateRequest {
@@ -101,6 +108,19 @@ export interface RecentProjectRequest {
   repo: string;
   ref?: string | null;
   path?: string | null;
+}
+
+/** Public settings of the deployment, readable without signing in. */
+export interface ClientConfig {
+  github: {
+    /** REST API base URL (`https://api.github.com`, or GitHub Enterprise). */
+    apiUrl: string;
+    /**
+     * Base URL of raw file contents (`https://raw.githubusercontent.com`):
+     * `<rawUrl>/<owner>/<repo>/<ref>/<path>`.
+     */
+    rawUrl: string;
+  };
 }
 
 export interface ApiError {

@@ -2,9 +2,10 @@ import type { DynamicModule } from '@nestjs/common';
 import { Module } from '@nestjs/common';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
-import { SessionGuard } from './auth/session.guard';
+import { OptionalSessionGuard, SessionGuard } from './auth/session.guard';
 import type { AppConfig } from './config/config';
 import { APP_CONFIG } from './config/config';
+import { ConfigController } from './config/config.controller';
 import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
 import { LayoutController } from './layout/layout.controller';
@@ -14,6 +15,7 @@ import { PreferencesService } from './preferences/preferences.service';
 import { RecentController } from './recent/recent.controller';
 import { RecentService } from './recent/recent.service';
 import { GitHubProvider } from './scm/github.provider';
+import { RepoAccessService } from './scm/repo-access.service';
 import type { ScmProvider } from './scm/scm-provider';
 import { SCM_PROVIDERS } from './scm/scm-provider';
 import { ScmController } from './scm/scm.controller';
@@ -42,6 +44,7 @@ export class AppModule {
         PreferencesController,
         RecentController,
         HealthController,
+        ConfigController,
       ],
       providers: [
         GitHubProvider,
@@ -54,6 +57,8 @@ export class AppModule {
         ScmRegistry,
         AuthService,
         SessionGuard,
+        OptionalSessionGuard,
+        RepoAccessService,
         LayoutService,
         PreferencesService,
         RecentService,
