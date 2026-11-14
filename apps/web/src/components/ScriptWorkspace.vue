@@ -60,6 +60,7 @@ import {
   currentFunctionOf,
   describeTarget,
   findDefinitionTarget,
+  parentGraphs,
   variableOfNode,
 } from './script-workspace/symbol-lookup';
 import type {
@@ -361,8 +362,28 @@ async function goToDefinition(nodeId: string): Promise<void> {
     return;
   }
 
+  // UE opens the graph of a function or collapsed graph.
+  await focusFunction(target.fnId);
   await selectNodes([target.nodeId]);
   await onActivate(target.nodeId);
+}
+
+/**
+ * Double-click on a node: a call or callback opens the graph it leads to
+ * (UE's double-click on a function or collapsed graph node); other nodes
+ * show their code.
+ */
+async function onNodeActivate(nodeId: string): Promise<void> {
+  const node = doc.value ? findNode(doc.value, nodeId) : undefined;
+  if (
+    (node?.kind === 'call' || node?.kind === 'functionRef') &&
+    describeDefinition(nodeId) !== undefined
+  ) {
+    await goToDefinition(nodeId);
+    return;
+  }
+
+  await onActivate(nodeId);
 }
 
 /** Definition to show once the file is parsed (`?symbol=` from a link). */
@@ -823,10 +844,12 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           v-if="breadcrumbVisible"
           :path="path"
           :focused="focusedFunction?.name"
+          :parents="parentGraphs(doc, focusedFunction?.id)"
           :can-back="focusBack.length > 0"
           :can-forward="focusAhead.length > 0"
           @navigate="navigateFocus"
           @show-all="focusFunction(null)"
+          @open="focusFunction"
         />
         <GraphCanvas
           ref="canvas"
@@ -849,7 +872,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           @action-menu="onActionMenu"
           @open-function="focusFunction"
           @navigate="navigateFocus"
-          @activate="onActivate"
+          @activate="onNodeActivate"
           @go-to-definition="goToDefinition"
           @camera-change="onCameraChange"
           @undo="undo"

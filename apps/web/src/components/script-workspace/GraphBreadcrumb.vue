@@ -3,6 +3,8 @@ defineProps<{
   path: string;
   /** Name of the function shown on its own, if any. */
   focused: string | undefined;
+  /** Graphs the shown one sits in (a callback's function), outermost first. */
+  parents?: ReadonlyArray<{ id: string; name: string }>;
   canBack: boolean;
   canForward: boolean;
 }>();
@@ -11,6 +13,8 @@ const emit = defineEmits<{
   navigate: [direction: 'back' | 'forward'];
   /** Show all functions again. */
   showAll: [];
+  /** Show one of the parent graphs. */
+  open: [fnId: string];
 }>();
 </script>
 
@@ -50,6 +54,17 @@ const emit = defineEmits<{
       {{ path.split('/').at(-1) }}
     </button>
     <template v-if="focused !== undefined">
+      <template v-for="parent in parents ?? []" :key="parent.id">
+        <span class="i-mdi-chevron-right shrink-0 text-zinc-600" />
+        <button
+          type="button"
+          class="truncate rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-800"
+          :title="`Show ${parent.name}`"
+          @click="emit('open', parent.id)"
+        >
+          {{ parent.name }}
+        </button>
+      </template>
       <span class="i-mdi-chevron-right shrink-0 text-zinc-600" />
       <span class="truncate px-1.5 font-semibold text-zinc-100">{{
         focused

@@ -61,6 +61,9 @@ export function createContextEntries(
     const first = index.nodes.get(target.nodeId);
     const definition =
       ids.length === 1 ? props.definitionOf?.(target.nodeId) : undefined;
+    const opensGraph =
+      definition !== undefined &&
+      (first?.node.kind === 'call' || first?.node.kind === 'functionRef');
     const deletable = ids.some(
       (id) => index.nodes.get(id)?.node.kind !== 'entry'
     );
@@ -75,7 +78,7 @@ export function createContextEntries(
       {
         label: 'Jump to code',
         icon: 'i-mdi-code-tags',
-        shortcut: 'Double-click',
+        shortcut: opensGraph ? undefined : 'Double-click',
         action: () => events.activate(target.nodeId),
       },
       ...(definition
@@ -83,7 +86,8 @@ export function createContextEntries(
             {
               label: `Go to definition (${definition})`,
               icon: 'i-mdi-arrow-top-right',
-              shortcut: 'F12',
+              // Like UE, double-clicking a call or callback opens its graph.
+              shortcut: opensGraph ? 'Double-click · F12' : 'F12',
               action: () => events.goToDefinition(target.nodeId),
             },
           ]
