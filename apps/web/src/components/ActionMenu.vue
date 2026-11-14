@@ -21,6 +21,8 @@ export interface ActionEntry {
   fits?: boolean;
   /** Why the action can't run now; shown dimmed with the reason. */
   disabled?: string;
+  /** Without a category: list it first instead of last (UE's "Promote to variable"). */
+  first?: boolean;
   /** Runs the action; `query` is the search text (e.g. a name to use). */
   action: (query: string) => void;
 }
@@ -81,6 +83,8 @@ const collapsed = useStorage<string[]>('vizscript:action-collapsed', []);
 const expanded = useStorage<string[]>('vizscript:action-expanded', []);
 
 const FAVORITES = 'Favorites';
+/** Group of uncategorized actions listed first. */
+const FIRST = '\u0000first';
 
 function keyOf(entry: ActionEntry): string {
   return `${entry.category}:${entry.label}`;
@@ -106,7 +110,7 @@ function foldsByDefault(category: string): boolean {
 }
 
 function isFolded(category: string): boolean {
-  if (category === '') {
+  if (category === '' || category === FIRST) {
     return false;
   }
 
@@ -167,14 +171,16 @@ const groups = computed(() => {
     const s = typed.includes(entry) ? matched + 1.5 : matched;
 
     count++;
-    const group = byCategory.get(entry.category) ?? {
+    const category =
+      entry.category === '' && entry.first ? FIRST : entry.category;
+    const group = byCategory.get(category) ?? {
       best: s,
       order: byCategory.size,
       items: [],
     };
     group.best = Math.min(group.best, s);
     group.items.push(entry);
-    byCategory.set(entry.category, group);
+    byCategory.set(category, group);
   }
 
   const starred = new Set(favorites.value);
@@ -189,10 +195,15 @@ const groups = computed(() => {
         a.best - b.best ||
         a.order - b.order
     );
-  const all =
+  const favoriteGroup =
     pinned.length > 0
-      ? [{ category: FAVORITES, best: -1, order: -1, items: pinned }, ...sorted]
-      : sorted;
+      ? [{ category: FAVORITES, best: -1, order: -1, items: pinned }]
+      : [];
+  const all = [
+    ...sorted.filter((g) => g.category === FIRST),
+    ...favoriteGroup,
+    ...sorted.filter((g) => g.category !== FIRST),
+  ];
 
   // Rows get their place in the keyboard order; folded groups have none.
   let index = 0;
@@ -356,6 +367,7 @@ onMounted(async () => {
           role="presentation"
           class="mx-1.5 mt-1.5 border-t border-zinc-800"
         />
+        <li v-else-if="group.category === FIRST" role="presentation" />
         <li v-else role="presentation">
           <button
             type="button"

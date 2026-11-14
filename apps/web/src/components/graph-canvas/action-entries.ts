@@ -579,10 +579,12 @@ export function createActionEntries(
           ? []
           : [
               {
-                label: 'Store in variable…',
-                category: 'Variables',
+                // UE lists it first, above the categories.
+                label: 'Promote to Variable…',
+                category: '',
+                first: true,
                 icon: 'i-mdi-variable text-sky-400',
-                keywords: 'promote const let',
+                keywords: 'promote store const let',
                 action: () => commands.promoteTo(source, pin, state.world),
               },
             ]),
@@ -693,16 +695,16 @@ export function createActionEntries(
       }),
       ...expressionActions(state),
       ...(extract.type === undefined || extract.type === 'item'
-        ? extract.disabled
-          ? []
-          : [
-              {
-                label: extract.label,
-                category: 'Value',
-                icon: extract.icon,
-                action: () => extract.action(),
-              },
-            ]
+        ? [
+            {
+              label: extract.label,
+              category: '',
+              first: true,
+              icon: extract.icon,
+              keywords: 'promote extract store const let',
+              action: () => extract.action(),
+            },
+          ]
         : []),
       {
         label: 'Replace with value…',

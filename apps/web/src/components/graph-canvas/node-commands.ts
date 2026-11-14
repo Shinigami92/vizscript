@@ -71,12 +71,22 @@ export function createNodeCommands(
     });
   }
 
-  /** "Extract to variable…": declare the input's value before its statement. */
+  /**
+   * UE's "Promote to Variable" for an input: a variable declared before the
+   * statement takes the input's value (or the type's start value when the
+   * input is empty) and the input reads it.
+   */
   function extractEntry(source: PinRef, pin: Pin, world: Point): MenuEntry {
+    const empty = !pin.range || pin.range.end <= pin.range.start;
+    const value = empty
+      ? (props.types?.primitives.find((t) => t.dataType === pin.type)
+          ?.defaultValue ??
+        props.types?.placeholder ??
+        'undefined')
+      : undefined;
     return {
-      label: 'Extract to variable…',
+      label: 'Promote to Variable…',
       icon: 'i-mdi-variable text-sky-400',
-      disabled: !pin.range,
       action: () =>
         void ask({
           label: 'Variable name',
@@ -87,6 +97,7 @@ export function createNodeCommands(
               type: 'extract',
               pin: source,
               name,
+              ...(value === undefined ? {} : { value }),
               position: { ...world },
             }),
         }),

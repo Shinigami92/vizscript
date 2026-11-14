@@ -367,7 +367,7 @@ export function createContextEntries(
       props.editable
         ? [
             {
-              label: 'Promote to variable…',
+              label: 'Promote to Variable…',
               icon: 'i-mdi-variable text-sky-400',
               action: () => commands.promoteTo(source, pin, state.world),
             },
