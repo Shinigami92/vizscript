@@ -84,6 +84,7 @@ Every language backend lowers its AST into the IR of `@vizscript/core`:
   - A free call (`totalPrice(cart)`) has an unwired Target without a range. Wiring a value in writes `value.` before the name (`InputPinMeta.insertSuffix`).
   - GDScript's calls of the script's own and inherited methods (`move_and_slide()`) show the `self` box. Global functions (`print`), constructors (`new X`, `Item::new`, `Item(…)`), conversions and Rust macros have no Target.
   - Use `calleeText` / `callPath` (`packages/core/src/callee.ts`) for the callee as written (`console.log`) instead of the title (`log`).
+- **Property reads** are split the same way: `response.ok` is a Get `response` wired into a `.ok` node. A member of the own object (`this.items`, `self.speed`) stays one Get, like UE's member variables, and so does a constant of a type (`State.IDLE`, `Math.PI`; `isTypeConstant`).
 - **Rest parameters** (`...data`, `*args`) name their values like UE's Make Array: `data[0]`, `data[1]`, typed by the array's items (`withParamPins`). Without values, a call shows one empty `data[0]` that writes the first one; "Add argument pin" adds more. `**kwargs` (`SymbolParam.keywords`) takes keyword pins only.
 - Module exports are the module's outputs: `export default x` and `export { a, b }` become **Export** nodes (re-exports show their source), and exported declarations are labelled `export`.
 

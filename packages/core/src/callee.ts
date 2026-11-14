@@ -122,3 +122,18 @@ export function isCutReceiver(doc: GraphDocument, ref: PinRef): boolean {
     receiverMissing(fn, node)
   );
 }
+
+/**
+ * A constant of a type (`State.IDLE`, `Math.PI`): one value, like UE's enum
+ * literals, so it stays one Get instead of the type and its member.
+ */
+export function isTypeConstant(chain: ReadonlyArray<string>): boolean {
+  const [type, member] = chain;
+  return (
+    chain.length === 2 &&
+    type !== undefined &&
+    member !== undefined &&
+    /^[A-Z]/.test(type) &&
+    /^[A-Z][A-Z\d_]*$/.test(member)
+  );
+}

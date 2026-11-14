@@ -1,4 +1,4 @@
-import { conversionCall } from '@vizscript/core';
+import { conversionCall, isTypeConstant } from '@vizscript/core';
 import type {
   DataType,
   InputSpec,
@@ -241,12 +241,12 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       }
 
       case 'Attribute': {
+        // A member of the own object is a variable (`self.items`); other
+        // reads are a Get of the object and its property (`math` → `.pi`).
         const chain = simpleChain(expr);
-        const root = chain?.[0];
         if (
-          chain &&
-          root !== undefined &&
-          (!this.lookup(root)?.source || root === 'self')
+          chain?.length === 2 &&
+          (chain[0] === 'self' || isTypeConstant(chain))
         ) {
           return this.getVar(chain.join('.'), range, path, 'any');
         }

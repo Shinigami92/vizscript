@@ -1,5 +1,5 @@
 import type * as t from '@babel/types';
-import { conversionCall } from '@vizscript/core';
+import { conversionCall, isTypeConstant } from '@vizscript/core';
 import type { DataType, Pin } from '@vizscript/core';
 import type { InsertPoint, OutputPinMeta } from '@vizscript/core';
 import { arrayElementType, arrayOfAll, truncate } from '@vizscript/core';
@@ -369,9 +369,15 @@ export abstract class ExpressionLowering extends GraphBuilder {
 
       case 'MemberExpression':
       case 'OptionalMemberExpression': {
+        // A member of the own object is a variable (`this.items`); other
+        // reads are a Get of the object and its property (`response` →
+        // `.ok`), like UE.
         const chain = simpleChain(expr);
         const root = chain?.[0];
-        if (chain && root !== undefined && !this.lookup(root)?.source) {
+        if (
+          chain?.length === 2 &&
+          (root === 'this' || root === 'super' || isTypeConstant(chain))
+        ) {
           return this.getVar(chain.join('.'), expr, path, 'any');
         }
 

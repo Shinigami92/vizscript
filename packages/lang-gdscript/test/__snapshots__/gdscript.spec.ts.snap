@@ -29,18 +29,20 @@ function ammo.set
   ==> #1.then -> #2.exec
 function _ready
   #0 entry "_ready" (event) [>then:▶]
-  #1 getVar "$Timer.timeout" [>value:any]
-  #2 functionRef "ƒ $Timer.timeout.connect callback" [>value:function]
-  #3 call "connect" [<exec:▶ >then:▶ <target:object <arg0:function >return:any]
-  #4 getVar "ammo" [>value:number]
-  #5 operator "%" [<a:string="Turret ready with %d ammo" <b:number >value:string]
-  #6 call "print" [<exec:▶ >then:▶ <target:object <arg0:string]
-  --> #1.value -> #3.target
-  --> #2.value -> #3.arg0
-  ==> #0.then -> #3.exec
-  --> #4.value -> #5.b
-  --> #5.value -> #6.arg0
-  ==> #3.then -> #6.exec
+  #1 getVar "$Timer" [>value:Node]
+  #2 getProperty ".timeout" [<target:object >value:any]
+  #3 functionRef "ƒ $Timer.timeout.connect callback" [>value:function]
+  #4 call "connect" [<exec:▶ >then:▶ <target:object <arg0:function >return:any]
+  #5 getVar "ammo" [>value:number]
+  #6 operator "%" [<a:string="Turret ready with %d ammo" <b:number >value:string]
+  #7 call "print" [<exec:▶ >then:▶ <target:object <arg0:string]
+  --> #1.value -> #2.target
+  --> #2.value -> #4.target
+  --> #3.value -> #4.arg0
+  ==> #0.then -> #4.exec
+  --> #5.value -> #6.b
+  --> #6.value -> #7.arg0
+  ==> #4.then -> #7.exec
 function _process
   #0 entry "_process" (event) [>then:▶ >param0:number]
   #1 call "_nearest_enemy" [<exec:▶ >then:▶ <target:object=self >return:Node3D]
@@ -58,18 +60,19 @@ function _process
   #13 getVar "State.TRACKING" [>value:number]
   #14 setVar "Set state" [<exec:▶ >then:▶ <value:number >out:number]
   #15 getVar "barrel" [>value:Node3D]
-  #16 getVar "target.global_position" [>value:Vector3]
-  #17 call "look_at" [<exec:▶ >then:▶ <target:object <arg0:Vector3 <param:up:Vector3= <param:use_model_front:bool=]
-  #18 call "get_tree" [<exec:▶ >then:▶ <target:object=self >return:SceneTree]
-  #19 call "get_nodes_in_group" [<exec:▶ >then:▶ <target:object <arg0:StringName=&"enemies" >return:Node[]]
-  #20 forEach "For Each" [<exec:▶ <array:array >body:▶ >element:Node3D >completed:▶]
-  #21 call "is_queued_for_deletion" [<exec:▶ >then:▶ <target:object >return:bool]
-  #22 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
-  #23 continue "Continue" [<exec:▶]
-  #24 getVar "state" [>value:number]
-  #25 switch "Match" [<exec:▶ <value:any >case0:▶ >case1:▶ >completed:▶]
-  #26 operator "*" [<a:number <b:number=2.0 >value:number]
-  #27 setVar "Set rotation.y" (+=) [<exec:▶ >then:▶ <value:number >out:number]
+  #16 getVar "target" [>value:Node3D]
+  #17 getProperty ".global_position" [<target:object >value:Vector3]
+  #18 call "look_at" [<exec:▶ >then:▶ <target:object <arg0:Vector3 <param:up:Vector3= <param:use_model_front:bool=]
+  #19 call "get_tree" [<exec:▶ >then:▶ <target:object=self >return:SceneTree]
+  #20 call "get_nodes_in_group" [<exec:▶ >then:▶ <target:object <arg0:StringName=&"enemies" >return:Node[]]
+  #21 forEach "For Each" [<exec:▶ <array:array >body:▶ >element:Node3D >completed:▶]
+  #22 call "is_queued_for_deletion" [<exec:▶ >then:▶ <target:object >return:bool]
+  #23 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
+  #24 continue "Continue" [<exec:▶]
+  #25 getVar "state" [>value:number]
+  #26 switch "Match" [<exec:▶ <value:any >case0:▶ >case1:▶ >completed:▶]
+  #27 operator "*" [<a:number <b:number=2.0 >value:number]
+  #28 setVar "Set rotation.y" (+=) [<exec:▶ >then:▶ <value:number >out:number]
   ==> #0.then -> #1.exec
   --> #1.return -> #2.value
   ==> #1.then -> #2.exec
@@ -85,24 +88,25 @@ function _process
   ==> #11.true -> #12.exec
   --> #13.value -> #14.value
   ==> #11.false -> #14.exec
-  --> #15.value -> #17.target
-  --> #16.value -> #17.arg0
-  ==> #5.completed -> #17.exec
-  ==> #17.then -> #18.exec
-  --> #18.return -> #19.target
+  --> #16.value -> #17.target
+  --> #15.value -> #18.target
+  --> #17.value -> #18.arg0
+  ==> #5.completed -> #18.exec
   ==> #18.then -> #19.exec
-  --> #19.return -> #20.array
+  --> #19.return -> #20.target
   ==> #19.then -> #20.exec
-  --> #20.element -> #21.target
-  ==> #20.body -> #21.exec
-  --> #21.return -> #22.condition
-  ==> #21.then -> #22.exec
-  ==> #22.true -> #23.exec
-  --> #24.value -> #25.value
-  ==> #20.completed -> #25.exec
-  --> #0.param0 -> #26.a
-  --> #26.value -> #27.value
-  ==> #25.case1 -> #27.exec
+  --> #20.return -> #21.array
+  ==> #20.then -> #21.exec
+  --> #21.element -> #22.target
+  ==> #21.body -> #22.exec
+  --> #22.return -> #23.condition
+  ==> #22.then -> #23.exec
+  ==> #23.true -> #24.exec
+  --> #25.value -> #26.value
+  ==> #21.completed -> #26.exec
+  --> #0.param0 -> #27.a
+  --> #27.value -> #28.value
+  ==> #26.case1 -> #28.exec
 function _nearest_enemy
   #0 entry "_nearest_enemy" (func) [>then:▶]
   #1 setVar "Set best" (var: Node3D) [<exec:▶ >then:▶ <value:Node3D=null >out:Node3D]

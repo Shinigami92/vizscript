@@ -8,7 +8,7 @@ import {
 import type { Expr } from './ast';
 import { CallLowering } from './call-lowering';
 import { dataTypeOf } from './data-type';
-import { only, rangeOf, simpleChain, unwrap } from './lower-utils';
+import { only, rangeOf, unwrap } from './lower-utils';
 
 const COMPARISONS = new Set(['==', '!=', '<', '<=', '>', '>=']);
 
@@ -44,17 +44,7 @@ export abstract class ExpressionLowering extends CallLowering {
       }
 
       case 'Field': {
-        const chain = simpleChain(expr);
-        const root = chain?.[0];
-        if (
-          chain &&
-          root !== undefined &&
-          root !== 'self' &&
-          !this.lookup(root)?.source
-        ) {
-          return this.getVar(chain.join('.'), range, path, 'any');
-        }
-
+        // A Get of the object and its field (`config` → `.name`), like UE.
         return this.pureNode({
           kind: 'getProperty',
           title: `.${expr.name}`,
