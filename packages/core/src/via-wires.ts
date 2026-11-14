@@ -4,6 +4,7 @@ import type {
   GraphDocument,
   GraphEdge,
   GraphNode,
+  PinRef,
   Positions,
 } from './ir';
 import type { TextChange } from './reconcile';
@@ -26,13 +27,43 @@ export function isViaKey(key: string): boolean {
   return key.startsWith(VIA_PREFIX);
 }
 
+/**
+ * A Get joined into another Get of the same variable (`~via|<get>|<host>`):
+ * wiring from a Get in UE uses that node again, while the code needs a
+ * read of its own; it is drawn as a wire from the host's output.
+ */
+export function joinKey(getId: string, hostId: string): string {
+  return `${VIA_PREFIX}${getId}|${hostId}`;
+}
+
+/** The ids of a `~via|` key: the hidden Get and its host Get, if any. */
+function parseViaKey(key: string): { get: string; host?: string } {
+  const [get = '', host] = key.slice(VIA_PREFIX.length).split('|');
+  return host === undefined ? { get } : { get, host };
+}
+
 /** The Get node ids drawn as wires from their SET. */
 export function viaGets(positions: Positions): Set<string> {
   return new Set(
     Object.keys(positions)
       .filter((key) => isViaKey(key))
-      .map((key) => key.slice(VIA_PREFIX.length))
+      .map(parseViaKey)
+      .filter((ids) => ids.host === undefined)
+      .map((ids) => ids.get)
   );
+}
+
+/** Joined Gets (hidden Get → the Get drawn in its place). */
+export function viaJoins(positions: Positions): Map<string, string> {
+  const joins = new Map<string, string>();
+  for (const key of Object.keys(positions)) {
+    const { get, host } = isViaKey(key) ? parseViaKey(key) : { get: '' };
+    if (host !== undefined) {
+      joins.set(get, host);
+    }
+  }
+
+  return joins;
 }
 
 /** The layout entries of `~via|` keys (kept apart from node positions). */
@@ -57,8 +88,11 @@ export function reconcileVias(
   const rename = renamedNodes(previous, next, change);
   const result: Positions = {};
   for (const [key, point] of Object.entries(entries)) {
-    const id = key.slice(VIA_PREFIX.length);
-    result[viaKey(rename.get(id) ?? id)] = point;
+    const { get, host } = parseViaKey(key);
+    const id = rename.get(get) ?? get;
+    result[
+      host === undefined ? viaKey(id) : joinKey(id, rename.get(host) ?? host)
+    ] = point;
   }
 
   return result;
@@ -176,20 +210,40 @@ export function adjacentVias(doc: GraphDocument): Set<string> {
  */
 export function foldVias(
   doc: GraphDocument,
-  remembered: ReadonlySet<string>
+  remembered: ReadonlySet<string>,
+  joins: ReadonlyMap<string, string> = new Map()
 ): GraphDocument {
   const gets = new Set([...remembered, ...adjacentVias(doc)]);
-  if (gets.size === 0) {
+  if (gets.size === 0 && joins.size === 0) {
     return doc;
   }
 
   let changed = false;
   const functions = doc.functions.map((fn) => {
-    const hidden = new Map<string, GraphNode>();
+    // Hidden Get → the output its wires are drawn from.
+    const hidden = new Map<string, PinRef>();
     for (const node of fn.nodes) {
       const setter = gets.has(node.id) ? viaSetter(fn, node) : undefined;
       if (setter) {
-        hidden.set(node.id, setter);
+        hidden.set(node.id, { node: setter.id, pin: 'out' });
+      }
+    }
+
+    const nodes = new Map(fn.nodes.map((n) => [n.id, n]));
+    for (const [id, hostId] of joins) {
+      const get = nodes.get(id);
+      const host = nodes.get(hostId);
+      const out = host?.pins.find((p) => p.direction === 'out');
+      if (
+        get?.kind === 'getVar' &&
+        host?.kind === 'getVar' &&
+        host.title === get.title &&
+        out &&
+        !hidden.has(id) &&
+        !joins.has(hostId)
+      ) {
+        // A host drawn from its SET draws the joined wires from there too.
+        hidden.set(id, hidden.get(hostId) ?? { node: hostId, pin: out.id });
       }
     }
 
@@ -199,12 +253,11 @@ export function foldVias(
 
     changed = true;
     const edges: GraphEdge[] = fn.edges.map((edge) => {
-      const setter = hidden.get(edge.from.node);
-      if (!setter) {
+      const from = hidden.get(edge.from.node);
+      if (!from) {
         return edge;
       }
 
-      const from = { node: setter.id, pin: 'out' };
       return { ...edge, id: edgeId(from, edge.to), from, via: edge.from.node };
     });
     return {

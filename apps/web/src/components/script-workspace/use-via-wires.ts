@@ -8,8 +8,10 @@ import type {
 import {
   findNode,
   foldVias,
+  joinKey,
   renamedNodes,
   viaGets,
+  viaJoins,
   viaKey,
   viaSetter,
 } from '@vizscript/core';
@@ -53,6 +55,16 @@ function sourceOf(op: GraphOp): PinRef | undefined {
   }
 }
 
+/** The Gets of a variable. */
+function readsOf(doc: GraphDocument, variable: string): Set<string> {
+  return new Set(
+    doc.functions
+      .flatMap((f) => f.nodes)
+      .filter((n) => n.kind === 'getVar' && n.title === variable)
+      .map((n) => n.id)
+  );
+}
+
 /**
  * UE wires a SET's output straight into inputs. The code reads the
  * variable there (a Get node); a Get made by wiring from a SET is
@@ -64,11 +76,17 @@ export function useViaWires(deps: {
 }): ViaWires {
   const canvasDoc = computed(() => {
     const shown = deps.shownDoc.value;
-    return shown ? foldVias(shown, viaGets(deps.pinned.value)) : null;
+    return shown
+      ? foldVias(shown, viaGets(deps.pinned.value), viaJoins(deps.pinned.value))
+      : null;
   });
 
-  /** Wired from a SET: the variable and the Gets it had before. */
-  let pending: { variable: string; before: Set<string> } | null = null;
+  /**
+   * Wired from a SET or a Get: the variable, the Gets it had before, and
+   * the Get wired from (the new read is drawn from it, like UE's node).
+   */
+  let pending: { variable: string; before: Set<string>; host?: string } | null =
+    null;
 
   function throughVias(op: GraphOp): GraphOp {
     const drawn = canvasDoc.value;
@@ -87,14 +105,43 @@ export function useViaWires(deps: {
       ),
     ];
     if (op.type === 'disconnect') {
+      // A wire drawn in place of a Get: breaking it removes that read.
+      const into = vias.find(
+        (e) => e.to.node === op.pin.node && e.to.pin === op.pin.pin
+      );
+      if (into?.via) {
+        return { type: 'deleteNodes', nodeIds: [into.via] };
+      }
+
       const gets = from(op.pin);
+      const own = drawn.functions
+        .flatMap((f) => f.edges)
+        .some(
+          (e) =>
+            !e.via && e.from.node === op.pin.node && e.from.pin === op.pin.pin
+        );
       // Breaking the SET's wires removes the reads of the variable.
-      return gets.length > 0 ? { type: 'deleteNodes', nodeIds: gets } : op;
+      return gets.length > 0 && !own
+        ? { type: 'deleteNodes', nodeIds: gets }
+        : op;
+    }
+
+    // A deleted Get takes the reads joined into it along (its wires).
+    if (op.type === 'deleteNodes') {
+      const joined = vias
+        .filter((e) => e.via && op.nodeIds.includes(e.from.node))
+        .map((e) => e.via ?? '');
+      return joined.length > 0
+        ? { ...op, nodeIds: [...new Set([...op.nodeIds, ...joined])] }
+        : op;
     }
 
     if (op.type === 'moveWires') {
+      const host = drawn.functions
+        .flatMap((f) => f.nodes)
+        .find((n) => n.id === op.from.node);
       const [get, ...rest] = from(op.from);
-      return get && rest.length === 0
+      return get && rest.length === 0 && host?.kind !== 'getVar'
         ? { ...op, from: { node: get, pin: 'value' } }
         : op;
     }
@@ -128,6 +175,16 @@ export function useViaWires(deps: {
     pending = null;
     const source = sourceOf(op);
     const setter = source && doc ? findNode(doc, source.node) : undefined;
+    // Wired from a Get: the new read joins it (UE uses the same node).
+    if (doc && op.type === 'connect' && setter?.kind === 'getVar') {
+      pending = {
+        variable: setter.title,
+        before: readsOf(doc, setter.title),
+        host: setter.id,
+      };
+      return;
+    }
+
     if (
       !doc ||
       setter?.kind !== 'setVar' ||
@@ -138,15 +195,7 @@ export function useViaWires(deps: {
     }
 
     const variable = setter.title.slice('Set '.length);
-    pending = {
-      variable,
-      before: new Set(
-        doc.functions
-          .flatMap((f) => f.nodes)
-          .filter((n) => n.kind === 'getVar' && n.title === variable)
-          .map((n) => n.id)
-      ),
-    };
+    pending = { variable, before: readsOf(doc, variable) };
   }
 
   function afterParse(
@@ -163,14 +212,23 @@ export function useViaWires(deps: {
     const rename = renamedNodes(previous, next, change);
     const before = new Set([...wired.before].map((id) => rename.get(id) ?? id));
     const patch: Positions = {};
+    const host = wired.host
+      ? (rename.get(wired.host) ?? wired.host)
+      : undefined;
     for (const fn of next.functions) {
       for (const node of fn.nodes) {
         if (
-          node.kind === 'getVar' &&
-          node.title === wired.variable &&
-          !before.has(node.id) &&
-          viaSetter(fn, node)
+          node.kind !== 'getVar' ||
+          node.title !== wired.variable ||
+          before.has(node.id) ||
+          node.id === host
         ) {
+          continue;
+        }
+
+        if (host && fn.nodes.some((n) => n.id === host)) {
+          patch[joinKey(node.id, host)] = { x: 0, y: 0 };
+        } else if (!host && viaSetter(fn, node)) {
           patch[viaKey(node.id)] = { x: 0, y: 0 };
         }
       }
