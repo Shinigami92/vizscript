@@ -460,6 +460,63 @@ class SymbolCollector {
     }
   }
 
+  /**
+   * Callbacks: functions written as an argument (`on('x', (err) => …)`).
+   * They have graphs of their own; their symbols let Details edit their
+   * inputs and output. Core names them after their graph (`linkSymbolGraphs`).
+   */
+  callbacks(program: t.Program): void {
+    const visit = (node: t.Node): void => {
+      if (
+        node.type === 'CallExpression' ||
+        node.type === 'NewExpression' ||
+        node.type === 'OptionalCallExpression'
+      ) {
+        for (const arg of node.arguments) {
+          if (isFunctionExpression(arg)) {
+            this.callback(arg);
+          }
+        }
+      }
+
+      for (const child of children(node)) {
+        visit(child);
+      }
+    };
+    visit(program);
+  }
+
+  private callback(
+    node: t.ArrowFunctionExpression | t.FunctionExpression
+  ): void {
+    const start = node.start ?? 0;
+    const [first] = node.params;
+    // `x => …` has no parentheses to add inputs to: the range ends at `x`,
+    // so no list is found there.
+    const bare =
+      node.type === 'ArrowFunctionExpression' &&
+      node.params.length === 1 &&
+      first !== undefined &&
+      first.start === start;
+    const range =
+      bare && first ? { start, end: first.end ?? start } : rangeOf(node);
+    const returns = this.typeRef(node.returnType);
+    this.add({
+      kind: 'function',
+      name: `callback@${start}`,
+      scope: '',
+      range,
+      nameRange: { start, end: start },
+      dataType: 'function',
+      modifiers: ['callback', ...(node.async ? ['async'] : [])],
+      params: node.params.map((p) => this.param(p)),
+      ...(returns
+        ? { returns, returnType: typeFromAnnotation(node.returnType) }
+        : {}),
+      graphStart: start,
+    });
+  }
+
   /** `import a, { b as c, type D } from './x'`, `import * as ns from 'y'`. */
   imports(stmt: t.ImportDeclaration): void {
     for (const specifier of stmt.specifiers) {
@@ -647,5 +704,6 @@ export function typeScriptSymbols(
     collector.statement(stmt);
   }
 
+  collector.callbacks(program);
   return collector.symbols;
 }

@@ -56,6 +56,7 @@ const KEYWORDS = new Set(
 const KINDS = ['var', 'const'];
 
 export const GDSCRIPT_TYPES: TypeSystemInfo = {
+  callback: 'func(): pass',
   classes: godotClasses(),
   inferredType: ':=',
   keywords: [...KEYWORDS],

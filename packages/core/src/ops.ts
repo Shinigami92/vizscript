@@ -304,6 +304,11 @@ export interface TypeSystemInfo {
    */
   classes?: EngineClass[];
   /**
+   * An empty callback (`() => {}`, `lambda: None`, `|| {}`): "Create
+   * callback" writes it into an input, and it gets a graph of its own.
+   */
+  callback?: string;
+  /**
    * Declares a variable with the type of its value (GDScript's `:=`); the
    * type picker offers it next to "No type".
    */

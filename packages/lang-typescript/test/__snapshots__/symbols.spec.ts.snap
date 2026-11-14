@@ -10,7 +10,8 @@ local loadUsers::parsed = … [const]
 class Counter ~Counter
 variable Counter::count ~number = … [private]
 method Counter::increment(by: number): number → Counter.increment
-variable i ~number = … [let]"
+variable i ~number = … [let]
+function users.map callback(u) [callback] → users.map callback"
 `;
 
 exports[`typeScriptSymbols > lists the declarations of the fixtures > exports.ts 1`] = `

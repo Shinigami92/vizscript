@@ -72,6 +72,7 @@ function quote(value: string, literal: PinLiteral): string {
 }
 
 export const RUST_TYPES: TypeSystemInfo = {
+  callback: '|| {}',
   keywords: [...KEYWORDS],
   globals: [
     'println!',

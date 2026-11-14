@@ -140,5 +140,12 @@ export function linkSymbolGraphs(doc: GraphDocument): void {
       (symbol.graphStart === undefined
         ? undefined
         : byStart.get(symbol.graphStart)) ?? byName.get(qualifiedName(symbol));
+    // A callback (`on('x', (e) => …)`) is named like its graph.
+    const graph = symbol.modifiers.includes('callback')
+      ? doc.functions.find((f) => f.id === symbol.fnId)
+      : undefined;
+    if (graph) {
+      symbol.name = graph.name;
+    }
   }
 }

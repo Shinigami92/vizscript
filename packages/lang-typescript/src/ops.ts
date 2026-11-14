@@ -33,6 +33,7 @@ const KINDS = ['const', 'let', 'var'];
 const ACCESS = ['public', 'protected', 'private'];
 
 export const TYPESCRIPT_TYPES: TypeSystemInfo = {
+  callback: '() => {}',
   keywords: [...KEYWORDS],
   globals: [
     'console.log',

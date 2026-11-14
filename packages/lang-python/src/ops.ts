@@ -47,6 +47,7 @@ const KEYWORDS = new Set(
 );
 
 export const PYTHON_TYPES: TypeSystemInfo = {
+  callback: 'lambda: None',
   keywords: [...KEYWORDS],
   globals: [
     'print',
