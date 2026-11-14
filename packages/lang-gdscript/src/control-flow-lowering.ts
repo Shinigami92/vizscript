@@ -77,9 +77,13 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
         this.execIn(),
         arrayPin,
         this.execOut('body', 'Loop Body', this.blockInsert(stmt.body)),
-        this.dataOut('element', stmt.variable, elementType, {
-          sourceText: stmt.variable,
-        }),
+        this.dataOut(
+          'element',
+          stmt.variable,
+          elementType,
+          { sourceText: stmt.variable },
+          rangeOf(stmt.variableSpan)
+        ),
         this.execOut(
           'completed',
           'Completed',

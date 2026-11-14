@@ -420,7 +420,13 @@ export class FnGraphBuilder extends ControlFlowLowering {
           member ? undefined : this.statementInsert(stmt, inline)
         ),
         valuePin,
-        this.dataOut('out', '', type, { sourceText: stmt.name }),
+        this.dataOut(
+          'out',
+          '',
+          type,
+          { sourceText: stmt.name },
+          rangeOf(stmt.nameSpan)
+        ),
       ],
       path,
       meta: this.statementMeta(stmt, inline, sole),
@@ -565,7 +571,8 @@ export class FnGraphBuilder extends ControlFlowLowering {
         'out',
         '',
         scoped?.type ?? 'any',
-        varName ? { sourceText: varName } : {}
+        varName ? { sourceText: varName } : {},
+        rangeOf(target)
       )
     );
 
