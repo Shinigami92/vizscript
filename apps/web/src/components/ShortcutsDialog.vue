@@ -35,6 +35,10 @@ const GROUPS: ReadonlyArray<{
         input: 'Double-click the node, or {F12}',
       },
       {
+        action: 'Back to where a graph is used',
+        input: 'Right-click its entry node → Jump to usage',
+      },
+      {
         action: 'Edit a variable',
         input: 'Select one of its Get / Set nodes; Details shows the variable',
       },

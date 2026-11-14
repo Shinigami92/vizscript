@@ -23,6 +23,13 @@ export interface GraphCanvasProps {
   initialCamera?: Camera | null;
   /** Describes where "Go to definition" of a node leads, if anywhere. */
   definitionOf?: (nodeId: string) => string | undefined;
+  /**
+   * Where a graph is used, for its entry node: the callback node or the
+   * calls of the function (the way back from Go to definition).
+   */
+  usagesOf?: (
+    entryId: string
+  ) => ReadonlyArray<{ nodeId: string; label: string }>;
   /** Problems per node, shown as ERROR / WARNING banners. */
   problems?: ReadonlyMap<string, ReadonlyArray<Problem>>;
   /** Nodes the code doesn't match yet (graph-only edits). */
@@ -90,6 +97,8 @@ export interface CanvasEvents {
   op: (op: GraphOp) => void;
   activate: (id: string) => void;
   goToDefinition: (id: string) => void;
+  /** Shows a node of any function (switching the focused graph). */
+  jumpTo: (id: string) => void;
   resetLayout: (ids: string[]) => void;
   openFunction: (fnId: string) => void;
 }

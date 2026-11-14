@@ -64,6 +64,7 @@ const emit = defineEmits<{
   op: [op: GraphOp];
   activate: [id: string];
   goToDefinition: [id: string];
+  jumpTo: [id: string];
   cameraChange: [camera: Camera];
   /** Forget saved positions so the nodes go back to the auto layout. */
   resetLayout: [ids: string[]];
@@ -385,6 +386,7 @@ const events: CanvasEvents = {
   op: (op) => emit('op', op),
   activate: (id) => emit('activate', id),
   goToDefinition: (id) => emit('goToDefinition', id),
+  jumpTo: (id) => emit('jumpTo', id),
   resetLayout: (ids) => emit('resetLayout', ids),
   openFunction: (fnId) => emit('openFunction', fnId),
 };

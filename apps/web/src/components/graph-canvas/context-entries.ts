@@ -81,6 +81,14 @@ export function createContextEntries(
         shortcut: opensGraph ? undefined : 'Double-click',
         action: () => events.activate(target.nodeId),
       },
+      // The way back: where this graph is used (a callback's node, calls).
+      ...(ids.length === 1 && first?.node.kind === 'entry'
+        ? (props.usagesOf?.(target.nodeId) ?? []).slice(0, 10).map((usage) => ({
+            label: `Jump to usage in ${usage.label}`,
+            icon: 'i-mdi-arrow-u-left-top',
+            action: () => events.jumpTo(usage.nodeId),
+          }))
+        : []),
       ...(definition
         ? [
             {

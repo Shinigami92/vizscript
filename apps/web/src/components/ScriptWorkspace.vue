@@ -369,6 +369,45 @@ async function goToDefinition(nodeId: string): Promise<void> {
 }
 
 /**
+ * Where the graph of an entry node is used: the nodes whose Go to
+ * definition leads to it (a callback's node, the calls of a function).
+ */
+function usagesOf(entryId: string): Array<{ nodeId: string; label: string }> {
+  const d = doc.value;
+  const fn = d?.functions.find((f) => f.nodes.some((n) => n.id === entryId));
+  if (!d || !fn) {
+    return [];
+  }
+
+  return d.functions.flatMap((other) =>
+    other.nodes
+      .filter((node) => {
+        if (node.kind !== 'call' && node.kind !== 'functionRef') {
+          return false;
+        }
+
+        const target = findDefinitionTarget(
+          d,
+          text.value,
+          references.value,
+          resolveReference,
+          node.id
+        );
+        return target?.kind === 'node' && target.fnId === fn.id;
+      })
+      .map((node) => ({
+        nodeId: node.id,
+        label: `${other.name} · line ${text.value.slice(0, node.range.start).split('\n').length}`,
+      }))
+  );
+}
+
+/** Shows a node of any function, switching the focused graph if needed. */
+async function jumpTo(nodeId: string): Promise<void> {
+  await selectNodes([nodeId]);
+}
+
+/**
  * Double-click on a node: a call or callback opens the graph it leads to
  * (UE's double-click on a function or collapsed graph node); other nodes
  * show their code.
@@ -859,6 +898,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           :editable="editable"
           :initial-camera="initialCamera"
           :definition-of="describeDefinition"
+          :usages-of="usagesOf"
           :problems="nodeProblems"
           :sync-nodes="syncNodes"
           :imports="importedNames"
@@ -874,6 +914,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           @navigate="navigateFocus"
           @activate="onNodeActivate"
           @go-to-definition="goToDefinition"
+          @jump-to="jumpTo"
           @camera-change="onCameraChange"
           @undo="undo"
           @redo="redo"
