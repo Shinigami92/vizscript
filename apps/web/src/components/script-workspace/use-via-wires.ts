@@ -217,6 +217,26 @@ export function useViaWires(deps: {
       return;
     }
 
+    // The wires of a Get moved to another Get of the variable: the reads
+    // join that one; the Get they left stays, alone.
+    const target =
+      doc && op.type === 'moveWires' ? findNode(doc, op.to.node) : undefined;
+    const moved =
+      doc && op.type === 'moveWires' ? findNode(doc, op.from.node) : undefined;
+    if (
+      doc &&
+      target?.kind === 'getVar' &&
+      moved?.kind === 'getVar' &&
+      target.title === moved.title
+    ) {
+      pending = {
+        variable: target.title,
+        before: readsOf(doc, target.title),
+        host: target.id,
+      };
+      return;
+    }
+
     if (
       !doc ||
       setter?.kind !== 'setVar' ||

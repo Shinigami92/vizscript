@@ -99,6 +99,24 @@ describe('moving wires (Ctrl+drag)', () => {
     );
   });
 
+  it('keeps the node whose output wires moved, like UE', () => {
+    const text =
+      'function f(a: number) {\n  let t = a;\n  const d = t - t * 2;\n}\n';
+    const [upper, lower] =
+      parseTypeScript(text, 't.ts')
+        .functions.find((fn) => fn.name === 'f')
+        ?.nodes.filter((n) => n.kind === 'getVar' && n.title === 't') ?? [];
+    expect(
+      apply(text, {
+        type: 'moveWires',
+        from: { node: lower?.id ?? '', pin: 'value' },
+        to: { node: upper?.id ?? '', pin: 'value' },
+      })
+    ).toBe(
+      'function f(a: number) {\n  let t = a;\n  t;\n  const d = t - t * 2;\n}\n'
+    );
+  });
+
   it('refuses exec pins', () => {
     const text = 'function f() {\n  g();\n}\n';
     const call = parseTypeScript(text, 't.ts')

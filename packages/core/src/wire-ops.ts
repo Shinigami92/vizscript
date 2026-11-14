@@ -165,9 +165,10 @@ export function moveWires(
   }
 
   if (fromPin.direction === 'out') {
-    // Every input the old output fed takes the new one.
+    // Every input the old output fed takes the new one; the old node stays
+    // (unwired, like UE's).
     return mergeEdits(
-      edges.map((e) => connectData(text, doc, to, e.to, syntax))
+      edges.map((e) => connectReplacing(text, doc, to, e.to, syntax))
     );
   }
 
