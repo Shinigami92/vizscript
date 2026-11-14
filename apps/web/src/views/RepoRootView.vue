@@ -2,10 +2,12 @@
 import type { ProviderId } from '@vizscript/api-contract';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api } from '../api/client';
+import { repoSource } from '../api/repo-source';
+import { useSessionStore } from '../stores/session';
 
 const route = useRoute();
 const router = useRouter();
+const session = useSessionStore();
 const error = ref<string | null>(null);
 
 // Resolves the default branch, then redirects to the repository view.
@@ -14,7 +16,10 @@ onMounted(async () => {
   const owner = String(route.params.owner);
   const repo = String(route.params.repo);
   try {
-    const info = await api.getRepo(provider, owner, repo);
+    const info = await repoSource(provider, session.me !== null).getRepo(
+      owner,
+      repo
+    );
     await router.replace({
       name: 'repo',
       params: {

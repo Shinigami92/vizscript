@@ -17,16 +17,18 @@ import {
   watch,
 } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api } from '../api/client';
+import { repoSource } from '../api/repo-source';
 import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
+import RepoAccessHint from '../components/RepoAccessHint.vue';
 import ScriptWorkspace from '../components/ScriptWorkspace.vue';
 import { useFileTabs } from '../composables/use-file-tabs';
 import { useToasts } from '../composables/use-toasts';
 import type { LayoutStore } from '../graph/layout-store';
-import { apiLayoutStore } from '../graph/layout-store';
+import { repoLayoutStore } from '../graph/layout-store';
 import { disposeModel } from '../monaco/models';
 import { useRecentStore } from '../stores/recent';
+import { useSessionStore } from '../stores/session';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
 import Workbench from '../workbench/Workbench.vue';
@@ -36,6 +38,7 @@ const route = useRoute();
 const router = useRouter();
 const { show } = useToasts();
 const workbench = useWorkbenchStore();
+const session = useSessionStore();
 
 const provider = computed(() => String(route.params.provider) as ProviderId);
 const owner = computed(() => String(route.params.owner));
@@ -45,6 +48,9 @@ const path = computed(() => {
   const value = route.params.path;
   return Array.isArray(value) ? value.join('/') : (value ?? '');
 });
+
+/** Signed in: through the API; signed out: public repositories from GitHub. */
+const source = computed(() => repoSource(provider.value, session.me !== null));
 
 const tree = shallowRef<TreeResponse | null>(null);
 const branches = shallowRef<BranchSummary[]>([]);
@@ -69,14 +75,18 @@ const dirty = computed(
     (text.value !== file.value.content || overlay.value.edits.length > 0)
 );
 
+/** Whether layout changes go to the shared layout (else this browser). */
+const layoutShared = ref<boolean | null>(null);
+
 const layoutStore = computed<LayoutStore | null>(() =>
   file.value
-    ? apiLayoutStore(
+    ? repoLayoutStore(
         provider.value,
         owner.value,
         repo.value,
         ref_.value,
-        file.value.path
+        file.value.path,
+        (canWrite) => (layoutShared.value = canWrite)
       )
     : null
 );
@@ -101,8 +111,8 @@ async function loadTree(): Promise<void> {
   tree.value = null;
   try {
     const [t, b] = await Promise.all([
-      api.getTree(provider.value, owner.value, repo.value, ref_.value),
-      api.listBranches(provider.value, owner.value, repo.value).catch(() => []),
+      source.value.getTree(owner.value, repo.value, ref_.value),
+      source.value.listBranches(owner.value, repo.value).catch(() => []),
     ]);
     tree.value = t;
     branches.value = b;
@@ -176,8 +186,8 @@ function readFile(filePath: string): Promise<string> {
 
   let read = readCache.get(filePath);
   if (!read) {
-    read = api
-      .getFile(provider.value, owner.value, repo.value, ref_.value, filePath)
+    read = source.value
+      .getFile(owner.value, repo.value, ref_.value, filePath)
       .then((f) => f.content);
     read.catch(() => readCache.delete(filePath));
     readCache.set(filePath, read);
@@ -275,8 +285,7 @@ async function loadFile(): Promise<void> {
 
   loadingFile.value = true;
   try {
-    const loaded = await api.getFile(
-      provider.value,
+    const loaded = await source.value.getFile(
       owner.value,
       repo.value,
       ref_.value,
@@ -499,6 +508,7 @@ function switchBranch(event: Event): void {
           :title="loadingFile ? path : file.path"
           >{{ loadingFile ? path : file.path }}</span
         >
+        <RepoAccessHint :shared="layoutShared" />
         <span
           v-if="loadingFile"
           class="i-mdi-loading shrink-0 animate-spin text-zinc-500"
@@ -542,6 +552,7 @@ function switchBranch(event: Event): void {
         <span class="truncate text-sm text-zinc-400"
           >{{ owner }}/{{ repo }}</span
         >
+        <RepoAccessHint :shared="null" />
         <div class="ml-auto">
           <LayoutMenu />
         </div>

@@ -67,7 +67,6 @@ async function logout(): Promise<void> {
       </nav>
       <nav v-else class="flex items-center gap-1 text-sm">
         <RouterLink
-          v-if="session.me"
           to="/repos"
           class="btn-ghost px-2"
           active-class="!text-zinc-50"
@@ -107,8 +106,8 @@ async function logout(): Promise<void> {
         >
           <span :class="theme.icon" />
         </button>
+        <RecentMenu />
         <template v-if="session.me">
-          <RecentMenu />
           <img
             v-if="session.me.avatarUrl"
             :src="session.me.avatarUrl"

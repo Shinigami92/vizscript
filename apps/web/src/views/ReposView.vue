@@ -5,10 +5,12 @@ import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { api } from '../api/client';
 import { recentLocation, timeAgo, useRecentStore } from '../stores/recent';
+import { useSessionStore } from '../stores/session';
 
 const REPO_PATTERN = /^([\w.-]+)\/([\w.-]+)$/;
 
 const recent = useRecentStore();
+const session = useSessionStore();
 void recent.load();
 
 function fileName(path: string): string {
@@ -23,6 +25,11 @@ const error = ref<string | null>(null);
 const direct = computed(() => query.value.trim().match(REPO_PATTERN));
 
 async function load(): Promise<void> {
+  // Signed out, there is no list: public repositories open by owner/name.
+  if (!session.me) {
+    return;
+  }
+
   loading.value = true;
   error.value = null;
   try {
@@ -69,8 +76,20 @@ function openDirect(): void {
     <div>
       <h1 class="text-xl font-semibold">Repositories</h1>
       <p class="text-sm text-zinc-400">
-        Pick a repository, or type
-        <code class="text-zinc-300">owner/name</code> to open any public one.
+        <template v-if="session.me">
+          Pick a repository, or type
+          <code class="text-zinc-300">owner/name</code> to open any public one.
+        </template>
+        <template v-else>
+          Type <code class="text-zinc-300">owner/name</code> to open a public
+          repository.
+          <RouterLink
+            :to="{ name: 'login', query: { redirect: '/repos' } }"
+            class="text-sky-300 hover:underline"
+            >Sign in</RouterLink
+          >
+          to list your repositories, open private ones and share layouts.
+        </template>
       </p>
     </div>
 
@@ -136,7 +155,8 @@ function openDirect(): void {
         v-model="query"
         class="input"
         type="search"
-        placeholder="Search or owner/name…"
+        :placeholder="session.me ? 'Search or owner/name…' : 'owner/name'"
+        aria-label="Repository"
       />
       <button
         class="btn-ghost border border-zinc-700"
@@ -154,7 +174,7 @@ function openDirect(): void {
       {{ error }}
     </p>
 
-    <ul class="card divide-y divide-zinc-800">
+    <ul v-if="session.me" class="card divide-y divide-zinc-800">
       <li
         v-if="loading && repos.length === 0"
         class="px-4 py-6 text-center text-sm text-zinc-500"

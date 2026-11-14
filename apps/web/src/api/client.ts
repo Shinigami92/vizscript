@@ -1,5 +1,6 @@
 import type {
   BranchSummary,
+  ClientConfig,
   FileResponse,
   LayoutResponse,
   LayoutUpdateRequest,
@@ -73,6 +74,9 @@ function layoutPath(
 }
 
 export const api = {
+  config(): Promise<ClientConfig> {
+    return request('GET', '/config');
+  },
   me(): Promise<MeResponse> {
     return request('GET', '/auth/me');
   },

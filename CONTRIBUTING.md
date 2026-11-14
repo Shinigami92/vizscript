@@ -14,17 +14,19 @@ pnpm dev                    # API on :3333 (migrates on start), web on :5173
 ```
 
 - http://localhost:5173/playground works without signing in.
-- To browse repositories, sign in with a GitHub [fine-grained token](https://github.com/settings/personal-access-tokens/new) with read access to _Contents_ and _Metadata_.
+- Public repositories open without signing in (`/repos`, type `owner/name`). To list and open your own, sign in with a GitHub [fine-grained token](https://github.com/settings/personal-access-tokens/new) with read access to _Contents_ and _Metadata_.
 - The web dev server proxies `/api` to the API.
 
 ### Environment
 
-| Variable         | Purpose                                                                      |
-| ---------------- | ---------------------------------------------------------------------------- |
-| `DATABASE_URL`   | Postgres for the API, migrations and the API e2e tests                       |
-| `APP_SECRET`     | Signs sessions and encrypts stored tokens; at least 32 characters            |
-| `SECURE_COOKIES` | `true` when served over HTTPS                                                |
-| `PORT`           | API port (default `3333`); the web dev server reads `API_PORT` for its proxy |
+| Variable         | Purpose                                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`   | Postgres for the API, migrations and the API e2e tests                                                  |
+| `APP_SECRET`     | Signs sessions and encrypts stored tokens; at least 32 characters                                       |
+| `SECURE_COOKIES` | `true` when served over HTTPS                                                                           |
+| `PORT`           | API port (default `3333`); the web dev server reads `API_PORT` for its proxy                            |
+| `GITHUB_API_URL` | GitHub REST API (default `https://api.github.com`); GitHub Enterprise: `https://<host>/api/v3`          |
+| `GITHUB_RAW_URL` | Raw file contents (default `https://raw.githubusercontent.com`, or `https://<host>/raw` for Enterprise) |
 
 ### Docker
 
@@ -157,6 +159,16 @@ Like UE, a graph may be in states the code can't hold yet: an exec wire broken w
 | Camera, color scheme              | URL (`?view=x,y,zoom`) and browser storage                                                       |
 
 Repositories are keyed by the provider's numeric id, so layouts survive renames. The playground uses browser storage only.
+
+### Signed in or not
+
+Signing in is optional. Without a session:
+
+- **Reading repositories:** the web app reads public repositories straight from GitHub without a token (`apps/web/src/api/github-public.ts`, chosen by `repoSource`), so every visitor has GitHub's 60 requests per hour of their own IP instead of sharing the server's. Files come from the raw host (`ClientConfig.github.rawUrl`, no API request; their git blob sha is computed in the browser), so only the repository, its tree and its branches count. `RepoAccessHint` shows the requests left. `GET /api/config` tells the web app where GitHub is (`GITHUB_API_URL`, `GITHUB_RAW_URL`, e.g. GitHub Enterprise in an internal network).
+- **Layouts:** `GET /api/layouts/…` works without a session for public repositories (`OptionalSessionGuard`). Changing a shared layout needs a session and push access (`RepoAccessService` asks the provider with the user's token, cached for 5 minutes; `LayoutResponse.canWrite`). Without it, `repoLayoutStore` keeps the user's moves in browser storage on top of the shared layout.
+- **Recent projects** stay in browser storage (`vizscript:recent`), the **workbench layout** in its browser cache; drafts are local either way.
+
+Signed in, the API reads through the user's stored token (private repositories, 5,000 requests per hour) and keeps recent projects and preferences per user.
 
 ### Extension points
 

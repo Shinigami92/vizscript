@@ -55,7 +55,72 @@ export function timeAgo(iso: string, now = Date.now()): string {
   return 'just now';
 }
 
-/** Recently opened repositories of the signed-in user (stored on the server). */
+const LOCAL_KEY = 'vizscript:recent';
+const LOCAL_LIMIT = 20;
+
+function sameRepo(a: RecentProjectRequest, b: RecentProjectRequest): boolean {
+  return (
+    a.provider === b.provider &&
+    a.owner.toLowerCase() === b.owner.toLowerCase() &&
+    a.repo.toLowerCase() === b.repo.toLowerCase()
+  );
+}
+
+function readLocal(): RecentProject[] {
+  try {
+    const value = JSON.parse(
+      localStorage.getItem(LOCAL_KEY) ?? '[]'
+    ) as unknown;
+    return Array.isArray(value) ? (value as RecentProject[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocal(projects: RecentProject[]): void {
+  try {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(projects));
+  } catch {
+    // storage unavailable: the list stays in memory
+  }
+}
+
+/**
+ * Moves a repository to the top, like the server does: a new file wins, the
+ * repository root of the same branch keeps the last file, and another branch
+ * forgets it.
+ */
+function touchLocal(
+  projects: ReadonlyArray<RecentProject>,
+  request: RecentProjectRequest
+): RecentProject[] {
+  const previous = projects.find((p) => sameRepo(p, request));
+  const branch = request.ref ?? previous?.ref ?? null;
+  const keepsPath =
+    previous !== undefined &&
+    (request.ref === undefined ||
+      request.ref === null ||
+      request.ref === previous.ref);
+  const path = request.path ?? (keepsPath ? previous.path : null);
+
+  const next: RecentProject = {
+    provider: request.provider,
+    owner: request.owner,
+    repo: request.repo,
+    ref: branch,
+    path,
+    openedAt: new Date().toISOString(),
+  };
+  return [next, ...projects.filter((p) => !sameRepo(p, request))].slice(
+    0,
+    LOCAL_LIMIT
+  );
+}
+
+/**
+ * Recently opened repositories: stored on the server for signed-in users,
+ * in this browser for signed-out visitors.
+ */
 export const useRecentStore = defineStore('recent', () => {
   const session = useSessionStore();
   const projects = ref<RecentProject[]>([]);
@@ -63,7 +128,8 @@ export const useRecentStore = defineStore('recent', () => {
 
   async function load(): Promise<void> {
     if (!session.me) {
-      projects.value = [];
+      projects.value = readLocal();
+      loaded.value = true;
       return;
     }
 
@@ -78,6 +144,8 @@ export const useRecentStore = defineStore('recent', () => {
 
   async function touch(project: RecentProjectRequest): Promise<void> {
     if (!session.me) {
+      projects.value = touchLocal(readLocal(), project);
+      writeLocal(projects.value);
       return;
     }
 
@@ -90,6 +158,11 @@ export const useRecentStore = defineStore('recent', () => {
 
   async function remove(project: RecentProject): Promise<void> {
     projects.value = projects.value.filter((p) => p !== project);
+    if (!session.me) {
+      writeLocal(projects.value);
+      return;
+    }
+
     try {
       await api.removeRecent(project.provider, project.owner, project.repo);
     } catch {
