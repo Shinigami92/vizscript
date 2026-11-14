@@ -57,7 +57,7 @@ Don't start a second copy.
 
 - First remember the current viewport size, to restore it at the end: `async (page) => page.viewportSize() ?? { width: await page.evaluate(() => window.innerWidth), height: await page.evaluate(() => window.innerHeight) }` (`browser_run_code_unsafe`).
 - Viewport **1733×1009** (`browser_resize`): the user's real Chrome size. Dark theme, the app's default.
-- Open the target URL. On the playground, click **Reset** in the top bar to start from the original sample.
+- Open the target URL. On the playground, click **Reset** in the top bar to start from the original sample (`[data-ui=playground-reset]`; it is only shown when the sample, its graph-only edits or its layout differ from the original). Reset keeps the camera.
 - Click the "fit all" button in the zoom controls (bottom right of the graph) so the whole graph is visible.
 
 ## 3. Phase 1: rebuild the script by hand

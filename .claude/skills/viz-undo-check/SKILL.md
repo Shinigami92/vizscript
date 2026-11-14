@@ -53,11 +53,12 @@ Same rules as `viz-user-test`:
      });
      await page.goto('http://localhost:5173/playground?sample=<name>');
      await page.waitForTimeout(1500);
-     await page
-       .getByRole('button', { name: /^Reset/ })
-       .first()
-       .click();
-     await page.waitForTimeout(1000);
+     // Reset is only shown when the sample was changed.
+     const reset = page.locator('[data-ui=playground-reset]');
+     if (await reset.isVisible()) {
+       await reset.click();
+       await page.waitForTimeout(1000);
+     }
      return page.evaluate(() => typeof window.__undoCheck);
    };
    ```
