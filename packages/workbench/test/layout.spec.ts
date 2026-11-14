@@ -93,8 +93,8 @@ describe('layout operations', () => {
   });
 
   it('reorders inside a zone', () => {
-    const l = moveView(defaultLayout(), 'graph', 'center', 0);
-    expect(l.zones.center.views).toEqual(['graph', 'code', 'preview']);
+    const l = moveView(defaultLayout(), 'preview', 'center', 0);
+    expect(l.zones.center.views).toEqual(['preview', 'graph']);
   });
 
   it('tracks which views are visible', () => {

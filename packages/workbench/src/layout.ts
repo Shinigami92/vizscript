@@ -121,11 +121,33 @@ export interface LayoutPreset {
   create: () => WorkbenchLayout;
 }
 
+/** Graph in the main area, code in the bottom panel below it. */
+function graphAboveCode(): Pick<
+  Record<ZoneId, ZoneState>,
+  'center' | 'bottom'
+> {
+  return {
+    center: zone(['graph', 'preview'], { split: true }),
+    bottom: zone(['code'], { size: SIZE_LIMITS.bottom.initial }),
+  };
+}
+
 export const PRESETS: ReadonlyArray<LayoutPreset> = [
   {
     id: 'default',
     name: 'Default',
-    description: 'Explorer left, code and graph side by side, details right',
+    description: 'Explorer left, graph above code, details right',
+    create: () =>
+      layout({
+        left: sidebar(),
+        ...graphAboveCode(),
+        right: zone(['details'], { size: SIZE_LIMITS.right.initial }),
+      }),
+  },
+  {
+    id: 'side-by-side',
+    name: 'Side by side',
+    description: 'Code and graph next to each other',
     create: () =>
       layout({
         left: sidebar(),
@@ -143,10 +165,7 @@ export const PRESETS: ReadonlyArray<LayoutPreset> = [
     create: () =>
       layout({
         left: zone(['details'], { size: SIZE_LIMITS.right.initial }),
-        center: zone(['code', 'graph', 'preview'], {
-          split: true,
-          weights: { code: 0.42, graph: 0.58, preview: 0.58 },
-        }),
+        ...graphAboveCode(),
         right: sidebar(),
       }),
   },
@@ -164,18 +183,6 @@ export const PRESETS: ReadonlyArray<LayoutPreset> = [
           split: true,
           weights: { code: 0.42, graph: 0.58, preview: 0.58 },
         }),
-      }),
-  },
-  {
-    id: 'graph-focus',
-    name: 'Graph focus',
-    description: 'Graph in the main area, code in the bottom panel',
-    create: () =>
-      layout({
-        left: sidebar(),
-        center: zone(['graph', 'preview'], { split: true }),
-        right: zone(['details'], { size: SIZE_LIMITS.right.initial }),
-        bottom: zone(['code'], { size: SIZE_LIMITS.bottom.initial }),
       }),
   },
   {

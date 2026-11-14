@@ -4,7 +4,7 @@ Visualize source code as Unreal-Engine-Blueprint-style node graphs.
 
 ![A TypeScript function shown as a node graph above its code, with a comment box, a comment bubble and a For Each loop, next to the My Script and Details panels](docs/screenshot.png)
 
-Open a repository and pick a script. vizscript shows it as code, as a node graph, or both side by side, and keeps them in sync. The graph has two kinds of wires:
+Open a repository and pick a script. vizscript shows it as a node graph with the code below it (or side by side, or just one of them), and keeps them in sync. The graph has two kinds of wires:
 
 - **Exec wires** (white) show the order in which the code runs.
 - **Data wires** (colored by type) connect values, such as variables, parameters and call results, to the inputs that use them.
