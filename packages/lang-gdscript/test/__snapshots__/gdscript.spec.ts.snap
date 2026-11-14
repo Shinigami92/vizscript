@@ -104,7 +104,7 @@ function _nearest_enemy
   #1 setVar "Set best" (var: Node3D) [<exec:▶ >then:▶ <value:Node3D=null >out:Node3D]
   #2 getVar "RANGE" [>value:number]
   #3 call "Engine.is_editor_hint" [<exec:▶ >then:▶ >return:bool]
-  #4 operator "not" [<a:any >value:bool]
+  #4 operator "not" [<a:bool >value:bool]
   #5 select "Select" [<condition:bool <true:number <false:number=0.0 >value:number]
   #6 setVar "Set best_distance" (var) [<exec:▶ >then:▶ <value:number >out:number]
   #7 getVar "best" [>value:Node3D]

@@ -34,5 +34,6 @@ export * from './symbols';
 export * from './text-ops';
 export * from './text-utils';
 export * from './type-info';
+export * from './wildcard-pins';
 export * from './types';
 export * from './value-fields';

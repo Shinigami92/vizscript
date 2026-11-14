@@ -1,6 +1,7 @@
 import type { StatementMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import type { GraphDocument } from './ir';
+import { typeWildcardPins } from './wildcard-pins';
 
 const VARIABLE_KINDS = new Set(['variable', 'constant', 'local']);
 
@@ -9,7 +10,8 @@ const VARIABLE_KINDS = new Set(['variable', 'constant', 'local']);
  * - a Return's value takes the function's declared result (`return;` of a
  *   function returning `string` offers string actions);
  * - an untyped variable takes the type of the value it is declared with
- *   (`const t = greet(user)` is a string when `greet` returns one).
+ *   (`const t = greet(user)` is a string when `greet` returns one);
+ * - untyped inputs of operators take the type wired into them.
  */
 export function inferTypes(doc: GraphDocument): void {
   const symbols = doc.symbols ?? [];
@@ -71,4 +73,6 @@ export function inferTypes(doc: GraphDocument): void {
       symbol.dataType = type;
     }
   }
+
+  doc.functions = doc.functions.map(typeWildcardPins);
 }

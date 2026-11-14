@@ -5,7 +5,7 @@ exports[`parsePythonDocument > lowers the fixture 1`] = `
   #0 entry "Module" (shop.py) [>then:▶]
   #1 setVar "Set TAX" [<exec:▶ >then:▶ <value:number=0.19 >out:number]
   #2 getVar "__name__" [>value:string]
-  #3 operator "==" [<a:any <b:string="__main__" >value:bool]
+  #3 operator "==" [<a:string <b:string="__main__" >value:bool]
   #4 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
   #5 call "load" [<exec:▶ >then:▶ <arg0:string="cart.json" >return:Item[]]
   #6 setVar "Set total" [<exec:▶ >then:▶ <value:Item[] >out:Item[]]
@@ -62,7 +62,7 @@ function checkout
   #10 throw "Raise" [<exec:▶ <error:any]
   #11 forEach "For Each" [<exec:▶ <array:Item[] >body:▶ >element:Item >completed:▶]
   #12 getProperty ".quantity" [<target:object >value:number]
-  #13 operator "<=" [<a:any <b:number=0 >value:bool]
+  #13 operator "<=" [<a:number <b:number=0 >value:bool]
   #14 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
   #15 continue "Continue" [<exec:▶]
   #16 getProperty ".name" [<target:object >value:string]
@@ -138,7 +138,7 @@ function Item.total
   #0 entry "Item.total" (method) [>then:▶ >param0:Item]
   #1 getVar "self.price" [>value:number]
   #2 getVar "self.quantity" [>value:number]
-  #3 operator "*" [<a:any <b:any >value:number]
+  #3 operator "*" [<a:number <b:number >value:number]
   #4 return "Return" [<exec:▶ <value:number]
   --> #1.value -> #3.a
   --> #2.value -> #3.b

@@ -7,6 +7,7 @@ import type {
   SourceRange,
 } from './ir';
 import type { ScriptSymbol, SymbolParam } from './symbols';
+import { typeWildcardPins } from './wildcard-pins';
 
 /** A field or method of a type, for the action menu (`response.ok`). */
 export interface TypeMember {
@@ -192,7 +193,8 @@ function typedSymbol(symbol: ScriptSymbol, types: TypeMap): ScriptSymbol {
  * The document with the checker's types: data outputs get the exact type
  * (and `Pin.typeText`), unwired `void` results lose their pin, untyped
  * variables and parameters get their inferred type, and `typeMembers` the
- * members of every type seen, by its text. Answers of `any` keep what the
+ * members of every type seen, by its text. Untyped operator inputs follow
+ * their wires (`typeWildcardPins`). Answers of `any` keep what the
  * parser found. Unchanged parts are shared, not copied.
  *
  * `types` must come from the same text the document was parsed from.
@@ -213,7 +215,9 @@ export function applyTypes(doc: GraphDocument, types: TypeMap): GraphDocument {
 
   return {
     ...doc,
-    functions: doc.functions.map((fn) => typedFunction(fn, types)),
+    functions: doc.functions.map((fn) =>
+      typeWildcardPins(typedFunction(fn, types))
+    ),
     ...(doc.symbols
       ? { symbols: doc.symbols.map((s) => typedSymbol(s, types)) }
       : {}),

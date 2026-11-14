@@ -110,6 +110,14 @@ describe('type information from a checker', () => {
       );
     expect(ok?.type).toBe('bool');
 
+    // The `!` of `!response.ok` takes the type wired into it.
+    const not = nodes.find((n) => n.kind === 'operator' && n.title === '!');
+    const before = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.id === not?.id);
+    expect(before?.pins.find((p) => p.direction === 'in')?.type).toBe('any');
+    expect(not?.pins.find((p) => p.direction === 'in')?.type).toBe('bool');
+
     // `any` answers keep the parser's type
     const json = nodeTitled(nodes, 'response.json').pins.find(
       (p) => p.direction === 'out' && p.kind === 'data'
