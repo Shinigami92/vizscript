@@ -489,6 +489,11 @@ export function graphEditsFor(
 ): GraphEdit[] | undefined {
   switch (op.type) {
     case 'connect': {
+      // A converted value needs its conversion in the code: no graph-only wire.
+      if (op.convert) {
+        return undefined;
+      }
+
       const fn = functionOfNode(doc, op.from.node);
       const from = fn?.nodes
         .find((n) => n.id === op.from.node)

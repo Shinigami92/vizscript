@@ -21,6 +21,7 @@ import {
   replaceKeyword,
 } from '@vizscript/core';
 import type { ImplItem, Item, StructItem } from './ast';
+import { CONVERSIONS } from './conversions';
 import { parseRust } from './convert';
 import { addRustImport } from './imports';
 import { parseRustDocument } from './lower';
@@ -73,6 +74,7 @@ function quote(value: string, literal: PinLiteral): string {
 
 export const RUST_TYPES: TypeSystemInfo = {
   callback: '|| {}',
+  conversions: CONVERSIONS,
   keywords: [...KEYWORDS],
   globals: [
     'println!',

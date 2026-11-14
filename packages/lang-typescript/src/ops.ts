@@ -17,6 +17,7 @@ import {
   withStartValue,
 } from '@vizscript/core';
 import { addTypeScriptImport } from './add-import';
+import { CONVERSIONS } from './conversions';
 import { parseFile, parseTypeScript } from './lower';
 import { renameTypeScriptSymbol, typeScriptCallSites } from './rename';
 
@@ -35,6 +36,7 @@ const ACCESS = ['public', 'protected', 'private'];
 
 export const TYPESCRIPT_TYPES: TypeSystemInfo = {
   callback: '() => {}',
+  conversions: CONVERSIONS,
   keywords: [...KEYWORDS],
   globals: [
     'console.log',

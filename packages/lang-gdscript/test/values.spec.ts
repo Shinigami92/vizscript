@@ -58,3 +58,21 @@ describe('values', () => {
     expect(set()).toContain('\tscore = null\n');
   });
 });
+
+describe('conversions (UE autocast)', () => {
+  it('writes str() around a number wired into a string input', () => {
+    const text = 'func f():\n\tvar count := 5\n\tvar label: String = ""\n';
+    const doc = parseGDScriptDocument(text);
+    const nodes = doc.functions.flatMap((f) => f.nodes);
+    const count = nodes.find((n) => n.title === 'Set count');
+    const label = nodes.find((n) => n.title === 'Set label');
+    expect(
+      apply(text, {
+        type: 'connect',
+        from: { node: count?.id ?? '', pin: 'out' },
+        to: { node: label?.id ?? '', pin: 'value' },
+        convert: 'str($value)',
+      })
+    ).toBe('func f():\n\tvar count := 5\n\tvar label: String = str(count)\n');
+  });
+});

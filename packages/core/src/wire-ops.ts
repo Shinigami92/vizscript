@@ -1,3 +1,4 @@
+import { applyConversion } from './conversions';
 import type {
   ExecOutPinMeta,
   InputPinMeta,
@@ -177,13 +178,20 @@ export function moveWires(
   );
 }
 
+/**
+ * Wires a value into a data input. `convert` (a conversion template like
+ * `String($value)`) wraps the value, like UE's autocast node.
+ */
 export function connectData(
   text: string,
   doc: GraphDocument,
   from: PinRef,
   to: PinRef,
-  syntax: StatementSyntax
+  syntax: StatementSyntax,
+  convert?: string
 ): OpResult {
+  const wrap = (expression: string): string =>
+    convert ? applyConversion(convert, expression) : expression;
   const target = findNode(doc, to.node);
   const targetPin = findPin(target, to.pin);
   if (
@@ -211,7 +219,14 @@ export function connectData(
     );
   }
 
-  const inlined = inlineIntoNextStatement(text, doc, from, target, targetPin);
+  const inlined = inlineIntoNextStatement(
+    text,
+    doc,
+    from,
+    target,
+    targetPin,
+    wrap
+  );
   if (inlined) {
     return inlined;
   }
@@ -247,7 +262,7 @@ export function connectData(
 
     return succeeded([
       ...reference.edits,
-      inputEdit(targetPin, targetRange, reference.text),
+      inputEdit(targetPin, targetRange, wrap(reference.text)),
     ]);
   }
 
@@ -259,7 +274,7 @@ export function connectData(
       {
         start: insertAt,
         end: insertAt,
-        text: `${inputMeta.insertPrefix ?? ' = '}${reference.text}`,
+        text: `${inputMeta.insertPrefix ?? ' = '}${wrap(reference.text)}`,
       },
     ]);
   }
@@ -277,7 +292,8 @@ function inlineIntoNextStatement(
   doc: GraphDocument,
   from: PinRef,
   target: GraphNode,
-  targetPin: Pin
+  targetPin: Pin,
+  wrap: (expression: string) => string
 ): OpResult | undefined {
   const source = findNode(doc, from.node);
   const consumer = owningStatement(target);
@@ -313,7 +329,7 @@ function inlineIntoNextStatement(
     return undefined;
   }
 
-  const expression = text.slice(expr.start, expr.end);
+  const expression = wrap(text.slice(expr.start, expr.end));
   const [removeStart, removeEnd] = lineAwareRange(text, stmt.start, stmt.end);
   const removal: TextEdit = { start: removeStart, end: removeEnd, text: '' };
   if (targetPin.range) {

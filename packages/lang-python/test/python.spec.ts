@@ -287,3 +287,14 @@ describe('applyPythonOp', () => {
     );
   });
 });
+
+describe('conversions (UE autocast)', () => {
+  it('draws str(x) as a compact pure node', () => {
+    const doc = parsePythonDocument('print(str(count))\n');
+    const convert = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.title === 'str');
+    expect(convert?.purity).toBe('pure');
+    expect(convert?.compact).toBe(true);
+  });
+});

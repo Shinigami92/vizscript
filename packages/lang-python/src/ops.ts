@@ -8,6 +8,7 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import { applyTextOp, removeModifier } from '@vizscript/core';
+import { CONVERSIONS } from './conversions';
 import { parsePython } from './convert';
 import { splitString } from './convert-utils';
 import { addPythonImport } from './imports';
@@ -48,6 +49,7 @@ const KEYWORDS = new Set(
 
 export const PYTHON_TYPES: TypeSystemInfo = {
   callback: 'lambda: None',
+  conversions: CONVERSIONS,
   keywords: [...KEYWORDS],
   globals: [
     'print',

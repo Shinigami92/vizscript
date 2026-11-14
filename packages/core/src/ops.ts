@@ -1,3 +1,4 @@
+import type { Conversion } from './conversions';
 import type { EngineClass } from './engine-classes';
 import type { ImportRequest, ParseOptions } from './imports';
 import type { DataType, GraphDocument, PinRef, Point } from './ir';
@@ -67,7 +68,13 @@ export type NodeTemplate =
 export type GraphOp =
   | { type: 'deleteNodes'; nodeIds: string[] }
   | { type: 'setLiteral'; node: string; pin: string; value: string }
-  | { type: 'connect'; from: PinRef; to: PinRef }
+  | {
+      type: 'connect';
+      from: PinRef;
+      to: PinRef;
+      /** Conversion template (`String($value)`) for a value of another type. */
+      convert?: string;
+    }
   | { type: 'disconnect'; pin: PinRef }
   /** The operator of an assignment: `=`, `+=`, `-=` … (not of declarations). */
   | { type: 'setAssignOperator'; node: string; operator: string }
@@ -308,6 +315,11 @@ export interface TypeSystemInfo {
    * callback" writes it into an input, and it gets a graph of its own.
    */
   callback?: string;
+  /**
+   * Conversions between pin types (UE's autocast): wiring a value into an
+   * input of another type writes the template around it.
+   */
+  conversions?: ReadonlyArray<Conversion>;
   /**
    * Declares a variable with the type of its value (GDScript's `:=`); the
    * type picker offers it next to "No type".

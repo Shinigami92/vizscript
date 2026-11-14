@@ -1,7 +1,9 @@
 import type * as t from '@babel/types';
+import { conversionCall } from '@vizscript/core';
 import type { DataType, Pin } from '@vizscript/core';
 import type { InsertPoint, OutputPinMeta } from '@vizscript/core';
 import { arrayElementType, arrayOfAll, truncate } from '@vizscript/core';
+import { CONVERSIONS } from './conversions';
 import { GraphBuilder } from './graph-builder';
 import type { EvalMode, InputSpec, ValueSource } from './lower-utils';
 import {
@@ -103,11 +105,17 @@ export abstract class ExpressionLowering extends GraphBuilder {
       });
     }
 
+    // `String(x)`: a pure compact node, like UE's autocast.
+    const converts =
+      isNew || mode === 'statement'
+        ? undefined
+        : conversionCall(CONVERSIONS, title, inputs.length);
     const returnType: DataType =
+      converts ??
       (knownName ? this.doc.functionReturnTypes.get(knownName) : undefined) ??
       (isNew && chain ? (chain.at(-1) ?? 'object') : 'any');
 
-    const impure = mode !== 'pure';
+    const impure = mode !== 'pure' && converts === undefined;
     const pins: Pin[] = impure
       ? [this.execIn(), this.execOut('then', '', statement?.insert)]
       : [];
@@ -132,6 +140,7 @@ export abstract class ExpressionLowering extends GraphBuilder {
       title,
       category: impure ? 'function' : 'pure',
       purity: impure ? 'impure' : 'pure',
+      ...(converts ? { compact: true } : {}),
       range:
         mode === 'statement' && statement
           ? rangeOf(statement.stmt)

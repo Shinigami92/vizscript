@@ -7,6 +7,7 @@ export * from './declaration-syntax';
 export * from './display';
 export * from './edit-meta';
 export * from './flow';
+export * from './conversions';
 export * from './geometry';
 export * from './graph-builder';
 export * from './engine-classes';

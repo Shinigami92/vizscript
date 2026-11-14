@@ -1,3 +1,4 @@
+import { conversionCall } from '@vizscript/core';
 import type {
   DataType,
   InputSpec,
@@ -13,6 +14,7 @@ import {
   truncate,
 } from '@vizscript/core';
 import type { Expr, Span } from './ast';
+import { CONVERSIONS } from './conversions';
 import type { DocumentContext, GraphSource, Signature } from './lower-utils';
 import { COMPARISONS, rangeOf, simpleChain, unwrap } from './lower-utils';
 
@@ -128,8 +130,13 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       });
     }
 
-    const returnType: DataType = signature?.returnType ?? 'any';
-    const impure = mode !== 'pure';
+    // `str(x)`: a pure compact node, like UE's autocast.
+    const converts =
+      mode === 'statement'
+        ? undefined
+        : conversionCall(CONVERSIONS, title, inputs.length);
+    const returnType: DataType = converts ?? signature?.returnType ?? 'any';
+    const impure = mode !== 'pure' && converts === undefined;
     const pins: Pin[] = impure
       ? [this.execIn(), this.execOut('then', '', statement?.insert)]
       : [];
@@ -153,6 +160,7 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       title,
       category: impure ? 'function' : 'pure',
       purity: impure ? 'impure' : 'pure',
+      ...(converts ? { compact: true } : {}),
       range:
         mode === 'statement' && statement
           ? rangeOf(statement.stmt)

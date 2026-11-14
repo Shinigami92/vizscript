@@ -515,7 +515,7 @@ function applyTextOpEdits(
             text,
             connectExec(text, doc, op.from, op.to, syntax)
           )
-        : connectData(text, doc, op.from, op.to, syntax);
+        : connectData(text, doc, op.from, op.to, syntax, op.convert);
     }
 
     case 'disconnect': {

@@ -17,6 +17,7 @@ import {
   withStartValue,
 } from '@vizscript/core';
 import { addGDScriptImport } from './add-import';
+import { CONVERSIONS } from './conversions';
 import { godotClasses, godotSingletonCalls } from './godot';
 import { setGDScriptSymbolGroup } from './groups';
 import { parseGDScriptDocument } from './lower';
@@ -58,6 +59,7 @@ const KINDS = ['var', 'const'];
 
 export const GDSCRIPT_TYPES: TypeSystemInfo = {
   callback: 'func(): pass',
+  conversions: CONVERSIONS,
   classes: godotClasses(),
   inferredType: ':=',
   keywords: [...KEYWORDS],
