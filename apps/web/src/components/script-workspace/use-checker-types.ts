@@ -1,11 +1,22 @@
-import type { GraphDocument, ParseOptions, TypeMap } from '@vizscript/core';
-import { applyTypes, checkTypes } from '@vizscript/core';
+import type {
+  FloatingNodes,
+  GraphDocument,
+  ParseOptions,
+  TypeMap,
+} from '@vizscript/core';
+import {
+  applyTypes,
+  checkTypes,
+  floatingDoc,
+  typedFloatingNodes,
+} from '@vizscript/core';
 import type { Ref, ShallowRef } from 'vue';
 import { onBeforeUnmount } from 'vue';
 import { languageOf } from '../../graph/languages';
 import {
   onCheckerFilesChange,
   typescriptTypes,
+  typescriptTypesInText,
 } from '../../monaco/ts-type-provider';
 
 interface CheckerTypeDeps {
@@ -34,6 +45,7 @@ function withoutMembers(types: TypeMap): TypeMap {
 export function useCheckerTypes(deps: CheckerTypeDeps): {
   refineTypes: (seq: number, source: string, parsed: GraphDocument) => void;
   checkedFor: (text: string) => ParseOptions['checked'];
+  typeFloating: (edit: FloatingNodes, text: string) => Promise<FloatingNodes>;
 } {
   /** The latest answers, without members (graph edits don't need them). */
   let checked: ParseOptions['checked'];
@@ -81,5 +93,20 @@ export function useCheckerTypes(deps: CheckerTypeDeps): {
     // Sent with graph edits of that text, so the worker's parse has the
     // argument pins the graph shows.
     checkedFor: (text) => (checked?.text === text ? checked : undefined),
+    // Graph-only nodes: typed in the copy of the code they were written
+    // into, so their values get the members of their type (`console`).
+    typeFloating: async (edit, text) => {
+      if (languageOf(deps.path()) !== 'typescript') {
+        return edit;
+      }
+
+      const types = await checkTypes(
+        floatingDoc(edit),
+        text,
+        deps.path(),
+        typescriptTypesInText
+      );
+      return types ? typedFloatingNodes(edit, types) : edit;
+    },
   };
 }

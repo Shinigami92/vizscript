@@ -273,6 +273,7 @@ const {
       });
     },
     positionOf: (id) => canvas.value?.getPositions()[id] ?? positions.value[id],
+    typeFloating: (edit, source) => typeFloating(edit, source),
     placed: (ids) => {
       const moved: Positions = {};
       for (const [from, to] of Object.entries(ids)) {
@@ -560,7 +561,7 @@ let parseSeq = 0;
 /** The text `doc` was parsed from (ranges of `doc` point into it). */
 const docText = ref('');
 
-const { refineTypes, checkedFor } = useCheckerTypes({
+const { refineTypes, checkedFor, typeFloating } = useCheckerTypes({
   path: () => props.path,
   parsedDoc,
   docText,

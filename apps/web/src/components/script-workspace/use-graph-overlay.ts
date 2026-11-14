@@ -45,6 +45,8 @@ export interface GraphOverlayDeps {
   placeFloating: (edit: FloatingNodes, world: Point, fixed?: Positions) => void;
   /** Where a node is shown. */
   positionOf: (id: string) => Point | undefined;
+  /** Floating nodes with a checker's types (the copy they were made in). */
+  typeFloating: (edit: FloatingNodes, text: string) => Promise<FloatingNodes>;
   /** Floating nodes were written as code: their nodes got these ids. */
   placed: (ids: Record<string, string>) => void;
   show: (message: string, kind?: 'info' | 'error') => void;
@@ -162,7 +164,7 @@ export function useGraphOverlay(
       return;
     }
 
-    let edit = result.edit;
+    let edit = await deps.typeFloating(result.edit, result.text);
     const edits: GraphEdit[] = [];
     if (feed) {
       const fed = feedFloating(edit, feed.placeholder, feed.from);

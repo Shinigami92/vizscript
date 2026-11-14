@@ -9,6 +9,8 @@ import type { GraphOp, NodeTemplate, OpResult, TextEdit } from './ops';
 import { applyTextEdits } from './ops';
 import type { TextChange } from './reconcile';
 import { renamedNodes } from './reconcile';
+import type { TypeMap } from './type-info';
+import { applyTypes } from './type-info';
 
 /** What graph-only edits need from a language backend. */
 export interface OverlayBackend {
@@ -17,7 +19,8 @@ export interface OverlayBackend {
 }
 
 export type FloatingResult =
-  | { ok: true; edit: FloatingNodes }
+  /** `text`: the copy of the code the nodes were written into (types). */
+  | { ok: true; edit: FloatingNodes; text: string }
   | { ok: false; error: string };
 
 /** Name of the function a dry run adds when the file has none. */
@@ -147,6 +150,7 @@ function collect(
   return {
     ok: true,
     edit: { type: 'addNodes', id, fnId, code: written.code, nodes, edges },
+    text: nextText,
   };
 }
 
@@ -214,7 +218,7 @@ export function floatingNodes(
     false
   );
   return result.ok && home
-    ? { ok: true, edit: { ...result.edit, fnId: home } }
+    ? { ...result, edit: { ...result.edit, fnId: home } }
     : result;
 }
 
@@ -381,4 +385,39 @@ export function sameFloatingNodes(
   }
 
   return result;
+}
+
+/**
+ * Floating nodes with a checker's types (asked at their pins' ranges in
+ * the copy of the code they were written into, `FloatingResult.text`),
+ * and the members of those types for the action menu.
+ */
+export function typedFloatingNodes(
+  edit: FloatingNodes,
+  types: TypeMap
+): FloatingNodes {
+  const typed = applyTypes(floatingDoc(edit), types);
+  const nodes = typed.functions[0]?.nodes ?? edit.nodes;
+  return {
+    ...edit,
+    nodes,
+    ...(typed.typeMembers ? { typeMembers: typed.typeMembers } : {}),
+  };
+}
+
+/** Floating nodes as a document of their own (to ask for their types). */
+export function floatingDoc(edit: FloatingNodes): GraphDocument {
+  return {
+    language: '',
+    diagnostics: [],
+    functions: [
+      {
+        id: edit.fnId,
+        name: '',
+        range: { start: 0, end: 0 },
+        nodes: edit.nodes,
+        edges: edit.edges,
+      },
+    ],
+  };
 }

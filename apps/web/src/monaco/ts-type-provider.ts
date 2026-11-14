@@ -7,6 +7,39 @@ interface VizWorker {
     fileName: string,
     ranges: ReadonlyArray<SourceRange>
   ): Promise<Array<TypeInfo | undefined>>;
+  vizTypesAtText(
+    fileName: string,
+    text: string,
+    ranges: ReadonlyArray<SourceRange>
+  ): Promise<Array<TypeInfo | undefined>>;
+}
+
+/**
+ * Types from TypeScript's checker for another text of a file open in an
+ * editor (a copy with graph-only nodes written into it).
+ */
+export const typescriptTypesInText: TypeProvider = {
+  async typesAt(text, fileName, ranges) {
+    const uri = modelUri(fileName);
+    const worker = await workerFor(uri);
+    return worker
+      ? worker.vizTypesAtText(uri.toString(), text, ranges)
+      : ranges.map(() => undefined);
+  },
+};
+
+async function workerFor(uri: monaco.Uri): Promise<VizWorker | undefined> {
+  const model = monaco.editor.getModel(uri);
+  if (!model) {
+    return undefined;
+  }
+
+  const ts = monaco.typescript;
+  const getWorker =
+    model.getLanguageId() === 'javascript'
+      ? await ts.getJavaScriptWorker()
+      : await ts.getTypeScriptWorker();
+  return (await getWorker(uri)) as unknown as VizWorker;
 }
 
 /**
@@ -17,18 +50,13 @@ interface VizWorker {
 export const typescriptTypes: TypeProvider = {
   async typesAt(text, fileName, ranges) {
     const uri = modelUri(fileName);
-    const model = monaco.editor.getModel(uri);
-    if (!model || model.getValue() !== text) {
-      return ranges.map(() => undefined);
-    }
-
-    const ts = monaco.typescript;
-    const getWorker =
-      model.getLanguageId() === 'javascript'
-        ? await ts.getJavaScriptWorker()
-        : await ts.getTypeScriptWorker();
-    const worker = (await getWorker(uri)) as unknown as VizWorker;
-    return worker.vizTypesAt(uri.toString(), ranges);
+    const worker =
+      monaco.editor.getModel(uri)?.getValue() === text
+        ? await workerFor(uri)
+        : undefined;
+    return worker
+      ? worker.vizTypesAt(uri.toString(), ranges)
+      : ranges.map(() => undefined);
   },
 };
 

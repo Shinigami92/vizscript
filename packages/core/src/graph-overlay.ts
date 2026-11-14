@@ -11,6 +11,7 @@ import type {
 import type { GraphOp } from './ops';
 import type { TextChange } from './reconcile';
 import { renamedNodes } from './reconcile';
+import type { TypeMember } from './type-info';
 
 /**
  * A change that exists only in the graph (UE lets a graph be in states that
@@ -39,6 +40,8 @@ export type GraphEdit =
       nodes: GraphNode[];
       /** Wires between the nodes. */
       edges: GraphEdge[];
+      /** Members of the nodes' types (a checker's, for the action menu). */
+      typeMembers?: Record<string, ReadonlyArray<TypeMember>>;
     };
 
 /** An `addNodes` edit. */
@@ -239,9 +242,18 @@ export function applyOverlay(
     }
   }
 
+  // Members of the floating nodes' types, for the action menu.
+  let typeMembers = doc.typeMembers;
+  for (const edit of overlay.edits) {
+    if (edit.type === 'addNodes' && edit.typeMembers) {
+      typeMembers = { ...edit.typeMembers, ...typeMembers };
+    }
+  }
+
   return {
     ...doc,
     functions: functions.map((fn) => markFloating(withoutReceiverPins(fn))),
+    ...(typeMembers ? { typeMembers } : {}),
   };
 }
 

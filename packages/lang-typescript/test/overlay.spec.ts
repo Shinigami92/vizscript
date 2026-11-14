@@ -15,6 +15,7 @@ import {
   overlayIssues,
   remapOverlay,
   resolveOverlay,
+  typedFloatingNodes,
 } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
@@ -554,6 +555,40 @@ describe('nodes made from a dragged value', () => {
         '  return Math.round(x * 100) / 100;',
         '  const roundResult = Math.round(x * 100);\n  console.log();\n  return roundResult / 100;'
       )
+    );
+  });
+
+  it('types floating nodes in the copy they were made in', () => {
+    const floating = floatingNodes(
+      source,
+      { type: 'value', expression: 'console' },
+      'fn:f',
+      'g3',
+      backend
+    );
+    if (!floating.ok) {
+      throw new Error(floating.error);
+    }
+
+    const out = floating.edit.nodes[0]?.pins.find((p) => p.direction === 'out');
+    const range = out?.range ?? { start: 0, end: 0 };
+    const members = [
+      { name: 'log', kind: 'method' as const, type: 'void', detail: 'log()' },
+    ];
+    const typed = typedFloatingNodes(
+      floating.edit,
+      new Map([
+        [
+          `${range.start}:${range.end}`,
+          { dataType: 'object', text: 'Console', members },
+        ],
+      ])
+    );
+    const value = typed.nodes[0]?.pins.find((p) => p.direction === 'out');
+    expect(value?.typeText).toBe('Console');
+    // The graph shows their members (the action menu offers `.log()`).
+    expect(applyOverlay(doc, { edits: [typed] }).typeMembers?.Console).toEqual(
+      members
     );
   });
 
