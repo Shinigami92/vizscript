@@ -117,10 +117,13 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
     visibleIn: SourceRange
   ): Pin[] {
     return bindings.map((b, i) =>
-      this.dataOut(`${prefix}${i}`, b.name, 'any', {
-        sourceText: b.name,
-        visibleIn,
-      })
+      this.dataOut(
+        `${prefix}${i}`,
+        b.name,
+        'any',
+        { sourceText: b.name, visibleIn },
+        rangeOf(b)
+      )
     );
   }
 
@@ -292,10 +295,13 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
     ];
     if (name) {
       pins.push(
-        this.dataOut('element', name, isRange ? 'number' : elementType, {
-          sourceText: name,
-          visibleIn: rangeOf(stmt.body),
-        })
+        this.dataOut(
+          'element',
+          name,
+          isRange ? 'number' : elementType,
+          { sourceText: name, visibleIn: rangeOf(stmt.body) },
+          rangeOf(stmt.pattern.bindings[0] ?? stmt.pattern)
+        )
       );
     } else {
       pins.push(

@@ -94,7 +94,13 @@ export class FnGraphBuilder extends ControlFlowLowering {
           this.execIn(),
           this.execOut('then', ''),
           valuePin,
-          this.dataOut('out', '', type, { sourceText: item.name }),
+          this.dataOut(
+            'out',
+            '',
+            type,
+            { sourceText: item.name },
+            rangeOf(item.nameSpan)
+          ),
         ],
         path,
         meta: {
@@ -542,9 +548,23 @@ export class FnGraphBuilder extends ControlFlowLowering {
       ? `Set ${name}`
       : `Set ${truncate(this.src(rangeOf(stmt.pattern)), 28)}`;
     const outputs: Pin[] = name
-      ? [this.dataOut('out', '', type, { sourceText: name })]
+      ? [
+          this.dataOut(
+            'out',
+            '',
+            type,
+            { sourceText: name },
+            rangeOf(stmt.pattern.bindings[0] ?? stmt.pattern)
+          ),
+        ]
       : stmt.pattern.bindings.map((b, i) =>
-          this.dataOut(`out${i}`, b.name, 'any', { sourceText: b.name })
+          this.dataOut(
+            `out${i}`,
+            b.name,
+            'any',
+            { sourceText: b.name },
+            rangeOf(b)
+          )
         );
     const pins: Pin[] = [
       this.execIn(),
@@ -665,7 +685,13 @@ export class FnGraphBuilder extends ControlFlowLowering {
       category: 'function',
       inputs,
       outputs: [
-        this.dataOut('out', '', type, varName ? { sourceText: varName } : {}),
+        this.dataOut(
+          'out',
+          '',
+          type,
+          varName ? { sourceText: varName } : {},
+          rangeOf(target)
+        ),
       ],
     });
   }
