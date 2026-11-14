@@ -305,6 +305,19 @@ export function createContextEntries(
     const peers = edges.map((e) =>
       pin.direction === 'in' ? e.from.node : e.to.node
     );
+    /** The other end of each wire, named like UE's "Break link to …". */
+    const links = edges.map((edge) => {
+      const peer = pin.direction === 'in' ? edge.from : edge.to;
+      const node = index.nodes.get(peer.node)?.node;
+      const title = node?.title ?? 'node';
+      const name = node?.pins.find((p) => p.id === peer.pin)?.name;
+      return {
+        edge,
+        node: peer.node,
+        title,
+        label: name ? `${title} · ${name}` : title,
+      };
+    });
     const source = { ...toRaw(target.pin) };
     const argument =
       entry.node.kind === 'call' && pin.range && ARG_PIN.test(pin.id)
@@ -373,20 +386,33 @@ export function createContextEntries(
             },
           ]
         : []),
-      {
-        label:
-          pin.direction === 'in'
-            ? 'Select connected source'
-            : 'Select connected targets',
-        icon: 'i-mdi-ray-start-arrow',
-        disabled: peers.length === 0,
-        reason: 'Nothing is wired to this pin.',
-        action: () => ctx.selectNodes([...new Set(peers)]),
-      },
+      // UE's "Jump to …": frame the node at the other end.
+      ...links
+        .filter((link, i) => links.findIndex((l) => l.node === link.node) === i)
+        .map((link) => ({
+          label: `Jump to ${link.title}`,
+          icon: 'i-mdi-arrow-right-circle-outline',
+          action: () => ctx.selectNodes([link.node]),
+        })),
+      ...(new Set(peers).size > 1
+        ? [
+            {
+              label: 'Select all connected nodes',
+              icon: 'i-mdi-ray-start-arrow',
+              action: () => ctx.selectNodes([...new Set(peers)]),
+            },
+          ]
+        : []),
       ...(props.editable
         ? [
             {
-              label: edges.length > 1 ? 'Break all links' : 'Break link',
+              // UE's "Break link to …", or "Break all links" for several.
+              label:
+                links.length > 1
+                  ? 'Break all links'
+                  : links.length === 1
+                    ? `Break link to ${links[0]?.label ?? 'node'}`
+                    : 'Break link',
               icon: 'i-mdi-link-variant-off',
               shortcut: 'Alt+Click',
               // Exec wires the code can't drop stay broken in the graph.
@@ -396,22 +422,17 @@ export function createContextEntries(
               reason: 'Nothing is wired to this pin.',
               action: () => events.op({ type: 'disconnect', pin: source }),
             },
-            // UE's "Break link to …": one wire of several.
-            ...(edges.length > 1
-              ? edges.map((edge) => {
-                  const peer = pin.direction === 'in' ? edge.from : edge.to;
-                  const node = index.nodes.get(peer.node)?.node;
-                  const name = node?.pins.find((p) => p.id === peer.pin)?.name;
-                  return {
-                    label: `Break link to ${node?.title ?? 'node'}${name ? ` · ${name}` : ''}`,
-                    icon: 'i-mdi-link-variant-minus',
-                    action: () =>
-                      events.op({
-                        type: 'disconnect',
-                        pin: { ...toRaw(edge.to) },
-                      }),
-                  };
-                })
+            // One wire of several.
+            ...(links.length > 1
+              ? links.map((link) => ({
+                  label: `Break link to ${link.label}`,
+                  icon: 'i-mdi-link-variant-minus',
+                  action: () =>
+                    events.op({
+                      type: 'disconnect',
+                      pin: { ...toRaw(link.edge.to) },
+                    }),
+                }))
               : []),
             ...(argument
               ? [
