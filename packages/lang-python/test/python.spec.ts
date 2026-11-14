@@ -193,7 +193,7 @@ describe('applyPythonOp', () => {
   it('writes Python booleans', () => {
     const text = 'path.mkdir(exist_ok=True)\n';
     const doc = parsePythonDocument(text);
-    const mkdir = fn(doc, 'Module').nodes.find((n) => n.title === 'path.mkdir');
+    const mkdir = fn(doc, 'Module').nodes.find((n) => n.title === 'mkdir');
     expect(
       apply(text, {
         type: 'setLiteral',

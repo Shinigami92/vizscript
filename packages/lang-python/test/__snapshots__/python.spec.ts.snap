@@ -7,10 +7,10 @@ exports[`parsePythonDocument > lowers the fixture 1`] = `
   #2 getVar "__name__" [>value:string]
   #3 operator "==" [<a:string <b:string="__main__" >value:bool]
   #4 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
-  #5 call "load" [<exec:▶ >then:▶ <arg0:string="cart.json" >return:Item[]]
+  #5 call "load" [<exec:▶ >then:▶ <target:object <arg0:string="cart.json" >return:Item[]]
   #6 setVar "Set total" [<exec:▶ >then:▶ <value:Item[] >out:Item[]]
   #7 getVar "total" [>value:Item[]]
-  #8 call "print" [<exec:▶ >then:▶ <arg0:string="Total:" <arg1:Item[] <param:sep:string= <param:end:string=]
+  #8 call "print" [<exec:▶ >then:▶ <target:object <arg0:string="Total:" <arg1:Item[] <param:sep:string= <param:end:string=]
   ==> #0.then -> #1.exec
   --> #2.value -> #3.a
   --> #3.value -> #4.condition
@@ -30,28 +30,30 @@ function Item
   ==> #2.then -> #3.exec
 function load
   #0 entry "load" (def) [>then:▶ >param0:string]
-  #1 call "open" [<exec:▶ >then:▶ <arg0:string <arg1:string="utf-8" >return:any]
+  #1 call "open" [<exec:▶ >then:▶ <target:object <arg0:string <arg1:string="utf-8" >return:any]
   #2 try "With" [<exec:▶ <context0:any >body:▶ >as0:any >completed:▶]
-  #3 call "json.load" [<exec:▶ >then:▶ <arg0:any >return:any]
-  #4 setVar "Set data" [<exec:▶ >then:▶ <value:any >out:any]
-  #5 getVar "data" [>value:any]
-  #6 makeArray "List Comprehension" ([Item(**row) for row in data]) [<source0:any >value:array]
-  #7 return "Return" [<exec:▶ <value:array]
+  #3 getVar "json" [>value:any]
+  #4 call "load" [<exec:▶ >then:▶ <target:object <arg0:any >return:any]
+  #5 setVar "Set data" [<exec:▶ >then:▶ <value:any >out:any]
+  #6 getVar "data" [>value:any]
+  #7 makeArray "List Comprehension" ([Item(**row) for row in data]) [<source0:any >value:array]
+  #8 return "Return" [<exec:▶ <value:array]
   --> #0.param0 -> #1.arg0
   ==> #0.then -> #1.exec
   --> #1.return -> #2.context0
   ==> #1.then -> #2.exec
-  --> #2.as0 -> #3.arg0
-  ==> #2.body -> #3.exec
-  --> #3.return -> #4.value
-  ==> #3.then -> #4.exec
-  --> #5.value -> #6.source0
-  --> #6.value -> #7.value
-  ==> #2.completed -> #7.exec
+  --> #3.value -> #4.target
+  --> #2.as0 -> #4.arg0
+  ==> #2.body -> #4.exec
+  --> #4.return -> #5.value
+  ==> #4.then -> #5.exec
+  --> #6.value -> #7.source0
+  --> #7.value -> #8.value
+  ==> #2.completed -> #8.exec
 function checkout
   #0 entry "checkout" (async def) [>then:▶ >param0:Item[] >param1:string]
   #1 makeArray "Generator Comprehension" (item.total() for item in items) [<source0:Item[] >value:array]
-  #2 call "sum" [<exec:▶ >then:▶ <arg0:array >return:any]
+  #2 call "sum" [<exec:▶ >then:▶ <target:object <arg0:array >return:any]
   #3 setVar "Set subtotal" [<exec:▶ >then:▶ <value:any >out:any]
   #4 operator "==" [<a:string <b:string="HALF" >value:bool]
   #5 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
@@ -68,21 +70,21 @@ function checkout
   #16 getProperty ".name" [<target:object >value:string]
   #17 call "total" [<exec:▶ >then:▶ <target:object >return:number]
   #18 template "Format Text" (f"{0}: {1}") [<part0:any <part1:any >value:string]
-  #19 call "print" [<exec:▶ >then:▶ <arg0:string <param:sep:string= <param:end:string=]
+  #19 call "print" [<exec:▶ >then:▶ <target:object <arg0:string <param:sep:string= <param:end:string=]
   #20 try "Try" [<exec:▶ >try:▶ >except0:▶ >error0:any >finally:▶ >completed:▶]
   #21 getVar "subtotal" [>value:any]
-  #22 call "notify" [<exec:▶ >then:▶ <arg0:any >return:any]
+  #22 call "notify" [<exec:▶ >then:▶ <target:object <arg0:any >return:any]
   #23 await "Await" [<exec:▶ >then:▶ <awaitable:any >result:any]
-  #24 call "print" [<exec:▶ >then:▶ <arg0:string="offline" <arg1:any <arg2:string=" - " <param:end:string=]
+  #24 call "print" [<exec:▶ >then:▶ <target:object <arg0:string="offline" <arg1:any <arg2:string=" - " <param:end:string=]
   #25 getVar "subtotal" [>value:any]
-  #26 call "len" [<exec:▶ >then:▶ <arg0:Item[] >return:number]
+  #26 call "len" [<exec:▶ >then:▶ <target:object <arg0:Item[] >return:number]
   #27 makeObject "Make Dict" [<p0:any <p1:any >value:object]
   #28 setVar "Set log" [<exec:▶ >then:▶ <value:object >out:object]
   #29 getVar "subtotal" [>value:any]
   #30 getVar "TAX" [>value:number]
   #31 operator "+" [<a:number=1 <b:number >value:number]
   #32 operator "*" [<a:any <b:number >value:any]
-  #33 call "round" [<exec:▶ >then:▶ <arg0:any <arg1:number=2 >return:number]
+  #33 call "round" [<exec:▶ >then:▶ <target:object <arg0:any <arg1:number=2 >return:number]
   #34 return "Return" [<exec:▶ <value:number]
   --> #0.param0 -> #1.source0
   --> #1.value -> #2.arg0

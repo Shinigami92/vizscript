@@ -122,10 +122,12 @@ describe('the Python type lookup', () => {
   it('gives method calls a pin per parameter', () => {
     const strip = doc.functions
       .flatMap((f) => f.nodes)
-      .find((n) => n.title === 'word.strip');
+      .find((n) => n.title === 'strip');
     expect(
       strip?.pins
-        .filter((p) => p.direction === 'in' && p.kind === 'data')
+        .filter(
+          (p) => p.direction === 'in' && p.kind === 'data' && p.id !== 'target'
+        )
         .map((p) => [p.id, p.type, p.literal?.value])
     ).toEqual([['param:chars', 'string', 'None']]);
   });

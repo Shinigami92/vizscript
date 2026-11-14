@@ -93,10 +93,12 @@ describe('declarations of imported files', () => {
     expect(summarizeGraph(doc)).toMatchInlineSnapshot(`
       "function Module
         #0 entry "Module" (main.py) [>then:▶]
-        #1 call "greet" [<exec:▶ >then:▶ <arg0:string="a" <param:punctuation:string= >return:string]
-        #2 call "util.greet" [<exec:▶ >then:▶ <arg0:string="b" <param:punctuation:string= >return:string]
+        #1 call "greet" [<exec:▶ >then:▶ <target:object <arg0:string="a" <param:punctuation:string= >return:string]
+        #2 getVar "util" [>value:any]
+        #3 call "greet" [<exec:▶ >then:▶ <target:object <arg0:string="b" <param:punctuation:string= >return:string]
         ==> #0.then -> #1.exec
-        ==> #1.then -> #2.exec"
+        --> #2.value -> #3.target
+        ==> #1.then -> #3.exec"
     `);
   });
 });
@@ -170,7 +172,7 @@ describe('standard library', () => {
       imports: [{ name: 'math', members: exports }],
     });
     expect(summarizeGraph(doc)).toContain(
-      'call "math.log" [<exec:▶ >then:▶ <arg0:number=8 <param:base:number= >return:number]'
+      'call "log" [<exec:▶ >then:▶ <target:object <arg0:number=8 <param:base:number= >return:number]'
     );
   });
 });

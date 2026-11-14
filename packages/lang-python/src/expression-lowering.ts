@@ -90,20 +90,31 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
 
     const chain = simpleChain(callee);
     const root = chain?.[0];
-    const rootWired =
-      root !== undefined && this.lookup(root)?.source !== undefined;
-    if (chain && (!rootWired || chain.length === 1 || root === 'self')) {
-      title = chain.join('.');
+    // A free call gets an unwired `self` that writes `value.` before the
+    // function's name (UE's Target pin); classes (constructors) get none.
+    let freeTarget: Pin | undefined;
+    if (chain) {
       signature =
         root === 'self' && this.className
           ? this.doc.signatures.get(
               `${this.className}.${chain.slice(1).join('.')}`
             )
-          : this.doc.signatures.get(title);
+          : this.doc.signatures.get(chain.join('.'));
+    }
+
+    if (chain?.length === 1) {
+      title = chain[0] ?? '';
+      if (!/^[A-Z]/.test(title)) {
+        freeTarget = this.dataIn('target', 'self', undefined, 'object', {
+          insertInitAt: rangeOf(callee).start,
+          insertPrefix: '',
+          insertSuffix: '.',
+        });
+      }
     } else if (callee.type === 'Attribute') {
       title = callee.name;
       inputs.push({
-        pin: this.dataIn('target', 'Target', rangeOf(callee.object), 'object'),
+        pin: this.dataIn('target', 'self', rangeOf(callee.object), 'object'),
         value: this.lowerExpr(callee.object, `${path}.target`, evalMode),
       });
     } else {
@@ -125,7 +136,7 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
           arg.value,
           `${path}.arg${i}`,
           evalMode,
-          `${title} callback`
+          `${chain?.join('.') ?? title} callback`
         ),
       });
     }
@@ -136,6 +147,10 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
         ? undefined
         : conversionCall(CONVERSIONS, title, inputs.length);
     const returnType: DataType = converts ?? signature?.returnType ?? 'any';
+    if (freeTarget && converts === undefined) {
+      inputs.unshift({ pin: freeTarget, value: undefined });
+    }
+
     const impure = mode !== 'pure' && converts === undefined;
     const pins: Pin[] = impure
       ? [this.execIn(), this.execOut('then', '', statement?.insert)]
