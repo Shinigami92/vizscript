@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import type {
+  FieldValue,
   GraphDocument,
   GraphOp,
   ScriptSymbol,
   SourceRange,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { pinColor } from '@vizscript/core';
+import { fieldValue, pinColor } from '@vizscript/core';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useTheme } from '../../composables/use-theme';
 import { usesSnakeCase } from '../../graph/languages';
 import { parameterUses } from '../../graph/symbols';
 import DetailsSection from '../DetailsSection.vue';
 import TypePicker from '../TypePicker.vue';
+import ValueFields from '../ValueFields.vue';
 
 /** Inputs and output of a function or signal (UE: Inputs / Outputs). */
 const props = defineProps<{
@@ -142,6 +144,44 @@ function setParameterValue(index: number, event: Event): void {
   });
 }
 
+/** Inputs whose details are folded out (UE: collapsed by default). */
+const expanded = ref(new Set<string>());
+
+function toggle(name: string): void {
+  const next = new Set(expanded.value);
+  if (!next.delete(name)) {
+    next.add(name);
+  }
+
+  expanded.value = next;
+}
+
+/** Vector, color and enum defaults get UE's value fields. */
+function defaultFields(
+  param: NonNullable<ScriptSymbol['params']>[number]
+): FieldValue | undefined {
+  const value = code(param.defaultRange);
+  return value
+    ? fieldValue(
+        value,
+        param.type?.text ?? String(param.dataType),
+        props.types,
+        props.doc?.symbols ?? [],
+        props.text
+      )
+    : undefined;
+}
+
+function setParameterDefault(index: number, value: string): void {
+  emit('op', {
+    type: 'setParameterValue',
+    symbol: props.symbol.id,
+    index,
+    value,
+    kind: 'expression',
+  });
+}
+
 function setReturnType(typeText: string | null): void {
   emit('op', { type: 'setReturnType', symbol: props.symbol.id, typeText });
 }
@@ -164,16 +204,27 @@ function setReturnType(typeText: string | null): void {
       No inputs.
     </p>
     <template v-if="editingSignature">
+      <!-- UE's input rows: name, type and remove; the details fold out. -->
       <div
         v-for="(param, index) in symbol.params"
         :key="`${index}:${param.name}`"
-        class="mx-2 mb-1.5 space-y-1 rounded-md border border-zinc-800 p-1.5 text-xs"
+        data-ui="parameter-row"
+        class="text-xs"
       >
-        <div class="flex items-center gap-1">
-          <span
-            class="size-2.5 shrink-0 rounded-full border-2"
-            :style="{ borderColor: color(String(param.dataType)) }"
-          />
+        <div class="flex items-center gap-1 px-1.5 py-0.5">
+          <button
+            type="button"
+            class="btn-ghost shrink-0 px-0.5"
+            :aria-expanded="expanded.has(param.name)"
+            :aria-label="`Details of ${param.name}`"
+            :title="expanded.has(param.name) ? 'Hide details' : 'Show details'"
+            @click="toggle(param.name)"
+          >
+            <span
+              class="motion-rotate i-mdi-chevron-down block"
+              :class="{ '-rotate-90': !expanded.has(param.name) }"
+            />
+          </button>
           <input
             class="input min-w-0 flex-1 py-0.5 font-mono text-xs"
             :value="param.name"
@@ -184,26 +235,16 @@ function setReturnType(typeText: string | null): void {
             @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
             @change="renameParameter(index, $event)"
           />
-          <button
-            type="button"
-            class="btn-ghost shrink-0 px-1"
-            title="Move up"
-            :aria-label="`Move ${param.name} up`"
-            :disabled="index === 0"
-            @click="moveParameter(index, index - 1)"
-          >
-            <span class="i-mdi-arrow-up" />
-          </button>
-          <button
-            type="button"
-            class="btn-ghost shrink-0 px-1"
-            title="Move down"
-            :aria-label="`Move ${param.name} down`"
-            :disabled="index === symbol.params.length - 1"
-            @click="moveParameter(index, index + 1)"
-          >
-            <span class="i-mdi-arrow-down" />
-          </button>
+          <TypePicker
+            class="w-32 shrink-0"
+            :value="param.type?.text ?? null"
+            :data-type="param.dataType"
+            :types="typeInfo"
+            :declared="declared"
+            :editable="true"
+            :required="typeInfo.requiredType !== undefined"
+            @change="(typeText) => setParameterType(index, typeText)"
+          />
           <button
             type="button"
             class="btn-ghost shrink-0 px-1 text-red-300"
@@ -214,28 +255,64 @@ function setReturnType(typeText: string | null): void {
             <span class="i-mdi-close" />
           </button>
         </div>
-        <div class="flex items-center gap-1">
-          <TypePicker
-            class="min-w-0 flex-1"
-            :value="param.type?.text ?? null"
-            :data-type="param.dataType"
-            :types="typeInfo"
-            :declared="declared"
-            :editable="true"
-            :required="typeInfo.requiredType !== undefined"
-            @change="(typeText) => setParameterType(index, typeText)"
-          />
-          <input
+        <dl
+          v-if="expanded.has(param.name)"
+          class="mb-1 ml-5 mr-2 grid grid-cols-[6.5rem_1fr] items-center gap-x-2 gap-y-1 border-l border-zinc-800 py-1 pl-2"
+        >
+          <template
             v-if="!typeInfo?.noParameterDefaults && symbol.kind !== 'signal'"
-            class="input w-24 shrink-0 py-0.5 font-mono text-xs"
-            :value="code(param.defaultRange)"
-            placeholder="default"
-            :aria-label="`Default value of ${param.name}`"
-            spellcheck="false"
-            @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
-            @change="setParameterValue(index, $event)"
-          />
-        </div>
+          >
+            <dt class="text-zinc-500">Default value</dt>
+            <dd
+              v-for="fields in [defaultFields(param)]"
+              :key="param.name"
+              class="min-w-0"
+            >
+              <ValueFields
+                v-if="fields"
+                :value="fields"
+                :editable="true"
+                :label="`Default value of ${param.name}`"
+                @set="(value) => setParameterDefault(index, value)"
+              />
+              <input
+                v-else
+                class="input w-full py-0.5 font-mono text-xs"
+                :value="code(param.defaultRange)"
+                placeholder="none"
+                :aria-label="`Default value of ${param.name}`"
+                spellcheck="false"
+                @keydown.enter.prevent="
+                  ($event.target as HTMLInputElement).blur()
+                "
+                @change="setParameterValue(index, $event)"
+              />
+            </dd>
+          </template>
+          <dt class="text-zinc-500">Order</dt>
+          <dd class="flex gap-1">
+            <button
+              type="button"
+              class="btn-ghost px-1"
+              title="Move up"
+              :aria-label="`Move ${param.name} up`"
+              :disabled="index === 0"
+              @click="moveParameter(index, index - 1)"
+            >
+              <span class="i-mdi-arrow-up" />
+            </button>
+            <button
+              type="button"
+              class="btn-ghost px-1"
+              title="Move down"
+              :aria-label="`Move ${param.name} down`"
+              :disabled="index === symbol.params.length - 1"
+              @click="moveParameter(index, index + 1)"
+            >
+              <span class="i-mdi-arrow-down" />
+            </button>
+          </dd>
+        </dl>
       </div>
     </template>
     <template v-else>
