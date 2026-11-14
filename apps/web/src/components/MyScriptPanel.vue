@@ -163,7 +163,13 @@ const sections = computed<Section[]>(() => {
     {
       id: 'functions',
       title: 'Functions',
-      groups: memberGroups(grouped(of('function', 'method'))),
+      groups: memberGroups(
+        grouped(
+          of('function', 'method').filter(
+            (s) => !s.modifiers.includes('callback')
+          )
+        )
+      ),
       empty: 'No functions',
       add: 'function',
     },
@@ -236,6 +242,17 @@ const sections = computed<Section[]>(() => {
 });
 
 const graph = computed(() => topLevelGraph(props.doc, props.text));
+/** Line of an offset, to tell callbacks of the same name apart. */
+function lineOf(offset: number): number {
+  return props.text.slice(0, offset).split('\n').length;
+}
+
+/** Functions written as arguments (`on('x', (e) => …)`), with their graphs. */
+const callbacks = computed(() =>
+  symbols.value.filter(
+    (s) => s.modifiers.includes('callback') && s.fnId !== undefined
+  )
+);
 
 const commentBoxes = computed(() =>
   (props.doc?.functions ?? []).flatMap((fn) =>
@@ -626,6 +643,32 @@ function addLabel(kind: AddKind, owner: string): string {
             <span class="i-mdi-graph-outline text-red-400" />
             <span class="truncate">{{ graph.name }}</span>
           </button>
+        </CollapseTransition>
+        <CollapseTransition>
+          <div v-if="!collapsed.graphs && callbacks.length > 0">
+            <button
+              v-for="callbackSymbol in callbacks"
+              :key="callbackSymbol.id"
+              type="button"
+              role="treeitem"
+              class="row pl-6"
+              :class="
+                callbackSymbol.id === selectedSymbol
+                  ? 'bg-amber-500/15 text-zinc-50'
+                  : ''
+              "
+              :aria-selected="callbackSymbol.id === selectedSymbol"
+              :title="`${callbackSymbol.name} — a function given as an argument; double-click to show it in the graph`"
+              @click="emit('selectSymbol', callbackSymbol.id)"
+              @dblclick="emit('selectFunction', callbackSymbol.fnId ?? '')"
+            >
+              <span class="i-mdi-function-variant text-sky-400" />
+              <span class="truncate">{{ callbackSymbol.name }}</span>
+              <span class="ml-auto shrink-0 font-mono text-[10px] text-zinc-500"
+                >line {{ lineOf(callbackSymbol.range.start) }}</span
+              >
+            </button>
+          </div>
         </CollapseTransition>
       </section>
 

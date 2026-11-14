@@ -34,6 +34,10 @@ export const SYMBOL_LABELS: Record<SymbolKind, string> = {
 
 /** "Function", or "Imported function" once the import's file was read. */
 export function symbolLabel(symbol: ScriptSymbol): string {
+  if (symbol.modifiers.includes('callback')) {
+    return 'Callback';
+  }
+
   return symbol.kind === 'import' && symbol.importedKind
     ? `Imported ${SYMBOL_LABELS[symbol.importedKind].toLowerCase()}`
     : SYMBOL_LABELS[symbol.kind];

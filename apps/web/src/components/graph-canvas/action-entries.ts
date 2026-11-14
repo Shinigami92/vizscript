@@ -624,6 +624,26 @@ export function createActionEntries(
         action: () =>
           emitOp({ type: 'setInput', pin: source, expression: `${callee}()` }),
       })),
+      // UE's "Create Event" for a delegate pin: an empty callback here,
+      // with a graph of its own.
+      ...(props.types?.callback
+        ? [
+            {
+              label: 'Create callback',
+              category: 'Function',
+              icon: 'i-mdi-function-variant text-sky-400',
+              hint: props.types.callback,
+              keywords: 'callback lambda arrow closure function handler event',
+              fits: pin.type === 'function' ? true : undefined,
+              action: () =>
+                emitOp({
+                  type: 'setInput',
+                  pin: source,
+                  expression: props.types?.callback ?? '',
+                }),
+            } satisfies ActionEntry,
+          ]
+        : []),
       ...importedClasses().map((expression): ActionEntry => ({
         label: expression,
         category: 'Construct',

@@ -87,6 +87,10 @@ const GROUPS: ReadonlyArray<{
         input: 'Type into the pin of a call, or wire a value into it',
       },
       {
+        action: 'Create a callback for an input',
+        input: 'Drag from the input into empty space → Create callback',
+      },
+      {
         action: 'Add an argument pin',
         input: 'Right-click a call → Add argument pin',
       },

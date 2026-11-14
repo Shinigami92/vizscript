@@ -80,7 +80,11 @@ const isImport = computed(() => props.symbol.kind === 'import');
 
 // ----------------------------------------------------------------- rename
 
-const renamable = computed(() => props.editable && !isImport.value);
+/** A function written as an argument (`on('x', (e) => …)`): no name. */
+const callback = computed(() => props.symbol.modifiers.includes('callback'));
+const renamable = computed(
+  () => props.editable && !isImport.value && !callback.value
+);
 const nameDraft = ref(props.symbol.name);
 watch(
   () => props.symbol.name,
@@ -180,9 +184,13 @@ const modifierOptions = computed(() => {
     return undefined;
   }
 
-  // Functions like UE's access specifier and flags (`export`, `async`).
+  // Functions like UE's access specifier and flags (`export`, `async`);
+  // a callback can only be `async`.
   if (props.symbol.kind === 'function' || props.symbol.kind === 'method') {
-    return modifiers[props.symbol.kind];
+    const options = modifiers[props.symbol.kind];
+    return callback.value
+      ? { flags: (options?.flags ?? []).filter((f) => f === 'async') }
+      : options;
   }
 
   if (!isVariable.value) {
@@ -222,6 +230,8 @@ const otherModifiers = computed(() => {
     ...(options?.flags?.includes('export') ? ['export default'] : []),
     ...(props.types?.exportHints ?? []).map((h) => h.name),
     ...(props.types?.exposeOnSpawn ? ['constructor'] : []),
+    // Shown as the label ("Callback"), not as a modifier.
+    'callback',
   ]);
   return props.symbol.modifiers.filter((m) => !known.has(m));
 });
@@ -300,7 +310,8 @@ const privatePrefix = computed(() => {
   return prefix &&
     ['variable', 'constant', 'function', 'method', 'signal'].includes(kind) &&
     !name.startsWith(`${prefix}${prefix}`) &&
-    !props.event
+    !props.event &&
+    !callback.value
     ? prefix
     : undefined;
 });
@@ -367,7 +378,7 @@ function setModifier(modifier: string, enabled: boolean): void {
 
     <!-- UE's Description: the doc comment above the declaration. -->
     <div
-      v-if="description && (editable || description.text)"
+      v-if="description && !callback && (editable || description.text)"
       data-ui="symbol-description"
       class="border-b border-zinc-800/80 px-3 py-2"
     >
@@ -619,6 +630,7 @@ function setModifier(modifier: string, enabled: boolean): void {
         <template
           v-if="
             !compact &&
+            !callback &&
             uses !== undefined &&
             symbol.kind !== 'type' &&
             symbol.kind !== 'enum' &&
