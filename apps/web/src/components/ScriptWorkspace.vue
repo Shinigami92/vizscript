@@ -18,6 +18,7 @@ import {
   findNode,
   graphEditsFor,
   layoutDocument,
+  makeRoomFor,
   reconcilePositions,
   reconcileReroutes,
   reconcileVias,
@@ -218,6 +219,8 @@ const {
   positions,
   relayout,
   currentPositions: () => canvas.value?.getPositions(),
+  makeRoom: (shown, moved) =>
+    doc.value ? makeRoomFor(doc.value, shown, moved, layoutOptions) : {},
   undoCode: () => editor.value?.undo(),
   redoCode: () => editor.value?.redo(),
   setOverlay: (overlay) => setOverlay(overlay),

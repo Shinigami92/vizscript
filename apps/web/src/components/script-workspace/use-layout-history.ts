@@ -46,6 +46,11 @@ export interface LayoutHistoryDeps {
   relayout: () => void;
   /** Where the canvas has its nodes right now. */
   currentPositions: () => Positions | undefined;
+  /**
+   * Positions of nodes that make room for moved ones (`makeRoomFor`):
+   * saved with the move, so the dropped nodes stay where they are.
+   */
+  makeRoom: (positions: Positions, moved: ReadonlySet<string>) => Positions;
   undoCode: () => void;
   redoCode: () => void;
   /** Restores graph-only edits (undo / redo). */
@@ -247,13 +252,24 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     // The first move freezes the current auto layout so nothing jumps around
     // after a reload; afterwards only moved nodes are sent.
     const full: LayoutPatch = { ...patch };
-    if (Object.keys(patch).some((key) => !isExtraLayoutKey(key))) {
+    const moved = Object.keys(patch).filter((key) => !isExtraLayoutKey(key));
+    if (moved.length > 0) {
       const current = deps.currentPositions() ?? deps.positions.value;
       for (const [id, p] of Object.entries(current)) {
         if (!pinned.value[id] && !(id in full)) {
           full[id] = p;
         }
       }
+
+      // Other functions make room, so the moved nodes stay where dropped.
+      const shown: Positions = { ...deps.positions.value, ...current };
+      for (const [id, p] of Object.entries(full)) {
+        if (p && !isExtraLayoutKey(id)) {
+          shown[id] = p;
+        }
+      }
+
+      Object.assign(full, deps.makeRoom(shown, new Set(moved)));
     }
 
     recordLayout(full);
