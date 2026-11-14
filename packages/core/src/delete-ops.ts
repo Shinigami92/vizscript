@@ -60,6 +60,87 @@ function keptCalls(
     .toSorted((a, b) => a.range.start - b.range.start);
 }
 
+/**
+ * Nodes wired into a deleted value node that aren't deleted with it, like
+ * UE keeps them: the outermost nodes inside its expression.
+ */
+function keptInputs(
+  doc: GraphDocument,
+  node: GraphNode,
+  deleted: ReadonlySet<string>
+): GraphNode[] {
+  const fn = doc.functions.find((f) => f.nodes.includes(node));
+  const candidates = (fn?.nodes ?? []).filter(
+    (n) =>
+      n !== node &&
+      !deleted.has(n.id) &&
+      n.kind !== 'entry' &&
+      !getMeta<StatementMeta>(n).stmt &&
+      contains(node.range, n.range) &&
+      !sameRange(node.range, n.range)
+  );
+  return candidates
+    .filter(
+      (n) =>
+        !candidates.some(
+          (other) =>
+            other !== n &&
+            contains(other.range, n.range) &&
+            !sameRange(other.range, n.range)
+        )
+    )
+    .toSorted((a, b) => a.range.start - b.range.start);
+}
+
+/**
+ * Where kept inputs of a deleted value go: lone statements right before its
+ * statement (and that statement's comment), so the graph shows them as
+ * unconnected nodes. Only for statements on an exec chain that stand on
+ * their own line.
+ */
+function keepPoint(
+  text: string,
+  doc: GraphDocument,
+  node: GraphNode
+): { at: number; indent: string } | undefined {
+  const owner = owningStatement(node);
+  if (!owner) {
+    return undefined;
+  }
+
+  const fn = doc.functions.find((f) => f.nodes.includes(node));
+  const statement = fn?.nodes.find((n) => {
+    const stmt = getMeta<StatementMeta>(n).stmt;
+    return stmt !== undefined && sameRange(stmt, owner.stmt);
+  });
+  const meta = statement ? getMeta<StatementMeta>(statement) : undefined;
+  if (
+    !statement ||
+    !meta ||
+    meta.inline ||
+    meta.locked ||
+    !statement.pins.some((p) => p.kind === 'exec' && p.direction === 'in')
+  ) {
+    return undefined;
+  }
+
+  const indent = lineIndent(text, owner.stmt.start);
+  if (
+    text.slice(owner.stmt.start - indent.length, owner.stmt.start) !== indent
+  ) {
+    return undefined;
+  }
+
+  const comment = statement.comment?.range;
+  return {
+    at:
+      comment && comment.end <= owner.stmt.start
+        ? comment.start
+        : owner.stmt.start,
+    indent,
+  };
+}
+
 /** The input whose whole expression is this node, if any. */
 function consumerInput(doc: GraphDocument, node: GraphNode): Pin | undefined {
   for (const edge of edgesOf(doc, node.id)) {
@@ -221,7 +302,12 @@ export function deleteNodes(
   ids: ReadonlyArray<string>,
   syntax: StatementSyntax
 ): OpResult {
-  const targets: Array<{ range: SourceRange; edit: TextEdit }> = [];
+  const targets: Array<{
+    range: SourceRange;
+    edit: TextEdit;
+    /** Inputs of a deleted value, kept as statements before its statement. */
+    keep?: { at: number; indent: string; nodes: GraphNode[] };
+  }> = [];
   const deleted = new Set(ids);
   let locked = false;
   for (const id of ids) {
@@ -270,6 +356,8 @@ export function deleteNodes(
 
     // A value node leaves an empty input behind (keeping a property key).
     const input = consumerInput(doc, node);
+    const inputs = keptInputs(doc, node, deleted);
+    const point = inputs.length > 0 ? keepPoint(text, doc, node) : undefined;
     targets.push({
       range: node.range,
       edit: input
@@ -279,6 +367,7 @@ export function deleteNodes(
             end: node.range.end,
             text: syntax.placeholder,
           },
+      ...(point ? { keep: { ...point, nodes: inputs } } : {}),
     });
   }
 
@@ -306,10 +395,40 @@ export function deleteNodes(
   return succeeded(
     keepIndentedBlocks(
       text,
-      kept.map((k) => k.edit),
+      [...kept.map((k) => k.edit), ...keptStatements(text, kept, syntax)],
       syntax
     )
   );
+}
+
+/** One insertion per statement for the kept inputs of deleted values. */
+function keptStatements(
+  text: string,
+  targets: ReadonlyArray<{
+    keep?: { at: number; indent: string; nodes: GraphNode[] };
+  }>,
+  syntax: StatementSyntax
+): TextEdit[] {
+  const byPoint = new Map<number, { indent: string; nodes: GraphNode[] }>();
+  for (const { keep } of targets) {
+    if (keep) {
+      const entry = byPoint.get(keep.at) ?? { indent: keep.indent, nodes: [] };
+      entry.nodes.push(...keep.nodes);
+      byPoint.set(keep.at, entry);
+    }
+  }
+
+  return [...byPoint].map(([at, { indent, nodes }]) => ({
+    start: at,
+    end: at,
+    text: nodes
+      .toSorted((a, b) => a.range.start - b.range.start)
+      .map(
+        (n) =>
+          `${asStatement(text.slice(n.range.start, n.range.end), syntax)}\n${indent}`
+      )
+      .join(''),
+  }));
 }
 
 /** Leading whitespace of the line that starts at `start`. */

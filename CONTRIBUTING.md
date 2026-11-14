@@ -89,7 +89,7 @@ Every language backend lowers its AST into the IR of `@vizscript/core`:
 
 Graph changes are `GraphOp`s. Each backend turns them into minimal text edits on the original source, normally through the shared `applyTextOp` with its own `StatementSyntax`. A few rules that keep edits predictable:
 
-- **Removing wires keeps nodes.** Alt + click on a pin removes only the wire. The expression that fed it stays as a statement of its own (`return load(path)` → `load(path);` and `return;`), shown as unconnected nodes. Deleting a statement keeps the calls inside it.
+- **Removing wires keeps nodes.** Alt + click on a pin removes only the wire. The expression that fed it stays as a statement of its own (`return load(path)` → `load(path);` and `return;`), shown as unconnected nodes. Deleting a statement keeps the calls inside it. Deleting a value node keeps the nodes wired into it, like UE: they become statements of their own right before its statement (`keptInputs` in `delete-ops.ts`: `const cart = [{…}, {…}]` → `({…});`, `({…});`, `const cart = undefined;`).
 - **Wiring an unconnected value** into a later input moves it there. A call only moves into the statement right after it, so the order of side effects never changes.
 - **Adding a node after a nested call** (e.g. after the call in `return f(x)`) first stores the call's result in a variable.
 - Edits go through Monaco, so code edits and graph edits share one undo history with layout changes.

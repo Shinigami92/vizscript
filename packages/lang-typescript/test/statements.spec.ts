@@ -142,3 +142,26 @@ describe('const without a value', () => {
     }
   });
 });
+
+describe('deleting a value node', () => {
+  it('keeps the nodes wired into it, like UE', () => {
+    const text =
+      "// The cart\nconst cart: Item[] = [\n  { name: 'Keyboard', price: 89.9 },\n  { name: 'Cable', price: 4.5 },\n];\nlog(cart);\n";
+    const doc = parseTypeScript(text, 'a.ts');
+    const array = node(doc, (n) => n.title === 'Make Array');
+    expect(apply(text, { type: 'deleteNodes', nodeIds: [array.id] })).toBe(
+      "({ name: 'Keyboard', price: 89.9 });\n({ name: 'Cable', price: 4.5 });\n// The cart\nconst cart: Item[] = undefined;\nlog(cart);\n"
+    );
+  });
+
+  it('keeps only the inputs that are not deleted too', () => {
+    const text = 'function f() {\n  const t = [a(), b()];\n}\n';
+    const doc = parseTypeScript(text, 'a.ts');
+    const ids = ['Make Array', 'a'].map(
+      (title) => node(doc, (n) => n.title === title).id
+    );
+    expect(apply(text, { type: 'deleteNodes', nodeIds: ids })).toBe(
+      'function f() {\n  b();\n  const t = undefined;\n}\n'
+    );
+  });
+});
