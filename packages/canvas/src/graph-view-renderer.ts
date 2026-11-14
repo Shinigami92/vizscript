@@ -1,4 +1,9 @@
-import { conversionLabel, pinColor } from '@vizscript/core';
+import {
+  conversionLabel,
+  GRID_MAJOR,
+  GRID_SIZE,
+  pinColor,
+} from '@vizscript/core';
 import type { GraphEdge, PinGeometry, Point } from '@vizscript/core';
 import { wireCurve } from './bezier';
 import type { WireShape } from './bezier';
@@ -99,8 +104,8 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
 
   private drawGrid(): void {
     const { ctx, camera, theme } = this;
-    const minor = 16;
-    const major = 128;
+    const minor = GRID_SIZE;
+    const major = GRID_MAJOR;
 
     const drawLines = (
       spacing: number,

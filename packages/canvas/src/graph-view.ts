@@ -1,4 +1,4 @@
-import { pinKey, reroutePatch } from '@vizscript/core';
+import { pinKey, reroutePatch, snapToGrid } from '@vizscript/core';
 import type { LayoutPatch, Point } from '@vizscript/core';
 import { normalizeRect, zoomAt } from './camera';
 import {
@@ -179,7 +179,7 @@ export class GraphView extends GraphViewDocument {
       }
 
       if (this.knotSelection.has(id)) {
-        this.startNodeDrag([...this.selection], world);
+        this.startNodeDrag([...this.selection], world, id);
       }
 
       this.requestRender();
@@ -252,7 +252,7 @@ export class GraphView extends GraphViewDocument {
       const selection = clickSelection(this.selection, id, mods);
       this.setSelectionInternal(selection);
       if (selection.has(id)) {
-        this.startNodeDrag([...selection], world);
+        this.startNodeDrag([...selection], world, id);
       }
 
       return;
@@ -291,7 +291,8 @@ export class GraphView extends GraphViewDocument {
     };
   }
 
-  private startNodeDrag(ids: string[], world: Point): void {
+  /** `grabbed`: the node or reroute (knot id) under the pointer. */
+  private startNodeDrag(ids: string[], world: Point, grabbed?: string): void {
     const origins = new Map<string, Point>();
     for (const id of ids) {
       const ns = this.nodes.get(id);
@@ -309,10 +310,16 @@ export class GraphView extends GraphViewDocument {
       }
     }
 
+    const anchor = (grabbed
+      ? (origins.get(grabbed) ?? knotOrigins.get(grabbed))
+      : undefined) ??
+      origins.values().next().value ??
+      knotOrigins.values().next().value ?? { ...world };
     this.drag = {
       type: 'nodes',
       ids,
       startWorld: world,
+      anchor,
       origins,
       knotOrigins,
       moved: false,
@@ -382,11 +389,18 @@ export class GraphView extends GraphViewDocument {
         }
 
         drag.moved = true;
+        // The grabbed node snaps to the grid; the others keep their offset.
+        const snapped = snapToGrid({
+          x: drag.anchor.x + dx,
+          y: drag.anchor.y + dy,
+        });
+        const sx = snapped.x - drag.anchor.x;
+        const sy = snapped.y - drag.anchor.y;
         for (const [id, origin] of drag.origins) {
           const ns = this.nodes.get(id);
           if (ns) {
-            ns.x = Math.round(origin.x + dx);
-            ns.y = Math.round(origin.y + dy);
+            ns.x = Math.round(origin.x + sx);
+            ns.y = Math.round(origin.y + sy);
           }
         }
 
@@ -394,8 +408,8 @@ export class GraphView extends GraphViewDocument {
           const { edgeId, index } = parseKnotId(id);
           const p = this.reroutes.get(edgeId)?.[index];
           if (p) {
-            p.x = Math.round(origin.x + dx);
-            p.y = Math.round(origin.y + dy);
+            p.x = Math.round(origin.x + sx);
+            p.y = Math.round(origin.y + sy);
           }
         }
 

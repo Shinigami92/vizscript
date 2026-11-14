@@ -163,6 +163,11 @@ export type Drag =
       type: 'nodes';
       ids: string[];
       startWorld: Point;
+      /**
+       * Where the grabbed node (or reroute) started: it snaps to the grid,
+       * the others move along by the same offset, like in UE.
+       */
+      anchor: Point;
       origins: Map<string, Point>;
       knotOrigins: Map<string, Point>;
       moved: boolean;
