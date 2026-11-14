@@ -50,6 +50,11 @@ function sourceOf(op: GraphOp): PinRef | undefined {
       return op.pin;
     }
 
+    // Wires moved onto an output: it feeds them now.
+    case 'moveWires': {
+      return op.to;
+    }
+
     default: {
       return undefined;
     }
