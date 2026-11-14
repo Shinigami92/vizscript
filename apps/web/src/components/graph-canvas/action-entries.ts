@@ -385,11 +385,13 @@ export function createActionEntries(
         ? undefined
         : props.doc?.typeMembers?.[pin.typeText];
     if (checked && checked.length > 0) {
+      // The checked type as the language writes it (`Option<Item>`).
+      const category = `Members of ${pin.typeText ?? typeName}`;
       return checked.map((member): ActionEntry => {
         const method = member.kind === 'method';
         return {
           label: method ? `.${member.name}()` : `.${member.name}`,
-          category: `Members of ${typeName}`,
+          category,
           icon: method ? ICON_CALL : ICON_MEMBER,
           hint: String(member.type),
           ...(member.detail ? { detail: member.detail } : {}),
