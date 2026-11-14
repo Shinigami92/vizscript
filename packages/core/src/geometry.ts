@@ -74,7 +74,8 @@ export function isCompact(node: GraphNode): boolean {
   return node.compact === true || node.kind === 'setVar';
 }
 
-function isSetter(node: GraphNode): boolean {
+/** UE's SET node: `SET` sits in the exec row, above the value. */
+export function isSetter(node: GraphNode): boolean {
   return node.kind === 'setVar' && node.title.startsWith('Set ');
 }
 
@@ -247,7 +248,21 @@ export function computeNodeGeometry(
 
   let width: number;
   let height: number;
-  if (compact) {
+  if (compact && isSetter(node)) {
+    // `SET` (and how it declares, `const`) fills the exec row only.
+    const title =
+      measure(compactTitle(node), 'compact') +
+      (node.subtitle ? 6 + measure(node.subtitle, 'subtitle') : 0);
+    width = Math.max(
+      title + (NODE_METRICS.pinInset + NODE_METRICS.pinRadius * 2 + 10) * 2,
+      leftWidth +
+        rightWidth +
+        NODE_METRICS.paddingX * 2 +
+        (leftWidth && rightWidth ? NODE_METRICS.columnGap : 0)
+    );
+    height =
+      rows * NODE_METRICS.rowHeight + NODE_METRICS.compactPaddingY * 2 - 4;
+  } else if (compact) {
     const titleWidth = Math.max(
       measure(compactTitle(node), isOperatorGlyph(node) ? 'glyph' : 'compact'),
       node.subtitle ? measure(node.subtitle, 'subtitle') : 0

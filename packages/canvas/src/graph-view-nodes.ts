@@ -6,6 +6,7 @@ import {
   isCompact,
   isLatent,
   isOperatorGlyph,
+  isSetter,
   NODE_METRICS,
   pinColor,
   pinKey,
@@ -163,6 +164,89 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     ctx.restore();
   }
 
+  /** Y of the exec row of a SET node (its first row). */
+  private execRowY(ns: NodeState): number {
+    for (const pg of ns.geom.pins.values()) {
+      if (pg.pin.kind === 'exec') {
+        return ns.y + pg.y;
+      }
+    }
+
+    return ns.y + NODE_METRICS.rowHeight / 2;
+  }
+
+  /** `SET` centered in the exec row, how it declares (`const`) beside it. */
+  private drawSetTitle(ns: NodeState, sub: string): void {
+    const { ctx, theme } = this;
+    const y = this.execRowY(ns);
+    ctx.save();
+    ctx.font = this.font('compact');
+    const title = compactTitle(ns.node);
+    const titleWidth = ctx.measureText(title).width;
+    ctx.font = this.font('subtitle');
+    const subWidth = sub ? ctx.measureText(sub).width + 6 : 0;
+    const left = ns.x + (ns.geom.width - titleWidth - subWidth) / 2;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = this.font('compact');
+    ctx.fillStyle = theme.nodeText;
+    if (theme.scheme === 'dark') {
+      const scale = this.camera.zoom * this.dpr;
+      ctx.shadowColor = theme.titleShadow;
+      ctx.shadowBlur = 2 * scale;
+      ctx.shadowOffsetY = 1 * scale;
+    }
+
+    ctx.fillText(title, left, y);
+    if (sub) {
+      ctx.shadowColor = 'transparent';
+      ctx.font = this.font('subtitle');
+      ctx.fillStyle = theme.compactSubtext;
+      ctx.fillText(sub, left + titleWidth + 6, y + 1);
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * UE's SET node: a haze of the value's type color along the top, and a
+   * gloss over the exec row.
+   */
+  private drawSetGlow(ns: NodeState, radius: number): void {
+    const { ctx, theme } = this;
+    const { node, geom } = ns;
+    const value = node.pins.find(
+      (p) => p.direction === 'in' && p.kind === 'data'
+    );
+    if (!value) {
+      return;
+    }
+
+    const color = pinColor(value.type, theme.scheme);
+    const rowY = this.execRowY(ns);
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(ns.x, ns.y, geom.width, geom.height, radius);
+    ctx.clip();
+    ctx.save();
+    const reach = geom.width * 0.6;
+    ctx.translate(ns.x + geom.width / 2, rowY - 2);
+    ctx.scale(1, Math.min(1, (NODE_METRICS.rowHeight * 1.3) / reach));
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, reach);
+    glow.addColorStop(0, `${color}${theme.pillTint}`);
+    glow.addColorStop(0.5, `${color}${theme.pillTintMid}`);
+    glow.addColorStop(1, `${color}00`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(-reach, -reach, reach * 2, reach * 2);
+    ctx.restore();
+    const shine = ctx.createLinearGradient(ns.x, ns.y, ns.x, rowY + 8);
+    shine.addColorStop(0, theme.pillShine);
+    shine.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = shine;
+    ctx.fillRect(ns.x, ns.y, geom.width, rowY + 8 - ns.y);
+    ctx.restore();
+  }
+
   private drawNode(ns: NodeState): void {
     const { ctx, theme } = this;
     const { node, geom } = ns;
@@ -171,6 +255,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     // UE's Get pill: a dark capsule lit by its type's color.
     const getPill =
       compact && node.category === 'variable' && node.kind !== 'setVar';
+    const setter = isSetter(node);
     // UE's pills are rounded rectangles, not full capsules.
     const r = getPill
       ? Math.min(geom.height * 0.36, 14)
@@ -228,6 +313,8 @@ export abstract class GraphViewNodes extends GraphViewCamera {
 
     if (getPill && !lod) {
       this.drawPillGlow(ns, r);
+    } else if (setter && !lod) {
+      this.drawSetGlow(ns, r);
     }
 
     // Header
@@ -317,7 +404,10 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         ctx.fillStyle = theme.operatorGlyph;
       }
 
-      if (getPill) {
+      if (setter) {
+        // UE's SET node: the title centered in the exec row.
+        this.drawSetTitle(ns, sub);
+      } else if (getPill) {
         // The name sits next to the pin, with a shadow like UE's.
         ctx.save();
         ctx.textAlign = 'right';
@@ -337,7 +427,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         ctx.fillText(compactTitle(node), centerX, centerY);
       }
 
-      if (sub) {
+      if (sub && !setter) {
         ctx.font = this.font('subtitle');
         ctx.fillStyle = theme.compactSubtext;
         ctx.fillText(sub, centerX, centerY + 14);
