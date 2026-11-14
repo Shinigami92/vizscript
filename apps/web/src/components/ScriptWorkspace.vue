@@ -70,6 +70,7 @@ import type {
   ScriptWorkspaceProps,
   ViewMode,
 } from './script-workspace/types';
+import { useCheckerTypes } from './script-workspace/use-checker-types';
 import { useCodeGraphSync } from './script-workspace/use-code-graph-sync';
 import { useFocusMode } from './script-workspace/use-focus-mode';
 import { useGraphOverlay } from './script-workspace/use-graph-overlay';
@@ -534,6 +535,18 @@ const positionMemory: Positions = {};
 let parseSeq = 0;
 /** The text `doc` was parsed from (ranges of `doc` point into it). */
 const docText = ref('');
+
+const { refineTypes } = useCheckerTypes({
+  path: () => props.path,
+  parsedDoc,
+  docText,
+  parseSeq: () => parseSeq,
+  apply: (typed) => {
+    parsedDoc.value = typed;
+    doc.value = applyOverlay(typed, overlay.value);
+  },
+});
+
 async function reparse(): Promise<void> {
   if (!visualizable.value) {
     return;
@@ -629,6 +642,7 @@ async function reparse(): Promise<void> {
 
   doc.value = shown;
   docText.value = source;
+  refineTypes(seq, source, next);
   relayout();
   void resolveOverlay();
   if (props.files) {

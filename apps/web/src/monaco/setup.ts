@@ -1,8 +1,8 @@
 import type { ColorScheme } from '@vizscript/core';
 import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
-import TsWorker from 'monaco-editor/language/typescript/ts.worker?worker';
 import { registerGDScript } from './gdscript';
+import TsWorker from './ts-worker?worker';
 
 declare global {
   interface Window {
