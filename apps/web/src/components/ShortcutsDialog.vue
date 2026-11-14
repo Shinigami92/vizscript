@@ -139,7 +139,7 @@ const GROUPS: ReadonlyArray<{
       {
         action: 'Disconnect a wire',
         input:
-          '{Alt} + click a pin (the nodes stay; an exec wire stays broken in the graph until the code can follow)',
+          '{Alt} + click a wire or pin (the nodes stay; an exec wire stays broken in the graph until the code can follow)',
       },
       {
         action: 'Move all wires of a pin',

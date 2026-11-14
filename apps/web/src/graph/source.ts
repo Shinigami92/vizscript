@@ -58,6 +58,9 @@ export function shortcut(key: string, shift = false): string {
   return `Ctrl+${shift ? 'Shift+' : ''}${key}`;
 }
 
+/** The Alt key's name: ⌥ (Option) on macOS. */
+export const ALT = isMac ? '⌥' : 'Alt+';
+
 /** Fast offset → 1-based line lookup for many queries on the same text. */
 export function lineLookup(text: string): (offset: number) => number {
   const starts = [0];

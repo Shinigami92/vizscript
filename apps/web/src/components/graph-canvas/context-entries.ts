@@ -1,10 +1,10 @@
 import type { ContextTarget, GraphView } from '@vizscript/canvas';
 import type { InputPinMeta, Point } from '@vizscript/core';
-import { ARG_PIN, getMeta, referenceName } from '@vizscript/core';
+import { ARG_PIN, getMeta, linkPin, referenceName } from '@vizscript/core';
 import type { Ref } from 'vue';
 import { toRaw } from 'vue';
 import { pinEdges } from '../../graph/doc-index';
-import { isMac, shortcut } from '../../graph/source';
+import { ALT, isMac, shortcut } from '../../graph/source';
 import type { MenuEntry } from '../ContextMenu.vue';
 import { ALIGN_ENTRIES } from './menu-data';
 import type { NodeCommands } from './node-commands';
@@ -33,7 +33,7 @@ function knotEntries(v: GraphView, target: Target<'knot'>): MenuEntry[] {
     {
       label: 'Remove reroute node',
       icon: 'i-mdi-close-circle-outline',
-      shortcut: 'Alt+Click',
+      shortcut: `${ALT}Click`,
       action: () => v.removeReroute(target.edgeId, target.index),
     },
     {
@@ -426,7 +426,7 @@ export function createContextEntries(
                     ? `Break link to ${links[0]?.label ?? 'node'}`
                     : 'Break link',
               icon: 'i-mdi-link-variant-off',
-              shortcut: 'Alt+Click',
+              shortcut: `${ALT}Click`,
               // Exec wires the code can't drop stay broken in the graph.
               disabled:
                 edges.length === 0 &&
@@ -505,10 +505,11 @@ export function createContextEntries(
             {
               label: 'Break link',
               icon: 'i-mdi-link-variant-off',
+              shortcut: `${ALT}Click`,
               action: () =>
                 events.op({
                   type: 'disconnect',
-                  pin: { ...toRaw(edge.to) },
+                  pin: { ...toRaw(linkPin(edge)) },
                 }),
             },
           ]

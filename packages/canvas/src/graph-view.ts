@@ -1,4 +1,4 @@
-import { pinKey, reroutePatch, snapToGrid } from '@vizscript/core';
+import { linkPin, pinKey, reroutePatch, snapToGrid } from '@vizscript/core';
 import type { LayoutPatch, Point } from '@vizscript/core';
 import { normalizeRect, zoomAt } from './camera';
 import {
@@ -271,6 +271,18 @@ export class GraphView extends GraphViewDocument {
       this.setSelectionInternal(selection);
       this.startNodeDrag([...selection], world);
       return;
+    }
+
+    // Like UE: Alt + click breaks a wire.
+    if (!hit && e.altKey && this.editable) {
+      const wire = this.hitWire(world, this.wireTolerance());
+      if (wire) {
+        this.emitter.emit('op', {
+          type: 'disconnect',
+          pin: { ...linkPin(wire.edge) },
+        });
+        return;
+      }
     }
 
     const mods = this.mods(e);

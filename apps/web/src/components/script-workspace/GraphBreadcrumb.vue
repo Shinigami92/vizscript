@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ALT } from '../../graph/source';
+
 defineProps<{
   path: string;
   /** Name of the function shown on its own, if any. */
@@ -27,7 +29,7 @@ const emit = defineEmits<{
     <button
       type="button"
       class="btn-ghost px-1"
-      title="Back (Alt+←, mouse back button)"
+      :title="`Back (${ALT}←, mouse back button)`"
       aria-label="Back"
       :disabled="!canBack"
       @click="emit('navigate', 'back')"
@@ -37,7 +39,7 @@ const emit = defineEmits<{
     <button
       type="button"
       class="btn-ghost px-1"
-      title="Forward (Alt+→)"
+      :title="`Forward (${ALT}→)`"
       aria-label="Forward"
       :disabled="!canForward"
       @click="emit('navigate', 'forward')"

@@ -1,4 +1,4 @@
-import type { FunctionGraph } from './ir';
+import type { FunctionGraph, GraphEdge, PinRef } from './ir';
 
 /**
  * The nodes wired into a function: connected to its entry node by any
@@ -35,4 +35,12 @@ export function wiredNodes(fn: FunctionGraph): Set<string> {
   }
 
   return result;
+}
+
+/**
+ * The pin whose `disconnect` breaks just this wire (UE's "Break link"):
+ * a data input and an exec output have one wire each.
+ */
+export function linkPin(edge: GraphEdge): PinRef {
+  return edge.kind === 'exec' ? edge.from : edge.to;
 }
