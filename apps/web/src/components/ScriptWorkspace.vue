@@ -20,6 +20,7 @@ import {
   layoutDocument,
   reconcilePositions,
   reconcileReroutes,
+  reconcileVias,
   remapOverlay,
   renamedNodes,
   rerouteEntries,
@@ -74,6 +75,7 @@ import { useGraphOverlay } from './script-workspace/use-graph-overlay';
 import { useImports } from './script-workspace/use-imports';
 import { useLayoutHistory } from './script-workspace/use-layout-history';
 import { useProblems } from './script-workspace/use-problems';
+import { useViaWires } from './script-workspace/use-via-wires';
 import WorkspaceStatus from './script-workspace/WorkspaceStatus.vue';
 
 export type { DefinitionTarget } from './script-workspace/symbol-lookup';
@@ -299,6 +301,10 @@ const {
   hiddenFunctionOf,
   followRename,
 } = useFocusMode({ stateKey: () => props.stateKey, doc, canvas });
+const { canvasDoc, throughVias, beforeOp, afterParse } = useViaWires({
+  shownDoc,
+  pinned,
+});
 const {
   selectedSymbol,
   onSelectionChange,
@@ -576,9 +582,16 @@ async function reparse(): Promise<void> {
           positionMemory
         ),
         ...reconcileReroutes(previous, shown, pinned.value, change),
+        ...reconcileVias(previous, shown, pinned.value, change),
         ...boxColorEntries(pinned.value),
       }
     : pinned.value;
+  // Wired from a SET's output: the new Get is drawn as that wire (UE).
+  const vias = afterParse(previous ?? undefined, shown, change);
+  if (Object.keys(vias).length > 0) {
+    pinned.value = { ...pinned.value, ...vias };
+    void persist(vias);
+  }
 
   let selectAfter: string[] | undefined;
   if (pendingPlacement) {
@@ -730,10 +743,13 @@ function freezeLayout(): void {
   }
 }
 
-async function onOp(op: GraphOp): Promise<void> {
+async function onOp(requested: GraphOp): Promise<void> {
   if (!editable.value) {
     return;
   }
+
+  // A wire drawn from a SET stands for a Get node in the code.
+  const op = throughVias(requested);
 
   // Wires and deletions the code can't follow stay in the graph (like UE's
   // graphs, which may be in states that don't compile). While the graph has
@@ -745,6 +761,7 @@ async function onOp(op: GraphOp): Promise<void> {
     return;
   }
 
+  beforeOp(op, doc.value);
   const result = await client.applyOp(
     text.value,
     props.path,
@@ -892,7 +909,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         />
         <GraphCanvas
           ref="canvas"
-          :doc="shownDoc"
+          :doc="canvasDoc"
           :text="text"
           :positions="positions"
           :editable="editable"
