@@ -46,12 +46,17 @@ declare var Buffer: any;
 `;
 
 const ts = monaco.typescript;
+/** TypeScript's `ModuleResolutionKind.Bundler`. */
+const BUNDLER = 100;
+const MODULE_RESOLUTION: string = 'moduleResolution';
 for (const defaults of [ts.typescriptDefaults, ts.javascriptDefaults]) {
   defaults.addExtraLib(NODE_GLOBALS, 'file:///vizscript/node-globals.d.ts');
   defaults.setCompilerOptions({
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeJs,
+    // Bundler: `exports` maps of npm packages and `.js` imports of `.ts`
+    // files, like Vite and tsdown. Monaco's enum stops at NodeJs.
+    [MODULE_RESOLUTION]: BUNDLER,
     allowNonTsExtensions: true,
     allowJs: true,
     strict: true,

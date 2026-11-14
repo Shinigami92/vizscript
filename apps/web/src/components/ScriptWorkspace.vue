@@ -77,6 +77,7 @@ import { useImports } from './script-workspace/use-imports';
 import { useLanguageVersion } from './script-workspace/use-language-version';
 import { useLayoutHistory } from './script-workspace/use-layout-history';
 import { useProblems } from './script-workspace/use-problems';
+import { useTypeLibs } from './script-workspace/use-type-libs';
 import { useViaWires } from './script-workspace/use-via-wires';
 import WorkspaceStatus from './script-workspace/WorkspaceStatus.vue';
 
@@ -181,6 +182,8 @@ const {
   reparse: () => reparse(),
   open: (path, symbol) => emit('open', path, symbol),
 });
+
+useTypeLibs({ props, client, references, text });
 
 const selectedImportPath = computed(() => {
   const symbol = selectedSymbol.value;
