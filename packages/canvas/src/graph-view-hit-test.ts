@@ -184,14 +184,11 @@ export abstract class GraphViewHitTest extends GraphViewBase {
   ): string | null {
     const from = drag.from.pg.pin;
     const to = target.pg.pin;
-    if (from.kind === 'exec') {
-      return 'Only data wires can be moved together.';
-    }
-
     if (to.kind !== from.kind || to.direction !== from.direction) {
+      const exec = from.kind === 'exec' ? ' exec pin' : '';
       return from.direction === 'out'
-        ? 'Move the wires to another output.'
-        : 'Move the wire to another input.';
+        ? `Move the wires to another output${exec}.`
+        : `Move the wire to another input${exec}.`;
     }
 
     for (const end of drag.ends) {

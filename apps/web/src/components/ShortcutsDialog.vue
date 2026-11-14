@@ -143,7 +143,8 @@ const GROUPS: ReadonlyArray<{
       },
       {
         action: 'Move all wires of a pin',
-        input: '{Mod} + drag the pin onto another pin',
+        input:
+          '{Mod} + drag the pin onto another pin of the same side (data or exec)',
       },
       { action: 'Straighten connections', input: '{Q}' },
       {

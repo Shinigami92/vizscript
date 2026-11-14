@@ -82,9 +82,9 @@ function nextStructureOp(
   overlay: GraphOverlay
 ): Step | null | undefined {
   const diff = overlayDiff(parsed, shown);
-  const [deleted] = diff.deletedNodes;
-  if (deleted) {
-    return { op: { type: 'deleteNodes', nodeIds: [deleted] } };
+  // All at once: a method and the Get of its receiver go together.
+  if (diff.deletedNodes.length > 0) {
+    return { op: { type: 'deleteNodes', nodeIds: [...diff.deletedNodes] } };
   }
 
   const group = (id: string): FloatingNodes | undefined => {

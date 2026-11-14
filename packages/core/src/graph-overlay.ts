@@ -6,6 +6,7 @@ import type {
   GraphDocument,
   GraphEdge,
   GraphNode,
+  Pin,
   PinRef,
 } from './ir';
 import type { GraphOp } from './ops';
@@ -611,6 +612,48 @@ function withCutReceivers(doc: GraphDocument, edits: GraphEdit[]): GraphEdit[] {
   return extra.length > 0 ? [...edits, ...extra] : edits;
 }
 
+/**
+ * Ctrl+drag of an exec pin (UE): its wire goes to another exec pin of the
+ * same side and keeps its other end. The code follows once the flow is
+ * whole again (the pin left behind is unwired).
+ */
+function moveExecWires(
+  fn: FunctionGraph,
+  from: PinRef,
+  to: PinRef
+): GraphEdit[] | undefined {
+  const pinOf = (ref: PinRef): Pin | undefined =>
+    fn.nodes.find((n) => n.id === ref.node)?.pins.find((p) => p.id === ref.pin);
+  const fromPin = pinOf(from);
+  const toPin = pinOf(to);
+  if (
+    fromPin?.kind !== 'exec' ||
+    toPin?.kind !== 'exec' ||
+    fromPin.direction !== toPin.direction ||
+    from.node === to.node
+  ) {
+    return undefined;
+  }
+
+  const out = fromPin.direction === 'out';
+  const edges = fn.edges.filter(
+    (e) => e.kind === 'exec' && sameRef(out ? e.from : e.to, from)
+  );
+  if (edges.length === 0) {
+    return undefined;
+  }
+
+  return [
+    ...edges.map(removeEdge),
+    ...edges.map((e): GraphEdit => ({
+      type: 'addEdge',
+      kind: 'exec',
+      from: out ? { ...to } : { ...e.from },
+      to: out ? { ...e.to } : { ...to },
+    })),
+  ];
+}
+
 function refKey(ref: PinRef): string {
   return `${ref.node}::${ref.pin}`;
 }
@@ -676,6 +719,11 @@ function opGraphEdits(
       const fn = functionOfNode(doc, op.from.node);
       if (!fn || functionOfNode(doc, op.to.node) !== fn) {
         return undefined;
+      }
+
+      const execMove = moveExecWires(fn, op.from, op.to);
+      if (execMove) {
+        return execMove;
       }
 
       const edges = fn.edges.filter(

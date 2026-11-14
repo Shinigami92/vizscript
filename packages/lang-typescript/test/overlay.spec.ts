@@ -299,6 +299,84 @@ describe('graph-only edits', () => {
     });
   });
 
+  it('moves an exec wire to another pin of the same side', () => {
+    const doc = parseTypeScript(text);
+    // Ctrl+drag log's exec input onto Return's: For Each → Return.
+    const overlay = edit(
+      text,
+      { edits: [] },
+      {
+        type: 'moveWires',
+        from: pin(doc, 'log', 'exec'),
+        to: pin(doc, 'Return', 'exec'),
+      }
+    );
+    const shown = applyOverlay(doc, overlay);
+    const edges = shown.functions.flatMap((f) => f.edges);
+    expect(
+      edges.some(
+        (e) =>
+          e.from.node === nodeId(doc, 'For Each') &&
+          e.to.node === nodeId(doc, 'Return')
+      )
+    ).toBe(true);
+    expect(
+      edges.some((e) => e.kind === 'exec' && e.to.node === nodeId(doc, 'log'))
+    ).toBe(false);
+    expect(overlayIssues(doc, shown).map((i) => i.node)).toContain(
+      nodeId(doc, 'log')
+    );
+
+    // The node left behind is deleted: the code follows.
+    const done = edit(text, overlay, {
+      type: 'deleteNodes',
+      nodeIds: [nodeId(doc, 'log')],
+    });
+    const result = resolveOverlay(text, done, backend);
+    expect(result.status).toBe('synced');
+    expect(result.status === 'synced' && result.text).not.toContain(
+      'console.log'
+    );
+  });
+
+  it('moves the wire of an exec output and keeps its other end', () => {
+    const doc = parseTypeScript(text);
+    // Set sum's wire (→ For Each) moves to log's output: log → For Each.
+    let overlay = edit(
+      text,
+      { edits: [] },
+      {
+        type: 'moveWires',
+        from: pin(doc, 'Set sum', 'then'),
+        to: pin(doc, 'log', 'then'),
+      }
+    );
+    overlay = edit(text, overlay, {
+      type: 'connect',
+      from: pin(doc, 'Set sum', 'then'),
+      to: pin(doc, 'log', 'exec'),
+    });
+    overlay = edit(text, overlay, {
+      type: 'connect',
+      from: pin(doc, 'For Each', 'completed'),
+      to: pin(doc, 'Return', 'exec'),
+    });
+    expect(resolveOverlay(text, overlay, backend)).toEqual({
+      status: 'synced',
+      text: [
+        'function total(items: number[]): number {',
+        '  let sum = 0;',
+        '  console.log(sum);',
+        '  for (const item of items) {',
+        '    sum += item;',
+        '  }',
+        '  return sum;',
+        '}',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('drops edits whose nodes were deleted in the code', () => {
     const doc = parseTypeScript(text);
     const overlay = edit(
