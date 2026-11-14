@@ -103,7 +103,14 @@ export type GraphOp =
       position?: Point;
     }
   /** Moves the expression feeding a data input into a new variable. */
-  | { type: 'extract'; pin: PinRef; name: string; position?: Point }
+  | {
+      type: 'extract';
+      pin: PinRef;
+      name: string;
+      /** Start value when the input is empty (UE promotes those too). */
+      value?: string;
+      position?: Point;
+    }
   /** Stores the value of a data output in a new variable. */
   | { type: 'promote'; pin: PinRef; name: string; position?: Point }
   /** Adds a call that receives the value of a data output. */

@@ -583,7 +583,7 @@ function applyTextOpEdits(
     }
 
     case 'extract': {
-      return extract(text, doc, op.pin, op.name, syntax);
+      return extract(text, doc, op.pin, op.name, syntax, op.value);
     }
 
     case 'promote': {

@@ -7,6 +7,7 @@ import type {
 } from './edit-meta';
 import { getMeta, owningStatement } from './edit-meta';
 import type { GraphDocument, GraphNode, Pin, PinRef, SourceRange } from './ir';
+import { setInput } from './literal-ops';
 import { failed, succeeded } from './op-result';
 import type { NodeTemplate, OpResult, TextEdit } from './ops';
 import { findNode } from './reconcile';
@@ -237,7 +238,8 @@ export function extract(
   doc: GraphDocument,
   ref: PinRef,
   name: string,
-  syntax: StatementSyntax
+  syntax: StatementSyntax,
+  value?: string
 ): OpResult {
   const node = findNode(doc, ref.node);
   const pin = findPin(node, ref.pin);
@@ -250,23 +252,29 @@ export function extract(
     return failed('Invalid variable name.');
   }
 
-  if (!pin.range || pin.range.end <= pin.range.start) {
-    return failed('This input has no value to extract.');
-  }
-
   const owner = owningStatement(node);
   if (!owner || owner.meta.inline || owner.meta.locked) {
     return failed('There is no place for a variable before this node.');
   }
 
   const { stmt } = owner;
-  const expression = text.slice(pin.range.start, pin.range.end);
+  const declaration = (expression: string): TextEdit => ({
+    start: stmt.start,
+    end: stmt.start,
+    text: `${syntax.declare(variable, expression)}\n${lineIndent(text, stmt.start)}`,
+  });
+  if (!pin.range || pin.range.end <= pin.range.start) {
+    // UE promotes an empty input too: the variable starts with `value`.
+    if (!value) {
+      return failed('This input has no value to extract.');
+    }
+
+    const used = setInput(doc, ref, variable);
+    return used.ok ? succeeded([declaration(value), ...used.edits]) : used;
+  }
+
   return succeeded([
-    {
-      start: stmt.start,
-      end: stmt.start,
-      text: `${syntax.declare(variable, expression)}\n${lineIndent(text, stmt.start)}`,
-    },
+    declaration(text.slice(pin.range.start, pin.range.end)),
     inputEdit(pin, pin.range, variable),
   ]);
 }

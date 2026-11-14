@@ -165,3 +165,35 @@ describe('deleting a value node', () => {
     );
   });
 });
+
+describe('promote to variable', () => {
+  it('promotes an input with a value', () => {
+    const text = "function f() {\n  greet('Jane');\n}\n";
+    const doc = parseTypeScript(text, 'a.ts');
+    const call = node(doc, (n) => n.kind === 'call' && n.title === 'greet');
+    expect(
+      apply(text, {
+        type: 'extract',
+        pin: { node: call.id, pin: 'arg0' },
+        name: 'person',
+      })
+    ).toBe("function f() {\n  const person = 'Jane';\n  greet(person);\n}\n");
+  });
+
+  it('promotes an empty input with a start value, like UE', () => {
+    const text =
+      'function greet(name: string) {}\nfunction f() {\n  greet();\n}\n';
+    const doc = parseTypeScript(text, 'a.ts');
+    const call = node(doc, (n) => n.kind === 'call' && n.title === 'greet');
+    expect(
+      apply(text, {
+        type: 'extract',
+        pin: { node: call.id, pin: 'param:name' },
+        name: 'person',
+        value: "''",
+      })
+    ).toBe(
+      "function greet(name: string) {}\nfunction f() {\n  const person = '';\n  greet(person);\n}\n"
+    );
+  });
+});
