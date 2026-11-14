@@ -136,6 +136,7 @@ export function createContextEntries(
                   e.kind === 'data' &&
                   (e.from.node === target.nodeId || e.to.node === target.nodeId)
               ),
+              reason: 'It has no data wires.',
               action: () =>
                 emitOp({ type: 'disconnectNode', node: target.nodeId }),
             },
@@ -149,6 +150,7 @@ export function createContextEntries(
               icon: 'i-mdi-content-cut',
               shortcut: shortcut('X'),
               disabled: !deletable,
+              reason: "A function's entry can't be cut.",
               action: () => void ctx.cutNodes(ids),
             },
           ]
@@ -194,8 +196,10 @@ export function createContextEntries(
               disabled: !props.doc?.symbols?.some(
                 (sym) =>
                   sym.fnId === first?.fn.id &&
-                  (sym.kind === 'function' || sym.kind === 'method')
+                  (sym.kind === 'function' || sym.kind === 'method') &&
+                  !sym.modifiers.includes('callback')
               ),
+              reason: 'Only code inside a named function can be collapsed.',
               action: () => commands.collapseToFunction(ids),
             },
           ]
@@ -275,6 +279,8 @@ export function createContextEntries(
               shortcut: 'Del',
               danger: true,
               disabled: !deletable,
+              reason:
+                "A function's entry can't be deleted; delete the function in My Script.",
               action: () =>
                 events.op({ type: 'deleteNodes', nodeIds: [...ids] }),
             },
@@ -374,6 +380,7 @@ export function createContextEntries(
             : 'Select connected targets',
         icon: 'i-mdi-ray-start-arrow',
         disabled: peers.length === 0,
+        reason: 'Nothing is wired to this pin.',
         action: () => ctx.selectNodes([...new Set(peers)]),
       },
       ...(props.editable
@@ -386,6 +393,7 @@ export function createContextEntries(
               disabled:
                 edges.length === 0 &&
                 (pin.kind === 'exec' || pin.direction === 'out' || !pin.range),
+              reason: 'Nothing is wired to this pin.',
               action: () => events.op({ type: 'disconnect', pin: source }),
             },
             // UE's "Break link to …": one wire of several.
@@ -444,6 +452,7 @@ export function createContextEntries(
         label: 'Remove reroute nodes',
         icon: 'i-mdi-vector-polyline-remove',
         disabled: knots === 0,
+        reason: 'This wire has no reroute nodes.',
         action: () => v.clearReroutes(edge.id),
       },
       { type: 'separator' },

@@ -243,7 +243,15 @@ const {
     record: (before, after) => recordOverlay(before, after),
     // The editor reports its new version in a microtask.
     recordCode: () => queueMicrotask(recordOverlayCode),
-    placeFloating: (edit, world) => movePinned(floatingLayout(edit, world)),
+    placeFloating: (edit, world) => {
+      movePinned(floatingLayout(edit, world));
+      // Selected like any node just placed (once the overlay shows them).
+      const ids = edit.nodes.map((n) => n.id);
+      void nextTick(() => {
+        canvas.value?.setSelection(ids);
+        onSelectionChange(ids);
+      });
+    },
     placed: (ids) => {
       const moved: Positions = {};
       for (const [from, to] of Object.entries(ids)) {

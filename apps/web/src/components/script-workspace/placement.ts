@@ -120,11 +120,12 @@ export function placementFor(
       known: allNodeIds(doc),
       matches,
       ...(placed.type === 'setInput' ? { code: placed.expression.trim() } : {}),
+      // Like UE, a node just placed is selected (pasted code: all of it).
       select:
-        placed.type === 'collapseToFunction'
-          ? 'added'
-          : placed.type === 'addNode' && placed.template.type === 'code'
-            ? 'fresh'
+        placed.type === 'addNode' && placed.template.type === 'code'
+          ? 'fresh'
+          : placed.type === 'collapseToFunction' || placed.type === 'addNode'
+            ? 'added'
             : undefined,
     };
   }

@@ -366,7 +366,13 @@ async function save(): Promise<void> {
 }
 
 function discard(): void {
-  if (saved.value !== null) {
+  // Drops every unsaved change of the file at once: ask first.
+  if (
+    saved.value !== null &&
+    globalThis.confirm(
+      `Discard all changes to ${shown.value ?? 'this file'}? This can't be undone.`
+    )
+  ) {
     text.value = saved.value;
     overlay.value = EMPTY_OVERLAY;
     localStorage.removeItem(draftKey.value);

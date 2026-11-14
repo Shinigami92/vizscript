@@ -381,7 +381,13 @@ watch([text, overlay], ([value, edits]) => {
 });
 
 function discard(): void {
-  if (file.value) {
+  // Drops every local change of the file at once: ask first.
+  if (
+    file.value &&
+    globalThis.confirm(
+      `Discard all changes to ${file.value.path}? This can't be undone.`
+    )
+  ) {
     text.value = file.value.content;
     overlay.value = EMPTY_OVERLAY;
     localStorage.removeItem(draftKey.value);

@@ -7,6 +7,8 @@ export type MenuEntry =
       /** Shortcut hint shown on the right, e.g. `Ctrl+Z`. */
       shortcut?: string;
       disabled?: boolean;
+      /** Why it is disabled, shown below the label. */
+      reason?: string;
       danger?: boolean;
       action: () => void;
     }
@@ -138,7 +140,7 @@ onMounted(async () => {
         v-else
         type="button"
         role="menuitem"
-        class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left outline-none disabled:cursor-not-allowed disabled:opacity-40"
+        class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left outline-none disabled:cursor-not-allowed"
         :class="
           entry.danger
             ? 'text-red-300 hover:bg-red-950/60 focus:bg-red-950/60'
@@ -149,13 +151,23 @@ onMounted(async () => {
       >
         <span
           class="w-4 shrink-0 text-zinc-400"
-          :class="entry.icon ?? ''"
+          :class="[entry.icon ?? '', entry.disabled ? 'opacity-40' : '']"
           aria-hidden="true"
         />
-        <span class="flex-1 truncate">{{ entry.label }}</span>
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="truncate" :class="entry.disabled ? 'opacity-40' : ''">{{
+            entry.label
+          }}</span>
+          <span
+            v-if="entry.disabled && entry.reason"
+            class="text-[11px] whitespace-normal text-zinc-400"
+            >{{ entry.reason }}</span
+          >
+        </span>
         <kbd
           v-if="entry.shortcut"
           class="font-sans text-[11px] text-zinc-500"
+          :class="entry.disabled ? 'opacity-40' : ''"
           >{{ entry.shortcut }}</kbd
         >
       </button>
