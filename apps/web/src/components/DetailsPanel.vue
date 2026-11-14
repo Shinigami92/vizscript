@@ -498,13 +498,16 @@ function deleteSelection(): void {
             :declared="declaredTypes"
             :language="doc?.language ?? ''"
             compact
+            :operator="assignOperator"
             @reveal="(range) => emit('reveal', range)"
             @select="(ids) => emit('select', ids)"
+            @set-operator="setAssignOperator"
             @op="onSymbolOp"
           />
-          <h3 class="section-title border-b border-zinc-800/80 pt-3">Node</h3>
         </template>
+        <!-- A variable's Get / Set node is named by the variable above. -->
         <div
+          v-else
           class="border-b border-zinc-800 px-3 py-2.5"
           :style="{
             boxShadow: `inset 3px 0 0 ${CATEGORY_COLORS[single.node.category]}`,
@@ -516,8 +519,16 @@ function deleteSelection(): void {
           </div>
         </div>
 
+        <!-- The comment of a declaration's SET node is the variable's
+             Description above: shown once. -->
         <DetailsSection
-          v-if="single.node.comment || editable"
+          v-if="
+            (single.node.comment || editable) &&
+            !(
+              shownNodeSymbol &&
+              descriptionOf(shownNodeSymbol)?.nodeId === single.node.id
+            )
+          "
           id="node-comment"
           title="Comment"
         >
@@ -535,60 +546,41 @@ function deleteSelection(): void {
           </div>
         </DetailsSection>
 
-        <DetailsSection id="node-general" title="General">
-          <dl class="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1 px-3 text-xs">
-            <dt class="text-zinc-500">Function</dt>
-            <dd class="truncate">
-              <button
-                type="button"
-                class="link"
-                @click="emit('selectFunction', single.fn.id)"
-              >
-                {{ single.fn.name }}
-              </button>
-            </dd>
-            <!-- An assignment's operator: `=`, `+=` … (UE has none). -->
-            <template v-if="assignOperator">
-              <dt class="text-zinc-500">Operator</dt>
-              <dd class="flex flex-wrap gap-1">
-                <button
-                  v-for="operator in ASSIGN_OPERATORS"
-                  :key="operator"
-                  type="button"
-                  class="rounded px-1.5 py-0.5 font-mono"
-                  :class="
-                    operator === assignOperator
-                      ? 'bg-zinc-700 text-zinc-50'
-                      : 'text-zinc-400 hover:bg-zinc-800'
-                  "
-                  :aria-pressed="operator === assignOperator"
-                  :disabled="!editable"
-                  @click="setAssignOperator(operator)"
-                >
-                  {{ operator }}
-                </button>
-              </dd>
-            </template>
-            <template v-if="location">
-              <dt class="text-zinc-500">Location</dt>
-              <dd>
-                <button
-                  type="button"
-                  class="link"
-                  @click="emit('activate', single.node.id)"
-                >
-                  Line {{ location.line }}, col {{ location.column }}
-                </button>
-              </dd>
-            </template>
-          </dl>
-        </DetailsSection>
-
         <DetailsSection
           v-if="inputs.length > 0"
           id="node-inputs"
           title="Inputs"
         >
+          <!-- The operator of a SET of something other than a variable
+               (`item.price += 1`); a variable's shows in its section. -->
+          <div
+            v-if="assignOperator && !shownNodeSymbol"
+            class="flex items-center gap-2 px-3 pb-1.5 text-xs"
+          >
+            <span class="w-16 shrink-0 text-zinc-500">Operator</span>
+            <div
+              class="flex flex-wrap gap-1"
+              role="group"
+              aria-label="Operator"
+            >
+              <button
+                v-for="operator in ASSIGN_OPERATORS"
+                :key="operator"
+                type="button"
+                class="rounded px-1.5 py-0.5 font-mono"
+                :class="
+                  operator === assignOperator
+                    ? 'bg-zinc-700 text-zinc-50'
+                    : 'text-zinc-400 hover:bg-zinc-800'
+                "
+                :aria-pressed="operator === assignOperator"
+                :disabled="!editable"
+                @click="setAssignOperator(operator)"
+              >
+                {{ operator }}
+              </button>
+            </div>
+          </div>
           <div v-for="pin in inputs" :key="pin.id" class="pin-row">
             <div class="flex items-center gap-1.5">
               <PinIcon :pin="pin" :size="9" />
@@ -657,14 +649,30 @@ function deleteSelection(): void {
           </div>
         </DetailsSection>
 
-        <DetailsSection v-if="source" id="node-source" title="Source">
-          <pre
-            class="mx-3 overflow-x-auto rounded bg-zinc-900 p-2 font-mono text-[11px] leading-snug text-zinc-300"
-            >{{ source }}</pre>
-        </DetailsSection>
-
         <DetailsSection id="node-advanced" title="Advanced" default-collapsed>
           <dl class="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1 px-3 text-xs">
+            <dt class="text-zinc-500">Function</dt>
+            <dd class="truncate">
+              <button
+                type="button"
+                class="link"
+                @click="emit('selectFunction', single.fn.id)"
+              >
+                {{ single.fn.name }}
+              </button>
+            </dd>
+            <template v-if="location">
+              <dt class="text-zinc-500">Location</dt>
+              <dd>
+                <button
+                  type="button"
+                  class="link"
+                  @click="emit('activate', single.node.id)"
+                >
+                  Line {{ location.line }}, col {{ location.column }}
+                </button>
+              </dd>
+            </template>
             <dt class="text-zinc-500">Kind</dt>
             <dd class="text-zinc-300">
               {{
@@ -685,6 +693,12 @@ function deleteSelection(): void {
               {{ single.node.id }}
             </dd>
           </dl>
+        </DetailsSection>
+
+        <DetailsSection v-if="source" id="node-source" title="Source">
+          <pre
+            class="mx-3 overflow-x-auto rounded bg-zinc-900 p-2 font-mono text-[11px] leading-snug text-zinc-300"
+            >{{ source }}</pre>
         </DetailsSection>
 
         <div v-if="editable && single.node.kind !== 'entry'" class="px-3 py-3">

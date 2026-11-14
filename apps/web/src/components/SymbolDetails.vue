@@ -6,7 +6,7 @@ import type {
   SourceRange,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { declaringNode, pinColor } from '@vizscript/core';
+import { ASSIGN_OPERATORS, declaringNode, pinColor } from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
 import { lineColumn, snippet } from '../graph/source';
@@ -53,6 +53,11 @@ const props = defineProps<{
    * disk) for UE's reset ↶; missing for symbols that are new.
    */
   base?: { value: string | null; type: string | null };
+  /**
+   * The assignment operator of the selected SET node (`=`, `+=` …), shown
+   * below the declaration; missing for other nodes and declarations.
+   */
+  operator?: string;
 }>();
 
 const emit = defineEmits<{
@@ -62,6 +67,7 @@ const emit = defineEmits<{
   openImport: [];
   op: [op: GraphOp];
   select: [ids: string[]];
+  setOperator: [operator: string];
 }>();
 
 /** Selects the SET node that computes the variable's value. */
@@ -357,7 +363,8 @@ function setModifier(modifier: string, enabled: boolean): void {
 
 <template>
   <div data-ui="symbol-details">
-    <div class="border-b border-zinc-800 px-3 py-2.5">
+    <!-- Variables name themselves in their section, like UE's. -->
+    <div v-if="!isVariable" class="border-b border-zinc-800 px-3 py-2.5">
       <div class="flex items-center gap-2">
         <span
           class="shrink-0"
@@ -390,6 +397,27 @@ function setModifier(modifier: string, enabled: boolean): void {
       :title="isVariable ? 'Variable' : symbolLabel(symbol)"
     >
       <dl class="grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1.5 px-3 text-xs">
+        <template v-if="isVariable">
+          <dt class="pt-1 text-zinc-500">Name</dt>
+          <dd class="flex min-w-0 items-center gap-2">
+            <input
+              v-if="renamable"
+              v-model="nameDraft"
+              data-ui="symbol-name"
+              class="input py-0.5 font-mono text-xs"
+              :aria-label="`Name of ${symbol.name}`"
+              spellcheck="false"
+              @keydown.enter.prevent="
+                ($event.target as HTMLInputElement).blur()
+              "
+              @keydown.escape.prevent="cancelRename($event)"
+              @change="commitRename"
+            />
+            <span v-else class="truncate font-mono text-zinc-200">{{
+              symbol.name
+            }}</span>
+          </dd>
+        </template>
         <template v-if="isImport">
           <dt class="text-zinc-500">Module</dt>
           <dd class="truncate font-mono text-zinc-200" :title="symbol.module">
@@ -506,6 +534,28 @@ function setModifier(modifier: string, enabled: boolean): void {
               @click="setModifier(keyword, true)"
             >
               {{ keyword }}
+            </button>
+          </dd>
+        </template>
+        <!-- The selected SET node's operator (UE has none). -->
+        <template v-if="operator">
+          <dt class="pt-1 text-zinc-500">Operator</dt>
+          <dd class="flex flex-wrap gap-0.5" role="group" aria-label="Operator">
+            <button
+              v-for="option in ASSIGN_OPERATORS"
+              :key="option"
+              type="button"
+              class="rounded px-1 py-0.5 font-mono"
+              :class="
+                option === operator
+                  ? 'bg-zinc-700 text-zinc-50'
+                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+              "
+              :aria-pressed="option === operator"
+              :disabled="!editable"
+              @click="emit('setOperator', option)"
+            >
+              {{ option }}
             </button>
           </dd>
         </template>
@@ -629,22 +679,6 @@ function setModifier(modifier: string, enabled: boolean): void {
           <dt class="text-zinc-500">Extends</dt>
           <dd class="truncate font-mono text-zinc-200">{{ symbol.extends }}</dd>
         </template>
-        <template
-          v-if="
-            !compact &&
-            !callback &&
-            uses !== undefined &&
-            symbol.kind !== 'type' &&
-            symbol.kind !== 'enum' &&
-            !(isImport && symbol.modifiers.includes('type'))
-          "
-        >
-          <dt class="text-zinc-500">Used by</dt>
-          <dd class="text-zinc-300">
-            {{ uses }} node{{ uses === 1 ? '' : 's' }}
-            <span v-if="uses > 0" class="text-zinc-500">(highlighted)</span>
-          </dd>
-        </template>
       </dl>
     </DetailsSection>
 
@@ -669,6 +703,17 @@ function setModifier(modifier: string, enabled: boolean): void {
       </dl>
     </DetailsSection>
 
+    <SymbolSignature
+      :symbol="symbol"
+      :text="text"
+      :editable="editable"
+      :types="types"
+      :declared="declared"
+      :language="language"
+      :doc="doc"
+      @op="emit('op', $event)"
+    />
+
     <!-- Rarely needed rows, folded like UE's "Advanced". -->
     <DetailsSection
       v-if="!compact"
@@ -690,6 +735,26 @@ function setModifier(modifier: string, enabled: boolean): void {
             >
           </dd>
         </template>
+        <template
+          v-if="
+            !compact &&
+            !callback &&
+            uses !== undefined &&
+            symbol.kind !== 'type' &&
+            symbol.kind !== 'enum' &&
+            !(isImport && symbol.modifiers.includes('type'))
+          "
+        >
+          <dt class="text-zinc-500">Used by</dt>
+          <dd class="text-zinc-300">
+            {{ uses }} node{{ uses === 1 ? '' : 's' }}
+            <span v-if="uses > 0" class="text-zinc-500">(highlighted)</span>
+          </dd>
+        </template>
+        <template v-if="isVariable && symbol.scope">
+          <dt class="text-zinc-500">Scope</dt>
+          <dd class="truncate font-mono text-zinc-200">{{ symbol.scope }}</dd>
+        </template>
         <dt class="text-zinc-500">Location</dt>
         <dd>
           <button
@@ -702,17 +767,6 @@ function setModifier(modifier: string, enabled: boolean): void {
         </dd>
       </dl>
     </DetailsSection>
-
-    <SymbolSignature
-      :symbol="symbol"
-      :text="text"
-      :editable="editable"
-      :types="types"
-      :declared="declared"
-      :language="language"
-      :doc="doc"
-      @op="emit('op', $event)"
-    />
 
     <DetailsSection v-if="!compact" id="symbol-source" title="Source">
       <pre
