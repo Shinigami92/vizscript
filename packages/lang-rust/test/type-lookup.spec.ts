@@ -120,7 +120,7 @@ describe('the Rust type lookup', () => {
         .filter((p) => p.direction === 'in' && p.kind === 'data')
         .map((p) => [p.id, p.name, p.type])
     ).toEqual([
-      ['target', 'Target', 'object'],
+      ['target', 'self', 'object'],
       ['arg0', 'key', 'string'],
     ]);
   });

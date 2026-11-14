@@ -89,40 +89,44 @@ export abstract class CallLowering extends GraphBuilderBase {
     inputs: InputSpec[]
   ): { title: string; signature?: Signature; chain?: string[] } {
     const chain = simpleChain(callee);
-    const root = chain?.[0];
-    // A variable as receiver (`cart.first()`) becomes the Target pin.
-    const rootIsVariable =
-      root !== undefined && root !== 'self' && this.lookup(root) !== undefined;
-    if (chain && (!rootIsVariable || chain.length === 1)) {
-      const title = chain.join('.');
-      const owner = root === 'self' || root === 'Self' ? this.owner : undefined;
-      const member = chain.slice(1).join('.');
-      const signature =
-        owner && member
-          ? this.doc.signatures.get(`${owner}::${member}`)
-          : this.doc.signatures.get(
-              title.replace(/^Self::/, `${this.owner ?? 'Self'}::`)
-            );
-      if (root === 'self' && chain.length > 1) {
-        // `self.save()`: the target is the function's `self`.
-        const entry = this.lookup('self');
-        if (entry?.source) {
-          inputs.push({
-            pin: this.dataIn('target', 'Target', undefined, entry.type),
-            value: { pin: entry.source, type: entry.type },
-          });
-        }
+    if (chain?.length === 1) {
+      // `total(items)`; paths (`Item::new`, `Self::check`) and tuple
+      // structs (`Some(x)`) are not called on a value.
+      const title = chain[0] ?? '';
+      const signature = this.doc.signatures.get(
+        title.replace(/^Self::/, `${this.owner ?? 'Self'}::`)
+      );
+      if (!title.includes('::') && !/^[A-Z]/.test(title)) {
+        // An unwired `self` that writes `value.` before the name.
+        inputs.push({
+          pin: this.dataIn('target', 'self', undefined, 'object', {
+            insertInitAt: rangeOf(callee).start,
+            insertPrefix: '',
+            insertSuffix: '.',
+          }),
+          value: undefined,
+        });
       }
 
       return { title, ...(signature ? { signature } : {}), chain };
     }
 
     if (callee.type === 'Field') {
+      // `self.save()`: a method of the own type.
+      const onSelf = chain?.length === 2 && chain[0] === 'self';
+      const signature =
+        onSelf && this.owner
+          ? this.doc.signatures.get(`${this.owner}::${callee.name}`)
+          : undefined;
       inputs.push({
-        pin: this.dataIn('target', 'Target', rangeOf(callee.object), 'object'),
+        pin: this.dataIn('target', 'self', rangeOf(callee.object), 'object'),
         value: this.lowerExpr(callee.object, `${path}.target`, evalMode),
       });
-      return { title: callee.name };
+      return {
+        title: callee.name,
+        ...(signature ? { signature } : {}),
+        ...(chain ? { chain } : {}),
+      };
     }
 
     inputs.push({
@@ -149,6 +153,7 @@ export abstract class CallLowering extends GraphBuilderBase {
     let title: string;
     let signature: Signature | undefined;
     let nameHint = 'value';
+    let calleeChain: string[] | undefined;
     let args: Expr[];
     if (expr.type === 'Macro') {
       const bare = expr.name.split('::').at(-1) ?? expr.name;
@@ -167,6 +172,7 @@ export abstract class CallLowering extends GraphBuilderBase {
         inputs
       );
       title = callee.title;
+      calleeChain = callee.chain;
       signature = callee.signature;
       nameHint = callee.chain?.at(-1) ?? 'value';
       args = expr.args;
@@ -187,7 +193,7 @@ export abstract class CallLowering extends GraphBuilderBase {
           arg,
           `${path}.arg${i}`,
           evalMode,
-          `${title} callback`
+          `${expr.type === 'Macro' ? title : (calleeChain?.join('.') ?? title)} callback`
         ),
       });
     }
