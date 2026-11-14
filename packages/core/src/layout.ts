@@ -2,6 +2,7 @@ import { withImplicitSelf } from './display';
 import type { StatementMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import { NODE_METRICS } from './geometry';
+import { snapToGrid } from './grid';
 import type {
   FunctionGraph,
   GraphDocument,
@@ -215,6 +216,14 @@ export function layoutDocument(
     }
 
     separateFunction(fn, above, result, boxes, options);
+  }
+
+  // Laid out nodes sit on the grid, like UE's; saved ones stay where they
+  // were put (aligned pins, older layouts).
+  for (const [id, p] of Object.entries(result)) {
+    if (!saved[id]) {
+      result[id] = snapToGrid(p);
+    }
   }
 
   return result;

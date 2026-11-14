@@ -1,5 +1,6 @@
 export * from './call-pins';
 export * from './constant-value';
+export * from './grid';
 export * from './infer-types';
 export * from './collapse';
 export * from './comment-ops';

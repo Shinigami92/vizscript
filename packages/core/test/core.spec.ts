@@ -20,6 +20,7 @@ import {
   rerouteKey,
   reroutePatch,
   searchNodes,
+  snapToGrid,
 } from '../src';
 
 function node(
@@ -157,11 +158,12 @@ describe('layoutDocument', () => {
 
   it('keeps saved positions and moves unsaved children along', () => {
     const auto = layoutDocument(sampleDoc(), { sizeOf });
-    const saved = { call1: { x: auto.call1!.x + 500, y: auto.call1!.y + 100 } };
+    // Moved by whole grid cells: the children stay on the grid too.
+    const saved = { call1: { x: auto.call1!.x + 512, y: auto.call1!.y + 96 } };
     const positions = layoutDocument(sampleDoc(), { sizeOf }, saved);
     expect(positions.call1).toEqual(saved.call1);
-    expect(positions.call2!.x - auto.call2!.x).toBe(500);
-    expect(positions.pure1!.y - auto.pure1!.y).toBe(100);
+    expect(positions.call2!.x - auto.call2!.x).toBe(512);
+    expect(positions.pure1!.y - auto.pure1!.y).toBe(96);
     expect(positions.entry).toEqual(auto.entry);
   });
 
@@ -272,15 +274,29 @@ describe('layoutDocument', () => {
     ];
     const spaced = layoutDocument(doc, {
       sizeOf,
-      spaceAbove: (n) => (n.id === 'b0' ? 50 : 0),
+      spaceAbove: (n) => (n.id === 'b0' ? 48 : 0),
       commentBoxTop: 40,
     });
     // The second function moves down by the larger of its row's needs:
-    // the entry's bubble (50) or the box title around its first call (40).
+    // the entry's bubble (48) or the box title around its first call (40).
     expect(spaced.a0).toEqual(plain.a0);
-    expect(spaced.b0!.y - plain.b0!.y).toBe(50);
+    expect(spaced.b0!.y - plain.b0!.y).toBe(48);
     // Nodes of one exec row stay aligned.
     expect(spaced.b1!.y).toBe(spaced.b0!.y);
+  });
+});
+
+describe('the grid', () => {
+  it('puts laid out nodes on it and leaves saved ones alone', () => {
+    const saved = { call1: { x: 101, y: 37 } };
+    const positions = layoutDocument(sampleDoc(), { sizeOf }, saved);
+    expect(positions.call1).toEqual(saved.call1);
+    const offGrid = Object.entries(positions)
+      .filter(([id, p]) => id !== 'call1' && (p.x % 16 !== 0 || p.y % 16 !== 0))
+      .map(([id]) => id);
+    expect(offGrid).toEqual([]);
+
+    expect(snapToGrid({ x: 7, y: 9 })).toEqual({ x: 0, y: 16 });
   });
 });
 
