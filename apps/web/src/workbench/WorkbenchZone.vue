@@ -30,8 +30,11 @@ const active = computed(() =>
     ? state.value.active
     : props.views[0]
 );
-/** Sidebars stack split views, the main area and panel put them in a row. */
-const stacked = computed(() => props.zone === 'left' || props.zone === 'right');
+/**
+ * Sidebars and the bottom panel stack split views (Problems below Code);
+ * the main area puts them in a row.
+ */
+const stacked = computed(() => props.zone !== 'center');
 
 // ------------------------------------------------------------ dragging
 

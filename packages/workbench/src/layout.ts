@@ -26,7 +26,10 @@ export interface ZoneState {
   views: ViewId[];
   /** Visible tab when the zone shows tabs. */
   active: ViewId | null;
-  /** Show all views side by side (stacked in sidebars) instead of as tabs. */
+  /**
+   * Show all views at once instead of as tabs: side by side in the main
+   * area, stacked in the sidebars and the bottom panel.
+   */
   split: boolean;
   /** Width (left/right) or height (bottom) in px; unused for `center`. */
   size: number;
@@ -121,14 +124,21 @@ export interface LayoutPreset {
   create: () => WorkbenchLayout;
 }
 
-/** Graph in the main area, code in the bottom panel below it. */
+/**
+ * Graph in the main area, code in the bottom panel below it, and the
+ * problems (when shown) below the code.
+ */
 function graphAboveCode(): Pick<
   Record<ZoneId, ZoneState>,
   'center' | 'bottom'
 > {
   return {
     center: zone(['graph', 'preview'], { split: true }),
-    bottom: zone(['code'], { size: SIZE_LIMITS.bottom.initial }),
+    bottom: zone(['code', 'problems'], {
+      size: SIZE_LIMITS.bottom.initial,
+      split: true,
+      weights: { code: 0.65, problems: 0.35 },
+    }),
   };
 }
 
