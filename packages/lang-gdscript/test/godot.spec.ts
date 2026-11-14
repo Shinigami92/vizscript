@@ -70,17 +70,26 @@ describe('Godot classes', () => {
     ].join('\n');
     const doc = parseGDScriptDocument(text, 'x.gd');
     expect(pins(call(doc, 'is_in_group'))).toEqual([
-      'in Target:object',
+      'in self:object',
       'in group:StringName',
       'out :bool',
     ]);
-    expect(pins(call(doc, 'sprite.look_at'))).toEqual(['in point:Vector2']);
-    expect(pins(call(doc, 'Input.is_action_pressed'))).toEqual([
+    expect(pins(call(doc, 'look_at'))).toEqual([
+      'in self:object',
+      'in point:Vector2',
+    ]);
+    expect(pins(call(doc, 'is_action_pressed'))).toEqual([
+      'in self:object',
       'in action:StringName',
       'in exact_match:bool',
       'out :bool',
     ]);
-    expect(pins(call(doc, 'move_and_slide'))).toEqual(['out :bool']);
+    // A method of the class the script extends: on `self`.
+    const slide = call(doc, 'move_and_slide');
+    expect(pins(slide)).toEqual(['in self:object', 'out :bool']);
+    expect(slide.pins.find((p) => p.id === 'target')?.literal?.value).toBe(
+      'self'
+    );
     // Inherited properties have their types.
     expect(pins(call(doc, 'position'))).toEqual(['out :Vector2']);
   });

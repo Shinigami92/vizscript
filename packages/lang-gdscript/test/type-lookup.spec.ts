@@ -82,7 +82,7 @@ describe('the GDScript type lookup', () => {
   it('drops results of functions that return nothing', () => {
     const calls = doc.functions
       .flatMap((f) => f.nodes)
-      .filter((n) => n.title === 'print' || n.title === 'hit.emit');
+      .filter((n) => n.title === 'print' || n.title === 'emit');
     expect(calls.length).toBe(4);
     expect(
       calls.flatMap((n) => n.pins.filter((p) => p.id === 'return'))
@@ -106,10 +106,12 @@ describe('the GDScript type lookup', () => {
   it('names and types the arguments of Godot methods', () => {
     const call = doc.functions
       .flatMap((f) => f.nodes)
-      .find((n) => n.title === 'top.distance_to');
+      .find((n) => n.title === 'distance_to');
     expect(
       call?.pins
-        .filter((p) => p.direction === 'in' && p.kind === 'data')
+        .filter(
+          (p) => p.direction === 'in' && p.kind === 'data' && p.id !== 'target'
+        )
         .map((p) => [p.name, p.type])
     ).toEqual([['to', 'Vector2']]);
   });

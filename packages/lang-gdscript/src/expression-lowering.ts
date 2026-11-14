@@ -16,6 +16,7 @@ import {
 import type { Expr, FuncDecl, Span } from './ast';
 import { CONVERSIONS } from './conversions';
 import { dataTypeOf } from './data-type';
+import { isGlobalFunction } from './godot';
 import type { EvalMode, GraphSource, LoweringContext } from './lower-utils';
 import { rangeOf, simpleChain, unwrap } from './lower-utils';
 
@@ -96,20 +97,37 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
     let knownName: string | undefined;
 
     const chain = simpleChain(callee, this.text);
-    const rootWired =
-      chain?.[0] !== undefined && this.lookup(chain[0])?.source !== undefined;
-    if (chain && !(rootWired && chain.length > 1)) {
+    // A call without a receiver: a global function (`print`) gets an
+    // unwired `self`, a method of the script or the class it extends
+    // (`move_and_slide()`) the `self` box; constructors get none. Wiring a
+    // value in writes `value.` before the name.
+    let freeTarget: Pin | undefined;
+    const constructs =
+      chain !== undefined && chain.length >= 2 && chain.at(-1) === 'new';
+    if (chain && (chain.length === 1 || constructs)) {
       title = chain.join('.');
-      knownName =
-        chain.length === 1
-          ? chain[0]
-          : chain.length === 2 && chain[0] === 'self'
-            ? chain[1]
-            : undefined;
+      knownName = chain.length === 1 ? chain[0] : undefined;
+      if (!constructs && !/^[A-Z]/.test(title)) {
+        freeTarget = this.dataIn('target', 'self', undefined, 'object', {
+          insertInitAt: rangeOf(callee).start,
+          insertPrefix: '',
+          insertSuffix: '.',
+        });
+        if (!isGlobalFunction(title)) {
+          freeTarget.literal = {
+            kind: 'undefined',
+            value: 'self',
+            raw: 'self',
+            editable: false,
+          };
+        }
+      }
     } else if (callee.type === 'Attribute') {
       title = callee.name;
+      knownName =
+        chain?.length === 2 && chain[0] === 'self' ? chain[1] : undefined;
       inputs.push({
-        pin: this.dataIn('target', 'Target', rangeOf(callee.object), 'object'),
+        pin: this.dataIn('target', 'self', rangeOf(callee.object), 'object'),
         value: this.lowerExpr(callee.object, `${path}.target`, evalMode),
       });
     } else {
@@ -134,7 +152,7 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
           arg,
           `${path}.arg${index}`,
           evalMode,
-          `${title} callback`
+          `${chain?.join('.') ?? title} callback`
         ),
       });
     }
@@ -152,6 +170,9 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       converts ??
       signature?.returnType ??
       (constructed ? dataTypeOf(constructed) : 'any');
+    if (freeTarget && converts === undefined) {
+      inputs.unshift({ pin: freeTarget, value: undefined });
+    }
 
     const impure = mode !== 'pure' && converts === undefined;
     const pins: Pin[] = impure

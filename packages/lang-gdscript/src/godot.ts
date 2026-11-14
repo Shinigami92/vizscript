@@ -69,3 +69,30 @@ export function godotGlobals(): ReadonlyMap<string, ScriptSymbol> {
   );
   return globals;
 }
+
+/** Functions of `@GDScript` that are no methods of `self`. */
+const GDSCRIPT_FUNCTIONS = new Set([
+  'assert',
+  'char',
+  'convert',
+  'dict_to_inst',
+  'get_stack',
+  'inst_to_dict',
+  'is_instance_of',
+  'len',
+  'load',
+  'ord',
+  'preload',
+  'print_debug',
+  'print_stack',
+  'range',
+  'type_exists',
+]);
+
+/**
+ * A global function (`print`, `len`): called without a receiver. Any other
+ * call without one is a method of `self` (`move_and_slide()`, `fire()`).
+ */
+export function isGlobalFunction(name: string): boolean {
+  return GDSCRIPT_FUNCTIONS.has(name) || godotGlobals().has(name);
+}

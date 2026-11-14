@@ -21,7 +21,7 @@ exports[`parseGDScriptDocument > lowers the fixture 1`] = `
   ==> #7.then -> #8.exec
 function ammo.set
   #0 entry "ammo.set" (setter) [>then:▶ >param0:number]
-  #1 call "clampi" [<exec:▶ >then:▶ <arg0:number <arg1:number=0 <arg2:number=99 >return:number]
+  #1 call "clampi" [<exec:▶ >then:▶ <target:object <arg0:number <arg1:number=0 <arg2:number=99 >return:number]
   #2 setVar "Set ammo" [<exec:▶ >then:▶ <value:number >out:number]
   --> #0.param0 -> #1.arg0
   ==> #0.then -> #1.exec
@@ -29,19 +29,21 @@ function ammo.set
   ==> #1.then -> #2.exec
 function _ready
   #0 entry "_ready" (event) [>then:▶]
-  #1 functionRef "ƒ $Timer.timeout.connect callback" [>value:function]
-  #2 call "$Timer.timeout.connect" [<exec:▶ >then:▶ <arg0:function >return:any]
-  #3 getVar "ammo" [>value:number]
-  #4 operator "%" [<a:string="Turret ready with %d ammo" <b:number >value:string]
-  #5 call "print" [<exec:▶ >then:▶ <arg0:string]
-  --> #1.value -> #2.arg0
-  ==> #0.then -> #2.exec
-  --> #3.value -> #4.b
-  --> #4.value -> #5.arg0
-  ==> #2.then -> #5.exec
+  #1 getVar "$Timer.timeout" [>value:any]
+  #2 functionRef "ƒ $Timer.timeout.connect callback" [>value:function]
+  #3 call "connect" [<exec:▶ >then:▶ <target:object <arg0:function >return:any]
+  #4 getVar "ammo" [>value:number]
+  #5 operator "%" [<a:string="Turret ready with %d ammo" <b:number >value:string]
+  #6 call "print" [<exec:▶ >then:▶ <target:object <arg0:string]
+  --> #1.value -> #3.target
+  --> #2.value -> #3.arg0
+  ==> #0.then -> #3.exec
+  --> #4.value -> #5.b
+  --> #5.value -> #6.arg0
+  ==> #3.then -> #6.exec
 function _process
   #0 entry "_process" (event) [>then:▶ >param0:number]
-  #1 call "_nearest_enemy" [<exec:▶ >then:▶ >return:Node3D]
+  #1 call "_nearest_enemy" [<exec:▶ >then:▶ <target:object=self >return:Node3D]
   #2 setVar "Set target" (var) [<exec:▶ >then:▶ <value:Node3D >out:Node3D]
   #3 getVar "target" [>value:Node3D]
   #4 operator "==" [<a:Node3D <b:any=null >value:bool]
@@ -52,21 +54,22 @@ function _process
   #9 getVar "ammo" [>value:number]
   #10 operator "<=" [<a:number <b:number=0 >value:bool]
   #11 branch "Branch" (elif) [<exec:▶ <condition:bool >true:▶ >false:▶]
-  #12 call "push_warning" [<exec:▶ >then:▶ <arg0:string="out of ammo"]
+  #12 call "push_warning" [<exec:▶ >then:▶ <target:object <arg0:string="out of ammo"]
   #13 getVar "State.TRACKING" [>value:number]
   #14 setVar "Set state" [<exec:▶ >then:▶ <value:number >out:number]
-  #15 getVar "target.global_position" [>value:Vector3]
-  #16 call "barrel.look_at" [<exec:▶ >then:▶ <arg0:Vector3 <param:up:Vector3= <param:use_model_front:bool=]
-  #17 call "get_tree" [<exec:▶ >then:▶ >return:SceneTree]
-  #18 call "get_nodes_in_group" [<exec:▶ >then:▶ <target:object <arg0:StringName=&"enemies" >return:Node[]]
-  #19 forEach "For Each" [<exec:▶ <array:array >body:▶ >element:Node3D >completed:▶]
-  #20 call "is_queued_for_deletion" [<exec:▶ >then:▶ <target:object >return:bool]
-  #21 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
-  #22 continue "Continue" [<exec:▶]
-  #23 getVar "state" [>value:number]
-  #24 switch "Match" [<exec:▶ <value:any >case0:▶ >case1:▶ >completed:▶]
-  #25 operator "*" [<a:number <b:number=2.0 >value:number]
-  #26 setVar "Set rotation.y" (+=) [<exec:▶ >then:▶ <value:number >out:number]
+  #15 getVar "barrel" [>value:Node3D]
+  #16 getVar "target.global_position" [>value:Vector3]
+  #17 call "look_at" [<exec:▶ >then:▶ <target:object <arg0:Vector3 <param:up:Vector3= <param:use_model_front:bool=]
+  #18 call "get_tree" [<exec:▶ >then:▶ <target:object=self >return:SceneTree]
+  #19 call "get_nodes_in_group" [<exec:▶ >then:▶ <target:object <arg0:StringName=&"enemies" >return:Node[]]
+  #20 forEach "For Each" [<exec:▶ <array:array >body:▶ >element:Node3D >completed:▶]
+  #21 call "is_queued_for_deletion" [<exec:▶ >then:▶ <target:object >return:bool]
+  #22 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
+  #23 continue "Continue" [<exec:▶]
+  #24 getVar "state" [>value:number]
+  #25 switch "Match" [<exec:▶ <value:any >case0:▶ >case1:▶ >completed:▶]
+  #26 operator "*" [<a:number <b:number=2.0 >value:number]
+  #27 setVar "Set rotation.y" (+=) [<exec:▶ >then:▶ <value:number >out:number]
   ==> #0.then -> #1.exec
   --> #1.return -> #2.value
   ==> #1.then -> #2.exec
@@ -82,69 +85,73 @@ function _process
   ==> #11.true -> #12.exec
   --> #13.value -> #14.value
   ==> #11.false -> #14.exec
-  --> #15.value -> #16.arg0
-  ==> #5.completed -> #16.exec
-  ==> #16.then -> #17.exec
-  --> #17.return -> #18.target
+  --> #15.value -> #17.target
+  --> #16.value -> #17.arg0
+  ==> #5.completed -> #17.exec
   ==> #17.then -> #18.exec
-  --> #18.return -> #19.array
+  --> #18.return -> #19.target
   ==> #18.then -> #19.exec
-  --> #19.element -> #20.target
-  ==> #19.body -> #20.exec
-  --> #20.return -> #21.condition
-  ==> #20.then -> #21.exec
-  ==> #21.true -> #22.exec
-  --> #23.value -> #24.value
-  ==> #19.completed -> #24.exec
-  --> #0.param0 -> #25.a
-  --> #25.value -> #26.value
-  ==> #24.case1 -> #26.exec
+  --> #19.return -> #20.array
+  ==> #19.then -> #20.exec
+  --> #20.element -> #21.target
+  ==> #20.body -> #21.exec
+  --> #21.return -> #22.condition
+  ==> #21.then -> #22.exec
+  ==> #22.true -> #23.exec
+  --> #24.value -> #25.value
+  ==> #20.completed -> #25.exec
+  --> #0.param0 -> #26.a
+  --> #26.value -> #27.value
+  ==> #25.case1 -> #27.exec
 function _nearest_enemy
   #0 entry "_nearest_enemy" (func) [>then:▶]
   #1 setVar "Set best" (var: Node3D) [<exec:▶ >then:▶ <value:Node3D=null >out:Node3D]
   #2 getVar "RANGE" [>value:number]
-  #3 call "Engine.is_editor_hint" [<exec:▶ >then:▶ >return:bool]
-  #4 operator "not" [<a:bool >value:bool]
-  #5 select "Select" [<condition:bool <true:number <false:number=0.0 >value:number]
-  #6 setVar "Set best_distance" (var) [<exec:▶ >then:▶ <value:number >out:number]
-  #7 getVar "best" [>value:Node3D]
-  #8 operator "==" [<a:Node3D <b:any=null >value:bool]
-  #9 getVar "best_distance" [>value:number]
-  #10 operator ">" [<a:number <b:number=0 >value:bool]
-  #11 operator "and" [<a:bool <b:bool >value:bool]
-  #12 loop "While Loop" [<exec:▶ <condition:bool >body:▶ >completed:▶]
-  #13 setVar "Set best_distance" (-=) [<exec:▶ >then:▶ <value:number=1 >out:number]
-  #14 getVar "best" [>value:Node3D]
-  #15 operator "as Node3D" [<a:Node3D >value:Node3D]
-  #16 return "Return" [<exec:▶ <value:Node3D]
+  #3 getVar "Engine" [>value:any]
+  #4 call "is_editor_hint" [<exec:▶ >then:▶ <target:object >return:bool]
+  #5 operator "not" [<a:bool >value:bool]
+  #6 select "Select" [<condition:bool <true:number <false:number=0.0 >value:number]
+  #7 setVar "Set best_distance" (var) [<exec:▶ >then:▶ <value:number >out:number]
+  #8 getVar "best" [>value:Node3D]
+  #9 operator "==" [<a:Node3D <b:any=null >value:bool]
+  #10 getVar "best_distance" [>value:number]
+  #11 operator ">" [<a:number <b:number=0 >value:bool]
+  #12 operator "and" [<a:bool <b:bool >value:bool]
+  #13 loop "While Loop" [<exec:▶ <condition:bool >body:▶ >completed:▶]
+  #14 setVar "Set best_distance" (-=) [<exec:▶ >then:▶ <value:number=1 >out:number]
+  #15 getVar "best" [>value:Node3D]
+  #16 operator "as Node3D" [<a:Node3D >value:Node3D]
+  #17 return "Return" [<exec:▶ <value:Node3D]
   ==> #0.then -> #1.exec
-  ==> #1.then -> #3.exec
-  --> #3.return -> #4.a
-  --> #4.value -> #5.condition
-  --> #2.value -> #5.true
-  --> #5.value -> #6.value
-  ==> #3.then -> #6.exec
-  --> #7.value -> #8.a
-  --> #9.value -> #10.a
-  --> #8.value -> #11.a
-  --> #10.value -> #11.b
-  --> #11.value -> #12.condition
-  ==> #6.then -> #12.exec
-  ==> #12.body -> #13.exec
-  --> #14.value -> #15.a
-  --> #15.value -> #16.value
-  ==> #12.completed -> #16.exec
+  --> #3.value -> #4.target
+  ==> #1.then -> #4.exec
+  --> #4.return -> #5.a
+  --> #5.value -> #6.condition
+  --> #2.value -> #6.true
+  --> #6.value -> #7.value
+  ==> #4.then -> #7.exec
+  --> #8.value -> #9.a
+  --> #10.value -> #11.a
+  --> #9.value -> #12.a
+  --> #11.value -> #12.b
+  --> #12.value -> #13.condition
+  ==> #7.then -> #13.exec
+  ==> #13.body -> #14.exec
+  --> #15.value -> #16.a
+  --> #16.value -> #17.value
+  ==> #13.completed -> #17.exec
 function _shoot
   #0 entry "_shoot" (func) [>then:▶]
   #1 setVar "Set ammo" (-=) [<exec:▶ >then:▶ <value:number=1 >out:number]
-  #2 call "get_tree" [<exec:▶ >then:▶ >return:SceneTree]
+  #2 call "get_tree" [<exec:▶ >then:▶ <target:object=self >return:SceneTree]
   #3 getVar "fire_rate" [>value:number]
   #4 operator "/" [<a:number=1.0 <b:number >value:number]
   #5 call "create_timer" [<exec:▶ >then:▶ <target:object <arg0:number <param:process_always:bool= <param:process_in_physics:bool= <param:ignore_time_scale:bool= >return:SceneTreeTimer]
   #6 getProperty ".timeout" [<target:object >value:Signal]
   #7 await "Await" [<exec:▶ >then:▶ <signal:any >result:any]
-  #8 getVar "self" [>value:object]
-  #9 call "fired.emit" [<exec:▶ >then:▶ <arg0:object]
+  #8 getVar "fired" [>value:Signal]
+  #9 getVar "self" [>value:object]
+  #10 call "emit" [<exec:▶ >then:▶ <target:object <arg0:object]
   ==> #0.then -> #1.exec
   ==> #1.then -> #2.exec
   --> #3.value -> #4.b
@@ -154,10 +161,11 @@ function _shoot
   --> #5.return -> #6.target
   --> #6.value -> #7.signal
   ==> #5.then -> #7.exec
-  --> #8.value -> #9.arg0
-  ==> #7.then -> #9.exec
+  --> #8.value -> #10.target
+  --> #9.value -> #10.arg0
+  ==> #7.then -> #10.exec
 function $Timer.timeout.connect callback
   #0 entry "$Timer.timeout.connect callback" (lambda) [>then:▶]
-  #1 call "_shoot" [<exec:▶ >then:▶]
+  #1 call "_shoot" [<exec:▶ >then:▶ <target:object=self]
   ==> #0.then -> #1.exec"
 `;

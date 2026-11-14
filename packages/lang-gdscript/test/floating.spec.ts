@@ -33,8 +33,9 @@ function node(doc: GraphDocument, match: (n: GraphNode) => boolean): GraphNode {
 }
 
 function dataPin(n: GraphNode, direction: 'in' | 'out'): PinRef {
+  // Not a call's `self`.
   const pin = n.pins.find(
-    (p) => p.kind === 'data' && p.direction === direction
+    (p) => p.kind === 'data' && p.direction === direction && p.id !== 'target'
   );
   if (!pin) {
     throw new Error('no pin');
