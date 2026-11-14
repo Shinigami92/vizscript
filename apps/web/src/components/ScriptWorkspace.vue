@@ -16,6 +16,7 @@ import {
   diffEdits,
   findDefinition,
   findNode,
+  floatsUntilWired,
   graphEditsFor,
   isCutReceiver,
   layoutDocument,
@@ -785,6 +786,30 @@ async function onOp(requested: GraphOp): Promise<void> {
   // Wires and deletions the code can't follow stay in the graph (like UE's
   // graphs, which may be in states that don't compile). While the graph has
   // such edits, the next ones join them, so the code follows what is shown.
+  // A node added on empty space floats until its exec input is wired, like
+  // UE's; an imported name gets its import right away.
+  const added = op.type === 'withImport' ? op.op : op;
+  if (
+    added.type === 'addNode' &&
+    !added.after &&
+    !added.before &&
+    floatsUntilWired(added.template)
+  ) {
+    if (op.type === 'withImport') {
+      await onOp({ type: 'addImport', import: op.import });
+    }
+
+    freezeLayout();
+    await addFloating(
+      added.template,
+      added.position ?? { x: 0, y: 0 },
+      added.fnId ??
+        focusFn.value ??
+        topLevelGraph(parsedDoc.value, text.value)?.id
+    );
+    return;
+  }
+
   // A value for a method's empty `this` (its wire broken in the graph):
   // its nodes are added in the graph and wired in; the code follows when
   // the overlay is written.

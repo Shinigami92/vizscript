@@ -9,7 +9,7 @@ import type {
   PinRef,
   Point,
 } from '@vizscript/core';
-import { endOfFunction } from '@vizscript/core';
+import { endOfFunction, floatsUntilWired } from '@vizscript/core';
 import { usePreferredReducedMotion } from '@vueuse/core';
 import {
   computed,
@@ -304,6 +304,30 @@ function placeAt(world: Point): Place | undefined {
   return { fnId, anchor };
 }
 
+/**
+ * A node added on empty space: exec nodes float, unwired, in the function
+ * under the point (like UE); values go to the end of that function.
+ */
+function looseNode(template: NodeTemplate, world: Point): GraphOp {
+  const place = placeAt(world);
+  if (floatsUntilWired(template)) {
+    const fnId = place?.fnId ?? view.value?.functionAt(world);
+    return {
+      type: 'addNode',
+      template,
+      position: { ...world },
+      ...(fnId ? { fnId } : {}),
+    };
+  }
+
+  return {
+    type: 'addNode',
+    template,
+    ...place?.anchor,
+    position: { ...world },
+  };
+}
+
 /** Emits an op built from the menu state and closes the menu. */
 function emitOp(op: GraphOp): void {
   const open = menu.value;
@@ -336,15 +360,8 @@ function addNode(
     from?.pin.kind === 'exec' && current.from
       ? { ...toRaw(current.from) }
       : undefined;
-  // Without an exec pin: at the end of the function under the cursor.
-  const place = anchor ? undefined : placeAt(current.world);
-  const op: GraphOp = place
-    ? {
-        type: 'addNode',
-        template,
-        ...place.anchor,
-        position: { ...current.world },
-      }
+  const op: GraphOp = !anchor
+    ? looseNode(template, current.world)
     : {
         type: 'addNode',
         template,
@@ -380,6 +397,7 @@ const ctx: CanvasContext = {
   ask,
   addNode,
   placeAt,
+  looseNode,
   pinOf,
 };
 const events: CanvasEvents = {

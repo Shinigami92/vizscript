@@ -89,6 +89,8 @@ export interface CanvasContext {
    * whose frame contains it (else the module).
    */
   placeAt: (world: Point) => Place | undefined;
+  /** An `addNode` on empty space (exec nodes float until wired). */
+  looseNode: (template: NodeTemplate, world: Point) => GraphOp;
   pinOf: (pinRef: PinRef) => { node: GraphNode; pin: Pin } | undefined;
 }
 

@@ -476,6 +476,10 @@ function applyTextOpEdits(
   syntax: StatementSyntax
 ): OpResult {
   switch (op.type) {
+    case 'addImport': {
+      return addImport(text, doc, op.import, syntax.declarations);
+    }
+
     case 'withImport': {
       // One edit (one undo step): the import and what uses the name.
       const imported = addImport(text, doc, op.import, syntax.declarations);

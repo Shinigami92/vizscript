@@ -291,3 +291,12 @@ export function withPlacedGroup(
 
   return { edits };
 }
+
+/**
+ * Nodes with exec pins added on empty space float until their exec input
+ * is wired, like a new node in UE; values (a Get) and pasted code are
+ * written right away.
+ */
+export function floatsUntilWired(template: NodeTemplate): boolean {
+  return template.type !== 'value' && template.type !== 'code';
+}

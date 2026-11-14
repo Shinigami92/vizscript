@@ -94,6 +94,11 @@ export type GraphOp =
       /** Exec input pin of a statement the new one should precede. */
       before?: PinRef;
       position?: Point;
+      /**
+       * Without `after` / `before`: the function under the position (UI
+       * only); the node floats there until it is wired in, like UE's.
+       */
+      fnId?: string;
     }
   /** Replaces the expression feeding a data input. */
   | {
@@ -246,7 +251,9 @@ export type GraphOp =
   /** Changes a setting of the script (`extends`, `@tool`; see `settings`). */
   | { type: 'setScriptSetting'; setting: string; value: string }
   /** Another op that uses a name of another file, plus its import. */
-  | { type: 'withImport'; import: ImportRequest; op: GraphOp };
+  | { type: 'withImport'; import: ImportRequest; op: GraphOp }
+  /** Only the import of a name (its use floats in the graph). */
+  | { type: 'addImport'; import: ImportRequest };
 
 /** How a value typed in the Details panel is written. */
 export type ValueKind = 'string' | 'number' | 'bool' | 'expression';

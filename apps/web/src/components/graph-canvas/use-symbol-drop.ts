@@ -56,13 +56,12 @@ export function useSymbolDrop(ctx: CanvasContext): SymbolDrop {
     }
 
     const fnId = place?.fnId;
-    const anchor = place?.anchor ?? {};
 
     const owner = doc.symbols?.find(
       (s) => s.fnId === fnId && (s.kind === 'function' || s.kind === 'method')
     );
     const add = (template: NodeTemplate): void =>
-      emitOp({ type: 'addNode', template, ...anchor, position: world });
+      emitOp(ctx.looseNode(template, world));
 
     if (
       symbol.kind === 'function' ||
