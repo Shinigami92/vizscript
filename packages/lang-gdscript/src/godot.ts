@@ -1,6 +1,7 @@
 import type { EngineClass, ScriptSymbol } from '@vizscript/core';
 import { portableSymbols } from '@vizscript/core';
 import { GODOT_API, GODOT_SINGLETONS } from './godot-api';
+import { GODOT_BUILTINS, GODOT_GLOBALS } from './godot-builtins';
 import { parseGDScript } from './parser';
 import { gdscriptSymbols } from './symbols';
 
@@ -46,4 +47,25 @@ export function godotSingletonCalls(): string[] {
         .filter((m) => m.kind === 'method')
         .map((m) => `${c.name}.${m.name}`)
     );
+}
+
+let builtins: EngineClass[] | undefined;
+
+/** Godot's built-in value types (`Vector2`, `String`, `Array` …). */
+export function godotBuiltins(): EngineClass[] {
+  builtins ??= GODOT_BUILTINS.map(([name, text]): EngineClass => ({
+    name,
+    members: members(name, text),
+  }));
+  return builtins;
+}
+
+let globals: Map<string, ScriptSymbol> | undefined;
+
+/** Godot's global functions (`print`, `randf`), by name. */
+export function godotGlobals(): ReadonlyMap<string, ScriptSymbol> {
+  globals ??= new Map(
+    members('@GlobalScope', GODOT_GLOBALS).map((s) => [s.name, s])
+  );
+  return globals;
 }

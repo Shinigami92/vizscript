@@ -35,19 +35,19 @@ describe('gdscriptSymbols', () => {
     ].join('\n');
     expect(summarizeSymbols(parseGDScriptDocument(text, 'player.gd')))
       .toMatchInlineSnapshot(`
-      "signal health_changed(value: int, source)
-      enum State ~State
-      constant SPEED ~number = … [const]
-      variable instances ~number = … [static var]
-      variable timer: Timer = … [@onready var]
-      variable velocity ~Vector2 = … [var]
-      function move(delta: float, scale = …): void → move
-      local move::step = … [var]
-      local move::i: int
-      local move::seen ~bool = … [var]
-      class Bullet ~Bullet → Bullet
-      variable Bullet::damage: int = … [var]
-      function Bullet::hit(): bool → Bullet.hit"
-    `);
+        "signal health_changed(value: int, source)
+        enum State ~State
+        constant SPEED ~number = … [const]
+        variable instances ~number = … [static var]
+        variable timer: Timer = … [@onready var]
+        variable velocity ~Vector2 = … [var]
+        function move(delta: float, scale = …): void → move
+        local move::step ~number = … [var]
+        local move::i: int
+        local move::seen ~bool = … [var]
+        class Bullet ~Bullet → Bullet
+        variable Bullet::damage: int = … [var]
+        function Bullet::hit(): bool → Bullet.hit"
+      `);
   });
 });

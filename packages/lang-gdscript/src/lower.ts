@@ -6,6 +6,7 @@ import type {
   ParseOptions,
 } from '@vizscript/core';
 import {
+  applyTypes,
   attachComments,
   classMembers,
   completeCallPins,
@@ -23,6 +24,7 @@ import { parseGDScript } from './parser';
 import { gdscriptSettings } from './settings';
 import { FnGraphBuilder } from './statement-lowering';
 import { gdscriptSymbols } from './symbols';
+import { gdscriptTypes } from './type-lookup';
 
 export const LANGUAGE_ID = 'gdscript';
 
@@ -132,5 +134,7 @@ export function parseGDScriptDocument(
     selfClass: script.extendsName ?? BASE,
   });
   inferTypes(doc);
-  return doc;
+  // Godot's own types, followed through the script (`velocity.x` is a
+  // `float`, `print()` returns nothing).
+  return applyTypes(doc, gdscriptTypes(script));
 }
