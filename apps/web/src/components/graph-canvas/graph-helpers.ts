@@ -157,6 +157,50 @@ export function scopeVariables(
   );
 }
 
+/** A global object a Get can read (`console`, Godot's `Input`, `json`). */
+export interface GlobalObject {
+  name: string;
+  /** Where it comes from: `global`, `singleton` or `import`. */
+  hint: string;
+}
+
+/**
+ * Objects every script can read without declaring them, like UE's Get of a
+ * global: the objects of the built-in functions (`console` of
+ * `console.log`), engine singletons and imported modules or classes.
+ */
+export function globalObjects(
+  doc: GraphDocument | null,
+  types: TypeSystemInfo | null | undefined
+): GlobalObject[] {
+  const found = new Map<string, GlobalObject>();
+  for (const name of types?.globals ?? []) {
+    const root = name.includes('.') ? name.split('.')[0] : undefined;
+    if (root && /^[A-Za-z_$][\w$]*$/.test(root) && !found.has(root)) {
+      found.set(root, { name: root, hint: 'global' });
+    }
+  }
+
+  for (const cls of types?.classes ?? []) {
+    if (cls.singleton && !found.has(cls.name)) {
+      found.set(cls.name, { name: cls.name, hint: 'singleton' });
+    }
+  }
+
+  // Functions are called, not read.
+  for (const symbol of doc?.symbols ?? []) {
+    if (
+      symbol.kind === 'import' &&
+      symbol.importedKind !== 'function' &&
+      !found.has(symbol.name)
+    ) {
+      found.set(symbol.name, { name: symbol.name, hint: 'import' });
+    }
+  }
+
+  return [...found.values()];
+}
+
 /** First parameter and result types of a function of the file. */
 export function callSignature(
   doc: GraphDocument | null,

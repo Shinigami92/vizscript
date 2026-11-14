@@ -8,6 +8,7 @@ import {
   callSignature,
   fillTemplate,
   fitsType,
+  globalObjects,
   scopeVariables,
   typeDefault,
   variablesNear,
@@ -249,6 +250,18 @@ export function createActionEntries(
               },
             ]),
       ]),
+      // UE's Get of a global object; not from an exec pin (no exec pins).
+      ...(state.from
+        ? []
+        : globalObjects(props.doc, props.types).map((global): ActionEntry => ({
+            label: `Get ${global.name}`,
+            category: 'Globals',
+            icon: ICON_VARIABLE,
+            hint: global.hint,
+            keywords: 'get read',
+            action: () =>
+              addNode({ type: 'value', expression: global.name }, state),
+          }))),
       ...callables.value.map((callee): ActionEntry => ({
         label: callee,
         category: 'Call function',
@@ -648,6 +661,16 @@ export function createActionEntries(
               expression: variable.expression,
             }),
         })),
+      // Global objects (`console` for a `log` node's `this`).
+      ...globalObjects(props.doc, props.types).map((global): ActionEntry => ({
+        label: global.name,
+        category: 'Globals',
+        icon: ICON_VARIABLE,
+        hint: global.hint,
+        keywords: 'get',
+        action: () =>
+          emitOp({ type: 'setInput', pin: source, expression: global.name }),
+      })),
       ...callables.value.map((callee): ActionEntry => ({
         label: `${callee}()`,
         category: 'Call function',
