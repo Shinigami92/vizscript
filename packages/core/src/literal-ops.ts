@@ -142,7 +142,7 @@ export function setLiteral(
       {
         start: insert.insertInitAt,
         end: insert.insertInitAt,
-        text: `${insert.insertPrefix ?? ' = '}${source}`,
+        text: `${insert.insertPrefix ?? ' = '}${source}${insert.insertSuffix ?? ''}`,
       },
     ]);
   }
@@ -224,7 +224,7 @@ export function setInput(
       {
         start: meta.insertInitAt,
         end: meta.insertInitAt,
-        text: `${meta.insertPrefix ?? ' = '}${value}`,
+        text: `${meta.insertPrefix ?? ' = '}${value}${meta.insertSuffix ?? ''}`,
       },
     ]);
   }

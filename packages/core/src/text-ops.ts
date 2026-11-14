@@ -56,6 +56,7 @@ import {
 import { qualifiedName } from './symbols';
 import { detectIndentUnit, findPin } from './text-op-helpers';
 import {
+  clearArguments,
   connectData,
   connectExec,
   disconnect,
@@ -627,6 +628,10 @@ function applyTextOpEdits(
 
     case 'removeArgument': {
       return removeArgument(text, doc, op.pin);
+    }
+
+    case 'clearArguments': {
+      return clearArguments(text, doc, op.node, syntax);
     }
 
     default: {

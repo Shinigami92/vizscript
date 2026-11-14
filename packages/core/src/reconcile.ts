@@ -249,11 +249,15 @@ function movedNodes(
   for (const [previousFn, node] of allNodes(previous)) {
     const fnId = functions.get(previousFn) ?? previousFn;
     const length = node.range.end - node.range.start;
+    // Moved code keeps its title; another node now starting there (a Get
+    // `console` where a deleted `cart;` was) is not this one.
     const pick = (start: number | undefined): GraphNode | undefined => {
       const candidates =
         start === undefined
           ? []
-          : (at.get(`${fnId}|${node.kind}|${start}`) ?? []);
+          : (at.get(`${fnId}|${node.kind}|${start}`) ?? []).filter(
+              (n) => n.title === node.title
+            );
       return (
         candidates.find((n) => n.range.end - n.range.start === length) ??
         (candidates.length === 1 ? candidates[0] : undefined)

@@ -1,7 +1,13 @@
-import type { GraphDocument, GraphOverlay, PinRef } from '@vizscript/core';
+import type {
+  GraphDocument,
+  GraphNode,
+  GraphOverlay,
+  PinRef,
+} from '@vizscript/core';
 import {
   applyOverlay,
   applyTextEdits,
+  EMPTY_OVERLAY,
   graphEditsFor,
   overlayIssues,
   remapOverlay,
@@ -95,11 +101,11 @@ describe('graph-only edits', () => {
     overlay = edit(text, overlay, {
       type: 'connect',
       from: pin(doc, 'Set sum', 'then'),
-      to: pin(doc, 'console.log', 'exec'),
+      to: pin(doc, 'log', 'exec'),
     });
     overlay = edit(text, overlay, {
       type: 'connect',
-      from: pin(doc, 'console.log', 'then'),
+      from: pin(doc, 'log', 'then'),
       to: pin(doc, 'For Each', 'exec'),
     });
     overlay = edit(text, overlay, {
@@ -159,7 +165,7 @@ describe('graph-only edits', () => {
     overlay = edit(text, overlay, {
       type: 'connect',
       from: pin(doc, 'Set sum', 'then'),
-      to: pin(doc, 'console.log', 'exec'),
+      to: pin(doc, 'log', 'exec'),
     });
     overlay = edit(text, overlay, {
       type: 'deleteNodes',
@@ -209,7 +215,7 @@ describe('graph-only edits', () => {
     const wire = {
       type: 'connect' as const,
       from: pin(doc, 'Set b', 'out'),
-      to: pin(doc, 'console.log', 'arg0'),
+      to: pin(doc, 'log', 'arg0'),
     };
     expect(applyTypeScriptOp(source, wire).ok).toBe(false);
 
@@ -229,7 +235,7 @@ describe('graph-only edits', () => {
     overlay = edit(source, overlay, {
       type: 'connect',
       from: pin(doc, 'Set b', 'then'),
-      to: pin(doc, 'console.log', 'exec'),
+      to: pin(doc, 'log', 'exec'),
     });
     expect(resolveOverlay(source, overlay, backend)).toEqual({
       status: 'synced',
@@ -275,7 +281,7 @@ describe('graph-only edits', () => {
     });
     overlay = edit(source, overlay, {
       type: 'connect',
-      from: pin(doc, 'console.log', 'then'),
+      from: pin(doc, 'log', 'then'),
       to: { node: first.id, pin: 'exec' },
     });
     expect(resolveOverlay(source, overlay, backend)).toEqual({
@@ -296,12 +302,126 @@ describe('graph-only edits', () => {
       { edits: [] },
       {
         type: 'disconnect',
-        pin: pin(doc, 'console.log', 'then'),
+        pin: pin(doc, 'log', 'then'),
       }
     );
     const next = text.replace('  console.log(sum);\n', '');
     const remapped = remapOverlay(doc, parseTypeScript(next), overlay);
     expect(remapped.dropped).toBe(1);
     expect(remapped.overlay.edits).toEqual([]);
+  });
+});
+
+describe('a method without its receiver', () => {
+  const source = [
+    'function f(items: string[], other: string[]): number {',
+    '  console.log("x", items);',
+    '  return items.indexOf("a");',
+    '}',
+    '',
+  ].join('\n');
+  const doc = parseTypeScript(source);
+  const node = (title: string): GraphNode => {
+    const found = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.title === title);
+    if (!found) {
+      throw new Error(`no node ${title}`);
+    }
+
+    return found;
+  };
+  const shownNode = (
+    overlay: GraphOverlay,
+    title: string
+  ): GraphNode | undefined =>
+    applyOverlay(doc, overlay)
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.title === title);
+
+  it('keeps a broken this in the graph and drops the other wires', () => {
+    const log = node('log');
+    expect(
+      applyTypeScriptOp(source, {
+        type: 'disconnect',
+        pin: { node: log.id, pin: 'target' },
+      }).ok
+    ).toBe(false);
+
+    const overlay = edit(source, EMPTY_OVERLAY, {
+      type: 'disconnect',
+      pin: { node: log.id, pin: 'target' },
+    });
+    expect(overlay.edits.map((e) => e.type)).toEqual([
+      'removeEdge',
+      'removeEdge',
+    ]);
+    expect(shownNode(overlay, 'log')?.pins.map((p) => p.id)).toEqual([
+      'exec',
+      'then',
+      'target',
+    ]);
+    const shown = applyOverlay(doc, overlay);
+    expect(overlayIssues(doc, shown).map((i) => i.node)).toEqual([log.id]);
+    expect(resolveOverlay(source, overlay, backend).status).toBe('pending');
+  });
+
+  it('starts with empty arguments once this is wired again', () => {
+    const log = node('log');
+    let overlay = edit(source, EMPTY_OVERLAY, {
+      type: 'disconnect',
+      pin: { node: log.id, pin: 'target' },
+    });
+    overlay = edit(source, overlay, {
+      type: 'connect',
+      from: { node: node('console').id, pin: 'value' },
+      to: { node: log.id, pin: 'target' },
+    });
+    expect(shownNode(overlay, 'log')?.pins.map((p) => p.id)).toContain('arg0');
+    const result = resolveOverlay(source, overlay, backend);
+    expect(result.status === 'synced' && result.text).toBe(
+      source.replace('console.log("x", items);', 'console.log();')
+    );
+  });
+
+  it('keeps calls of the arguments as statements when clearing them', () => {
+    const code =
+      'function g(items: string[]): void {\n  console.log(items.join(","), 1);\n}\n';
+    const log = parseTypeScript(code)
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.title === 'log');
+    const result = applyTypeScriptOp(code, {
+      type: 'clearArguments',
+      node: log?.id ?? '',
+    });
+    expect(result.ok && applyTextEdits(code, result.edits)).toBe(
+      'function g(items: string[]): void {\n  items.join(",");\n  console.log();\n}\n'
+    );
+  });
+
+  it('drops the wires of its result, and calls it on the new value', () => {
+    const indexOf = node('indexOf');
+    const entry = node('f');
+    let overlay = edit(source, EMPTY_OVERLAY, {
+      type: 'disconnect',
+      pin: { node: indexOf.id, pin: 'target' },
+    });
+    expect(shownNode(overlay, 'indexOf')?.pins.map((p) => p.id)).toEqual([
+      'exec',
+      'then',
+      'target',
+    ]);
+    overlay = edit(source, overlay, {
+      type: 'connect',
+      from: { node: entry.id, pin: 'param1' },
+      to: { node: indexOf.id, pin: 'target' },
+    });
+    const result = resolveOverlay(source, overlay, backend);
+    expect(result.status === 'synced' && result.text).toBe(
+      source.replace(
+        '  return items.indexOf("a");',
+        '  other.indexOf();\n  return;'
+      )
+    );
   });
 });

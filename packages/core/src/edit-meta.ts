@@ -65,6 +65,8 @@ export interface InputPinMeta {
   insertInitAt?: number;
   /** Text before an inserted value (default ` = `; ` ` after `return`). */
   insertPrefix?: string;
+  /** Text after an inserted value (`.` for a free call's Target). */
+  insertSuffix?: string;
   /**
    * The value may be left out (`return x` → `return`): disconnecting removes
    * it instead of writing a placeholder.

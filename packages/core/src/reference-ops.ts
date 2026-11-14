@@ -1,3 +1,4 @@
+import { calleeNameAt } from './callee';
 import type { GraphDocument, GraphNode } from './ir';
 import { failed, succeeded } from './op-result';
 import type { OpResult } from './ops';
@@ -77,8 +78,9 @@ export function replaceReference(
     return failed('Enter a name.');
   }
 
-  // The name is where the node's code starts: `x`, `x = …`, `fn(…)`.
-  const at = node.range.start;
+  // The name is where the node's code starts (`x`, `x = …`, `fn(…)`), or
+  // right after a call's receiver (`console.log(…)`).
+  const at = node.kind === 'call' ? calleeNameAt(text, node) : node.range.start;
   if (
     text.slice(at, at + current.length) !== current ||
     /[\w$]/.test(text.charAt(at + current.length))

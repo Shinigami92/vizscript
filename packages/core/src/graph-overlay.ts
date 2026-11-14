@@ -1,3 +1,4 @@
+import { isReceiver, receiverMissing, receiverPin } from './callee';
 import { edgeId } from './ids';
 import type {
   EdgeKind,
@@ -224,7 +225,42 @@ export function applyOverlay(
     }
   }
 
-  return { ...doc, functions: functions.map(markFloating) };
+  return {
+    ...doc,
+    functions: functions.map((fn) => markFloating(withoutReceiverPins(fn))),
+  };
+}
+
+/**
+ * Methods whose receiver lost its wire show only their exec pins and
+ * `this`: their inputs and results depend on what they are called on.
+ */
+function withoutReceiverPins(fn: FunctionGraph): FunctionGraph {
+  const hidden = new Map<string, Set<string>>();
+  const nodes = fn.nodes.map((node) => {
+    if (!receiverMissing(fn, node)) {
+      return node;
+    }
+
+    const pins = node.pins.filter(
+      (p) => p.kind === 'exec' || p.id === 'target'
+    );
+    hidden.set(
+      node.id,
+      new Set(node.pins.filter((p) => !pins.includes(p)).map((p) => p.id))
+    );
+    return { ...node, pins };
+  });
+  if (hidden.size === 0) {
+    return fn;
+  }
+
+  const shown = (ref: PinRef): boolean => !hidden.get(ref.node)?.has(ref.pin);
+  return {
+    ...fn,
+    nodes,
+    edges: fn.edges.filter((e) => shown(e.from) && shown(e.to)),
+  };
 }
 
 /** Floating nodes of a group in a function, by group. */
@@ -445,6 +481,14 @@ export function overlayIssues(
     }
 
     issues.push(...valueIssues(fn));
+    for (const node of fn.nodes) {
+      if (receiverMissing(fn, node)) {
+        issues.push({
+          node: node.id,
+          message: `Wire a value into ${receiverPin(node)?.name || 'Target'}: ${node.title} needs something to be called on.`,
+        });
+      }
+    }
   }
 
   return issues;
@@ -484,6 +528,62 @@ function valueIssues(fn: FunctionGraph): OverlayIssue[] {
  * for ops that aren't graph edits (commands and settings keep their error).
  */
 export function graphEditsFor(
+  doc: GraphDocument,
+  op: GraphOp
+): GraphEdit[] | undefined {
+  const edits = opGraphEdits(doc, op);
+  return edits ? withCutReceivers(doc, edits) : undefined;
+}
+
+/**
+ * A method that loses its receiver loses its other data wires too (UE:
+ * its pins depend on the Target): they are removed with it.
+ */
+function withCutReceivers(doc: GraphDocument, edits: GraphEdit[]): GraphEdit[] {
+  const removedNodes = new Set(
+    edits.flatMap((e) => (e.type === 'removeNode' ? [e.node] : []))
+  );
+  const removed = new Set(
+    edits.flatMap((e) => (e.type === 'removeEdge' ? [edgeKey(e)] : []))
+  );
+  const rewired = new Set(
+    edits.flatMap((e) => (e.type === 'addEdge' ? [refKey(e.to)] : []))
+  );
+  const extra: GraphEdit[] = [];
+  for (const fn of doc.functions) {
+    for (const edge of fn.edges) {
+      const cut =
+        (removed.has(edgeKey(edge)) || removedNodes.has(edge.from.node)) &&
+        !rewired.has(refKey(edge.to)) &&
+        isReceiver(doc, edge.to);
+      if (!cut || removedNodes.has(edge.to.node)) {
+        continue;
+      }
+
+      const call = edge.to.node;
+      for (const other of fn.edges) {
+        const key = edgeKey(other);
+        const wire =
+          other.kind === 'data' &&
+          other !== edge &&
+          (other.from.node === call || other.to.node === call);
+        if (wire && !removed.has(key)) {
+          removed.add(key);
+          extra.push(removeEdge(other));
+        }
+      }
+    }
+  }
+
+  return extra.length > 0 ? [...edits, ...extra] : edits;
+}
+
+function refKey(ref: PinRef): string {
+  return `${ref.node}::${ref.pin}`;
+}
+
+/** The graph-only edits of an op, before cut receivers drop wires. */
+function opGraphEdits(
   doc: GraphDocument,
   op: GraphOp
 ): GraphEdit[] | undefined {

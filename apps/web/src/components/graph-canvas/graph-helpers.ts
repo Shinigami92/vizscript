@@ -10,7 +10,12 @@ import type {
   StatementMeta,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { getMeta, isTypeCompatible, qualifiedName } from '@vizscript/core';
+import {
+  calleeText,
+  getMeta,
+  isTypeCompatible,
+  qualifiedName,
+} from '@vizscript/core';
 import type { DocIndex } from '../../graph/doc-index';
 import type { ExternalName } from '../../graph/project-index';
 import { signature } from '../../graph/project-index';
@@ -252,8 +257,9 @@ export function collectCallables(
     }
 
     for (const node of fn.nodes) {
-      if (node.kind === 'call' && IDENTIFIER_PATH.test(node.title)) {
-        names.add(node.title);
+      const callee = node.kind === 'call' ? calleeText(text, node) : '';
+      if (IDENTIFIER_PATH.test(callee)) {
+        names.add(callee);
       }
     }
   }

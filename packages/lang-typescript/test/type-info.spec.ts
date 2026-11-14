@@ -119,7 +119,7 @@ describe('type information from a checker', () => {
     expect(not?.pins.find((p) => p.direction === 'in')?.type).toBe('bool');
 
     // `any` answers keep the parser's type
-    const json = nodeTitled(nodes, 'response.json').pins.find(
+    const json = nodeTitled(nodes, 'json').pins.find(
       (p) => p.direction === 'out' && p.kind === 'data'
     );
     expect(json?.typeText).toBeUndefined();
@@ -133,7 +133,7 @@ describe('type information from a checker', () => {
     ]);
 
     // Results of nothing lose their pin, unless the code uses them.
-    const logs = nodes.filter((n) => n.title === 'console.log');
+    const logs = nodes.filter((n) => n.title === 'log');
     expect(
       logs.map((n) =>
         n.pins.filter((p) => p.id === 'return').map((p) => p.type)
@@ -197,6 +197,7 @@ describe('type information from a checker', () => {
         .filter((p) => p.direction === 'in' && p.kind === 'data')
         .map((p) => [p.id, p.name, p.type, p.literal?.value])
     ).toEqual([
+      ['target', 'this', 'object', undefined],
       ['arg0', 'input', 'string', undefined],
       ['param:init', 'init', 'RequestInit', 'undefined'],
     ]);

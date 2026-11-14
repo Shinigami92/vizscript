@@ -1,5 +1,9 @@
 import type { GraphDocument, GraphNode, GraphOp } from '@vizscript/core';
-import { applyTextEdits, reconcilePositions } from '@vizscript/core';
+import {
+  applyTextEdits,
+  calleeText,
+  reconcilePositions,
+} from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
 
@@ -100,7 +104,7 @@ describe('applyTypeScriptOp', () => {
 
   it('moves a call into the statement right after it when wiring it', () => {
     const doc = parseTypeScript(source);
-    const log = node(doc, (n) => n.title === 'console.log');
+    const log = node(doc, (n) => n.title === 'log');
     const call = node(doc, (n) => n.title === 'foo');
     const result = apply(source, {
       type: 'connect',
@@ -114,7 +118,7 @@ describe('applyTypeScriptOp', () => {
   it('binds call results to a variable when wiring them further away', () => {
     const text = 'console.log(1);\nbar();\nfoo(2);\n';
     const doc = parseTypeScript(text);
-    const log = node(doc, (n) => n.title === 'console.log');
+    const log = node(doc, (n) => n.title === 'log');
     const call = node(doc, (n) => n.title === 'foo');
     const result = apply(text, {
       type: 'connect',
@@ -129,7 +133,7 @@ describe('applyTypeScriptOp', () => {
   it('rejects wiring values that are not available yet', () => {
     const doc = parseTypeScript(source);
     const setUser = node(doc, (n) => n.title === 'Set user');
-    const log = node(doc, (n) => n.title === 'console.log');
+    const log = node(doc, (n) => n.title === 'log');
     const call = node(doc, (n) => n.title === 'foo');
     const result = applyTypeScriptOp(source, {
       type: 'connect',
@@ -142,7 +146,7 @@ describe('applyTypeScriptOp', () => {
 
   it('disconnects data inputs', () => {
     const doc = parseTypeScript(source);
-    const log = node(doc, (n) => n.title === 'console.log');
+    const log = node(doc, (n) => n.title === 'log');
     const result = apply(source, {
       type: 'disconnect',
       pin: { node: log.id, pin: 'arg0' },
@@ -171,7 +175,7 @@ describe('module entry', () => {
   it('moves statements before the first executable statement', () => {
     const doc = parseTypeScript(source);
     const entry = node(doc, (n) => n.kind === 'entry' && n.title === 'Module');
-    const log = node(doc, (n) => n.title === 'console.log');
+    const log = node(doc, (n) => n.title === 'log');
     const result = apply(source, {
       type: 'connect',
       from: { node: entry.id, pin: 'then' },
@@ -349,6 +353,16 @@ describe('deleting and restoring a return', () => {
         'test.ts'
       ).ok
     ).toBe(false);
+  });
+
+  it('replaces the method of a call on a value', () => {
+    const text = 'function f(items: string[]) {\n  items.pop();\n}\n';
+    const doc = parseTypeScript(text);
+    const call = node(doc, (n) => n.kind === 'call' && n.title === 'pop');
+    expect(calleeText(text, call)).toBe('items.pop');
+    expect(
+      apply(text, { type: 'replaceReference', node: call.id, name: 'shift' })
+    ).toContain('  items.shift();');
   });
 
   it("writes an empty text default in the file's quotes", () => {

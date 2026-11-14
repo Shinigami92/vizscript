@@ -3,7 +3,7 @@ import type {
   ModuleReference,
   ScriptSymbol,
 } from '@vizscript/core';
-import { findNode, qualifiedName } from '@vizscript/core';
+import { callsOwnFunction, findNode, qualifiedName } from '@vizscript/core';
 
 /** Where "Go to definition" of a node leads. */
 export type DefinitionTarget =
@@ -75,9 +75,12 @@ export function findDefinitionTarget(
   }
 
   // A function of this file.
-  if (node.kind === 'call' || node.kind === 'functionRef') {
+  const own = d.functions.find((f) => f.nodes.includes(node));
+  if (
+    (node.kind === 'call' && own && callsOwnFunction(own, node)) ||
+    node.kind === 'functionRef'
+  ) {
     const name = node.title.replace(/^this\./, '');
-    const own = d.functions.find((f) => f.nodes.includes(node));
     const fn =
       d.functions.find((f) => f !== own && f.name === name) ??
       d.functions.find((f) => f !== own && f.name.endsWith(`.${name}`));

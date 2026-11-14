@@ -33,7 +33,9 @@ export function templateMatcher(
 ): (node: GraphNode) => boolean {
   switch (template.type) {
     case 'call': {
-      return (n) => n.kind === 'call' && n.title === template.callee;
+      // `console.log` is a `log` node on a Get `console`.
+      const name = template.callee.split('.').at(-1);
+      return (n) => n.kind === 'call' && n.title === name;
     }
 
     case 'setVar': {

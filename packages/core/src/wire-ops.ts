@@ -1,3 +1,5 @@
+import { ARG_PIN, callClose } from './call-pins';
+import { isReceiver, RECEIVER_NEEDED } from './callee';
 import { applyConversion } from './conversions';
 import type {
   ExecOutPinMeta,
@@ -274,7 +276,7 @@ export function connectData(
       {
         start: insertAt,
         end: insertAt,
-        text: `${inputMeta.insertPrefix ?? ' = '}${wrap(reference.text)}`,
+        text: `${inputMeta.insertPrefix ?? ' = '}${wrap(reference.text)}${inputMeta.insertSuffix ?? ''}`,
       },
     ]);
   }
@@ -349,7 +351,7 @@ function inlineIntoNextStatement(
     {
       start: inputMeta.insertInitAt,
       end: inputMeta.insertInitAt,
-      text: `${inputMeta.insertPrefix ?? ' = '}${expression}`,
+      text: `${inputMeta.insertPrefix ?? ' = '}${expression}${inputMeta.insertSuffix ?? ''}`,
     },
   ]);
 }
@@ -517,6 +519,19 @@ export function disconnect(
     );
   }
 
+  const cut =
+    pin.direction === 'in'
+      ? isReceiver(doc, ref)
+      : edgesOf(doc, node.id).some(
+          (e) =>
+            e.from.node === ref.node &&
+            e.from.pin === ref.pin &&
+            isReceiver(doc, e.to)
+        );
+  if (cut) {
+    return failed(RECEIVER_NEEDED);
+  }
+
   if (pin.direction === 'in') {
     const edits = clearInput(text, doc, node, pin, syntax);
     return edits.length > 0
@@ -555,6 +570,10 @@ export function disconnectNode(
   }
 
   const wires = edgesOf(doc, nodeId).filter((e) => e.kind === 'data');
+  if (wires.some((e) => isReceiver(doc, e.to))) {
+    return failed(RECEIVER_NEEDED);
+  }
+
   const clear = (
     edge: GraphEdge,
     keep?: (r: SourceRange) => string
@@ -638,4 +657,56 @@ export function disconnectNode(
   return merged.length > 0
     ? succeeded(merged)
     : failed('Nothing to disconnect.');
+}
+
+/** `...`, `*`, `**` or `name=` written before an argument's value. */
+const ARG_PREFIX = /(?<=[(,]\s*)(?:\.\.\.|\*{1,2}|[A-Za-z_]\w*\s*=(?!=))\s*$/;
+
+/**
+ * Empties a call's argument list (`console.log(a, b)` → `console.log()`):
+ * a method that got a new receiver starts with empty pins, like UE's node
+ * whose Target changed. Nodes computed in the arguments stay as statements
+ * of their own, as when their wires are broken.
+ */
+export function clearArguments(
+  text: string,
+  doc: GraphDocument,
+  nodeId: string,
+  syntax: StatementSyntax
+): OpResult {
+  const node = findNode(doc, nodeId);
+  if (node?.kind !== 'call') {
+    return failed('Only calls have arguments.');
+  }
+
+  const args = node.pins.filter((p) => ARG_PIN.test(p.id) && p.range);
+  const first = args[0]?.range;
+  const last = args.at(-1)?.range;
+  if (!first || !last) {
+    return succeeded([]);
+  }
+
+  // Only the statements kept in front, merged in argument order.
+  const kept = args.flatMap((pin) =>
+    clearInput(text, doc, node, pin, syntax).filter(
+      (e) => e.start === e.end && e.start < first.start
+    )
+  );
+  const prefix = text.slice(0, first.start).match(ARG_PREFIX)?.[0] ?? '';
+  // Up to the `)`, with a trailing comma and line breaks.
+  const close = callClose(text, node);
+  const end = close !== undefined && close >= last.end ? close : last.end;
+  const edits: TextEdit[] = [
+    { start: first.start - prefix.length, end, text: '' },
+  ];
+  const at = kept[0]?.start;
+  if (at !== undefined) {
+    edits.unshift({
+      start: at,
+      end: at,
+      text: kept.map((e) => e.text).join(''),
+    });
+  }
+
+  return succeeded(edits);
 }

@@ -1,5 +1,5 @@
 import type { GraphNode, GraphOp } from '@vizscript/core';
-import { applyTextEdits } from '@vizscript/core';
+import { applyTextEdits, calleeText } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
 
@@ -12,10 +12,11 @@ function apply(text: string, op: GraphOp): string {
   return applyTextEdits(text, result.edits);
 }
 
+/** A call node by its callee as written (`console.log`). */
 function callNode(text: string, title: string): GraphNode {
   const node = parseTypeScript(text, 't.ts')
     .functions.flatMap((f) => f.nodes)
-    .find((n) => n.kind === 'call' && n.title === title);
+    .find((n) => n.kind === 'call' && calleeText(text, n) === title);
   if (!node) {
     throw new Error(`no call ${title}`);
   }
@@ -45,6 +46,7 @@ describe('argument pins from signatures', () => {
       .pins.filter((p) => p.direction === 'in' && p.kind === 'data')
       .map((p) => `${p.id}:${p.name}:${p.type}=${p.literal?.value ?? ''}`);
     expect(pins).toEqual([
+      'target:this:object=',
       'param:person:person:string=',
       'param:times:times:number=2',
       'param:loud:loud:bool=',
@@ -89,6 +91,7 @@ describe('argument pins from signatures', () => {
       (p) => p.direction === 'in' && p.kind === 'data'
     );
     expect(pins.map((p) => `${p.id}:${p.type}`)).toEqual([
+      'target:object',
       'arg0:string',
       'param:times:number',
       'param:loud:bool',

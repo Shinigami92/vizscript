@@ -1,5 +1,5 @@
 import type { GraphDocument, GraphOp } from '@vizscript/core';
-import { applyTextEdits } from '@vizscript/core';
+import { applyTextEdits, receiverPin } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
 
@@ -40,9 +40,10 @@ function apply(text: string, op: GraphOp): string {
 }
 
 function nodeId(doc: GraphDocument, title: string): string {
+  // `log` is the free call, not `console.log`.
   const node = doc.functions
     .flatMap((f) => f.nodes)
-    .find((n) => n.title === title);
+    .find((n) => n.title === title && !receiverPin(n));
   if (!node) {
     throw new Error(`No node ${title}`);
   }

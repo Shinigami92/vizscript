@@ -28,7 +28,7 @@ describe('layout', () => {
       'a.ts'
     );
     const positions = layoutDocument(doc, options);
-    const ys = ['x.one', 'two', 'three', 'four'].map(
+    const ys = ['one', 'two', 'three', 'four'].map(
       (title) => positions[first(doc, title).id]?.y
     );
     expect(new Set(ys).size).toBe(1);

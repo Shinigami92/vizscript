@@ -19,36 +19,42 @@ function loadUsers
   #2 setVar "Set users" (const) [<exec:▶ >then:▶ <value:array >out:array]
   #3 forEach "For Each" [<exec:▶ <array:string[] >body:▶ >element:string >completed:▶]
   #4 try "Try" [<exec:▶ >try:▶ >catch:▶ >error:any >completed:▶]
-  #5 call "readFile" [<exec:▶ >then:▶ <arg0:string <arg1:string='utf8' >return:any]
+  #5 call "readFile" [<exec:▶ >then:▶ <target:object <arg0:string <arg1:string='utf8' >return:any]
   #6 await "Await" [<exec:▶ >then:▶ <promise:any >result:any]
   #7 setVar "Set raw" (const) [<exec:▶ >then:▶ <value:any >out:any]
-  #8 getVar "raw" [>value:any]
-  #9 call "JSON.parse" [<exec:▶ >then:▶ <arg0:any >return:any]
-  #10 setVar "Set parsed" (const) [<exec:▶ >then:▶ <value:any >out:any]
-  #11 getVar "parsed.active" [>value:any]
-  #12 operator "&&" [<a:any <b:any >value:any]
-  #13 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
-  #14 getVar "parsed.name" [>value:any]
-  #15 template "Format Text" (Loaded {0} from {1}) [<part0:any <part1:string >value:string]
-  #16 call "console.log" [<exec:▶ >then:▶ <arg0:string >return:any]
-  #17 continue "Continue" [<exec:▶]
-  #18 getVar "parsed.name" [>value:any]
-  #19 getVar "parsed.age" [>value:any]
-  #20 operator "??" [<a:any <b:number=0 >value:any]
-  #21 makeObject "Make Object" [<p0:any <p1:any >value:object]
-  #22 call "users.push" [<exec:▶ >then:▶ <arg0:object >return:any]
-  #23 call "console.error" [<exec:▶ >then:▶ <arg0:any >return:any]
-  #24 getVar "users.length" [>value:any]
-  #25 switch "Switch" [<exec:▶ <value:any >case0:▶ >case1:▶ >completed:▶]
-  #26 call "new Error" [<exec:▶ >then:▶ <arg0:string='No users' >return:Error]
-  #27 throw "Throw" [<exec:▶ <error:Error]
+  #8 getVar "JSON" [>value:any]
+  #9 getVar "raw" [>value:any]
+  #10 call "parse" [<exec:▶ >then:▶ <target:object <arg0:any >return:any]
+  #11 setVar "Set parsed" (const) [<exec:▶ >then:▶ <value:any >out:any]
+  #12 getVar "parsed.active" [>value:any]
+  #13 operator "&&" [<a:any <b:any >value:any]
+  #14 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
+  #15 getVar "console" [>value:any]
+  #16 getVar "parsed.name" [>value:any]
+  #17 template "Format Text" (Loaded {0} from {1}) [<part0:any <part1:string >value:string]
+  #18 call "log" [<exec:▶ >then:▶ <target:object <arg0:string >return:any]
+  #19 continue "Continue" [<exec:▶]
+  #20 getVar "users" [>value:array]
+  #21 getVar "parsed.name" [>value:any]
+  #22 getVar "parsed.age" [>value:any]
+  #23 operator "??" [<a:any <b:number=0 >value:any]
+  #24 makeObject "Make Object" [<p0:any <p1:any >value:object]
+  #25 call "push" [<exec:▶ >then:▶ <target:object <arg0:object >return:any]
+  #26 getVar "console" [>value:any]
+  #27 call "error" [<exec:▶ >then:▶ <target:object <arg0:any >return:any]
   #28 getVar "users.length" [>value:any]
-  #29 operator ">" [<a:any <b:number=1 >value:bool]
-  #30 select "Select" [<condition:bool <true:string='many' <false:string='one' >value:string]
-  #31 call "console.info" [<exec:▶ >then:▶ <arg0:string >return:any]
-  #32 functionRef "ƒ users.map callback" [>value:function]
-  #33 call "users.map" [<exec:▶ >then:▶ <arg0:function >return:any]
-  #34 return "Return" [<exec:▶ <value:any]
+  #29 switch "Switch" [<exec:▶ <value:any >case0:▶ >case1:▶ >completed:▶]
+  #30 call "new Error" [<exec:▶ >then:▶ <arg0:string='No users' >return:Error]
+  #31 throw "Throw" [<exec:▶ <error:Error]
+  #32 getVar "console" [>value:any]
+  #33 getVar "users.length" [>value:any]
+  #34 operator ">" [<a:any <b:number=1 >value:bool]
+  #35 select "Select" [<condition:bool <true:string='many' <false:string='one' >value:string]
+  #36 call "info" [<exec:▶ >then:▶ <target:object <arg0:string >return:any]
+  #37 getVar "users" [>value:array]
+  #38 functionRef "ƒ users.map callback" [>value:function]
+  #39 call "map" [<exec:▶ >then:▶ <target:object <arg0:function >return:any]
+  #40 return "Return" [<exec:▶ <value:any]
   --> #1.value -> #2.value
   ==> #0.then -> #2.exec
   --> #0.param0 -> #3.array
@@ -60,39 +66,45 @@ function loadUsers
   ==> #5.then -> #6.exec
   --> #6.result -> #7.value
   ==> #6.then -> #7.exec
-  --> #8.value -> #9.arg0
-  ==> #7.then -> #9.exec
-  --> #9.return -> #10.value
-  ==> #9.then -> #10.exec
-  --> #11.value -> #12.a
-  --> #0.param1 -> #12.b
-  --> #12.value -> #13.condition
-  ==> #10.then -> #13.exec
-  --> #14.value -> #15.part0
-  --> #3.element -> #15.part1
-  --> #15.value -> #16.arg0
-  ==> #13.true -> #16.exec
-  ==> #13.false -> #17.exec
-  --> #19.value -> #20.a
-  --> #18.value -> #21.p0
-  --> #20.value -> #21.p1
-  --> #21.value -> #22.arg0
-  ==> #13.completed -> #22.exec
-  --> #4.error -> #23.arg0
-  ==> #4.catch -> #23.exec
-  --> #24.value -> #25.value
-  ==> #3.completed -> #25.exec
-  ==> #25.case0 -> #26.exec
-  --> #26.return -> #27.error
-  ==> #26.then -> #27.exec
-  --> #28.value -> #29.a
-  --> #29.value -> #30.condition
-  --> #30.value -> #31.arg0
-  ==> #25.case1 -> #31.exec
-  --> #32.value -> #33.arg0
-  ==> #25.completed -> #33.exec
-  --> #33.return -> #34.value
-  ==> #33.then -> #34.exec
+  --> #8.value -> #10.target
+  --> #9.value -> #10.arg0
+  ==> #7.then -> #10.exec
+  --> #10.return -> #11.value
+  ==> #10.then -> #11.exec
+  --> #12.value -> #13.a
+  --> #0.param1 -> #13.b
+  --> #13.value -> #14.condition
+  ==> #11.then -> #14.exec
+  --> #16.value -> #17.part0
+  --> #3.element -> #17.part1
+  --> #15.value -> #18.target
+  --> #17.value -> #18.arg0
+  ==> #14.true -> #18.exec
+  ==> #14.false -> #19.exec
+  --> #22.value -> #23.a
+  --> #21.value -> #24.p0
+  --> #23.value -> #24.p1
+  --> #20.value -> #25.target
+  --> #24.value -> #25.arg0
+  ==> #14.completed -> #25.exec
+  --> #26.value -> #27.target
+  --> #4.error -> #27.arg0
+  ==> #4.catch -> #27.exec
+  --> #28.value -> #29.value
+  ==> #3.completed -> #29.exec
+  ==> #29.case0 -> #30.exec
+  --> #30.return -> #31.error
+  ==> #30.then -> #31.exec
+  --> #33.value -> #34.a
+  --> #34.value -> #35.condition
+  --> #32.value -> #36.target
+  --> #35.value -> #36.arg0
+  ==> #29.case1 -> #36.exec
+  --> #37.value -> #39.target
+  --> #38.value -> #39.arg0
+  ==> #29.completed -> #39.exec
+  --> #39.return -> #40.value
+  ==> #39.then -> #40.exec
 function Counter.increment
   #0 entry "Counter.increment" (method) [>then:▶ >param0:number]
   #1 setVar "Set this.count" (+=) [<exec:▶ >then:▶ <value:number >out:any]
@@ -114,32 +126,34 @@ function users.map callback
 exports[`parseTypeScript > lowers exports.ts 1`] = `
 "function Module
   #0 entry "Module" (exports.ts) [>then:▶]
-  #1 call "Date.now" [<exec:▶ >then:▶ >return:any]
-  #2 setVar "Set SEED" (const) [<exec:▶ >then:▶ <value:any >out:any]
-  #3 setVar "Set VERSION" (export const) [<exec:▶ >then:▶ <value:string='1.0.0' >out:string]
-  #4 getVar "SEED" [>value:any]
-  #5 getVar "helper" [>value:any]
-  #6 export "Export" [<exec:▶ >then:▶ <e0:any <e1:any]
-  #7 export "Re-export" (parse from ./parser) [<exec:▶ >then:▶]
-  #8 export "Export * from" (./types) [<exec:▶ >then:▶]
-  #9 getVar "SEED" [>value:any]
-  #10 makeObject "Make Object" [<p0:any >value:object]
-  #11 call "defineConfig" [<exec:▶ >then:▶ <arg0:object >return:any]
-  #12 export "Export default" [<exec:▶ >then:▶ <value:any]
-  ==> #0.then -> #1.exec
-  --> #1.return -> #2.value
-  ==> #1.then -> #2.exec
+  #1 getVar "Date" [>value:any]
+  #2 call "now" [<exec:▶ >then:▶ <target:object >return:any]
+  #3 setVar "Set SEED" (const) [<exec:▶ >then:▶ <value:any >out:any]
+  #4 setVar "Set VERSION" (export const) [<exec:▶ >then:▶ <value:string='1.0.0' >out:string]
+  #5 getVar "SEED" [>value:any]
+  #6 getVar "helper" [>value:any]
+  #7 export "Export" [<exec:▶ >then:▶ <e0:any <e1:any]
+  #8 export "Re-export" (parse from ./parser) [<exec:▶ >then:▶]
+  #9 export "Export * from" (./types) [<exec:▶ >then:▶]
+  #10 getVar "SEED" [>value:any]
+  #11 makeObject "Make Object" [<p0:any >value:object]
+  #12 call "defineConfig" [<exec:▶ >then:▶ <target:object <arg0:object >return:any]
+  #13 export "Export default" [<exec:▶ >then:▶ <value:any]
+  --> #1.value -> #2.target
+  ==> #0.then -> #2.exec
+  --> #2.return -> #3.value
   ==> #2.then -> #3.exec
-  --> #4.value -> #6.e0
-  --> #5.value -> #6.e1
-  ==> #3.then -> #6.exec
-  ==> #6.then -> #7.exec
+  ==> #3.then -> #4.exec
+  --> #5.value -> #7.e0
+  --> #6.value -> #7.e1
+  ==> #4.then -> #7.exec
   ==> #7.then -> #8.exec
-  --> #9.value -> #10.p0
-  --> #10.value -> #11.arg0
-  ==> #8.then -> #11.exec
-  --> #11.return -> #12.value
-  ==> #11.then -> #12.exec
+  ==> #8.then -> #9.exec
+  --> #10.value -> #11.p0
+  --> #11.value -> #12.arg0
+  ==> #9.then -> #12.exec
+  --> #12.return -> #13.value
+  ==> #12.then -> #13.exec
 function helper
   #0 entry "helper" (export function) [>then:▶ >param0:number]
   #1 operator "*" [<a:number <b:number=2 >value:number]
@@ -149,7 +163,7 @@ function helper
   ==> #0.then -> #2.exec
 function twice
   #0 entry "twice" (export function) [>then:▶ >param0:number]
-  #1 call "helper" [<exec:▶ >then:▶ <arg0:number >return:number]
+  #1 call "helper" [<exec:▶ >then:▶ <target:object <arg0:number >return:number]
   #2 return "Return" [<exec:▶ <value:number]
   --> #0.param0 -> #1.arg0
   ==> #0.then -> #1.exec
@@ -162,20 +176,22 @@ exports[`parseTypeScript > lowers greeter.ts 1`] = `
   #0 entry "Module" (greeter.ts) [>then:▶]
   #1 setVar "Set user" (const) [<exec:▶ >then:▶ <value:string="Jane User" >out:string]
   #2 getVar "user" [>value:string]
-  #3 call "greeter" [<exec:▶ >then:▶ <arg0:string >return:string]
+  #3 call "greeter" [<exec:▶ >then:▶ <target:object <arg0:string >return:string]
   #4 setVar "Set textContent" (const) [<exec:▶ >then:▶ <value:string >out:string]
-  #5 getVar "user" [>value:string]
-  #6 call "greeter" [<exec:▶ >then:▶ <arg0:string >return:string]
-  #7 call "console.log" [<exec:▶ >then:▶ <arg0:string >return:any]
+  #5 getVar "console" [>value:any]
+  #6 getVar "user" [>value:string]
+  #7 call "greeter" [<exec:▶ >then:▶ <target:object <arg0:string >return:string]
+  #8 call "log" [<exec:▶ >then:▶ <target:object <arg0:string >return:any]
   ==> #0.then -> #1.exec
   --> #2.value -> #3.arg0
   ==> #1.then -> #3.exec
   --> #3.return -> #4.value
   ==> #3.then -> #4.exec
-  --> #5.value -> #6.arg0
-  ==> #4.then -> #6.exec
-  --> #6.return -> #7.arg0
-  ==> #6.then -> #7.exec
+  --> #6.value -> #7.arg0
+  ==> #4.then -> #7.exec
+  --> #5.value -> #8.target
+  --> #7.return -> #8.arg0
+  ==> #7.then -> #8.exec
 function greeter
   #0 entry "greeter" (function) [>then:▶ >param0:string]
   #1 operator "+" [<a:string="Hello, " <b:string >value:string]

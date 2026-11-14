@@ -4,7 +4,7 @@ import type {
   ScriptSymbol,
   SymbolKind,
 } from '@vizscript/core';
-import { qualifiedName } from '@vizscript/core';
+import { callsOwnFunction, qualifiedName } from '@vizscript/core';
 
 export const SYMBOL_ICONS: Record<SymbolKind, string> = {
   function: 'i-mdi-function text-sky-400',
@@ -107,8 +107,6 @@ export function symbolNodes(
       ? new RegExp(String.raw`^${name}(?:$|\.)`)
       : new RegExp(String.raw`(?:^|[.\s])${name}$`);
   const sets = new RegExp(String.raw`^Set (?:\w+\.)?${name}$`);
-  // A method called on it: `program.command()`, `this.items.push()`.
-  const calledOn = new RegExp(String.raw`^(?:this\.|self\.)?${name}\.`);
   const graphs =
     symbol.kind === 'local'
       ? doc.functions.filter(
@@ -129,17 +127,21 @@ export function symbolNodes(
     }
 
     for (const node of fn.nodes) {
+      // A call on a value (`console.log`) is a method of that value, not
+      // the file's function or import of that name.
+      const ownCall =
+        node.kind === 'call' &&
+        node.title === symbol.name &&
+        (symbol.kind === 'method' || callsOwnFunction(fn, node));
       const matches =
         symbol.kind === 'import'
-          ? (node.kind === 'call' ||
-              node.kind === 'getVar' ||
-              node.kind === 'getProperty') &&
-            uses.test(node.title)
+          ? ((node.kind === 'getVar' || node.kind === 'getProperty') &&
+              uses.test(node.title)) ||
+            ownCall
           : symbol.kind === 'function' || symbol.kind === 'method'
-            ? node.kind === 'call' && uses.test(node.title)
+            ? ownCall
             : ((node.kind === 'getVar' || node.kind === 'getProperty') &&
                 uses.test(node.title)) ||
-              (node.kind === 'call' && calledOn.test(node.title)) ||
               (node.kind === 'setVar' && sets.test(node.title));
       if (matches) {
         ids.push(node.id);

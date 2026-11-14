@@ -1,3 +1,4 @@
+import { isReceiver } from './callee';
 import type { StatementMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import type {
@@ -293,6 +294,36 @@ export function resolveOverlay(
     source = nextText;
     return undefined;
   };
+
+  // Methods that got a new receiver first: their arguments go (UE: pins
+  // follow the Target), and the new value replaces the old one, so a
+  // deleted Get of the old receiver is gone from the code too.
+  for (let i = 0; ; i++) {
+    if (i >= maxSteps) {
+      return pending('', 'Writing the graph as code did not end.');
+    }
+
+    const index = current.edits.findIndex(
+      (e) =>
+        (e.type === 'removeEdge' || e.type === 'addEdge') &&
+        isReceiver(doc, e.to)
+    );
+    const edit = current.edits[index];
+    if (!edit || edit.type === 'removeNode' || edit.type === 'addNodes') {
+      break;
+    }
+
+    current = { edits: current.edits.filter((_, j) => j !== index) };
+    const op: GraphOp =
+      edit.type === 'removeEdge'
+        ? { type: 'clearArguments', node: edit.to.node }
+        : { type: 'connect', from: edit.from, to: edit.to };
+    const done = edit.type === 'addEdge' && hasEdge(doc, edit.from, edit.to);
+    const error = done ? undefined : step(op);
+    if (error !== undefined) {
+      return pending(edit.to.node, error);
+    }
+  }
 
   for (let i = 0; ; i++) {
     if (i >= maxSteps) {

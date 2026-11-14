@@ -131,16 +131,20 @@ describe('declarations of imported files', () => {
     expect(summarizeGraph(doc)).toMatchInlineSnapshot(`
       "function Module
         #0 entry "Module" (m.ts) [>then:▶]
-        #1 call "greet" [<exec:▶ >then:▶ <arg0:string='a' <param:punctuation:string= >return:string]
-        #2 call "u.greet" [<exec:▶ >then:▶ <arg0:string='b' <arg1:string='?' >return:string]
-        #3 call "main" [<exec:▶ >then:▶]
-        #4 getVar "LIMIT" [>value:number]
-        #5 call "console.log" [<exec:▶ >then:▶ <arg0:any >return:any]
+        #1 call "greet" [<exec:▶ >then:▶ <target:object <arg0:string='a' <param:punctuation:string= >return:string]
+        #2 getVar "u" [>value:any]
+        #3 call "greet" [<exec:▶ >then:▶ <target:object <arg0:string='b' <arg1:string='?' >return:string]
+        #4 call "main" [<exec:▶ >then:▶ <target:object]
+        #5 getVar "console" [>value:any]
+        #6 getVar "LIMIT" [>value:number]
+        #7 call "log" [<exec:▶ >then:▶ <target:object <arg0:any >return:any]
         ==> #0.then -> #1.exec
-        ==> #1.then -> #2.exec
-        ==> #2.then -> #3.exec
-        --> #4.value -> #5.arg0
-        ==> #3.then -> #5.exec"
+        --> #2.value -> #3.target
+        ==> #1.then -> #3.exec
+        ==> #3.then -> #4.exec
+        --> #5.value -> #7.target
+        --> #6.value -> #7.arg0
+        ==> #4.then -> #7.exec"
     `);
   });
 

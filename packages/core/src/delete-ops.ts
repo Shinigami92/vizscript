@@ -1,3 +1,4 @@
+import { isReceiver, RECEIVER_NEEDED } from './callee';
 import { deleteCommentBox } from './comment-ops';
 import type { StatementMeta } from './edit-meta';
 import { getMeta, owningStatement } from './edit-meta';
@@ -352,6 +353,18 @@ export function deleteNodes(
             : edit,
       });
       continue;
+    }
+
+    // A method's receiver can't be left empty (graph-only instead).
+    if (
+      edgesOf(doc, node.id).some(
+        (e) =>
+          e.from.node === node.id &&
+          !deleted.has(e.to.node) &&
+          isReceiver(doc, e.to)
+      )
+    ) {
+      return failed(RECEIVER_NEEDED);
     }
 
     // A value node leaves an empty input behind (keeping a property key).

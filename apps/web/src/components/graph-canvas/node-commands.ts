@@ -1,6 +1,19 @@
 import type { CommentTarget } from '@vizscript/canvas';
-import type { Pin, PinRef, Point } from '@vizscript/core';
-import { qualifiedName, referenceName, uniqueName } from '@vizscript/core';
+import type {
+  FunctionGraph,
+  GraphDocument,
+  GraphNode,
+  Pin,
+  PinRef,
+  Point,
+} from '@vizscript/core';
+import {
+  callPath,
+  callsOwnFunction,
+  qualifiedName,
+  referenceName,
+  uniqueName,
+} from '@vizscript/core';
 import { usesSnakeCase } from '../../graph/languages';
 import { symbolNodes } from '../../graph/symbols';
 import type { MenuEntry } from '../ContextMenu.vue';
@@ -22,6 +35,22 @@ export interface NodeCommands {
   extractEntry: (source: PinRef, pin: Pin, world: Point) => MenuEntry;
   findReferences: (nodeId: string) => void;
   collapseToFunction: (ids: ReadonlyArray<string>) => void;
+}
+
+/** Calls of the same function on the same Get (`console.log`), by id. */
+function sameCalls(
+  doc: GraphDocument,
+  fn: FunctionGraph,
+  node: GraphNode
+): string[] {
+  const path = callPath(fn, node);
+  return path === undefined
+    ? [node.id]
+    : doc.functions.flatMap((f) =>
+        f.nodes
+          .filter((n) => n.kind === 'call' && callPath(f, n) === path)
+          .map((n) => n.id)
+      );
 }
 
 /** Node commands that ask for a name or select nodes (menus, keys). */
@@ -121,8 +150,13 @@ export function createNodeCommands(
     const kinds = isCall
       ? ['function', 'method', 'import']
       : ['variable', 'constant', 'local', 'import'];
+    // `console.log` is no call of the file's `log`.
+    const own = !isCall || callsOwnFunction(entry.fn, entry.node);
     const candidates = (doc.symbols ?? []).filter(
-      (s) => s.name === bare && kinds.includes(s.kind)
+      (s) =>
+        s.name === bare &&
+        kinds.includes(s.kind) &&
+        (own || s.kind === 'method')
     );
     const owner = doc.symbols?.find(
       (s) => s.fnId === entry.fn.id && s.kind !== 'class'
@@ -133,10 +167,12 @@ export function createNodeCommands(
       ) ?? candidates.find((s) => s.kind !== 'local');
     const found = symbol
       ? symbolNodes(doc, symbol)
-      : doc.functions
-          .flatMap((f) => f.nodes)
-          .filter((n) => referenceName(n) === name)
-          .map((n) => n.id);
+      : isCall
+        ? sameCalls(doc, entry.fn, entry.node)
+        : doc.functions
+            .flatMap((f) => f.nodes)
+            .filter((n) => referenceName(n) === name)
+            .map((n) => n.id);
     const ids = found.includes(nodeId) ? found : [nodeId, ...found];
     ctx.selectNodes(ids);
     ctx.show(
