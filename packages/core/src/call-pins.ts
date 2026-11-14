@@ -3,6 +3,7 @@ import type { EngineClass } from './engine-classes';
 import { classMethod } from './engine-classes';
 import type { ImportedDeclaration } from './imports';
 import type {
+  DataType,
   FunctionGraph,
   GraphDocument,
   GraphNode,
@@ -11,6 +12,7 @@ import type {
 } from './ir';
 import type { ScriptSymbol, SymbolParam } from './symbols';
 import { qualifiedName } from './symbols';
+import { arrayElementType } from './types';
 
 export interface CallPinOptions {
   /** Argument written for a skipped parameter (`undefined`, `null`). */
@@ -201,6 +203,48 @@ function typeResult(
   }
 }
 
+/** The type of one value of a `...rest` / `*args` parameter. */
+function restElementType(param: SymbolParam): DataType {
+  return param.dataType === 'array' || param.dataType.endsWith('[]')
+    ? arrayElementType(param.dataType)
+    : param.dataType;
+}
+
+/**
+ * The first, empty pin of a `...rest` parameter without values (`data[0]`
+ * of `console.log()`); "Add argument pin" adds the next ones.
+ */
+function restPin(
+  param: SymbolParam,
+  gap: number,
+  given: number,
+  close: number,
+  options: Pick<CallPinOptions, 'placeholder'>
+): Pin {
+  // Skipped parameters before it get a placeholder.
+  const fill = Array.from({ length: gap }, () => `${options.placeholder}, `);
+  const type = restElementType(param);
+  const meta: InputPinMeta = {
+    insertInitAt: close,
+    insertPrefix: `${given > 0 ? ', ' : ''}${fill.join('')}`,
+    optional: true,
+  };
+  return {
+    id: `param:${param.name}`,
+    name: `${param.name}[0]`,
+    direction: 'in',
+    kind: 'data',
+    type,
+    literal: {
+      value: '',
+      raw: '',
+      kind: literalKind({ ...param, dataType: type }),
+      editable: true,
+    },
+    meta: { ...meta },
+  };
+}
+
 /**
  * The pins of a call node completed from the parameters it calls, like
  * UE's call nodes: given arguments get their parameter's name, type and
@@ -229,7 +273,7 @@ export function withParamPins(
   );
 
   // Positional arguments from a `*rest` parameter on all belong to it.
-  const restAt = params.findIndex((p) => p.rest);
+  const restAt = params.findIndex((p) => p.rest && !p.keywords);
   const paramAt = (index: number): SymbolParam | undefined =>
     restAt !== -1 && index >= restAt ? params[restAt] : params[index];
 
@@ -255,6 +299,14 @@ export function withParamPins(
     if (param && !param.rest && pin.name === '') {
       pin.name = param.name;
     }
+
+    // Values of a `...rest` parameter, like UE's Make Array: `data[0]`.
+    if (param?.rest) {
+      pin.name = `${param.name}[${index - restAt}]`;
+      if (pin.type === 'any') {
+        pin.type = restElementType(param);
+      }
+    }
   }
 
   const close = callClose(text, node);
@@ -266,6 +318,13 @@ export function withParamPins(
   for (const [index, param] of params.entries()) {
     // After a `*rest` parameter only keywords reach a parameter.
     const afterRest = restAt !== -1 && index > restAt;
+    if (index === restAt && positional.length <= index) {
+      added.push(
+        restPin(param, index - positional.length, args.length, close, options)
+      );
+      continue;
+    }
+
     if (
       param.rest ||
       keywords.has(param.name) ||

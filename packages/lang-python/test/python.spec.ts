@@ -190,6 +190,23 @@ describe('applyPythonOp', () => {
     );
   });
 
+  it('names *args values like an array and skips **kwargs', () => {
+    const text = 'def f(*args, **kwargs):\n    pass\n\nf()\nf(1, 2)\n';
+    const calls = fn(parsePythonDocument(text), 'Module').nodes.filter(
+      (n) => n.title === 'f'
+    );
+    expect(
+      calls.map((n) =>
+        n.pins
+          .filter(
+            (p) =>
+              p.direction === 'in' && p.kind === 'data' && p.id !== 'target'
+          )
+          .map((p) => p.name)
+      )
+    ).toEqual([['args[0]'], ['args[0]', 'args[1]']]);
+  });
+
   it('writes Python booleans', () => {
     const text = 'path.mkdir(exist_ok=True)\n';
     const doc = parsePythonDocument(text);

@@ -127,9 +127,12 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
 
     let positional = 0;
     for (const [i, arg] of expr.args.entries()) {
+      // `*args` values are named by their parameter (`args[0]`) later.
+      const param = arg.keyword || arg.star ? undefined : positional++;
+      const named = param === undefined ? '' : (signature?.params[param] ?? '');
       const label = arg.keyword
         ? `${arg.keyword}=`
-        : (arg.star ?? signature?.params[positional++] ?? '');
+        : (arg.star ?? (named.startsWith('*') ? '' : named));
       inputs.push({
         pin: this.dataIn(`arg${i}`, label, rangeOf(arg.value)),
         value: this.lowerExpr(

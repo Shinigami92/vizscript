@@ -14,6 +14,8 @@ export interface StubParam {
   type?: string;
   defaultText?: string;
   rest?: boolean;
+  /** `**kwargs`. */
+  keywords?: boolean;
 }
 
 export interface Callable {
@@ -57,6 +59,7 @@ export function callableOf(
         ...(type ? { type } : {}),
         ...(defaultText ? { defaultText } : {}),
         ...(p.name.startsWith('*') ? { rest: true } : {}),
+        ...(p.name.startsWith('**') ? { keywords: true } : {}),
       };
     }),
   };
@@ -82,6 +85,7 @@ export function signatureOf(
       dataType: dataTypeOf(type),
       ...(param.defaultText ? { defaultText: param.defaultText } : {}),
       ...(param.rest ? { rest: true } : {}),
+      ...(param.keywords ? { keywords: true } : {}),
     };
   });
 }

@@ -138,6 +138,7 @@ class SymbolCollector {
         ...(param.annotation ? { annotation: param.annotation } : {}),
       }),
       ...(stars ? { rest: true } : {}),
+      ...(stars === '**' ? { keywords: true } : {}),
     };
   }
 

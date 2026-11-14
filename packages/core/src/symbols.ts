@@ -37,6 +37,8 @@ export interface SymbolParam {
   defaultText?: string;
   /** `...rest`, `*args`, `**kwargs`. */
   rest?: boolean;
+  /** `**kwargs`: takes keyword arguments, not positional ones. */
+  keywords?: boolean;
 }
 
 /** A declaration of the script (UE: an entry of "My Blueprint"). */

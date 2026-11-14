@@ -106,6 +106,35 @@ describe('argument pins from signatures', () => {
     ).toContain('greet(user, 3);');
   });
 
+  it('names the values of a rest parameter like an array', () => {
+    const decl = 'function f(fmt: string, ...data: number[]): void {}\n';
+    const inputs = (text: string): string[] =>
+      callNode(text, 'f')
+        .pins.filter(
+          (p) => p.direction === 'in' && p.kind === 'data' && p.id !== 'target'
+        )
+        .map((p) => `${p.id}:${p.name}:${p.type}`);
+    expect(inputs(`${decl}f("a", 1, 2);\n`)).toEqual([
+      'arg0:fmt:string',
+      'arg1:data[0]:number',
+      'arg2:data[1]:number',
+    ]);
+    // Without values: one empty pin that writes the first one.
+    const empty = `${decl}f();\n`;
+    expect(inputs(empty)).toEqual([
+      'param:fmt:fmt:string',
+      'param:data:data[0]:number',
+    ]);
+    expect(
+      apply(empty, {
+        type: 'setLiteral',
+        node: callNode(empty, 'f').id,
+        pin: 'param:data',
+        value: '3',
+      })
+    ).toContain('f(undefined, 3);');
+  });
+
   it('completes method calls through this', () => {
     const text = 'class A {\n  add(n: number) {}\n  run() { this.add(); }\n}\n';
     const node = parseTypeScript(text, 't.ts')
