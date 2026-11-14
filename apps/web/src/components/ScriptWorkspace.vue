@@ -209,6 +209,9 @@ const {
   undo,
   redo,
   recordOverlay,
+  beforeCodeEdit,
+  recordCodeLayout,
+  parsed,
   recordOverlayCode,
   onLayoutChange,
   boxColorOf,
@@ -640,9 +643,10 @@ async function reparse(): Promise<void> {
   // Wired from a SET's output: the new Get is drawn as that wire (UE).
   const vias = afterParse(previous ?? undefined, shown, change);
   if (Object.keys(vias).length > 0) {
-    pinned.value = { ...pinned.value, ...vias };
-    void persist(vias);
+    recordCodeLayout(vias);
   }
+
+  parsed();
 
   let selectAfter: string[] | undefined;
   if (pendingPlacement) {
@@ -890,6 +894,7 @@ async function onOp(requested: GraphOp): Promise<void> {
   }
 
   beforeOp(op, doc.value);
+  beforeCodeEdit();
   const result = await client.applyOp(
     text.value,
     props.path,

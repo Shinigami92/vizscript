@@ -20,6 +20,10 @@ type HistoryStep =
       before: LayoutPatch;
       after: LayoutPatch;
       codeVersion: number;
+      /** Made by a graph edit that wrote code: undone together with it. */
+      code?: boolean;
+      /** Version of the code before that edit (for redo). */
+      beforeVersion?: number;
     }
   | {
       kind: 'overlay';
@@ -65,6 +69,15 @@ export interface LayoutHistory {
   redo: () => void;
   /** A change of the graph-only edits, as an undo step. */
   recordOverlay: (before: GraphOverlay, after: GraphOverlay) => void;
+  /** A graph edit that writes code starts (its code version). */
+  beforeCodeEdit: () => void;
+  /**
+   * Layout entries the last graph edit made with its code (a Get drawn as
+   * a wire): one undo for both.
+   */
+  recordCodeLayout: (after: LayoutPatch) => void;
+  /** The code was parsed (a redone edit gets its layout entries back). */
+  parsed: () => void;
   /**
    * The last overlay step also wrote code (synced): one undo for both. Call
    * after the editor reported the new version.
@@ -160,6 +173,42 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     applyLayoutPatch(after);
   }
 
+  let editVersion = 0;
+  function beforeCodeEdit(): void {
+    editVersion = codeHistory.value.version;
+  }
+
+  function recordCodeLayout(after: LayoutPatch): void {
+    const before: LayoutPatch = {};
+    for (const key of Object.keys(after)) {
+      before[key] = pinned.value[key] ?? null;
+    }
+
+    undoStack.value = [
+      ...undoStack.value.slice(-199),
+      {
+        kind: 'layout',
+        before,
+        after,
+        codeVersion: codeHistory.value.version,
+        code: true,
+        beforeVersion: editVersion,
+      },
+    ];
+    redoStack.value = [];
+    applyLayoutPatch(after);
+  }
+
+  /** Applied once the redone code is parsed (its ids exist again). */
+  let afterParse: LayoutPatch | null = null;
+  function parsed(): void {
+    const patch = afterParse;
+    afterParse = null;
+    if (patch) {
+      applyLayoutPatch(patch);
+    }
+  }
+
   function recordOverlay(before: GraphOverlay, after: GraphOverlay): void {
     undoStack.value = [
       ...undoStack.value.slice(-199),
@@ -200,6 +249,9 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
       redoStack.value = [...redoStack.value, step];
       if (step.kind === 'layout') {
         applyLayoutPatch(step.before);
+        if (step.code) {
+          deps.undoCode();
+        }
       } else {
         if (step.code) {
           deps.undoCode();
@@ -217,17 +269,17 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
   function redo(): void {
     const step = redoStack.value.at(-1);
     // A step that wrote code is redone from the code as it was before.
-    const version =
-      step?.kind === 'overlay' && step.code
-        ? step.beforeVersion
-        : step?.codeVersion;
+    const version = step?.code ? step.beforeVersion : step?.codeVersion;
     if (
       step &&
       (version === codeHistory.value.version || !codeHistory.value.canRedo)
     ) {
       redoStack.value = redoStack.value.slice(0, -1);
       undoStack.value = [...undoStack.value, step];
-      if (step.kind === 'layout') {
+      if (step.kind === 'layout' && step.code) {
+        afterParse = step.after;
+        deps.redoCode();
+      } else if (step.kind === 'layout') {
         applyLayoutPatch(step.after);
       } else {
         if (step.code) {
@@ -313,6 +365,9 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     undo,
     redo,
     recordOverlay,
+    beforeCodeEdit,
+    recordCodeLayout,
+    parsed,
     recordOverlayCode,
     onLayoutChange,
     boxColorOf,
