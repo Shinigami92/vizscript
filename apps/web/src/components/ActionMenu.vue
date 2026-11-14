@@ -426,9 +426,10 @@ onMounted(async () => {
                   :class="{ 'text-zinc-500': row.entry.disabled }"
                   >{{ row.entry.label }}</span
                 >
+                <!-- Long types give way to the label; Details shows them whole. -->
                 <span
                   v-if="row.entry.hint"
-                  class="shrink-0 font-mono text-[11px] text-zinc-500"
+                  class="max-w-1/2 min-w-0 truncate font-mono text-[11px] text-zinc-500"
                   >{{ row.entry.hint }}</span
                 >
                 <button
