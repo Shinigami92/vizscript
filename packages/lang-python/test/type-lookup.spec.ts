@@ -118,4 +118,15 @@ describe('the Python type lookup', () => {
       doc.typeMembers?.['dict[str, float]']?.find((m) => m.name === 'get')?.type
     ).toBe('number');
   });
+
+  it('gives method calls a pin per parameter', () => {
+    const strip = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.title === 'word.strip');
+    expect(
+      strip?.pins
+        .filter((p) => p.direction === 'in' && p.kind === 'data')
+        .map((p) => [p.id, p.type, p.literal?.value])
+    ).toEqual([['param:chars', 'string', 'None']]);
+  });
 });

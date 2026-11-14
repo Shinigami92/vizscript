@@ -300,5 +300,8 @@ export function parsePythonDocument(
   inferTypes(doc);
   // Types followed through the file (`len(xs)` is an `int`, `print()`
   // returns `None`).
-  return applyTypes(doc, pythonTypes(text, body, options.imports));
+  return applyTypes(doc, pythonTypes(text, body, options.imports), {
+    text,
+    options: { placeholder: 'None', keywordArguments: true },
+  });
 }

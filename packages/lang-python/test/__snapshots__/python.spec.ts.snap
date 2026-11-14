@@ -10,7 +10,7 @@ exports[`parsePythonDocument > lowers the fixture 1`] = `
   #5 call "load" [<exec:▶ >then:▶ <arg0:string="cart.json" >return:Item[]]
   #6 setVar "Set total" [<exec:▶ >then:▶ <value:Item[] >out:Item[]]
   #7 getVar "total" [>value:Item[]]
-  #8 call "print" [<exec:▶ >then:▶ <arg0:string="Total:" <arg1:Item[]]
+  #8 call "print" [<exec:▶ >then:▶ <arg0:string="Total:" <arg1:Item[] <param:sep:string= <param:end:string=]
   ==> #0.then -> #1.exec
   --> #2.value -> #3.a
   --> #3.value -> #4.condition
@@ -68,12 +68,12 @@ function checkout
   #16 getProperty ".name" [<target:object >value:string]
   #17 call "total" [<exec:▶ >then:▶ <target:object >return:number]
   #18 template "Format Text" (f"{0}: {1}") [<part0:any <part1:any >value:string]
-  #19 call "print" [<exec:▶ >then:▶ <arg0:string]
+  #19 call "print" [<exec:▶ >then:▶ <arg0:string <param:sep:string= <param:end:string=]
   #20 try "Try" [<exec:▶ >try:▶ >except0:▶ >error0:any >finally:▶ >completed:▶]
   #21 getVar "subtotal" [>value:any]
   #22 call "notify" [<exec:▶ >then:▶ <arg0:any >return:any]
   #23 await "Await" [<exec:▶ >then:▶ <awaitable:any >result:any]
-  #24 call "print" [<exec:▶ >then:▶ <arg0:string="offline" <arg1:any <arg2:string=" - "]
+  #24 call "print" [<exec:▶ >then:▶ <arg0:string="offline" <arg1:any <arg2:string=" - " <param:end:string=]
   #25 getVar "subtotal" [>value:any]
   #26 call "len" [<exec:▶ >then:▶ <arg0:Item[] >return:number]
   #27 makeObject "Make Dict" [<p0:any <p1:any >value:object]

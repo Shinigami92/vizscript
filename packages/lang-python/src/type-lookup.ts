@@ -1,6 +1,7 @@
 import type {
   ImportedDeclaration,
   ScriptSymbol,
+  SymbolParam,
   TypeInfo,
   TypeMap,
 } from '@vizscript/core';
@@ -20,6 +21,7 @@ import {
   builtinMembers,
   callableOf,
   pythonBuiltins,
+  signatureOf,
   sliceOf,
   substitute,
 } from './builtin-types';
@@ -81,6 +83,15 @@ interface Member {
   kind: 'value' | 'method';
   type: string | undefined;
   isAsync?: boolean;
+  /** Parameters of a method. */
+  params?: ReadonlyArray<SymbolParam>;
+}
+
+/** What a call gives, and the parameters of what it calls. */
+interface CallResult {
+  type: string | undefined;
+  isAsync?: boolean;
+  params?: ReadonlyArray<SymbolParam>;
 }
 
 /**
@@ -97,6 +108,8 @@ class TypeLookup {
   /** Module-level functions. */
   private readonly functions = new Map<string, Callable>();
   private readonly imports = new Map<string, ImportedDeclaration>();
+  /** Parameters of what calls reach, by the call's range. */
+  public readonly signatures = new Map<string, ReadonlyArray<SymbolParam>>();
   /** Calls of `async def` functions: what awaiting them gives. */
   private readonly awaited = new Map<string, string>();
 
@@ -467,6 +480,7 @@ class TypeLookup {
           kind: 'method',
           type: this.result(method, own.name),
           isAsync: method.isAsync,
+          params: signatureOf(method),
         };
       }
 
@@ -491,6 +505,7 @@ class TypeLookup {
     return {
       kind: 'method',
       type: method.returns ? substitute(method.returns, args) : undefined,
+      params: signatureOf(method, args),
     };
   }
 
@@ -720,6 +735,10 @@ class TypeLookup {
     const callee = unwrap(expr.callee);
     const args = expr.args.map((arg) => this.infer(arg.value, scope));
     const result = this.callResult(callee, expr.args, args, scope);
+    if (result?.params && result.params.length > 0) {
+      this.signatures.set(rangeKey(expr), result.params);
+    }
+
     if (result?.isAsync) {
       if (result.type !== undefined) {
         this.awaited.set(rangeKey(expr), result.type);
@@ -736,7 +755,7 @@ class TypeLookup {
     argExprs: ReadonlyArray<Arg>,
     args: ReadonlyArray<string | undefined>,
     scope: Scope
-  ): { type: string | undefined; isAsync?: boolean } | undefined {
+  ): CallResult | undefined {
     if (callee.type === 'Attribute') {
       const object = this.infer(callee.object, scope);
       if (object === undefined) {
@@ -748,16 +767,14 @@ class TypeLookup {
         const member = declaration
           ? this.importedMember(declaration, callee.name)
           : undefined;
-        return { type: this.importedCall(member) };
+        return { type: this.importedCall(member), params: member?.params };
       }
 
       const cls = object.startsWith(CLASS)
         ? object.slice(CLASS.length)
         : undefined;
       const member = this.member(cls ?? object, callee.name);
-      return member?.kind === 'method'
-        ? { type: member.type, isAsync: member.isAsync }
-        : undefined;
+      return member?.kind === 'method' ? member : undefined;
     }
 
     if (callee.type !== 'Name') {
@@ -769,18 +786,28 @@ class TypeLookup {
     const local = scope.find(name);
     if (local) {
       if (local.type?.startsWith(CLASS)) {
-        return { type: local.type.slice(CLASS.length) };
+        // A class of the file: its `__init__` takes the arguments.
+        const cls = local.type.slice(CLASS.length);
+        const init = this.member(cls, '__init__');
+        return { type: cls, params: init?.params };
       }
 
       const fn = this.functions.get(name);
       return fn && local.type === 'Callable'
-        ? { type: this.result(fn), isAsync: fn.isAsync }
+        ? {
+            type: this.result(fn),
+            isAsync: fn.isAsync,
+            params: signatureOf(fn),
+          }
         : undefined;
     }
 
     const imported = this.imports.get(name);
     if (imported) {
-      return { type: this.importedCall(imported.declaration) };
+      return {
+        type: this.importedCall(imported.declaration),
+        params: imported.declaration?.params,
+      };
     }
 
     if (GENERIC_CALLS.has(name)) {
@@ -789,7 +816,7 @@ class TypeLookup {
 
     const builtin = pythonBuiltins().functions.get(name);
     if (builtin) {
-      return { type: normalize(builtin.returns) };
+      return { type: normalize(builtin.returns), params: signatureOf(builtin) };
     }
 
     // Built-in exceptions (`ValueError("…")`).
@@ -904,16 +931,16 @@ export function pythonTypes(
   imports: ReadonlyArray<ImportedDeclaration> = []
 ): TypeMap {
   const types = new Map<string, TypeInfo>();
-  let found: ReadonlyMap<string, string>;
+  let lookup: TypeLookup;
   try {
-    found = new TypeLookup(text, body, imports).types;
+    lookup = new TypeLookup(text, body, imports);
   } catch {
     // Code the parser recovered from in an unexpected shape: the graph
     // keeps the parser's types.
     return types;
   }
 
-  for (const [key, type] of found) {
+  for (const [key, type] of lookup.types) {
     if (type.startsWith(CLASS) || type.startsWith(MODULE) || VAGUE.has(type)) {
       continue;
     }
@@ -923,6 +950,15 @@ export function pythonTypes(
       text: type,
       dataType: dataTypeOf(type),
       ...(members ? { members } : {}),
+    });
+  }
+
+  // Calls: the parameters of what they call, also when the result is
+  // unknown (`any` keeps the parser's type).
+  for (const [key, signature] of lookup.signatures) {
+    types.set(key, {
+      ...(types.get(key) ?? { text: 'Any', dataType: 'any' }),
+      signature,
     });
   }
 
