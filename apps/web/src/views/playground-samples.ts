@@ -14,7 +14,7 @@ const user: string = "Jane User";
 
 const textContent: string = greeter(user);
 
-console.log(greeter(user));
+console.log(textContent);
 `,
   },
   {
