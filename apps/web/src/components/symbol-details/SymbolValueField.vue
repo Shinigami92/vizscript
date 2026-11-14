@@ -5,7 +5,7 @@ import type {
   TypeSystemInfo,
   ValueKind,
 } from '@vizscript/core';
-import { fieldValue } from '@vizscript/core';
+import { fieldValue, isConstantValue } from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
 import ValueFields from '../ValueFields.vue';
 
@@ -23,6 +23,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   op: [op: GraphOp];
+  /** Select the SET node that computes the value. */
+  showNode: [];
 }>();
 
 const isVariable = computed(() =>
@@ -143,6 +145,20 @@ const fields = computed(() =>
     : undefined
 );
 
+/**
+ * A value computed when the code runs (`greeter(user)`), not a constant
+ * like UE's Default Value: the graph computes it, so it is shown, not
+ * edited here.
+ */
+const computedValue = computed(
+  () =>
+    isVariable.value &&
+    valueKind.value === 'expression' &&
+    placeholderValue.value === '' &&
+    fields.value === undefined &&
+    !isConstantValue(valueCode.value)
+);
+
 function setExpression(written: string): void {
   emit('op', {
     type: 'setSymbolValue',
@@ -190,10 +206,21 @@ function resetValue(): void {
 
 <template>
   <dt class="pt-1 text-zinc-500">
-    {{ symbol.kind === 'local' ? 'Value' : 'Default value' }}
+    {{ symbol.kind === 'local' || computedValue ? 'Value' : 'Default value' }}
   </dt>
   <dd class="flex min-w-0 items-center gap-1">
-    <template v-if="!editable">
+    <template v-if="computedValue">
+      <button
+        type="button"
+        class="link min-w-0 truncate px-1.5 text-left font-mono"
+        :title="`${valueCode}\nComputed in the graph: show its SET node`"
+        @click="emit('showNode')"
+      >
+        {{ valueCode }}
+      </button>
+      <span class="shrink-0 text-[11px] text-zinc-500">in graph</span>
+    </template>
+    <template v-else-if="!editable">
       <span class="truncate px-1.5 font-mono text-zinc-200">{{
         valueCode || '—'
       }}</span>
@@ -235,7 +262,12 @@ function resetValue(): void {
       @blur="commitValue"
     />
     <button
-      v-if="editable && symbol.defaultRange"
+      v-if="
+        editable &&
+        symbol.defaultRange &&
+        !computedValue &&
+        symbol.kind !== 'constant'
+      "
       type="button"
       class="btn-ghost shrink-0 px-1"
       title="Remove the value"
@@ -245,7 +277,7 @@ function resetValue(): void {
       <span class="i-mdi-close" />
     </button>
     <button
-      v-if="editable && valueChanged"
+      v-if="editable && valueChanged && !computedValue"
       type="button"
       class="btn-ghost shrink-0 px-1 text-amber-400"
       :title="`Reset to the saved value (${base?.value ?? 'none'})`"

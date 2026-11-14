@@ -6,7 +6,7 @@ import type {
   SourceRange,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { pinColor } from '@vizscript/core';
+import { declaringNode, pinColor } from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
 import { lineColumn, snippet } from '../graph/source';
@@ -61,7 +61,16 @@ const emit = defineEmits<{
   /** Open the file of an import at the imported name. */
   openImport: [];
   op: [op: GraphOp];
+  select: [ids: string[]];
 }>();
+
+/** Selects the SET node that computes the variable's value. */
+function showValueNode(): void {
+  const node = props.doc ? declaringNode(props.doc, props.symbol) : undefined;
+  if (node) {
+    emit('select', [node.id]);
+  }
+}
 
 const { scheme } = useTheme();
 const type = computed(() => symbolType(props.symbol));
@@ -481,6 +490,7 @@ function setModifier(modifier: string, enabled: boolean): void {
           :symbols="symbols"
           :base="base"
           @op="emit('op', $event)"
+          @show-node="showValueNode"
         />
         <template v-if="modifierOptions?.keywords">
           <dt class="pt-1 text-zinc-500">Declaration</dt>

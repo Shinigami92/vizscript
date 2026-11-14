@@ -13,7 +13,10 @@ import {
   ASSIGN_OPERATORS,
   CATEGORY_COLORS,
   COMMENT_BOX_COLORS,
+  declaringNode,
+  fieldValue,
   getMeta,
+  isConstantValue,
 } from '@vizscript/core';
 import { computed, provide, ref } from 'vue';
 import { indexDocument, pinPeers } from '../graph/doc-index';
@@ -287,13 +290,32 @@ const defaults = computed(() => {
         (s.kind === 'variable' || s.kind === 'constant') &&
         s.defaultRange
     )
-    .map((symbol) => ({
-      symbol,
-      value: symbol.defaultRange
+    .map((symbol) => {
+      const value = symbol.defaultRange
         ? code.slice(symbol.defaultRange.start, symbol.defaultRange.end)
-        : '',
-    }));
+        : '';
+      // Computed values (`greeter(user)`) are no defaults to edit: the
+      // graph computes them, like a SET node in UE.
+      const computedBy =
+        props.doc && !isConstantValue(value) && !fieldValueOf(symbol, value)
+          ? declaringNode(props.doc, symbol)?.id
+          : undefined;
+      return { symbol, value, computedBy };
+    });
 });
+
+/** Vector, color and enum values have fields: they are constants too. */
+function fieldValueOf(symbol: ScriptSymbol, value: string): boolean {
+  return (
+    fieldValue(
+      value.trim(),
+      symbol.type?.text ?? String(symbol.dataType),
+      props.types ?? null,
+      props.doc?.symbols ?? [],
+      props.docText ?? props.text
+    ) !== undefined
+  );
+}
 
 function setDefault(symbol: ScriptSymbol, before: string, value: string): void {
   if (value.trim() && value.trim() !== before.trim()) {
@@ -454,6 +476,7 @@ function deleteSelection(): void {
         :language="doc?.language ?? ''"
         :import-path="shownImportPath"
         @reveal="(range) => emit('reveal', range)"
+        @select="(ids) => emit('select', ids)"
         @op="onSymbolOp"
         @open="emit('openSymbol', shownSymbol.id)"
         @open-import="emit('openImport', shownSymbol.id)"
@@ -476,6 +499,7 @@ function deleteSelection(): void {
             :language="doc?.language ?? ''"
             compact
             @reveal="(range) => emit('reveal', range)"
+            @select="(ids) => emit('select', ids)"
             @op="onSymbolOp"
           />
           <h3 class="section-title border-b border-zinc-800/80 pt-3">Node</h3>
@@ -780,7 +804,21 @@ function deleteSelection(): void {
                   {{ variable.symbol.name }}
                 </button>
               </dt>
-              <dd class="flex items-center gap-1">
+              <dd
+                v-if="variable.computedBy"
+                class="flex min-w-0 items-center gap-1"
+              >
+                <button
+                  type="button"
+                  class="link min-w-0 truncate px-1.5 text-left font-mono"
+                  :title="`${variable.value}\nComputed in the graph: show its SET node`"
+                  @click="emit('select', [variable.computedBy])"
+                >
+                  {{ variable.value }}
+                </button>
+                <span class="shrink-0 text-[11px] text-zinc-500">in graph</span>
+              </dd>
+              <dd v-else class="flex items-center gap-1">
                 <input
                   :key="`${variable.symbol.id}:${variable.value}`"
                   class="input py-1 font-mono text-xs"
