@@ -8,6 +8,7 @@ import type {
   SourceRange,
 } from '@vizscript/core';
 import {
+  applyTypes,
   attachComments,
   completeCallPins,
   functionIdCounter,
@@ -28,6 +29,7 @@ import type {
 import { dataTypeOf, isDeclarationOnly, rangeOf, unwrap } from './lower-utils';
 import { StatementLowering } from './statement-lowering';
 import { pythonSymbols } from './symbols';
+import { pythonTypes } from './type-lookup';
 
 export const LANGUAGE_ID = 'python';
 
@@ -296,5 +298,7 @@ export function parsePythonDocument(
     imports: options.imports,
   });
   inferTypes(doc);
-  return doc;
+  // Types followed through the file (`len(xs)` is an `int`, `print()`
+  // returns `None`).
+  return applyTypes(doc, pythonTypes(text, body, options.imports));
 }

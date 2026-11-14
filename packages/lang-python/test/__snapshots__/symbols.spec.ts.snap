@@ -14,6 +14,6 @@ local load::fh
 local load::data = …
 function checkout(items: list[Item], coupon: str | None = …): float [async] → checkout
 local checkout::subtotal = …
-local checkout::item
+local checkout::item ~Item
 local checkout::log ~object = …"
 `;

@@ -47,14 +47,14 @@ describe('pythonSymbols', () => {
         class Cart ~Cart → Cart
         variable Cart::count: int = …
         method Cart::__init__(owner: str) → Cart.__init__
-        variable Cart::owner = … [self.]
+        variable Cart::owner ~string = … [self.]
         variable Cart::items: list[str] = … [self.]
         method Cart::create(...args, ...kwargs): "Cart" [@staticmethod] → Cart.create
         local Cart.create::total ~number = …
         local Cart.create::item
         local Cart.create::seen ~bool = …
-        local Cart.create::a
-        local Cart.create::b
+        local Cart.create::a ~number
+        local Cart.create::b ~number
         function load(path, retries = …) [async] → load"
       `);
   });

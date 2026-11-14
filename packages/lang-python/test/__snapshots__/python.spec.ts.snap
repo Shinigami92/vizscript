@@ -4,13 +4,13 @@ exports[`parsePythonDocument > lowers the fixture 1`] = `
 "function Module
   #0 entry "Module" (shop.py) [>then:▶]
   #1 setVar "Set TAX" [<exec:▶ >then:▶ <value:number=0.19 >out:number]
-  #2 getVar "__name__" [>value:any]
+  #2 getVar "__name__" [>value:string]
   #3 operator "==" [<a:any <b:string="__main__" >value:bool]
   #4 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
   #5 call "load" [<exec:▶ >then:▶ <arg0:string="cart.json" >return:Item[]]
   #6 setVar "Set total" [<exec:▶ >then:▶ <value:Item[] >out:Item[]]
   #7 getVar "total" [>value:Item[]]
-  #8 call "print" [<exec:▶ >then:▶ <arg0:string="Total:" <arg1:Item[] >return:any]
+  #8 call "print" [<exec:▶ >then:▶ <arg0:string="Total:" <arg1:Item[]]
   ==> #0.then -> #1.exec
   --> #2.value -> #3.a
   --> #3.value -> #4.condition
@@ -58,31 +58,31 @@ function checkout
   #6 setVar "Set subtotal" (*=) [<exec:▶ >then:▶ <value:number=0.5 >out:number]
   #7 branch "Branch" (elif) [<exec:▶ <condition:bool >true:▶ >false:▶]
   #8 template "Format Text" (f"unknown coupon {0}") [<part0:string >value:string]
-  #9 call "ValueError" [<exec:▶ >then:▶ <arg0:string >return:any]
+  #9 call "ValueError" [<exec:▶ >then:▶ <arg0:string >return:ValueError]
   #10 throw "Raise" [<exec:▶ <error:any]
   #11 forEach "For Each" [<exec:▶ <array:Item[] >body:▶ >element:Item >completed:▶]
-  #12 getProperty ".quantity" [<target:object >value:any]
+  #12 getProperty ".quantity" [<target:object >value:number]
   #13 operator "<=" [<a:any <b:number=0 >value:bool]
   #14 branch "Branch" [<exec:▶ <condition:bool >true:▶ >false:▶ >completed:▶]
   #15 continue "Continue" [<exec:▶]
-  #16 getProperty ".name" [<target:object >value:any]
-  #17 call "total" [<exec:▶ >then:▶ <target:object >return:any]
+  #16 getProperty ".name" [<target:object >value:string]
+  #17 call "total" [<exec:▶ >then:▶ <target:object >return:number]
   #18 template "Format Text" (f"{0}: {1}") [<part0:any <part1:any >value:string]
-  #19 call "print" [<exec:▶ >then:▶ <arg0:string >return:any]
+  #19 call "print" [<exec:▶ >then:▶ <arg0:string]
   #20 try "Try" [<exec:▶ >try:▶ >except0:▶ >error0:any >finally:▶ >completed:▶]
   #21 getVar "subtotal" [>value:any]
   #22 call "notify" [<exec:▶ >then:▶ <arg0:any >return:any]
   #23 await "Await" [<exec:▶ >then:▶ <awaitable:any >result:any]
-  #24 call "print" [<exec:▶ >then:▶ <arg0:string="offline" <arg1:any <arg2:string=" - " >return:any]
+  #24 call "print" [<exec:▶ >then:▶ <arg0:string="offline" <arg1:any <arg2:string=" - "]
   #25 getVar "subtotal" [>value:any]
-  #26 call "len" [<exec:▶ >then:▶ <arg0:Item[] >return:any]
+  #26 call "len" [<exec:▶ >then:▶ <arg0:Item[] >return:number]
   #27 makeObject "Make Dict" [<p0:any <p1:any >value:object]
   #28 setVar "Set log" [<exec:▶ >then:▶ <value:object >out:object]
   #29 getVar "subtotal" [>value:any]
   #30 getVar "TAX" [>value:number]
   #31 operator "+" [<a:number=1 <b:number >value:number]
   #32 operator "*" [<a:any <b:number >value:any]
-  #33 call "round" [<exec:▶ >then:▶ <arg0:any <arg1:number=2 >return:any]
+  #33 call "round" [<exec:▶ >then:▶ <arg0:any <arg1:number=2 >return:number]
   #34 return "Return" [<exec:▶ <value:number]
   --> #0.param0 -> #1.source0
   --> #1.value -> #2.arg0
@@ -136,9 +136,9 @@ function checkout
   ==> #33.then -> #34.exec
 function Item.total
   #0 entry "Item.total" (method) [>then:▶ >param0:Item]
-  #1 getVar "self.price" [>value:any]
-  #2 getVar "self.quantity" [>value:any]
-  #3 operator "*" [<a:any <b:any >value:any]
+  #1 getVar "self.price" [>value:number]
+  #2 getVar "self.quantity" [>value:number]
+  #3 operator "*" [<a:any <b:any >value:number]
   #4 return "Return" [<exec:▶ <value:number]
   --> #1.value -> #3.a
   --> #2.value -> #3.b
