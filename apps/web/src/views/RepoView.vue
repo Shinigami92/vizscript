@@ -554,7 +554,6 @@ function switchBranch(event: Event): void {
         <span class="truncate text-sm text-zinc-400"
           >{{ owner }}/{{ repo }}</span
         >
-        <RepoAccessHint :shared="null" />
         <div class="ml-auto">
           <LayoutMenu />
         </div>

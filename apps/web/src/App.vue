@@ -34,6 +34,13 @@ const crumbs = computed(() => {
   return { owner: String(route.params.owner), repo: String(route.params.repo) };
 });
 
+/** What signing in adds, on the Sign in button. */
+const SIGN_IN_TITLE = [
+  "Signed out: public repositories only, with GitHub's limit for signed-out use (see the status bar).",
+  'Your node moves, recent repositories and unsaved changes are kept in this browser only.',
+  'Sign in to open private repositories and share layouts on repositories you can push to.',
+].join('\n');
+
 async function logout(): Promise<void> {
   await session.logout();
   await router.push({ name: 'login' });
@@ -128,8 +135,10 @@ async function logout(): Promise<void> {
         </template>
         <RouterLink
           v-else-if="route.name !== 'login'"
-          to="/login"
+          data-ui="sign-in"
+          :to="{ name: 'login', query: { redirect: route.fullPath } }"
           class="btn-primary"
+          :title="SIGN_IN_TITLE"
           >Sign in</RouterLink
         >
       </div>
