@@ -1,9 +1,39 @@
 import type { StatementMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
-import type { GraphDocument } from './ir';
+import type { GraphDocument, GraphNode } from './ir';
+import type { ScriptSymbol } from './symbols';
 import { typeWildcardPins } from './wildcard-pins';
 
 const VARIABLE_KINDS = new Set(['variable', 'constant', 'local']);
+
+/**
+ * The SET node that declares a variable with its value (`const x = …`):
+ * where the graph computes it.
+ */
+export function declaringNode(
+  doc: GraphDocument,
+  symbol: ScriptSymbol
+): GraphNode | undefined {
+  const at = symbol.nameRange.start;
+  for (const fn of doc.functions) {
+    for (const node of fn.nodes) {
+      const declares = node.meta?.declares;
+      const stmt = getMeta<StatementMeta>(node).stmt ?? node.range;
+      if (
+        node.kind === 'setVar' &&
+        Array.isArray(declares) &&
+        declares.length === 1 &&
+        declares[0] === symbol.name &&
+        stmt.start <= at &&
+        at < stmt.end
+      ) {
+        return node;
+      }
+    }
+  }
+
+  return undefined;
+}
 
 /**
  * Types known from elsewhere in the graph, after the call pins are complete:
@@ -44,9 +74,6 @@ export function inferTypes(doc: GraphDocument): void {
     }
   }
 
-  const declarations = doc.functions.flatMap((f) =>
-    f.nodes.filter((n) => n.kind === 'setVar')
-  );
   for (const symbol of symbols) {
     if (
       !VARIABLE_KINDS.has(symbol.kind) ||
@@ -56,18 +83,7 @@ export function inferTypes(doc: GraphDocument): void {
       continue;
     }
 
-    const at = symbol.nameRange.start;
-    const node = declarations.find((n) => {
-      const declares = n.meta?.declares;
-      const stmt = getMeta<StatementMeta>(n).stmt ?? n.range;
-      return (
-        Array.isArray(declares) &&
-        declares.length === 1 &&
-        declares[0] === symbol.name &&
-        stmt.start <= at &&
-        at < stmt.end
-      );
-    });
+    const node = declaringNode(doc, symbol);
     const type = node?.pins.find((p) => p.id === 'value')?.type;
     if (type !== undefined && type !== 'any' && type !== 'void') {
       symbol.dataType = type;
