@@ -21,6 +21,10 @@ export interface ViaWires {
   canvasDoc: ComputedRef<GraphDocument | null>;
   /** An op on a wire drawn from a SET acts on the Get it stands for. */
   throughVias: (op: GraphOp) => GraphOp;
+  /** Problems of hidden Gets go to the node their wire feeds. */
+  viaProblems: <T>(
+    problems: ReadonlyMap<string, ReadonlyArray<T>>
+  ) => ReadonlyMap<string, ReadonlyArray<T>>;
   /** Notes an op that wires a SET's output somewhere (before it runs). */
   beforeOp: (op: GraphOp, doc: GraphDocument | null) => void;
   /** The `~via|` entries of the Gets that op made (after the re-parse). */
@@ -98,6 +102,28 @@ export function useViaWires(deps: {
     return op;
   }
 
+  function viaProblems<T>(
+    problems: ReadonlyMap<string, ReadonlyArray<T>>
+  ): ReadonlyMap<string, ReadonlyArray<T>> {
+    const drawn = canvasDoc.value;
+    const edges = drawn
+      ? drawn.functions.flatMap((f) => f.edges).filter((e) => e.via)
+      : [];
+    if (edges.length === 0) {
+      return problems;
+    }
+
+    const result = new Map(problems);
+    for (const edge of edges) {
+      const own = edge.via ? problems.get(edge.via) : undefined;
+      if (own) {
+        result.set(edge.to.node, [...(result.get(edge.to.node) ?? []), ...own]);
+      }
+    }
+
+    return result;
+  }
+
   function beforeOp(op: GraphOp, doc: GraphDocument | null): void {
     pending = null;
     const source = sourceOf(op);
@@ -153,5 +179,5 @@ export function useViaWires(deps: {
     return patch;
   }
 
-  return { canvasDoc, throughVias, beforeOp, afterParse };
+  return { canvasDoc, throughVias, viaProblems, beforeOp, afterParse };
 }

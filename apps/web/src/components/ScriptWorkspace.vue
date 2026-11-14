@@ -301,10 +301,11 @@ const {
   hiddenFunctionOf,
   followRename,
 } = useFocusMode({ stateKey: () => props.stateKey, doc, canvas });
-const { canvasDoc, throughVias, beforeOp, afterParse } = useViaWires({
-  shownDoc,
-  pinned,
-});
+const { canvasDoc, throughVias, viaProblems, beforeOp, afterParse } =
+  useViaWires({
+    shownDoc,
+    pinned,
+  });
 const {
   selectedSymbol,
   onSelectionChange,
@@ -916,7 +917,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           :initial-camera="initialCamera"
           :definition-of="describeDefinition"
           :usages-of="usagesOf"
-          :problems="nodeProblems"
+          :problems="viaProblems(nodeProblems)"
           :sync-nodes="syncNodes"
           :imports="importedNames"
           :externals="externals"
