@@ -94,10 +94,40 @@ export function viaSetter(
 }
 
 /**
+ * A node and the pure nodes feeding it (`.ok` and `!` of `if
+ * (!response.ok)`): pure nodes are computed when the node runs.
+ */
+function withPureInputs(
+  fn: FunctionGraph,
+  ids: ReadonlySet<string>
+): Set<string> {
+  const nodes = new Map(fn.nodes.map((n) => [n.id, n]));
+  const result = new Set(ids);
+  const queue = [...ids];
+  for (let id = queue.pop(); id !== undefined; id = queue.pop()) {
+    for (const edge of fn.edges) {
+      const source = nodes.get(edge.from.node);
+      if (
+        edge.kind === 'data' &&
+        edge.to.node === id &&
+        source?.purity === 'pure' &&
+        !result.has(source.id)
+      ) {
+        result.add(source.id);
+        queue.push(source.id);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Gets drawn as wires without being remembered: those that feed the node
  * right after their variable's SET on the exec chain (`const cart = …;`
- * then `totalPrice(cart)`), as one would wire it in UE. Reads further away
- * stay Get nodes; the variable could have changed by then.
+ * then `totalPrice(cart)`, also through pure nodes: `if (!response.ok)`),
+ * as one would wire it in UE. Reads further away stay Get nodes; the
+ * variable could have changed by then.
  */
 export function adjacentVias(doc: GraphDocument): Set<string> {
   const result = new Set<string>();
@@ -113,10 +143,13 @@ export function adjacentVias(doc: GraphDocument): Set<string> {
       }
 
       const variable = setter.title.slice('Set '.length);
-      const next = new Set(
-        fn.edges
-          .filter((e) => e.kind === 'exec' && e.from.node === setter.id)
-          .map((e) => e.to.node)
+      const next = withPureInputs(
+        fn,
+        new Set(
+          fn.edges
+            .filter((e) => e.kind === 'exec' && e.from.node === setter.id)
+            .map((e) => e.to.node)
+        )
       );
       for (const edge of fn.edges) {
         const get = nodes.get(edge.from.node);

@@ -49,6 +49,14 @@ describe('wires from a SET (UE)', () => {
     expect(adjacentVias(doc)).toEqual(new Set([node(doc, 'cart').id]));
   });
 
+  it('draws a Get through pure nodes of the next node as a wire', () => {
+    const doc = parseTypeScript(
+      'async function f(): Promise<void> {\n  const response = await fetch("x");\n  if (!response.ok) {\n    return;\n  }\n}\n',
+      'a.ts'
+    );
+    expect(adjacentVias(doc)).toEqual(new Set([node(doc, 'response').id]));
+  });
+
   it('keeps reads after a loop that changes the variable', () => {
     const doc = parseTypeScript(
       'let total = 0;\nfor (const item of items) {\n  total += item;\n}\nlog(total);\n',
