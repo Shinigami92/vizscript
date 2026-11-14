@@ -385,25 +385,10 @@ function setModifier(modifier: string, enabled: boolean): void {
       </div>
     </div>
 
-    <!-- UE's Description: the doc comment above the declaration. -->
-    <div
-      v-if="description && !callback && (editable || description.text)"
-      data-ui="symbol-description"
-      class="border-b border-zinc-800/80 px-3 py-2"
+    <DetailsSection
+      id="symbol-general"
+      :title="isVariable ? 'Variable' : symbolLabel(symbol)"
     >
-      <textarea
-        :key="description.nodeId"
-        class="input min-h-12 resize-y text-xs"
-        :value="description.text"
-        :readonly="!editable"
-        placeholder="Description…"
-        :aria-label="`Description of ${symbol.name}`"
-        rows="2"
-        @change="commitDescription"
-      />
-    </div>
-
-    <DetailsSection id="symbol-general" :title="symbolLabel(symbol)">
       <dl class="grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1.5 px-3 text-xs">
         <template v-if="isImport">
           <dt class="text-zinc-500">Module</dt>
@@ -481,17 +466,24 @@ function setModifier(modifier: string, enabled: boolean): void {
             </button>
           </dd>
         </template>
-        <SymbolValueField
-          v-if="isVariable && !isValuelessField"
-          :symbol="symbol"
-          :text="text"
-          :editable="editable"
-          :types="types"
-          :symbols="symbols"
-          :base="base"
-          @op="emit('op', $event)"
-          @show-node="showValueNode"
-        />
+        <!-- UE's Tooltip: the doc comment above the declaration. -->
+        <template
+          v-if="description && !callback && (editable || description.text)"
+        >
+          <dt class="pt-1 text-zinc-500">Description</dt>
+          <dd data-ui="symbol-description" class="min-w-0">
+            <textarea
+              :key="description.nodeId"
+              class="input min-h-12 resize-y text-xs"
+              :value="description.text"
+              :readonly="!editable"
+              placeholder="Description…"
+              :aria-label="`Description of ${symbol.name}`"
+              rows="2"
+              @change="commitDescription"
+            />
+          </dd>
+        </template>
         <template v-if="modifierOptions?.keywords">
           <dt class="pt-1 text-zinc-500">Declaration</dt>
           <dd
@@ -653,6 +645,27 @@ function setModifier(modifier: string, enabled: boolean): void {
             <span v-if="uses > 0" class="text-zinc-500">(highlighted)</span>
           </dd>
         </template>
+      </dl>
+    </DetailsSection>
+
+    <!-- UE's Default Value: its own section, the row named after the
+         variable. -->
+    <DetailsSection
+      v-if="isVariable && !isValuelessField"
+      id="symbol-default"
+      title="Default Value"
+    >
+      <dl class="grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1.5 px-3 text-xs">
+        <SymbolValueField
+          :symbol="symbol"
+          :text="text"
+          :editable="editable"
+          :types="types"
+          :symbols="symbols"
+          :base="base"
+          @op="emit('op', $event)"
+          @show-node="showValueNode"
+        />
       </dl>
     </DetailsSection>
 

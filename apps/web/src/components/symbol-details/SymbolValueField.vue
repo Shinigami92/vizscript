@@ -205,8 +205,9 @@ function resetValue(): void {
 </script>
 
 <template>
-  <dt class="pt-1 text-zinc-500">
-    {{ symbol.kind === 'local' || computedValue ? 'Value' : 'Default value' }}
+  <!-- Named after the variable, like UE's Default Value rows. -->
+  <dt class="truncate pt-1 font-mono text-zinc-500" :title="symbol.name">
+    {{ symbol.name }}
   </dt>
   <dd class="flex min-w-0 items-center gap-1">
     <template v-if="computedValue">
