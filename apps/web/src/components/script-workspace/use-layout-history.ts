@@ -33,6 +33,8 @@ type HistoryStep =
       code?: boolean;
       /** Version of the code before the step wrote code (for redo). */
       beforeVersion?: number;
+      /** Layout entries made with the code it wrote (Gets kept as nodes). */
+      layout?: { before: LayoutPatch; after: LayoutPatch };
     };
 
 export interface EditorHistory {
@@ -184,6 +186,26 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
       before[key] = pinned.value[key] ?? null;
     }
 
+    // Graph-only edits that just wrote this code: the same undo step.
+    const top = undoStack.value.at(-1);
+    if (
+      top?.kind === 'overlay' &&
+      (!top.code || top.codeVersion === codeHistory.value.version)
+    ) {
+      undoStack.value = [
+        ...undoStack.value.slice(0, -1),
+        {
+          ...top,
+          layout: {
+            before: { ...before, ...top.layout?.before },
+            after: { ...top.layout?.after, ...after },
+          },
+        },
+      ];
+      applyLayoutPatch(after);
+      return;
+    }
+
     undoStack.value = [
       ...undoStack.value.slice(-199),
       {
@@ -253,6 +275,10 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
           deps.undoCode();
         }
       } else {
+        if (step.layout) {
+          applyLayoutPatch(step.layout.before);
+        }
+
         if (step.code) {
           deps.undoCode();
         }
@@ -283,6 +309,7 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
         applyLayoutPatch(step.after);
       } else {
         if (step.code) {
+          afterParse = step.layout?.after ?? null;
           deps.redoCode();
         }
 

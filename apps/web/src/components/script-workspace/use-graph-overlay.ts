@@ -47,6 +47,8 @@ export interface GraphOverlayDeps {
   positionOf: (id: string) => Point | undefined;
   /** Floating nodes with a checker's types (the copy they were made in). */
   typeFloating: (edit: FloatingNodes, text: string) => Promise<FloatingNodes>;
+  /** The graph-only edits are about to be written (`wrote`: new code). */
+  writing: (overlay: GraphOverlay, wrote: boolean) => void;
   /** Floating nodes were written as code: their nodes got these ids. */
   placed: (ids: Record<string, string>) => void;
   show: (message: string, kind?: 'info' | 'error') => void;
@@ -302,6 +304,8 @@ export function useGraphOverlay(
     }
 
     const wrote = result.text !== source;
+    deps.writing(current, wrote);
+
     if (result.placed) {
       deps.placed(result.placed);
     }

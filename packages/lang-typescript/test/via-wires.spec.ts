@@ -3,6 +3,7 @@ import {
   adjacentVias,
   foldVias,
   joinKey,
+  nodeKey,
   reconcileVias,
   viaGets,
   viaJoins,
@@ -106,6 +107,18 @@ describe('wires from a SET (UE)', () => {
       'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    if (item <= 0) {\n      continue;\n    }\n    total += item;\n  }\n  return total;\n}\n'
     );
     expect(adjacentVias(doc)).toEqual(new Set([node(doc, 'total').id]));
+  });
+
+  it('keeps a Get the user wired as its node', () => {
+    const doc = parse('const rate = 0.19;\nconst item = { price: rate };\n');
+    const read = node(doc, 'rate');
+    expect(adjacentVias(doc).has(read.id)).toBe(true);
+    const drawn = foldVias(
+      doc,
+      new Set(),
+      viaJoins({ [nodeKey(read.id)]: { x: 0, y: 0 } })
+    );
+    expect(drawn.functions[0]?.nodes.some((n) => n.id === read.id)).toBe(true);
   });
 
   it('keeps reads after a loop with two SETs of the variable', () => {

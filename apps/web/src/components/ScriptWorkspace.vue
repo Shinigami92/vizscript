@@ -288,6 +288,12 @@ const {
 
       movePinned(moved);
     },
+    writing: (written, wrote) => {
+      const kept = keepWired(written, wrote);
+      if (Object.keys(kept).length > 0) {
+        recordCodeLayout(kept);
+      }
+    },
     show,
   },
   props.overlay
@@ -342,9 +348,10 @@ const {
   hiddenFunctionOf,
   followRename,
 } = useFocusMode({ stateKey: () => props.stateKey, doc, canvas });
-const { canvasDoc, throughVias, viaProblems, beforeOp, afterParse } =
+const { canvasDoc, throughVias, viaProblems, keepWired, beforeOp, afterParse } =
   useViaWires({
     shownDoc,
+    parsedDoc,
     pinned,
   });
 const {

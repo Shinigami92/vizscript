@@ -36,6 +36,14 @@ export function joinKey(getId: string, hostId: string): string {
   return `${VIA_PREFIX}${getId}|${hostId}`;
 }
 
+/**
+ * A Get the user wired from, kept as its node even where the graph would
+ * draw it as a wire from its SET (a join to itself).
+ */
+export function nodeKey(getId: string): string {
+  return joinKey(getId, getId);
+}
+
 /** The ids of a `~via|` key: the hidden Get and its host Get, if any. */
 function parseViaKey(key: string): { get: string; host?: string } {
   const [get = '', host] = key.slice(VIA_PREFIX.length).split('|');
@@ -278,7 +286,11 @@ export function foldVias(
     // Hidden Get → the output its wires are drawn from.
     const hidden = new Map<string, PinRef>();
     for (const node of fn.nodes) {
-      const setter = gets.has(node.id) ? viaSetter(fn, node) : undefined;
+      // A Get the user wired (joined, or kept as its node) stays so.
+      const setter =
+        gets.has(node.id) && !joins.has(node.id)
+          ? viaSetter(fn, node)
+          : undefined;
       if (setter) {
         hidden.set(node.id, { node: setter.id, pin: 'out' });
       }
@@ -286,6 +298,10 @@ export function foldVias(
 
     const nodes = new Map(fn.nodes.map((n) => [n.id, n]));
     for (const [id, hostId] of joins) {
+      if (id === hostId) {
+        continue;
+      }
+
       const get = nodes.get(id);
       const host = nodes.get(hostId);
       const out = host?.pins.find((p) => p.direction === 'out');
@@ -295,7 +311,7 @@ export function foldVias(
         host.title === get.title &&
         out &&
         !hidden.has(id) &&
-        !joins.has(hostId)
+        (joins.get(hostId) ?? hostId) === hostId
       ) {
         // A host drawn from its SET draws the joined wires from there too.
         hidden.set(id, hidden.get(hostId) ?? { node: hostId, pin: out.id });

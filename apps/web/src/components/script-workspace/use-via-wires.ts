@@ -1,7 +1,9 @@
 import type {
   GraphDocument,
   GraphOp,
+  GraphOverlay,
   PinRef,
+  Point,
   Positions,
   TextChange,
 } from '@vizscript/core';
@@ -10,6 +12,7 @@ import {
   findNode,
   foldVias,
   joinKey,
+  nodeKey,
   renamedNodes,
   viaGets,
   viaJoins,
@@ -28,6 +31,12 @@ export interface ViaWires {
   viaProblems: <T>(
     problems: ReadonlyMap<string, ReadonlyArray<T>>
   ) => ReadonlyMap<string, ReadonlyArray<T>>;
+  /**
+   * Graph-only edits are written as code: Gets wired by them stay nodes,
+   * not wires from their SET. The entries once the code is parsed, or now
+   * when the code stays the same (`wrote` false).
+   */
+  keepWired: (overlay: GraphOverlay, wrote: boolean) => Positions;
   /** Notes an op that wires a SET's output somewhere (before it runs). */
   beforeOp: (op: GraphOp, doc: GraphDocument | null) => void;
   /** The `~via|` entries of the Gets that op made (after the re-parse). */
@@ -84,6 +93,44 @@ function stillDrawn(
   return patch;
 }
 
+/**
+ * `~via|` entries keeping the Gets that feed these inputs as nodes where
+ * the graph would draw them as wires from their SET.
+ */
+function keptGets(
+  next: GraphDocument,
+  inputs: ReadonlyArray<WiredGet>,
+  rename: ReadonlyMap<string, string>
+): Positions {
+  if (inputs.length === 0) {
+    return {};
+  }
+
+  const adjacent = adjacentVias(next);
+  const patch: Positions = {};
+  for (const { input, at } of inputs) {
+    const node = rename.get(input.node) ?? input.node;
+    const source = next.functions
+      .flatMap((f) => f.edges)
+      .find((e) => e.to.node === node && e.to.pin === input.pin)?.from.node;
+    if (source && adjacent.has(source)) {
+      patch[nodeKey(source)] = { x: 0, y: 0 };
+      // Where the Get was dropped (its read had no place of its own).
+      if (at) {
+        patch[source] = at;
+      }
+    }
+  }
+
+  return patch;
+}
+
+/** A Get of graph-only edits wired into an input, and where it was. */
+interface WiredGet {
+  input: PinRef;
+  at: Point | undefined;
+}
+
 /** The Gets of a variable. */
 function readsOf(doc: GraphDocument, variable: string): Set<string> {
   return new Set(
@@ -101,6 +148,8 @@ function readsOf(doc: GraphDocument, variable: string): Set<string> {
  */
 export function useViaWires(deps: {
   shownDoc: ComputedRef<GraphDocument | null>;
+  /** The graph of the code alone (no graph-only edits). */
+  parsedDoc: Readonly<ShallowRef<GraphDocument | null>>;
   pinned: ShallowRef<Positions>;
 }): ViaWires {
   const canvasDoc = computed(() => {
@@ -155,6 +204,15 @@ export function useViaWires(deps: {
         : op;
     }
 
+    // Wired over a wire drawn in place of a Get: that read goes (it was
+    // a wire, not a node to keep).
+    if (op.type === 'connect') {
+      const into = vias.find(
+        (e) => e.to.node === op.to.node && e.to.pin === op.to.pin
+      );
+      return into ? { ...op, drop: true } : op;
+    }
+
     // A deleted Get takes the reads joined into it along (its wires).
     if (op.type === 'deleteNodes') {
       const joined = vias
@@ -206,6 +264,27 @@ export function useViaWires(deps: {
    * graph around them does.
    */
   let drawnBefore: Set<string> | null = null;
+  /** Inputs a Get was wired into by graph-only edits just written. */
+  let wiredInputs: WiredGet[] = [];
+
+  function keepWired(overlay: GraphOverlay, wrote: boolean): Positions {
+    const shown = deps.shownDoc.value;
+    const inputs = overlay.edits.flatMap((e) =>
+      e.type === 'addEdge' &&
+      e.kind === 'data' &&
+      shown &&
+      findNode(shown, e.from.node)?.kind === 'getVar'
+        ? [{ input: e.to, at: deps.pinned.value[e.from.node] }]
+        : []
+    );
+    const parsed = deps.parsedDoc.value;
+    if (wrote || !parsed) {
+      wiredInputs = inputs;
+      return {};
+    }
+
+    return keptGets(parsed, inputs, new Map());
+  }
 
   function beforeOp(op: GraphOp, doc: GraphDocument | null): void {
     pending = null;
@@ -262,14 +341,19 @@ export function useViaWires(deps: {
   ): Positions {
     const wired = pending;
     const drawn = drawnBefore;
+    const inputs = wiredInputs;
     pending = null;
     drawnBefore = null;
-    if (!previous || (!wired && !drawn)) {
+    wiredInputs = [];
+    if (!previous || (!wired && !drawn && inputs.length === 0)) {
       return {};
     }
 
     const rename = renamedNodes(previous, next, change);
-    const patch: Positions = drawn ? stillDrawn(next, drawn, rename) : {};
+    const patch: Positions = {
+      ...keptGets(next, inputs, rename),
+      ...(drawn ? stillDrawn(next, drawn, rename) : {}),
+    };
     if (!wired) {
       return patch;
     }
@@ -278,6 +362,8 @@ export function useViaWires(deps: {
     const host = wired.host
       ? (rename.get(wired.host) ?? wired.host)
       : undefined;
+    // The Get wired from stays the node it is (not a wire from its SET).
+    const keep = host !== undefined && adjacentVias(next).has(host);
     for (const fn of next.functions) {
       for (const node of fn.nodes) {
         if (
@@ -297,8 +383,19 @@ export function useViaWires(deps: {
       }
     }
 
+    if (host && keep) {
+      patch[nodeKey(host)] = { x: 0, y: 0 };
+    }
+
     return patch;
   }
 
-  return { canvasDoc, throughVias, viaProblems, beforeOp, afterParse };
+  return {
+    canvasDoc,
+    throughVias,
+    viaProblems,
+    keepWired,
+    beforeOp,
+    afterParse,
+  };
 }
