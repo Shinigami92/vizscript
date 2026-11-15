@@ -396,6 +396,11 @@ export interface TypeSystemInfo {
    */
   globals?: ReadonlyArray<string>;
   /**
+   * Built-in classes made with `new` (`Error`, `Map`): the action menu's
+   * Construct entries, one node each (`new Error()`, UE's Construct).
+   */
+  constructors?: ReadonlyArray<string>;
+  /**
    * Operators and values of the action menu (UE: `+`, Make Literal String,
    * Select, Make Array …). `$1`, `$2` … are their inputs.
    */

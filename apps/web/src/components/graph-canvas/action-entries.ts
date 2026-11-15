@@ -60,13 +60,24 @@ export function createActionEntries(
   const index = ctx.index;
   const callables = ctx.callables;
   const externalNames = ctx.externalNames;
-  /** `new X()` of classes this file imports already (TypeScript). */
-  const importedClasses = (): string[] =>
-    props.doc?.language === 'typescript'
-      ? (props.doc.symbols ?? [])
-          .filter((s) => s.kind === 'import' && s.importedKind === 'class')
-          .map((s) => `new ${s.name}()`)
-      : [];
+  /**
+   * `new X()` of classes this file imports already (TypeScript) and of the
+   * language's built-in classes (`new Error()`): one node each.
+   */
+  const constructable = (): Array<{ name: string; global: boolean }> => {
+    const imported =
+      props.doc?.language === 'typescript'
+        ? (props.doc.symbols ?? [])
+            .filter((s) => s.kind === 'import' && s.importedKind === 'class')
+            .map((s) => s.name)
+        : [];
+    return [
+      ...imported.map((name) => ({ name, global: false })),
+      ...(props.types?.constructors ?? [])
+        .filter((name) => !imported.includes(name))
+        .map((name) => ({ name, global: true })),
+    ];
+  };
   const signatureOf = (callee: string): ReturnType<typeof callSignature> =>
     callSignature(props.doc, props.text, callee);
   const fill = (
@@ -279,12 +290,14 @@ export function createActionEntries(
         detail: signatureOf(callee).detail,
         action: () => addNode({ type: 'call', callee }, state),
       })),
-      ...importedClasses().map((expression): ActionEntry => ({
-        label: expression,
+      ...constructable().map(({ name, global }): ActionEntry => ({
+        label: `new ${name}()`,
         category: 'Construct',
         icon: ICON_CALL,
-        keywords: 'new construct create',
-        action: () => addNode({ type: 'value', expression }, state),
+        ...(global ? { hint: 'global' } : {}),
+        keywords: `${name} new construct create`,
+        action: () =>
+          addNode({ type: 'value', expression: `new ${name}()` }, state),
       })),
       ...externalNames.value.map((external): ActionEntry =>
         external.kind === 'class'
@@ -745,12 +758,19 @@ export function createActionEntries(
             } satisfies ActionEntry,
           ]
         : []),
-      ...importedClasses().map((expression): ActionEntry => ({
-        label: expression,
+      ...constructable().map(({ name, global }): ActionEntry => ({
+        label: `new ${name}()`,
         category: 'Construct',
         icon: ICON_CALL,
-        keywords: 'new construct create',
-        action: () => emitOp({ type: 'setInput', pin: source, expression }),
+        ...(global ? { hint: 'global' } : {}),
+        fits: fitsType(name, pin.type),
+        keywords: `${name} new construct create`,
+        action: () =>
+          emitOp({
+            type: 'setInput',
+            pin: source,
+            expression: `new ${name}()`,
+          }),
       })),
       ...externalNames.value.map((external): ActionEntry => {
         const expression =
