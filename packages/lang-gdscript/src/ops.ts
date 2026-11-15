@@ -502,6 +502,7 @@ const DECLARATIONS: DeclarationSyntax = {
 };
 
 export const GDSCRIPT_SYNTAX: StatementSyntax = {
+  objectEntry: { write: (key, value) => `${JSON.stringify(key)}: ${value}` },
   placeholder: 'null',
   emptyBody: 'pass',
   bindingName: (hint) =>

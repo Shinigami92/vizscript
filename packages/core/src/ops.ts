@@ -228,8 +228,12 @@ export type GraphOp =
     }
   /** Sets (or with `null` removes) the declared return type. */
   | { type: 'setReturnType'; symbol: string; typeText: string | null }
-  /** Adds a placeholder argument to a call (UE: "Add pin"). */
-  | { type: 'addArgument'; node: string }
+  /**
+   * Adds a placeholder argument to a call, a value to an operator chain or
+   * an element to Make Array (UE: "Add pin"). Make Object takes the key of
+   * the new entry as `name`.
+   */
+  | { type: 'addArgument'; node: string; name?: string }
   /** Removes an argument of a call with its comma (UE: "Remove pin"). */
   | { type: 'removeArgument'; pin: PinRef }
   /** Empties a call's argument list. */

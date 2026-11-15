@@ -35,6 +35,8 @@ export interface NodeCommands {
   extractEntry: (source: PinRef, pin: Pin, world: Point) => MenuEntry;
   findReferences: (nodeId: string) => void;
   collapseToFunction: (ids: ReadonlyArray<string>) => void;
+  /** Make Object's "Add pin": asks for the key of the new entry. */
+  addObjectEntry: (nodeId: string) => void;
 }
 
 /** Calls of the same function on the same Get (`console.log`), by id. */
@@ -81,6 +83,23 @@ export function createNodeCommands(
       allowEmpty: true,
       submit: (title) =>
         emitOp({ type: 'addCommentBox', nodes: [...ids], title }),
+    });
+  }
+
+  function addObjectEntry(nodeId: string): void {
+    if (!props.editable) {
+      return;
+    }
+
+    ctx.openMenu({
+      world: { x: 0, y: 0 },
+      client: { ...ctx.pointer },
+      target: { kind: 'node', nodeId },
+    });
+    void ask({
+      label: 'Key of the new entry',
+      placeholder: 'key',
+      submit: (name) => emitOp({ type: 'addArgument', node: nodeId, name }),
     });
   }
 
@@ -219,6 +238,7 @@ export function createNodeCommands(
     editComment,
     createCommentBox,
     promoteTo,
+    addObjectEntry,
     extractEntry,
     findReferences,
     collapseToFunction,

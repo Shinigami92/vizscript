@@ -389,6 +389,7 @@ const DECLARATIONS: DeclarationSyntax = {
 };
 
 export const PYTHON_SYNTAX: StatementSyntax = {
+  objectEntry: { write: (key, value) => `${JSON.stringify(key)}: ${value}` },
   placeholder: 'None',
   emptyBody: 'pass',
   bindingName: (hint) =>

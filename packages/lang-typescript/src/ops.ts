@@ -635,6 +635,11 @@ function expressionStatement(expression: string): string {
 
 export const TYPESCRIPT_SYNTAX: StatementSyntax = {
   placeholder: 'undefined',
+  objectEntry: {
+    write: (key, value) =>
+      `${/^[A-Za-z_$][\w$]*$/.test(key) ? key : quoteString(key, "'")}: ${value}`,
+    padded: true,
+  },
   emptyBody: '{}',
   bindingName: (hint) => `${hint}Result`,
   declare: (name, expr) => `const ${name} = ${expr};`,

@@ -6,6 +6,7 @@ import {
   chainValues,
   getMeta,
   linkPin,
+  objectEntries,
   referenceName,
 } from '@vizscript/core';
 import type { Ref } from 'vue';
@@ -342,7 +343,12 @@ export function createContextEntries(
       entry.node.kind === 'call' && pin.range && ARG_PIN.test(pin.id)
         ? pin.range
         : undefined;
-    const element = arrayElements(entry.node)?.some((p) => p.id === pin.id);
+    const element =
+      arrayElements(entry.node)?.some((p) => p.id === pin.id) ||
+      objectEntries(entry.node)?.some(
+        (p) =>
+          p.id === pin.id && getMeta<InputPinMeta>(p).property !== undefined
+      );
     const fallback = getMeta<InputPinMeta>(pin).defaultValue;
     const current = pin.range
       ? props.text.slice(pin.range.start, pin.range.end)
@@ -463,7 +469,9 @@ export function createContextEntries(
                     label: argument
                       ? 'Remove argument pin'
                       : element
-                        ? 'Remove array element pin'
+                        ? entry.node.kind === 'makeObject'
+                          ? 'Remove entry pin'
+                          : 'Remove array element pin'
                         : 'Remove pin',
                     icon: 'i-mdi-minus-circle-outline',
                     danger: true,

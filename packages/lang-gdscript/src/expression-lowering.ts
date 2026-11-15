@@ -561,7 +561,12 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
                 ? key.value
                 : truncate(this.src(rangeOf(key)), 16);
             return {
-              pin: this.dataIn(`p${i}`, label, rangeOf(entry.value)),
+              pin: this.dataIn(`p${i}`, label, rangeOf(entry.value), 'any', {
+                property: {
+                  start: rangeOf(entry.key).start,
+                  end: rangeOf(entry.value).end,
+                },
+              }),
               value: this.lowerExpr(
                 entry.value,
                 `${path}.p${i}`,

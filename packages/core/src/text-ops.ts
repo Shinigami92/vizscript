@@ -116,6 +116,14 @@ export interface StatementSyntax {
   expressionStatement?: (expression: string) => string;
   /** Adding, renaming and deleting symbols ("My Script"). */
   declarations?: DeclarationSyntax;
+  /**
+   * A new entry of an object or dictionary literal (Make Object's "Add
+   * pin"); `padded`: one alone in braces gets spaces (`{ a: 1 }`).
+   */
+  objectEntry?: {
+    write: (key: string, value: string) => string;
+    padded?: boolean;
+  };
 }
 
 const NO_RESULT = new Set(['void', 'None', 'undefined', 'null', 'never']);
@@ -630,7 +638,7 @@ function applyTextOpEdits(
     }
 
     case 'addArgument': {
-      return addArgument(text, doc, op.node, syntax);
+      return addArgument(text, doc, op.node, syntax, op.name);
     }
 
     case 'removeArgument': {

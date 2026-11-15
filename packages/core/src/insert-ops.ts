@@ -405,10 +405,12 @@ export function addArgument(
   text: string,
   doc: GraphDocument,
   nodeId: string,
-  syntax: StatementSyntax
+  syntax: StatementSyntax,
+  /** The key of a new object entry. */
+  name?: string
 ): OpResult {
   const node = findNode(doc, nodeId);
-  const added = node ? addPinValue(text, node, syntax) : undefined;
+  const added = node ? addPinValue(text, node, syntax, name) : undefined;
   if (added) {
     return added;
   }

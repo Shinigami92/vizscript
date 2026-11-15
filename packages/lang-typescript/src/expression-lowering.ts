@@ -610,7 +610,9 @@ export abstract class ExpressionLowering extends GraphBuilder {
     for (const [i, prop] of expr.properties.entries()) {
       if (prop.type === 'SpreadElement') {
         inputs.push({
-          pin: this.dataIn(`p${i}`, '...', rangeOf(prop.argument), 'object'),
+          pin: this.dataIn(`p${i}`, '...', rangeOf(prop.argument), 'object', {
+            property: rangeOf(prop),
+          }),
           value: this.lowerExpr(prop.argument, `${path}.p${i}`, mode),
         });
         continue;
@@ -626,7 +628,9 @@ export abstract class ExpressionLowering extends GraphBuilder {
         const fnName = `${owner}.${key}`;
         this.queueFunction(fnName, 'method', prop);
         inputs.push({
-          pin: this.dataIn(`p${i}`, key, undefined, 'function'),
+          pin: this.dataIn(`p${i}`, key, undefined, 'function', {
+            property: rangeOf(prop),
+          }),
           value: this.pureNode({
             kind: 'functionRef',
             title: `ƒ ${fnName}`,
@@ -653,7 +657,7 @@ export abstract class ExpressionLowering extends GraphBuilder {
                 property: rangeOf(prop),
                 ...(prop.shorthand ? { shorthand: true } : {}),
               }
-            : undefined
+            : { property: rangeOf(prop) }
         ),
         value: this.lowerExpr(
           valueExpr,

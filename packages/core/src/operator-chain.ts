@@ -98,12 +98,30 @@ export function arrayElements(node: GraphNode): Pin[] | undefined {
     : undefined;
 }
 
+/** Object and dictionary literals (not structs: their fields are fixed). */
+const GROWING_OBJECTS: ReadonlySet<string> = new Set([
+  'Make Object',
+  'Make Dict',
+  'Make Dictionary',
+]);
+
+/** A Make Object node of a literal (`{ a: 1 }`): its entries. */
+export function objectEntries(node: GraphNode): Pin[] | undefined {
+  return node.kind === 'makeObject' && GROWING_OBJECTS.has(node.title)
+    ? chainInputs(node)
+    : undefined;
+}
+
 /**
- * UE's "Add pin +": a call with a rest parameter, an operator chain or a
- * Make Array.
+ * UE's "Add pin +": a call with a rest parameter, an operator chain, a
+ * Make Array or a Make Object.
  */
 export function canAddPin(node: GraphNode): boolean {
-  if (node.addPin === true || arrayElements(node) !== undefined) {
+  if (
+    node.addPin === true ||
+    arrayElements(node) !== undefined ||
+    objectEntries(node) !== undefined
+  ) {
     return true;
   }
 

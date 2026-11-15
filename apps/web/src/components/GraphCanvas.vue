@@ -10,7 +10,11 @@ import type {
   PinRef,
   Point,
 } from '@vizscript/core';
-import { endOfFunction, floatsUntilWired } from '@vizscript/core';
+import {
+  endOfFunction,
+  floatsUntilWired,
+  objectEntries,
+} from '@vizscript/core';
 import { usePreferredReducedMotion } from '@vueuse/core';
 import {
   computed,
@@ -486,7 +490,26 @@ onMounted(() => {
     scheduleTooltip();
   });
   v.on('layoutChange', ({ patch }) => emit('layoutChange', patch));
-  v.on('op', (op) => emit('op', op));
+  v.on('op', (op) => {
+    // Make Object's "Add pin" needs the key of the new entry first.
+    const node =
+      op.type === 'addArgument' && op.name === undefined
+        ? index.value.nodes.get(op.node)?.node
+        : undefined;
+    if (op.type === 'addArgument' && node && objectEntries(node)) {
+      // After the click: the canvas takes the focus on pointer down, which
+      // would close the prompt at once.
+      const id = op.node;
+      globalThis.addEventListener(
+        'pointerup',
+        () => setTimeout(() => commands.addObjectEntry(id), 0),
+        { once: true }
+      );
+      return;
+    }
+
+    emit('op', op);
+  });
   v.on('activate', ({ nodeId }) => emit('activate', nodeId));
   v.on('openFunction', ({ fnId }) => emit('openFunction', fnId));
   v.on('cameraChange', (camera) => {

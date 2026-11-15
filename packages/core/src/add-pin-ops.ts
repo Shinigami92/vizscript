@@ -1,6 +1,13 @@
+import type { InputPinMeta } from './edit-meta';
+import { getMeta } from './edit-meta';
 import type { GraphNode, Pin, SourceRange } from './ir';
 import { failed, succeeded } from './op-result';
-import { arrayElements, chainValues, MAX_CHAIN_PINS } from './operator-chain';
+import {
+  arrayElements,
+  chainValues,
+  MAX_CHAIN_PINS,
+  objectEntries,
+} from './operator-chain';
 import type { OpResult } from './ops';
 import { removeListItem } from './symbol-edits';
 import type { StatementSyntax } from './text-ops';
@@ -145,6 +152,56 @@ function emptyValue(
   return syntax.placeholder;
 }
 
+/**
+ * Appends an item to a bracketed list (`[a, b]`, `{ a: 1 }`) after its
+ * last one, on its own line when the items are; an empty list (`[]`)
+ * gets it between the brackets.
+ */
+function appendItem(
+  text: string,
+  node: GraphNode,
+  items: ReadonlyArray<SourceRange>,
+  item: string,
+  close: string,
+  padded = false
+): OpResult {
+  const first = items[0];
+  const last = items.at(-1);
+  if (first && last) {
+    const end = operandSpan(text, last).end;
+    // One item per line: the new one gets its own, like the others.
+    if (text.slice(node.range.start, first.start).includes('\n')) {
+      const indent = lineIndent(text, last.start);
+      const trailing = text.slice(end).match(/^[ \t]*,/)?.[0];
+      return succeeded([
+        trailing
+          ? {
+              start: end + trailing.length,
+              end: end + trailing.length,
+              text: `\n${indent}${item},`,
+            }
+          : { start: end, end, text: `,\n${indent}${item}` },
+      ]);
+    }
+
+    return succeeded([{ start: end, end, text: `, ${item}` }]);
+  }
+
+  const at = node.range.end - 1;
+  let open = at - 1;
+  while (open > node.range.start && /\s/.test(text[open] ?? '')) {
+    open--;
+  }
+
+  if (text[at] !== close || !'[{'.includes(text[open] ?? '')) {
+    return failed('Cannot find the brackets of this value.');
+  }
+
+  return succeeded([
+    { start: open + 1, end: at, text: padded ? ` ${item} ` : item },
+  ]);
+}
+
 /** UE's "Add pin +" on Make Array: `[a, b]` → `[a, b, 0]`. */
 function addArrayElement(
   text: string,
@@ -161,49 +218,66 @@ function addArrayElement(
     elements,
     syntax
   );
-  const first = elements[0]?.range;
-  const last = elements.at(-1)?.range;
-  if (first && last) {
-    const end = operandSpan(text, last).end;
-    // One element per line: the new one gets its own, like the others.
-    if (text.slice(node.range.start, first.start).includes('\n')) {
-      const indent = lineIndent(text, last.start);
-      const trailing = text.slice(end).match(/^[ \t]*,/)?.[0];
-      return succeeded([
-        trailing
-          ? {
-              start: end + trailing.length,
-              end: end + trailing.length,
-              text: `\n${indent}${value},`,
-            }
-          : { start: end, end, text: `,\n${indent}${value}` },
-      ]);
-    }
+  return appendItem(
+    text,
+    node,
+    elements.flatMap((p) => (p.range ? [p.range] : [])),
+    value,
+    ']'
+  );
+}
 
-    return succeeded([{ start: end, end, text: `, ${value}` }]);
+/** Make Object's "Add pin +": a new entry with that key, still empty. */
+function addObjectEntry(
+  text: string,
+  node: GraphNode,
+  entries: ReadonlyArray<Pin>,
+  syntax: StatementSyntax,
+  key: string | undefined
+): OpResult {
+  const write = syntax.objectEntry;
+  if (!write || !key) {
+    return failed('A new entry needs a key.');
   }
 
-  // An empty array: the value goes between its brackets.
-  const close = node.range.end - 1;
-  if (text[close] !== ']') {
-    return failed('Cannot find the end of this array.');
+  if (entries.some((p) => p.name === key)) {
+    return failed(`"${key}" is in the object already.`);
   }
 
-  return succeeded([{ start: close, end: close, text: value }]);
+  const ranges = entries.map((p) => getMeta<InputPinMeta>(p).property);
+  if (ranges.some((r) => r === undefined)) {
+    return failed('Cannot find the entries of this object.');
+  }
+
+  return appendItem(
+    text,
+    node,
+    ranges.flatMap((r) => (r ? [r] : [])),
+    write.write(key, syntax.placeholder),
+    '}',
+    write.padded
+  );
 }
 
 /**
- * UE's "Add pin +" of a node that takes more values (an operator chain or
- * Make Array); `undefined` for other nodes.
+ * UE's "Add pin +" of a node that takes more values (an operator chain,
+ * Make Array or Make Object); `undefined` for other nodes.
  */
 export function addPinValue(
   text: string,
   node: GraphNode,
-  syntax: StatementSyntax
+  syntax: StatementSyntax,
+  /** The key of a new object entry. */
+  key?: string
 ): OpResult | undefined {
   const values = chainValues(node);
   if (values) {
     return addChainValue(text, node, values, syntax);
+  }
+
+  const entries = objectEntries(node);
+  if (entries) {
+    return addObjectEntry(text, node, entries, syntax, key);
   }
 
   const elements = arrayElements(node);
@@ -222,6 +296,14 @@ export function removePinValue(
   const values = chainValues(node);
   if (values) {
     return removeChainValue(text, values, pinId);
+  }
+
+  const entry = objectEntries(node)?.find((p) => p.id === pinId);
+  if (entry) {
+    const property = getMeta<InputPinMeta>(entry).property;
+    return property
+      ? succeeded([removeListItem(text, property, true)])
+      : failed('Cannot find this entry of the object.');
   }
 
   const range = arrayElements(node)?.find((p) => p.id === pinId)?.range;
