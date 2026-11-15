@@ -45,7 +45,13 @@ export interface GraphOverlayDeps {
   /** The last recorded step also wrote code (one undo for both). */
   recordCode: () => void;
   /** Positions for new floating nodes (where they were dropped). */
-  placeFloating: (edit: FloatingNodes, world: Point, fixed?: Positions) => void;
+  placeFloating: (
+    edit: FloatingNodes,
+    world: Point,
+    fixed?: Positions,
+    /** Lay the group out around its kept nodes instead of at `world`. */
+    anchored?: boolean
+  ) => void;
   /** Where a node is shown. */
   positionOf: (id: string) => Point | undefined;
   /** Floating nodes with a checker's types (the copy they were made in). */
@@ -64,6 +70,8 @@ export interface FloatingOptions {
   replaces?: ReadonlyArray<FloatingNodes>;
   /** A value of the code wired where the placeholder was written. */
   feed?: { from: PinRef; placeholder: string };
+  /** The new nodes go around the ones taken over, not at `world`. */
+  anchored?: boolean;
 }
 
 export interface WorkspaceGraphOverlay {
@@ -96,6 +104,8 @@ export interface WorkspaceGraphOverlay {
     op: Extract<GraphOp, { type: 'useValue' | 'callWith' }>,
     placeholder: string
   ) => Promise<boolean>;
+  /** A value for an input of a floating node; `false` for code's nodes. */
+  floatInput: (op: Extract<GraphOp, { type: 'setInput' }>) => Promise<boolean>;
   /**
    * A value wired into the empty `this` of a floating call (`round()`):
    * the call is made again with it (`Math.round()`), so it gets the typed
@@ -172,7 +182,7 @@ export function useGraphOverlay(
     fnId: string | undefined,
     options: FloatingOptions = {}
   ): Promise<void> {
-    const { wireTo, replaces, feed } = options;
+    const { wireTo, replaces, feed, anchored } = options;
     const group = `${Date.now().toString(36)}${(groups++).toString(36)}`;
     const result = await deps.client.floatingNodes(
       deps.text.value,
@@ -240,7 +250,7 @@ export function useGraphOverlay(
         : [];
     });
 
-    deps.placeFloating(edit, world, fixed);
+    deps.placeFloating(edit, world, fixed, anchored);
     const out = wireTo ? floatingOutput(edit) : undefined;
     addEdits([
       // Removing one node of a floating group drops all of it.
@@ -281,11 +291,9 @@ export function useGraphOverlay(
       const group = overlay.value.edits.find(
         (e): e is FloatingNodes => e.type === 'addNodes' && e.id === name
       );
-      // A floating value: one group with the new node (the same Get).
-      if (
-        !group ||
-        group.nodes.some((n) => n.pins.some((p) => p.kind === 'exec'))
-      ) {
+      // A floating value: one group with the new node (the same Get). A
+      // statement not wired into the flow yet (`new Error()`) too.
+      if (!group || execWired(group)) {
         return false;
       }
 
@@ -311,6 +319,58 @@ export function useGraphOverlay(
       {
         feed: { from: op.pin, placeholder },
       }
+    );
+    return true;
+  }
+
+  /** Whether a floating group is wired into the flow (graph-only). */
+  function execWired(group: FloatingNodes): boolean {
+    const ids = new Set(group.nodes.map((n) => n.id));
+    return overlay.value.edits.some(
+      (e) =>
+        e.type === 'addEdge' &&
+        e.kind === 'exec' &&
+        (ids.has(e.from.node) || ids.has(e.to.node))
+    );
+  }
+
+  /**
+   * A value for an input of a floating node (a new `new Error()` for a
+   * floating Throw): the group is made again with it written in place of
+   * the input's value. `false` for inputs of the code's nodes.
+   */
+  async function floatInput(
+    op: Extract<GraphOp, { type: 'setInput' }>
+  ): Promise<boolean> {
+    const name = floatingGroup(op.pin.node);
+    const group = overlay.value.edits.find(
+      (e): e is FloatingNodes => e.type === 'addNodes' && e.id === name
+    );
+    const node = group?.nodes.find((n) => n.id === op.pin.node);
+    const raw = node?.pins.find((p) => p.id === op.pin.pin)?.literal?.raw;
+    if (!group || !node || raw === undefined) {
+      return false;
+    }
+
+    // The value's text in the node's code (pins point into the copy the
+    // group was made in): only when it is there once.
+    const own = group.code.slice(node.range.start, node.range.end);
+    const at = own.indexOf(raw);
+    if (at === -1 || own.indexOf(raw, at + 1) !== -1) {
+      return false;
+    }
+
+    const start = node.range.start + at;
+    const code = `${group.code.slice(0, start)}${op.expression}${group.code.slice(start + raw.length)}`;
+    const statement = group.nodes.some((n) =>
+      n.pins.some((p) => p.kind === 'exec')
+    );
+    await addFloating(
+      statement ? { type: 'code', code } : { type: 'value', expression: code },
+      // Laid out around the node it was set on, which keeps its place.
+      deps.positionOf(node.id) ?? op.position ?? { x: 0, y: 0 },
+      group.fnId,
+      { replaces: [group], anchored: true }
     );
     return true;
   }
@@ -514,6 +574,7 @@ export function useGraphOverlay(
     addFloating,
     floatValueUse,
     floatReceiver,
+    floatInput,
     fillCutReceiver,
     setOverlay,
     discard,

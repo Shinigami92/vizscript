@@ -56,6 +56,7 @@ import GraphBreadcrumb from './script-workspace/GraphBreadcrumb.vue';
 import LanguageStatus from './script-workspace/LanguageStatus.vue';
 import type { PendingPlacement } from './script-workspace/placement';
 import {
+  anchoredTo,
   floatingLayout,
   placementFor,
   placeNewNodes,
@@ -241,6 +242,7 @@ const {
   addFloating,
   floatValueUse,
   floatReceiver,
+  floatInput,
   fillCutReceiver,
   setOverlay,
   discard: discardGraphChanges,
@@ -269,8 +271,9 @@ const {
     record: (before, after) => recordOverlay(before, after),
     // The editor reports its new version in a microtask.
     recordCode: () => queueMicrotask(recordOverlayCode),
-    placeFloating: (edit, world, fixed) => {
-      movePinned({ ...floatingLayout(edit, world), ...fixed });
+    placeFloating: (edit, world, fixed, anchored) => {
+      const laid = floatingLayout(edit, world);
+      movePinned({ ...(anchored ? anchoredTo(laid, fixed) : laid), ...fixed });
       // Selected like any node just placed (once the overlay shows them).
       const ids = edit.nodes.map((n) => n.id);
       void nextTick(() => {
@@ -885,7 +888,10 @@ async function runOp(requested: GraphOp): Promise<void> {
   // A value for a method's empty `this` (its wire broken in the graph):
   // its nodes are added in the graph and wired in; the code follows when
   // the overlay is written.
-  if (op.type === 'setInput' && (await fillCutReceiver(op, freezeLayout))) {
+  if (
+    op.type === 'setInput' &&
+    ((await fillCutReceiver(op, freezeLayout)) || (await floatInput(op)))
+  ) {
     return;
   }
 

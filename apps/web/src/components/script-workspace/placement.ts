@@ -230,7 +230,28 @@ function runs(n: GraphNode): boolean {
  */
 export function floatingLayout(edit: FloatingNodes, world: Point): Positions {
   const positions: Positions = {};
-  const statements = edit.nodes.filter(runs);
+  // In the order they run (a hoisted `new Error()` before its `throw`).
+  const pending = edit.nodes.filter(runs);
+  const statements: typeof pending = [];
+  while (pending.length > 0) {
+    const next =
+      pending.find(
+        (n) =>
+          !edit.edges.some(
+            (e) =>
+              e.kind === 'exec' &&
+              e.to.node === n.id &&
+              pending.some((p) => p.id === e.from.node)
+          )
+      ) ?? pending[0];
+    if (!next) {
+      break;
+    }
+
+    statements.push(next);
+    pending.splice(pending.indexOf(next), 1);
+  }
+
   for (const [i, node] of statements.entries()) {
     positions[node.id] = { x: world.x + i * 260, y: world.y };
   }
@@ -269,4 +290,27 @@ export function floatingLayout(edit: FloatingNodes, world: Point): Positions {
   }
 
   return positions;
+}
+
+/**
+ * A group's layout moved so that a node it keeps (`fixed`) lands where
+ * that node is: the new nodes keep their place relative to it.
+ */
+export function anchoredTo(
+  laid: Positions,
+  fixed: Positions | undefined
+): Positions {
+  const kept = Object.keys(fixed ?? {}).find((id) => laid[id]);
+  const from = kept ? laid[kept] : undefined;
+  const to = kept ? fixed?.[kept] : undefined;
+  if (!from || !to) {
+    return laid;
+  }
+
+  return Object.fromEntries(
+    Object.entries(laid).map(([id, p]) => [
+      id,
+      { x: p.x + to.x - from.x, y: p.y + to.y - from.y },
+    ])
+  );
 }
