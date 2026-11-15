@@ -43,6 +43,8 @@ interface Noted {
 export interface KeptNodes {
   /** Notes the graph before an op that may leave nodes behind. */
   beforeOp: (op: GraphOp) => void;
+  /** The op wasn't written: forgets what `beforeOp` noted. */
+  cancelOp: () => void;
   /**
    * After the op's code is parsed: the nodes it took out of the code that
    * the user didn't delete stay as loose graph-only nodes (UE keeps them,
@@ -405,5 +407,10 @@ export function useKeptNodes(deps: {
     }
   }
 
-  return { beforeOp, afterParse, deleteLoose };
+  /** The edit wasn't written: what `beforeOp` noted is dropped. */
+  function cancelOp(): void {
+    noted = null;
+  }
+
+  return { beforeOp, cancelOp, afterParse, deleteLoose };
 }

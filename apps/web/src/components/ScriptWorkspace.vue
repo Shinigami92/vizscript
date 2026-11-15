@@ -3,10 +3,8 @@ import { COMMENT_BOX_TOP } from '@vizscript/canvas';
 import type {
   GraphDocument,
   GraphNode,
-  GraphOp,
   GraphOverlay,
   Positions,
-  TextEdit,
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
@@ -15,8 +13,6 @@ import {
   diffEdits,
   findDefinition,
   findNode,
-  floatsUntilWired,
-  graphEditsFor,
   layoutDocument,
   reconcilePositions,
   reconcileReroutes,
@@ -41,7 +37,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useToasts } from '../composables/use-toasts';
 import { GraphClient } from '../graph/graph-client';
 import { isPreviewable, isVisualizable } from '../graph/languages';
-import { countedUses, symbolNodes, topLevelGraph } from '../graph/symbols';
+import { countedUses, symbolNodes } from '../graph/symbols';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
 import WorkbenchView from '../workbench/WorkbenchView.vue';
@@ -52,11 +48,15 @@ import ProblemsPanel from './ProblemsPanel.vue';
 import EditorActions from './script-workspace/EditorActions.vue';
 import GraphBreadcrumb from './script-workspace/GraphBreadcrumb.vue';
 import LanguageStatus from './script-workspace/LanguageStatus.vue';
-import type { PendingPlacement } from './script-workspace/placement';
+import type { OpTransaction } from './script-workspace/op-transaction';
+import {
+  opTransaction,
+  parseRole,
+  textChange,
+} from './script-workspace/op-transaction';
 import {
   anchoredTo,
   floatingLayout,
-  placementFor,
   placeNewNodes,
 } from './script-workspace/placement';
 import {
@@ -80,6 +80,7 @@ import { useImports } from './script-workspace/use-imports';
 import { useKeptNodes } from './script-workspace/use-kept-nodes';
 import { useLanguageVersion } from './script-workspace/use-language-version';
 import { useLayoutHistory } from './script-workspace/use-layout-history';
+import { useOpRunner } from './script-workspace/use-op-runner';
 import { provideParseValue } from './script-workspace/use-parse-value';
 import { usePinnedLayout } from './script-workspace/use-pinned-layout';
 import { useProblems } from './script-workspace/use-problems';
@@ -148,9 +149,8 @@ const parsedDoc = shallowRef<GraphDocument | null>(null);
 const pinned = shallowRef<Positions>({});
 const positions = shallowRef<Positions>({});
 const selection = ref<string[]>([]);
-/** The edits of the last op and the text they were made on. */
-let lastOpEdits: { base: string; edits: ReadonlyArray<TextEdit> } | null = null;
-let pendingPlacement: PendingPlacement | null = null;
+/** The last edit written into the code, until its result is parsed. */
+let transaction: OpTransaction | null = null;
 
 const route = useRoute();
 const router = useRouter();
@@ -260,7 +260,7 @@ const {
     doc,
     writeCode: (next) => {
       const edits = diffEdits(text.value, next);
-      lastOpEdits = { base: text.value, edits };
+      transaction = opTransaction(text.value, edits, parseSeq);
       editor.value?.applyEdits(edits);
     },
     changed: (next) => {
@@ -354,6 +354,7 @@ const {
   keepWired,
   placedNodes,
   beforeOp,
+  cancelOp: cancelViaOp,
   afterParse,
 } = useViaWires({
   shownDoc,
@@ -404,7 +405,7 @@ const {
   codeVisible,
   graphVisible,
   focus: { focusFn, focusFunction, hiddenFunctionOf },
-  onOp,
+  onOp: (op) => onOp(op),
 });
 const breadcrumbVisible = computed(
   () =>
@@ -625,16 +626,17 @@ async function reparse(): Promise<void> {
   const previous = doc.value;
   const previousParsed = parsedDoc.value;
 
+  // A parse started before an op's edits were written leaves the op's
+  // notes to the parse of its result.
+  const role = parseRole(transaction, seq);
+  const written = role === 'result' ? transaction : null;
+  if (written) {
+    transaction = null;
+  }
+
   // Nodes are followed through the op's edits when this parse is its
   // result, else through the change of the text (typing, undo, redo).
-  const change = {
-    before: docText.value,
-    edits:
-      lastOpEdits && lastOpEdits.base === docText.value
-        ? lastOpEdits.edits
-        : diffEdits(docText.value, source),
-  };
-  lastOpEdits = null;
+  const change = textChange(written, docText.value, source);
 
   // Graph-only edits follow the code's nodes, like positions do.
   if (previousParsed && overlay.value.edits.length > 0) {
@@ -668,20 +670,21 @@ async function reparse(): Promise<void> {
         ...boxColorEntries(pinned.value),
       }
     : pinned.value;
-  // Wired from a SET's output: the new Get is drawn as that wire (UE).
-  const vias = afterParse(previous ?? undefined, shown, change);
-  if (Object.keys(vias).length > 0) {
-    recordCodeLayout(vias);
-  }
+  if (role !== 'earlier') {
+    // Wired from a SET's output: the new Get is drawn as that wire (UE).
+    const vias = afterParse(previous ?? undefined, shown, change);
+    if (Object.keys(vias).length > 0) {
+      recordCodeLayout(vias);
+    }
 
-  keptNodes.afterParse(next, change);
+    keptNodes.afterParse(next, change);
+  }
 
   parsed();
 
   let selectAfter: string[] | undefined;
-  if (pendingPlacement) {
-    const placement = pendingPlacement;
-    pendingPlacement = null;
+  const placement = written?.placement;
+  if (placement) {
     const result = placeNewNodes(
       placement,
       previous,
@@ -821,154 +824,46 @@ const currentFunction = computed(() =>
   )
 );
 
-/**
- * Like Blueprints, editing must not move other nodes: pins the current auto
- * layout first (it looks the same, so no undo step). Otherwise a node
- * placed relative to an edited one would jump.
- */
-let opQueue: Promise<void> = Promise.resolve();
-
-/**
- * Ops run one after the other, so each sees the code the one before left
- * (a description saved on blur by the click on `export`).
- */
-function onOp(op: GraphOp): Promise<void> {
-  const next = opQueue.then(() => runOp(op));
-  opQueue = next.catch(() => undefined);
-  return next;
-}
-
-async function runOp(requested: GraphOp): Promise<void> {
-  if (!editable.value) {
-    return;
-  }
-
-  // A wire drawn from a SET stands for a Get node in the code.
-  const op = throughVias(requested);
-
-  // Wires and deletions the code can't follow stay in the graph (like UE's
-  // graphs, which may be in states that don't compile). While the graph has
-  // such edits, the next ones join them, so the code follows what is shown.
-  // A node added on empty space floats until its exec input is wired, like
-  // UE's; an imported name gets its import right away.
-  const added = op.type === 'withImport' ? op.op : op;
-  if (
-    added.type === 'addNode' &&
-    !added.after &&
-    !added.before &&
-    floatsUntilWired(added.template)
-  ) {
-    if (op.type === 'withImport') {
-      await runOp({ type: 'addImport', import: op.import });
-    }
-
-    freezeLayout();
-    await addFloating(
-      added.template,
-      added.position ?? { x: 0, y: 0 },
-      added.fnId ??
-        focusFn.value ??
-        topLevelGraph(parsedDoc.value, text.value)?.id
-    );
-    return;
-  }
-
-  // A value for a method's empty `this` (its wire broken in the graph):
-  // its nodes are added in the graph and wired in; the code follows when
-  // the overlay is written.
-  if (
-    op.type === 'setInput' &&
-    ((await fillCutReceiver(op, freezeLayout)) || (await floatInput(op)))
-  ) {
-    return;
-  }
-
-  // Deleting loose nodes keeps the rest of their groups.
-  if (op.type === 'deleteNodes' && (await keptNodes.deleteLoose(op.nodeIds))) {
-    return;
-  }
-
-  // A receiver wired into a floating call: the call is made with it, so
-  // it shows the typed pins of what it calls.
-  if (
-    op.type === 'connect' &&
-    (await floatReceiver(op, typeSystem.value?.placeholder ?? 'undefined'))
-  ) {
-    freezeLayout();
-    return;
-  }
-
-  // A node made from a dragged value floats unwired, like UE's.
-  if (op.type === 'useValue' || op.type === 'callWith') {
-    freezeLayout();
-    if (await floatValueUse(op, typeSystem.value?.placeholder ?? 'undefined')) {
-      return;
-    }
-  }
-
-  const graphEdits = doc.value ? graphEditsFor(doc.value, op) : undefined;
-  // Loose graph-only nodes are edited in the graph too.
-  const loose = JSON.stringify(op).includes('"overlay:');
-  if ((outOfSync.value || loose) && graphEdits) {
-    freezeLayout();
-    addEdits(graphEdits);
-    return;
-  }
-
-  beforeOp(op, doc.value);
-  keptNodes.beforeOp(op);
-  beforeCodeEdit();
-  const result = await client.applyOp(
-    text.value,
-    props.path,
-    op,
-    importDeclarations(),
-    checkedFor(text.value)
-  );
-  if (!result.ok) {
-    keptNodes.beforeOp({ type: 'deleteNodes', nodeIds: [] });
-    if (graphEdits) {
-      freezeLayout();
-      addEdits(graphEdits);
-    } else if (op.type === 'addNode' && !op.after && !op.before) {
-      // No place in the code (e.g. a GDScript class body): it floats in
-      // the graph until it is wired in, like a new node in UE.
-      freezeLayout();
-      await addFloating(
-        op.template,
-        op.position ?? { x: 0, y: 0 },
-        // Shown with the function in focus, else with the class body.
-        focusFn.value ?? topLevelGraph(parsedDoc.value, text.value)?.id
-      );
-    } else if (JSON.stringify(op).includes('"overlay:')) {
-      show('This node is not in the code yet: wire it in first.', 'error');
-    } else {
-      show(result.error, 'error');
-    }
-
-    return;
-  }
-
-  if (result.edits.length === 0) {
-    return;
-  }
-
-  // New nodes go where the wire was dropped or the menu was opened.
-  const placement = placementFor(op, doc.value);
-  if (placement) {
-    pendingPlacement = placement;
-  }
-
-  freezeLayout();
-  lastOpEdits = { base: text.value, edits: result.edits };
-  editor.value?.applyEdits(result.edits);
-
-  // Like UE, nothing stays selected after a delete (entry nodes would).
-  if (op.type === 'deleteNodes') {
+const { onOp } = useOpRunner({
+  editable: () => editable.value,
+  text: () => text.value,
+  parsedText: () => docText.value,
+  reparse,
+  doc: () => doc.value,
+  parsedDoc: () => parsedDoc.value,
+  focusFn: () => focusFn.value,
+  outOfSync: () => outOfSync.value,
+  placeholder: () => typeSystem.value?.placeholder ?? 'undefined',
+  vias: { throughVias, beforeOp, cancelOp: cancelViaOp },
+  keptNodes,
+  overlay: {
+    addEdits,
+    addFloating,
+    fillCutReceiver,
+    floatInput,
+    floatReceiver,
+    floatValueUse,
+  },
+  freezeLayout,
+  beforeCodeEdit,
+  applyOp: (base, op) =>
+    client.applyOp(
+      base,
+      props.path,
+      op,
+      importDeclarations(),
+      checkedFor(base)
+    ),
+  write: (base, edits, placement) => {
+    transaction = opTransaction(base, edits, parseSeq, placement);
+    editor.value?.applyEdits(edits);
+  },
+  deselect: () => {
     canvas.value?.setSelection([]);
     onSelectionChange([]);
-  }
-}
+  },
+  show,
+});
 
 onMounted(async () => {
   if (props.layoutStore) {

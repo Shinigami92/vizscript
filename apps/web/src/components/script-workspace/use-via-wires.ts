@@ -49,6 +49,8 @@ export interface ViaWires {
   placedNodes: (ids: Readonly<Record<string, string>>) => void;
   /** Notes an op that wires a SET's output somewhere (before it runs). */
   beforeOp: (op: GraphOp, doc: GraphDocument | null) => void;
+  /** The op wasn't written: forgets what `beforeOp` noted. */
+  cancelOp: () => void;
   /** The `~via|` entries of the Gets that op made (after the re-parse). */
   afterParse: (
     previous: GraphDocument | undefined,
@@ -528,6 +530,15 @@ export function useViaWires(deps: {
     pending = { variable, before: readsOf(doc, variable) };
   }
 
+  /** The edit wasn't written: what `beforeOp` noted is dropped. */
+  function cancelOp(): void {
+    pending = null;
+    drawnBefore = null;
+    wrappedBefore = null;
+    wiredInputs = [];
+    wiredCopy = null;
+  }
+
   function afterParse(
     previous: GraphDocument | undefined,
     next: GraphDocument,
@@ -611,6 +622,7 @@ export function useViaWires(deps: {
     keepWired,
     placedNodes,
     beforeOp,
+    cancelOp,
     afterParse,
   };
 }
