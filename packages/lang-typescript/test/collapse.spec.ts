@@ -165,7 +165,7 @@ describe('descriptions', () => {
       't.ts'
     );
     expect(result.ok && applyTextEdits(text, result.edits)).toBe(
-      '/**\n * Says hello.\n */\nfunction greet(name: string) {\n  return name;\n}\n'
+      '/** Says hello. */\nfunction greet(name: string) {\n  return name;\n}\n'
     );
   });
 });

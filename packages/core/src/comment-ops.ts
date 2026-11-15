@@ -53,6 +53,13 @@ function formatComment(
 ): string {
   const lines = value.replaceAll('\r', '').split('\n');
   if (block) {
+    // A one-line description stays on one line (`/** Sum of all items. */`).
+    const [only] = lines;
+    const single = `${indent}/** ${only} */`;
+    if (lines.length === 1 && only && single.length <= 80) {
+      return `${single}\n`;
+    }
+
     const body = lines
       .map((line) => `${indent} *${line ? ` ${line}` : ''}`)
       .join('\n');

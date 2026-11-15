@@ -85,7 +85,7 @@ describe('comments', () => {
         text: 'Does f.',
         doc: true,
       })
-    ).toBe('/**\n * Does f.\n */\nexport function f(): void {}\n');
+    ).toBe('/** Does f. */\nexport function f(): void {}\n');
   });
 
   it('edits, adds and removes node comments', () => {
@@ -112,9 +112,7 @@ describe('comments', () => {
       node: nodeId(doc3, 'greet'),
       text: 'Says hello.',
     });
-    expect(docComment.startsWith('/**\n * Says hello.\n */\nexport')).toBe(
-      true
-    );
+    expect(docComment.startsWith('/** Says hello. */\nexport')).toBe(true);
 
     const removed = apply(SOURCE, {
       type: 'setComment',
