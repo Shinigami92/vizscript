@@ -95,6 +95,8 @@ export abstract class GraphViewBase {
   protected problems = new Map<string, NodeBannerKind>();
   protected hoverNode: string | null = null;
   protected hoverPin: string | null = null;
+  /** The node whose "Add pin +" button is under the cursor. */
+  protected hoverAddPin: string | null = null;
   protected drag: Drag | null = null;
   private frameRequested = false;
   protected hasFramed = false;
@@ -206,6 +208,9 @@ export abstract class GraphViewBase {
             { ...pg, y: pg.y + BANNER_HEIGHT },
           ])
         ),
+        ...(geom.addPin
+          ? { addPin: { ...geom.addPin, y: geom.addPin.y + BANNER_HEIGHT } }
+          : {}),
       };
     }
 
@@ -462,6 +467,14 @@ export abstract class GraphViewBase {
     this.hoverPin = pin;
     this.emitter.emit('hoverChange', { nodeId, pin });
     this.requestRender();
+  }
+
+  /** Under the cursor: the node whose "Add pin +" button it is on. */
+  protected setHoverAddPin(nodeId: string | null): void {
+    if (nodeId !== this.hoverAddPin) {
+      this.hoverAddPin = nodeId;
+      this.requestRender();
+    }
   }
 
   protected setHoverEdge(edgeId: string | null): void {

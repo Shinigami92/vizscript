@@ -140,8 +140,11 @@ export interface FrameState {
 export type Hit =
   | { type: 'pin'; ns: NodeState; pg: PinGeometry }
   | { type: 'literal'; ns: NodeState; pg: PinGeometry }
-  /** `advanced`: on the ▼ / ▲ row that folds advanced pins. */
-  | { type: 'node'; ns: NodeState; advanced?: boolean }
+  /**
+   * `advanced`: on the ▼ / ▲ row that folds advanced pins; `addPin`: on
+   * UE's "Add pin +" button.
+   */
+  | { type: 'node'; ns: NodeState; advanced?: boolean; addPin?: boolean }
   | { type: 'bubble'; ns: NodeState }
   | { type: 'knot'; edgeId: string; index: number }
   | { type: 'frame'; frame: FrameState };

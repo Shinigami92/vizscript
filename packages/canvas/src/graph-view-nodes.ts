@@ -1,4 +1,5 @@
 import {
+  ADD_PIN_LABEL,
   compactTitle,
   headerIcon,
   ICON_SPACE,
@@ -515,6 +516,41 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     if (ns.advanced > 0 && !lod) {
       this.drawAdvancedToggle(ns);
     }
+
+    if (ns.geom.addPin && this.editable && !lod) {
+      this.drawAddPin(ns, ns.geom.addPin);
+    }
+  }
+
+  /** UE's "Add pin ⊕" under the input pins. */
+  private drawAddPin(
+    ns: NodeState,
+    button: { x: number; y: number; width: number }
+  ): void {
+    const { ctx, theme } = this;
+    const hovered = this.hoverAddPin === ns.node.id;
+    const color = hovered ? theme.nodeText : theme.pinLabel;
+    const x = ns.x + button.x;
+    const y = ns.y + button.y;
+    ctx.font = this.font('label');
+    ctx.fillStyle = color;
+    ctx.globalAlpha = hovered ? 1 : 0.75;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ADD_PIN_LABEL, x, y);
+    // ⊕ after the text.
+    const r = NODE_METRICS.pinRadius + 1;
+    const cx = x + button.width - r - 1;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(cx, y, r, 0, Math.PI * 2);
+    ctx.moveTo(cx - r + 2.5, y);
+    ctx.lineTo(cx + r - 2.5, y);
+    ctx.moveTo(cx, y - r + 2.5);
+    ctx.lineTo(cx, y + r - 2.5);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 
   /** UE's ▼ under a node with folded advanced pins (▲ when shown). */

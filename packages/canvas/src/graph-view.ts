@@ -191,6 +191,12 @@ export class GraphView extends GraphViewDocument {
       return;
     }
 
+    // UE's "Add pin +": one more argument.
+    if (hit?.type === 'node' && hit.addPin) {
+      this.emitter.emit('op', { type: 'addArgument', node: hit.ns.node.id });
+      return;
+    }
+
     if (hit?.type === 'pin' && this.editable) {
       const ref = { node: hit.ns.node.id, pin: hit.pg.pin.id };
       if (e.altKey) {
@@ -517,6 +523,9 @@ export class GraphView extends GraphViewDocument {
     let cursor = 'default';
     const edge = hit ? null : this.hitWire(world, this.wireTolerance());
     this.setHoverEdge(edge?.edge.id ?? null);
+    this.setHoverAddPin(
+      hit?.type === 'node' && hit.addPin ? hit.ns.node.id : null
+    );
 
     if (!hit) {
       this.setHover(null, null);
@@ -529,7 +538,7 @@ export class GraphView extends GraphViewDocument {
     } else {
       this.setHover(hit.ns.node.id, hit.type === 'pin' ? hit.pg.pin.id : null);
       cursor =
-        hit.type === 'node' && hit.advanced
+        hit.type === 'node' && (hit.advanced || hit.addPin)
           ? 'pointer'
           : hit.type === 'pin' && this.editable
             ? 'crosshair'

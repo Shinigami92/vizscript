@@ -11,6 +11,7 @@ import {
   isArrayType,
   isTypeCompatible,
   layoutDocument,
+  NODE_METRICS,
   NodeIdFactory,
   pinColor,
   reconcilePositions,
@@ -581,5 +582,19 @@ describe('layoutDocument with saved positions', () => {
       Math.abs((result.a?.x ?? 0) - (result.b?.x ?? 0)) < size.width &&
       Math.abs((result.a?.y ?? 0) - (result.b?.y ?? 0)) < size.height;
     expect(overlap).toBe(false);
+  });
+});
+
+describe('Add pin', () => {
+  it('adds a row under the input pins, like UE', () => {
+    const plain = node('c', 'impure', [execIn, execOut, dataIn]);
+    const base = computeNodeGeometry(plain);
+    const geom = computeNodeGeometry({ ...plain, addPin: true });
+    expect(base.addPin).toBeUndefined();
+    expect(geom.height).toBe(base.height + NODE_METRICS.rowHeight);
+    // The row after the inputs (exec, then `a`).
+    expect(geom.addPin?.y).toBe(
+      (geom.pins.get('a')?.y ?? 0) + NODE_METRICS.rowHeight
+    );
   });
 });

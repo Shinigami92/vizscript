@@ -203,6 +203,16 @@ function typeResult(
   }
 }
 
+/**
+ * Whether a call to these parameters takes more arguments than any count
+ * written (a `...rest` / `*args` parameter): UE's "Add pin +".
+ */
+export function takesMoreArguments(
+  params: ReadonlyArray<SymbolParam>
+): boolean {
+  return params.some((p) => p.rest && !p.keywords);
+}
+
 /** The type of one value of a `...rest` / `*args` parameter. */
 function restElementType(param: SymbolParam): DataType {
   return param.dataType === 'array' || param.dataType.endsWith('[]')
@@ -397,6 +407,9 @@ export function completeCallPins(
       const params = symbol?.params;
       if (symbol && params) {
         node.pins = withParamPins(text, node, params, options);
+        if (takesMoreArguments(params)) {
+          node.addPin = true;
+        }
       }
     }
   }

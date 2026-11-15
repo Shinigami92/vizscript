@@ -1,6 +1,7 @@
 import { ARG_PIN, callClose } from './call-pins';
 import type {
   ExecOutPinMeta,
+  InputPinMeta,
   InsertPoint,
   OutputPinMeta,
   StatementMeta,
@@ -416,6 +417,23 @@ export function addArgument(
   const open = text.slice(node.range.start, close).includes('(');
   if (!open) {
     return failed('Cannot find the arguments of this call.');
+  }
+
+  // The first, empty pin of a `...rest` parameter (`data[0]`) is written
+  // too: one more pin next to it, like UE's Make Array.
+  const rest = node.pins.find(
+    (p) => p.id.startsWith('param:') && !p.range && p.name.endsWith('[0]')
+  );
+  const meta = rest ? getMeta<InputPinMeta>(rest) : undefined;
+  if (meta?.insertInitAt !== undefined) {
+    const value = syntax.placeholder;
+    return succeeded([
+      {
+        start: meta.insertInitAt,
+        end: meta.insertInitAt,
+        text: `${meta.insertPrefix ?? ''}${value}, ${value}`,
+      },
+    ]);
   }
 
   return succeeded([

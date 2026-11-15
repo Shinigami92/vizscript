@@ -1,4 +1,8 @@
-import { findConversion, isTypeCompatible } from '@vizscript/core';
+import {
+  findConversion,
+  isTypeCompatible,
+  NODE_METRICS,
+} from '@vizscript/core';
 import type { Conversion, PinGeometry, Point } from '@vizscript/core';
 import { rectContains, rectsIntersect, screenToWorld } from './camera';
 import { GraphViewBase } from './graph-view-base';
@@ -65,6 +69,22 @@ export abstract class GraphViewHitTest extends GraphViewBase {
     );
   }
 
+  /** Whether `world` is on the node's "Add pin +" button (its row). */
+  private onAddPin(ns: NodeState, world: Point): boolean {
+    const button = ns.geom.addPin;
+    if (!button) {
+      return false;
+    }
+
+    const x = world.x - ns.x - button.x;
+    const y = world.y - ns.y - button.y;
+    return (
+      x >= -2 &&
+      x <= button.width + 2 &&
+      Math.abs(y) <= NODE_METRICS.rowHeight / 2
+    );
+  }
+
   protected hitTest(world: Point): Hit | null {
     const pinRadius = Math.max(9, 7 / this.camera.zoom);
     const candidates = this.orderedCandidates(world, pinRadius);
@@ -110,6 +130,10 @@ export abstract class GraphViewHitTest extends GraphViewBase {
         ) {
           return { type: 'literal', ns, pg };
         }
+      }
+
+      if (this.editable && this.onAddPin(ns, world)) {
+        return { type: 'node', ns, addPin: true };
       }
 
       const advanced =

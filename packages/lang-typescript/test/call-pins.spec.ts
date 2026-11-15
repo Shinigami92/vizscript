@@ -145,6 +145,25 @@ describe('argument pins from signatures', () => {
     ).toBe(true);
   });
 
+  it('shows Add pin on calls with a rest parameter, like UE', () => {
+    const decl = 'function f(fmt: string, ...data: number[]): void {}\n';
+    const fixed = 'function g(a: number): void {}\n';
+    expect(callNode(`${decl}f("a", 1);\n`, 'f').addPin).toBe(true);
+    expect(callNode(`${fixed}g(1);\n`, 'g').addPin).toBeUndefined();
+  });
+
+  it('writes the empty rest pin along with the added one', () => {
+    const decl = 'function f(fmt: string, ...data: number[]): void {}\n';
+    const add = (call: string): string =>
+      apply(`${decl}${call}\n`, {
+        type: 'addArgument',
+        node: callNode(`${decl}${call}\n`, 'f').id,
+      }).slice(decl.length);
+    expect(add('f("a");')).toBe('f("a", undefined, undefined);\n');
+    expect(add('f();')).toBe('f(undefined, undefined, undefined);\n');
+    expect(add('f("a", 1);')).toBe('f("a", 1, undefined);\n');
+  });
+
   it('adds argument pins to calls of unknown functions', () => {
     const text = 'console.log("a");\n';
     expect(

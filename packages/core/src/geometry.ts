@@ -64,6 +64,24 @@ export interface NodeGeometry {
   /** Width of the output pin column. */
   rightColumn: number;
   pins: Map<string, PinGeometry>;
+  /**
+   * UE's "Add pin +" row under the input pins (`node.addPin`): its left
+   * edge, the middle of the row and its width, relative to the node.
+   */
+  addPin?: { x: number; y: number; width: number };
+}
+
+/** Text of the "Add pin" button, followed by a ⊕ icon. */
+export const ADD_PIN_LABEL = 'Add pin';
+
+/** Width of the "Add pin ⊕" button. */
+function addPinWidth(measure: MeasureText): number {
+  return (
+    measure(ADD_PIN_LABEL, 'label') +
+    NODE_METRICS.pinLabelGap +
+    NODE_METRICS.pinRadius * 2 +
+    4
+  );
 }
 
 /**
@@ -238,7 +256,12 @@ export function computeNodeGeometry(
   const left = sortPins(node.pins.filter((p) => p.direction === 'in'));
   const right = sortPins(node.pins.filter((p) => p.direction === 'out'));
   const compact = isCompact(node);
-  const rows = Math.max(left.length, right.length, compact ? 1 : 0);
+  const addPin = node.addPin === true && !compact;
+  const rows = Math.max(
+    left.length + (addPin ? 1 : 0),
+    right.length,
+    compact ? 1 : 0
+  );
 
   const headerHeight = compact
     ? 0
@@ -246,7 +269,7 @@ export function computeNodeGeometry(
       (node.subtitle ? NODE_METRICS.subtitleHeight : 0);
 
   const leftWidth = Math.max(
-    0,
+    addPin ? addPinWidth(measure) : 0,
     ...left.map((p) => pinColumnWidth(node, p, measure))
   );
   const rightWidth = Math.max(
@@ -350,5 +373,14 @@ export function computeNodeGeometry(
     leftColumn: leftWidth,
     rightColumn: rightWidth,
     pins,
+    ...(addPin
+      ? {
+          addPin: {
+            x: NODE_METRICS.pinInset - NODE_METRICS.pinRadius,
+            y: rowY(left.length),
+            width: addPinWidth(measure),
+          },
+        }
+      : {}),
   };
 }

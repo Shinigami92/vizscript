@@ -100,7 +100,8 @@ const GROUPS: ReadonlyArray<{
       },
       {
         action: 'Add an argument pin',
-        input: 'Right-click a call → Add argument pin',
+        input:
+          'Click Add pin ⊕ under a call with a rest parameter, or right-click a call → Add argument pin',
       },
       {
         action: 'Show arguments left at their default',

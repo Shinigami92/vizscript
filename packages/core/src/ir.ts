@@ -174,6 +174,11 @@ export interface GraphNode {
    * function frames until it is wired in.
    */
   floating?: boolean;
+  /**
+   * Takes more inputs (a `...rest` parameter): UE's "Add pin +" under the
+   * input pins.
+   */
+  addPin?: boolean;
 }
 
 export interface PinRef {
