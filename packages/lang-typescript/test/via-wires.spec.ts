@@ -8,6 +8,7 @@ import {
   viaGets,
   viaJoins,
   viaSetter,
+  wrappedVias,
 } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { parseTypeScript } from '../src';
@@ -100,6 +101,62 @@ describe('wires from a SET (UE)', () => {
     expect(reads).toHaveLength(2);
     const vias = adjacentVias(doc);
     expect(reads.every((n) => vias.has(n.id))).toBe(true);
+  });
+
+  it('draws reads on a wrapped row as one Get node, not wires back', () => {
+    const doc = parseTypeScript(
+      'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    total += item;\n  }\n  const half = total - total / 2;\n  return half;\n}\n',
+      'a.ts'
+    );
+    const fn = doc.functions.find((f) => f.name === 'f');
+    const reads = (fn?.nodes ?? []).filter(
+      (n) => n.kind === 'getVar' && n.title === 'total'
+    );
+    const [first, second] = reads;
+    const setter = fn && first ? viaSetter(fn, first) : undefined;
+    if (!fn || !first || !second || !setter) {
+      throw new Error('no reads of total');
+    }
+
+    // The generated layout wrapped the code after the loop to a new row:
+    // the SET is right of the reads, the second read is the leftmost.
+    const layout = {
+      [setter.id]: { x: 900, y: 0 },
+      [first.id]: { x: 300, y: 200 },
+      [second.id]: { x: 100, y: 260 },
+    };
+    const vias = adjacentVias(doc, layout);
+    expect(vias.has(first.id) || vias.has(second.id)).toBe(false);
+    expect(wrappedVias(doc, layout)).toEqual(
+      new Map([
+        [second.id, second.id],
+        [first.id, second.id],
+      ])
+    );
+
+    const drawn = foldVias(doc, new Set(), new Map(), layout).functions.find(
+      (f) => f.name === 'f'
+    );
+    const shown = drawn?.nodes.filter(
+      (n) => n.kind === 'getVar' && n.title === 'total'
+    );
+    expect(shown?.map((n) => n.id)).toEqual([second.id]);
+    expect(drawn?.edges.filter((e) => e.from.node === second.id)).toHaveLength(
+      2
+    );
+
+    // A read the user wired from the SET stays that wire.
+    const remembered = foldVias(
+      doc,
+      new Set([first.id]),
+      new Map(),
+      layout
+    ).functions.find((f) => f.name === 'f');
+    expect(
+      remembered?.edges.some(
+        (e) => e.from.node === setter.id && e.via === first.id
+      )
+    ).toBe(true);
   });
 
   it('draws reads after a loop that skips items before its SET', () => {

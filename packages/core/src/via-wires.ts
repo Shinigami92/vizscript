@@ -226,15 +226,14 @@ function nextAfter(fn: FunctionGraph, id: string): Set<string> {
   return new Set();
 }
 
-/**
- * Gets drawn as wires without being remembered: those that feed the node
- * right after their variable's SET on the exec chain (`const cart = …;`
- * then `totalPrice(cart)`, also through pure nodes: `if (!response.ok)`),
- * as one would wire it in UE. Reads further away stay Get nodes; the
- * variable could have changed by then.
- */
-export function adjacentVias(doc: GraphDocument): Set<string> {
-  const result = new Set<string>();
+/** A Get right after its variable's SET (see `adjacentVias`). */
+interface AdjacentRead {
+  setter: GraphNode;
+  get: GraphNode;
+}
+
+function adjacentReads(doc: GraphDocument): AdjacentRead[] {
+  const result: AdjacentRead[] = [];
   for (const fn of doc.functions) {
     const nodes = new Map(fn.nodes.map((n) => [n.id, n]));
     for (const setter of fn.nodes) {
@@ -248,6 +247,7 @@ export function adjacentVias(doc: GraphDocument): Set<string> {
 
       const variable = setter.title.slice('Set '.length);
       const next = withPureInputs(fn, nextAfter(fn, setter.id));
+      const seen = new Set<string>();
       for (const edge of fn.edges) {
         const get = nodes.get(edge.from.node);
         if (
@@ -255,9 +255,11 @@ export function adjacentVias(doc: GraphDocument): Set<string> {
           next.has(edge.to.node) &&
           get?.kind === 'getVar' &&
           get.title === variable &&
+          !seen.has(get.id) &&
           viaSetter(fn, get) === setter
         ) {
-          result.add(get.id);
+          seen.add(get.id);
+          result.push({ setter, get });
         }
       }
     }
@@ -267,16 +269,86 @@ export function adjacentVias(doc: GraphDocument): Set<string> {
 }
 
 /**
+ * The generated layout put the SET right of the read: the exec chain
+ * wrapped to a new row in between, and a wire would run back across it.
+ */
+function wraps(read: AdjacentRead, layout: Positions | undefined): boolean {
+  const setter = layout?.[read.setter.id];
+  const get = layout?.[read.get.id];
+  return setter !== undefined && get !== undefined && get.x < setter.x;
+}
+
+/**
+ * Gets drawn as wires without being remembered: those that feed the node
+ * right after their variable's SET on the exec chain (`const cart = …;`
+ * then `totalPrice(cart)`, also through pure nodes: `if (!response.ok)`),
+ * as one would wire it in UE. Reads further away stay Get nodes; the
+ * variable could have changed by then. With the generated `layout`, reads
+ * on a wrapped row stay nodes too (`wrappedVias`).
+ */
+export function adjacentVias(
+  doc: GraphDocument,
+  layout?: Positions
+): Set<string> {
+  return new Set(
+    adjacentReads(doc)
+      .filter((read) => !wraps(read, layout))
+      .map((read) => read.get.id)
+  );
+}
+
+/**
+ * Reads right after their SET that the generated layout wrapped to a new
+ * row (`total += …` ending a loop body, then `total - total * discount`
+ * after it): like one would wire it in UE, one Get node left of them
+ * feeds them all, instead of wires running back from the SET. Each read
+ * maps to that Get (the leftmost one, which maps to itself), like
+ * `viaJoins`.
+ */
+export function wrappedVias(
+  doc: GraphDocument,
+  layout: Positions
+): Map<string, string> {
+  const hosts = new Map<string, GraphNode>();
+  const result = new Map<string, string>();
+  // The leftmost read is the shared Get: its wires all run forward.
+  const x = (node: GraphNode): number => layout[node.id]?.x ?? 0;
+  const wrapped = adjacentReads(doc)
+    .filter((read) => wraps(read, layout))
+    .toSorted(
+      (a, b) => x(a.get) - x(b.get) || a.get.range.start - b.get.range.start
+    );
+  for (const { setter, get } of wrapped) {
+    const host = hosts.get(setter.id) ?? get;
+    hosts.set(setter.id, host);
+    result.set(get.id, host.id);
+  }
+
+  return result;
+}
+
+/**
  * The graph as drawn: remembered Gets and those right after their SET
  * (`adjacentVias`) become wires from the SET's output (`GraphEdge.via`
- * names the hidden Get). Gets without a SET before them stay nodes.
+ * names the hidden Get). Gets without a SET before them stay nodes. With
+ * the generated `layout`, reads it wrapped to a new row share one Get
+ * (`wrappedVias`).
  */
 export function foldVias(
   doc: GraphDocument,
   remembered: ReadonlySet<string>,
-  joins: ReadonlyMap<string, string> = new Map()
+  userJoins: ReadonlyMap<string, string> = new Map(),
+  layout?: Positions
 ): GraphDocument {
-  const gets = new Set([...remembered, ...adjacentVias(doc)]);
+  const gets = new Set([...remembered, ...adjacentVias(doc, layout)]);
+  // Wrapped reads share one Get; what the user wired or kept wins.
+  const joins = new Map(userJoins);
+  for (const [id, host] of layout ? wrappedVias(doc, layout) : []) {
+    if (!remembered.has(id) && !joins.has(id)) {
+      joins.set(id, host);
+    }
+  }
+
   if (gets.size === 0 && joins.size === 0) {
     return doc;
   }

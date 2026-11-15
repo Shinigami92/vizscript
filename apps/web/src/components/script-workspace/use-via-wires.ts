@@ -77,10 +77,11 @@ function sourceOf(op: GraphOp): PinRef | undefined {
 function stillDrawn(
   next: GraphDocument,
   before: ReadonlySet<string>,
-  rename: ReadonlyMap<string, string>
+  rename: ReadonlyMap<string, string>,
+  layout: Positions
 ): Positions {
   const ids = new Set([...before].map((id) => rename.get(id) ?? id));
-  const adjacent = adjacentVias(next);
+  const adjacent = adjacentVias(next, layout);
   const patch: Positions = {};
   for (const fn of next.functions) {
     for (const node of fn.nodes) {
@@ -100,13 +101,14 @@ function stillDrawn(
 function keptGets(
   next: GraphDocument,
   inputs: ReadonlyArray<WiredGet>,
-  rename: ReadonlyMap<string, string>
+  rename: ReadonlyMap<string, string>,
+  layout: () => Positions
 ): Positions {
   if (inputs.length === 0) {
     return {};
   }
 
-  const adjacent = adjacentVias(next);
+  const adjacent = adjacentVias(next, layout());
   const patch: Positions = {};
   for (const { input, at } of inputs) {
     const node = rename.get(input.node) ?? input.node;
@@ -151,11 +153,25 @@ export function useViaWires(deps: {
   /** The graph of the code alone (no graph-only edits). */
   parsedDoc: Readonly<ShallowRef<GraphDocument | null>>;
   pinned: ShallowRef<Positions>;
+  /**
+   * The generated layout of a graph (no saved positions): reads it wraps
+   * to a new row are drawn as one Get, not as wires back from their SET.
+   */
+  autoLayout: (doc: GraphDocument) => Positions;
 }): ViaWires {
+  const shownLayout = computed(() => {
+    const shown = deps.shownDoc.value;
+    return shown ? deps.autoLayout(shown) : {};
+  });
   const canvasDoc = computed(() => {
     const shown = deps.shownDoc.value;
     return shown
-      ? foldVias(shown, viaGets(deps.pinned.value), viaJoins(deps.pinned.value))
+      ? foldVias(
+          shown,
+          viaGets(deps.pinned.value),
+          viaJoins(deps.pinned.value),
+          shownLayout.value
+        )
       : null;
   });
 
@@ -283,12 +299,17 @@ export function useViaWires(deps: {
       return {};
     }
 
-    return keptGets(parsed, inputs, new Map());
+    return keptGets(parsed, inputs, new Map(), () => deps.autoLayout(parsed));
   }
 
   function beforeOp(op: GraphOp, doc: GraphDocument | null): void {
     pending = null;
-    drawnBefore = doc ? adjacentVias(doc) : null;
+    drawnBefore = doc
+      ? adjacentVias(
+          doc,
+          doc === deps.shownDoc.value ? shownLayout.value : deps.autoLayout(doc)
+        )
+      : null;
     const source = sourceOf(op);
     const setter = source && doc ? findNode(doc, source.node) : undefined;
     // Wired from a Get: the new read joins it (UE uses the same node).
@@ -350,9 +371,11 @@ export function useViaWires(deps: {
     }
 
     const rename = renamedNodes(previous, next, change);
+    let layout: Positions | undefined;
+    const nextLayout = (): Positions => (layout ??= deps.autoLayout(next));
     const patch: Positions = {
-      ...keptGets(next, inputs, rename),
-      ...(drawn ? stillDrawn(next, drawn, rename) : {}),
+      ...keptGets(next, inputs, rename, nextLayout),
+      ...(drawn ? stillDrawn(next, drawn, rename, nextLayout()) : {}),
     };
     if (!wired) {
       return patch;
@@ -363,7 +386,8 @@ export function useViaWires(deps: {
       ? (rename.get(wired.host) ?? wired.host)
       : undefined;
     // The Get wired from stays the node it is (not a wire from its SET).
-    const keep = host !== undefined && adjacentVias(next).has(host);
+    const keep =
+      host !== undefined && adjacentVias(next, nextLayout()).has(host);
     for (const fn of next.functions) {
       for (const node of fn.nodes) {
         if (

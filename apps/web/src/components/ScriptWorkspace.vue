@@ -350,11 +350,19 @@ const {
   hiddenFunctionOf,
   followRename,
 } = useFocusMode({ stateKey: () => props.stateKey, doc, canvas });
+const layoutOptions = {
+  sizeOf: (node: GraphNode) =>
+    canvas.value?.sizeOf(node) ?? { width: 160, height: 60 },
+  spaceAbove: (node: GraphNode) => canvas.value?.spaceAbove(node) ?? 0,
+  commentBoxTop: COMMENT_BOX_TOP,
+};
+
 const { canvasDoc, throughVias, viaProblems, keepWired, beforeOp, afterParse } =
   useViaWires({
     shownDoc,
     parsedDoc,
     pinned,
+    autoLayout: (shown) => layoutDocument(shown, layoutOptions),
   });
 const {
   selectedSymbol,
@@ -543,13 +551,6 @@ const {
 });
 
 // ------------------------------------------------------------------ parse
-
-const layoutOptions = {
-  sizeOf: (node: GraphNode) =>
-    canvas.value?.sizeOf(node) ?? { width: 160, height: 60 },
-  spaceAbove: (node: GraphNode) => canvas.value?.spaceAbove(node) ?? 0,
-  commentBoxTop: COMMENT_BOX_TOP,
-};
 
 function relayout(): void {
   if (!doc.value) {
