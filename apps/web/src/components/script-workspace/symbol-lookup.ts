@@ -167,6 +167,45 @@ export function variableOfNode(
   );
 }
 
+/**
+ * The function of a single selected node that stands for it: its entry
+ * and return nodes, or a call of a function of this file. Details shows
+ * the function there, like the variable of a Get / Set node.
+ */
+export function functionOfNode(
+  d: GraphDocument | null,
+  selection: ReadonlyArray<string>
+): ScriptSymbol | null {
+  const id = selection.length === 1 ? selection[0] : undefined;
+  const node = d && id ? findNode(d, id) : undefined;
+  const own = node ? d?.functions.find((f) => f.nodes.includes(node)) : null;
+  if (!d?.symbols || !node || !own) {
+    return null;
+  }
+
+  const ofGraph = (fnId: string): ScriptSymbol | null =>
+    d.symbols?.find(
+      (s) => s.fnId === fnId && (s.kind === 'function' || s.kind === 'method')
+    ) ?? null;
+  if (node.kind === 'entry' || node.kind === 'return') {
+    return ofGraph(own.id);
+  }
+
+  if (node.kind !== 'call' || !callsOwnFunction(own, node)) {
+    return null;
+  }
+
+  // A method of the caller's class first, then any function of the name.
+  const name = node.title.replace(/^(?:this|self)\./, '');
+  const owner = ofGraph(own.id);
+  const sameClass = owner?.kind === 'method' ? `${owner.scope}.${name}` : '';
+  const fn =
+    d.functions.find((f) => sameClass && f.name === sameClass) ??
+    d.functions.find((f) => f.name === name) ??
+    d.functions.find((f) => f.name.endsWith(`.${name}`));
+  return fn ? ofGraph(fn.id) : null;
+}
+
 /** Function whose local variables "My Script" lists. */
 export function currentFunctionOf(
   d: GraphDocument | null,

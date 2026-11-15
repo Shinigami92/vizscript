@@ -44,7 +44,10 @@ const props = defineProps<{
   types?: TypeSystemInfo | null;
   /** The text `doc` was parsed from (symbol ranges point into it). */
   docText?: string;
-  /** Variable of a selected Get / Set node, shown above the node. */
+  /**
+   * Variable of a selected Get / Set node, or function of a selected
+   * entry, return or call node, shown above the node.
+   */
   nodeSymbol?: ScriptSymbol | null;
   /** Palette index of a comment box's color (0: default). */
   boxColorOf?: (boxId: string) => number;
@@ -146,6 +149,10 @@ const selected = computed(() =>
 );
 const single = computed(() =>
   selected.value.length === 1 ? selected.value[0] : undefined
+);
+/** A call of a function shown above: its pins apart from the signature. */
+const callOfFunction = computed(
+  () => !!shownNodeSymbol.value?.params && single.value?.node.kind === 'call'
 );
 /** Entry nodes go with their function (deleted in My Script). */
 const deletable = computed(() =>
@@ -496,7 +503,7 @@ function deleteSelection(): void {
             @op="onSymbolOp"
           />
         </template>
-        <!-- A variable's Get / Set node is named by the variable above. -->
+        <!-- Nodes of a variable or function are named by it above. -->
         <div
           v-else
           class="border-b border-zinc-800 px-3 py-2.5"
@@ -554,7 +561,7 @@ function deleteSelection(): void {
         <DetailsSection
           v-if="inputs.length > 0"
           id="node-inputs"
-          title="Inputs"
+          :title="callOfFunction ? 'Call inputs' : 'Inputs'"
         >
           <!-- The operator of a SET of something other than a variable
                (`item.price += 1`); a variable's shows in its section. -->
@@ -637,10 +644,14 @@ function deleteSelection(): void {
           </div>
         </DetailsSection>
 
+        <!-- An entry node's outputs are the function's inputs above. -->
         <DetailsSection
-          v-if="outputs.length > 0"
+          v-if="
+            outputs.length > 0 &&
+            !(shownNodeSymbol?.params && single.node.kind === 'entry')
+          "
           id="node-outputs"
-          title="Outputs"
+          :title="callOfFunction ? 'Call outputs' : 'Outputs'"
         >
           <div v-for="pin in outputs" :key="pin.id" class="pin-row">
             <div class="flex items-center gap-1.5">

@@ -65,6 +65,7 @@ import {
   currentFunctionOf,
   describeTarget,
   findDefinitionTarget,
+  functionOfNode,
   parentGraphs,
   variableOfNode,
 } from './script-workspace/symbol-lookup';
@@ -771,7 +772,11 @@ watch(
   { immediate: true }
 );
 
-const nodeSymbol = computed(() => variableOfNode(doc.value, selection.value));
+const nodeSymbol = computed(
+  () =>
+    variableOfNode(doc.value, selection.value) ??
+    functionOfNode(doc.value, selection.value)
+);
 
 /** Nodes using the selected symbol, highlighted like UE does. */
 const symbolUses = computed(() =>
