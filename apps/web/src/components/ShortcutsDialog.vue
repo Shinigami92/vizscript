@@ -86,6 +86,11 @@ const GROUPS: ReadonlyArray<{
       },
       { action: 'Toggle a true / false value', input: 'Click its checkbox' },
       {
+        action: 'Edit an array value in Details',
+        input:
+          '⊕ adds, 🗑 empties; ▼ on an element: Insert, Duplicate, Delete; drag its grip to reorder',
+      },
+      {
         action: 'Change a number in Details',
         input:
           'Drag left / right on it (Shift ×10, Alt ×0.1), or click and type; ↑ / ↓ step',

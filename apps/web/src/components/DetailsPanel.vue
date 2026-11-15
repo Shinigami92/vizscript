@@ -832,6 +832,7 @@ function deleteSelection(): void {
               :types="types ?? null"
               :symbols="doc?.symbols ?? []"
               :base="baseOf(variable.symbol)"
+              :doc="doc"
               linked
               @op="emit('op', $event)"
               @select-symbol="emit('selectSymbol', variable.symbol.id)"

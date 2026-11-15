@@ -719,6 +719,7 @@ function setModifier(modifier: string, enabled: boolean): void {
           :types="types"
           :symbols="symbols"
           :base="base"
+          :doc="doc"
           @op="emit('op', $event)"
           @show-node="showValueNode"
         />
