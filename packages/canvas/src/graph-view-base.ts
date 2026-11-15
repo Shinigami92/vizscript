@@ -386,7 +386,14 @@ export abstract class GraphViewBase {
       );
     }
 
-    // Route backward wires through the gap above the lower node's row.
+    // Data wires are UE's spline, also backwards (an S-loop).
+    if (edge.kind !== 'exec') {
+      return [
+        wireShape(this.pinWorld(from, fromPin), this.pinWorld(to, toPin)),
+      ];
+    }
+
+    // Exec chains wrapped to a lower row go through the gap above it.
     const fromBottom = from.y + from.geom.height;
     const toBottom = to.y + to.geom.height;
     const laneY =

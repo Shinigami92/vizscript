@@ -8,12 +8,22 @@ export interface Wire {
   p1: Point;
 }
 
-/** Blueprint-style wire: horizontal tangents growing with the distance. */
+/**
+ * UE's wire spline (`FConnectionDrawingPolicy::ComputeSplineTangent` with
+ * the default graph editor settings): both ends leave horizontally, with a
+ * tangent growing with the distance. Going backwards the tangent is larger
+ * and reaches its full size sooner, so the wire loops out of its pin and
+ * into the other in an S, like in Blueprints.
+ */
 export function wireCurve(from: Point, to: Point): Wire {
-  const dx = Math.abs(to.x - from.x);
-  const offset =
-    Math.max(50, dx * 0.5) +
-    (to.x < from.x ? Math.min(150, Math.abs(to.y - from.y) * 0.25) : 0);
+  const dx = to.x - from.x;
+  const dy = Math.abs(to.y - from.y);
+  const tangent =
+    dx >= 0
+      ? Math.min(dx, 1000) + Math.min(dy, 1000)
+      : 3 * Math.min(-dx, 200) + 1.5 * Math.min(dy, 200);
+  // A Hermite spline as a Bezier curve: control points a third along.
+  const offset = tangent / 3;
   return {
     p0: from,
     c0: { x: from.x + offset, y: from.y },
@@ -83,9 +93,9 @@ function pointsBounds(points: ReadonlyArray<Point>): Rect {
 }
 
 /**
- * Shape for a wire between two pins. Wires that run backwards to a lower row
- * (wrapped exec chains) are routed through the gap at `laneY` instead of
- * cutting diagonally across other nodes.
+ * Shape for a wire between two pins. With `laneY`, wires that run backwards
+ * (exec chains wrapped to a lower row) are routed through the gap there
+ * instead of cutting diagonally across the row; others are UE's spline.
  */
 export function wireShape(from: Point, to: Point, laneY?: number): WireShape {
   const backwards = to.x < from.x - 60;
