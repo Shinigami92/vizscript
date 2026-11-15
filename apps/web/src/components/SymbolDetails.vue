@@ -6,13 +6,20 @@ import type {
   SourceRange,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { ASSIGN_OPERATORS, declaringNode, pinColor } from '@vizscript/core';
+import {
+  ASSIGN_OPERATORS,
+  declaringNode,
+  holdsFields,
+  pinColor,
+  qualifiedName,
+} from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
 import { lineColumn, snippet } from '../graph/source';
 import { SYMBOL_ICONS, symbolLabel, symbolType } from '../graph/symbols';
 import DetailsSection from './DetailsSection.vue';
 import SymbolExportHint from './symbol-details/SymbolExportHint.vue';
+import SymbolFields from './symbol-details/SymbolFields.vue';
 import SymbolSignature from './symbol-details/SymbolSignature.vue';
 import SymbolValueField from './symbol-details/SymbolValueField.vue';
 import TypePicker from './TypePicker.vue';
@@ -146,16 +153,28 @@ const importedText = computed(() => {
 const isVariable = computed(() =>
   ['variable', 'constant', 'local'].includes(props.symbol.kind)
 );
-/** A field of a class that takes no default value (Rust struct fields). */
+/** The interface or object type this symbol is a field of. */
+const fieldOwner = computed(() =>
+  props.symbol.kind === 'variable'
+    ? (props.symbols ?? []).find(
+        (s) => holdsFields(s) && qualifiedName(s) === props.symbol.scope
+      )
+    : undefined
+);
+/**
+ * A field that takes no default value: of an interface, or of a class in
+ * a language without field values (Rust struct fields).
+ */
 const isValuelessField = computed(
   () =>
-    props.types?.noFieldValues === true &&
-    props.symbol.kind === 'variable' &&
-    (props.symbols ?? []).some(
-      (s) =>
-        s.kind === 'class' &&
-        (s.scope ? `${s.scope}.${s.name}` : s.name) === props.symbol.scope
-    )
+    fieldOwner.value !== undefined ||
+    (props.types?.noFieldValues === true &&
+      props.symbol.kind === 'variable' &&
+      (props.symbols ?? []).some(
+        (s) =>
+          s.kind === 'class' &&
+          (s.scope ? `${s.scope}.${s.name}` : s.name) === props.symbol.scope
+      ))
 );
 /** The language needs a type here: no "No type" choice (Rust). */
 const typeRequired = computed(
@@ -220,11 +239,13 @@ const modifierOptions = computed(() => {
   const kind =
     props.symbol.kind === 'local'
       ? 'local'
-      : member
-        ? 'member'
-        : props.symbol.kind === 'constant'
-          ? 'constant'
-          : 'variable';
+      : fieldOwner.value
+        ? 'field'
+        : member
+          ? 'member'
+          : props.symbol.kind === 'constant'
+            ? 'constant'
+            : 'variable';
   return modifiers[kind];
 });
 
@@ -277,6 +298,7 @@ const spawnable = computed(
     props.types?.exposeOnSpawn === true &&
     props.symbol.kind === 'variable' &&
     props.symbol.scope !== '' &&
+    fieldOwner.value === undefined &&
     !props.symbol.modifiers.includes('static') &&
     !props.symbol.name.startsWith('#')
 );
@@ -711,6 +733,15 @@ function setModifier(modifier: string, enabled: boolean): void {
       :declared="declared"
       :language="language"
       :doc="doc"
+      @op="emit('op', $event)"
+    />
+    <SymbolFields
+      :symbol="symbol"
+      :symbols="symbols ?? []"
+      :editable="editable"
+      :types="types"
+      :declared="declared"
+      :language="language"
       @op="emit('op', $event)"
     />
 

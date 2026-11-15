@@ -5,7 +5,12 @@ import type {
   ScriptSymbol,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { pinColor, qualifiedName, uniqueName } from '@vizscript/core';
+import {
+  holdsFields,
+  pinColor,
+  qualifiedName,
+  uniqueName,
+} from '@vizscript/core';
 import { useStorage } from '@vueuse/core';
 import {
   computed,
@@ -141,6 +146,11 @@ const functionScopes = computed(
 const classes = computed(() =>
   (props.doc?.symbols ?? []).filter((s) => s.kind === 'class')
 );
+/** Interfaces and object types: Details lists their fields, not My Script. */
+const fieldOwners = computed(
+  () =>
+    new Set((props.doc?.symbols ?? []).filter(holdsFields).map(qualifiedName))
+);
 
 /** Groups for every class, so `+` can add the first member. */
 function withClasses(groups: Group[]): Group[] {
@@ -179,7 +189,9 @@ const sections = computed<Section[]>(() => {
       groups: memberGroups(
         grouped(
           of('variable', 'constant').filter(
-            (s) => !functionScopes.value.has(s.scope)
+            (s) =>
+              !functionScopes.value.has(s.scope) &&
+              !fieldOwners.value.has(s.scope)
           )
         )
       ),
