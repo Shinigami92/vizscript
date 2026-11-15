@@ -14,6 +14,7 @@ import {
   joinKey,
   keptWrapped,
   nodeKey,
+  pureSignature,
   renamedNodes,
   viaGets,
   viaJoins,
@@ -23,6 +24,8 @@ import {
 } from '@vizscript/core';
 import type { ComputedRef, ShallowRef } from 'vue';
 import { computed } from 'vue';
+import type { PureJoin } from './pure-join-ops';
+import { fanOut, isPureCopy, pureJoins, withCopyParts } from './pure-join-ops';
 
 export interface ViaWires {
   /** The graph as drawn: remembered Gets as wires from their SET. */
@@ -135,6 +138,35 @@ interface WiredGet {
   at: Point | undefined;
 }
 
+/**
+ * The join of the copy a wire from a pure node wrote into an input: the
+ * node now wired into it, when it is the same expression as its host.
+ */
+function joinedCopy(
+  next: GraphDocument,
+  copied: { host: string; input: PinRef },
+  rename: ReadonlyMap<string, string>
+): Positions {
+  const host = rename.get(copied.host) ?? copied.host;
+  const input = rename.get(copied.input.node) ?? copied.input.node;
+  for (const fn of next.functions) {
+    const copy = fn.edges.find(
+      (e) => e.to.node === input && e.to.pin === copied.input.pin
+    )?.from.node;
+    const signature = copy ? pureSignature(fn, copy) : undefined;
+    if (
+      copy &&
+      copy !== host &&
+      signature !== undefined &&
+      signature === pureSignature(fn, host)
+    ) {
+      return { [joinKey(copy, host)]: { x: 0, y: 0 } };
+    }
+  }
+
+  return {};
+}
+
 /** The Gets of a variable. */
 function readsOf(doc: GraphDocument, variable: string): Set<string> {
   return new Set(
@@ -186,9 +218,23 @@ export function useViaWires(deps: {
 
   function throughVias(op: GraphOp): GraphOp {
     const drawn = canvasDoc.value;
-    if (!drawn) {
+    const shown = deps.shownDoc.value;
+    if (!drawn || !shown) {
       return op;
     }
+
+    const joins = pureJoins(shown, drawn);
+    const result = viaOp(op, drawn, joins);
+    // An edit of a joined pure node is written at its copies too.
+    return result === op ? fanOut(op, joins) : result;
+  }
+
+  function viaOp(
+    op: GraphOp,
+    drawn: GraphDocument,
+    joins: ReadonlyArray<PureJoin>
+  ): GraphOp {
+    const shown = deps.shownDoc.value;
 
     const vias = drawn.functions
       .flatMap((f) => f.edges)
@@ -206,20 +252,41 @@ export function useViaWires(deps: {
         (e) => e.to.node === op.pin.node && e.to.pin === op.pin.pin
       );
       if (into?.via) {
-        return { type: 'deleteNodes', nodeIds: [into.via] };
+        // A joined pure copy goes with its wire, without leaving its
+        // inputs behind as statements.
+        return isPureCopy(shown, into.via)
+          ? { ...op, drop: true }
+          : { type: 'deleteNodes', nodeIds: [into.via] };
       }
 
-      const gets = from(op.pin);
+      const gets = from(op.pin).filter((id) => !isPureCopy(shown, id));
       const own = drawn.functions
         .flatMap((f) => f.edges)
         .some(
           (e) =>
             !e.via && e.from.node === op.pin.node && e.from.pin === op.pin.pin
         );
+      // Breaking a joined node's wires takes its copies along.
+      const copies: GraphOp[] = vias
+        .filter(
+          (e) =>
+            e.from.node === op.pin.node &&
+            e.from.pin === op.pin.pin &&
+            e.via !== undefined &&
+            isPureCopy(shown, e.via)
+        )
+        .map((e) => ({ type: 'disconnect', pin: e.to, drop: true }));
       // Breaking the SET's wires removes the reads of the variable.
-      return gets.length > 0 && !own
-        ? { type: 'deleteNodes', nodeIds: gets }
-        : op;
+      // The pin's own wires, if it has any besides the joined ones.
+      const rest: GraphOp | undefined =
+        gets.length > 0 && !own
+          ? { type: 'deleteNodes', nodeIds: gets }
+          : own || copies.length === 0
+            ? op
+            : undefined;
+      return copies.length > 0
+        ? { type: 'all', ops: [...(rest ? [rest] : []), ...copies] }
+        : (rest ?? op);
     }
 
     // Wired over a wire drawn in place of a Get: that read goes (it was
@@ -231,11 +298,15 @@ export function useViaWires(deps: {
       return into ? { ...op, drop: true } : op;
     }
 
-    // A deleted Get takes the reads joined into it along (its wires).
+    // A deleted Get takes the reads joined into it along (its wires), a
+    // joined pure node its copies with their parts.
     if (op.type === 'deleteNodes') {
-      const joined = vias
-        .filter((e) => e.via && op.nodeIds.includes(e.from.node))
-        .map((e) => e.via ?? '');
+      const joined = withCopyParts(
+        joins,
+        vias
+          .filter((e) => e.via && op.nodeIds.includes(e.from.node))
+          .map((e) => e.via ?? '')
+      );
       return joined.length > 0
         ? { ...op, nodeIds: [...new Set([...op.nodeIds, ...joined])] }
         : op;
@@ -265,10 +336,14 @@ export function useViaWires(deps: {
       return problems;
     }
 
+    const shown = deps.shownDoc.value;
+    const joins = drawn && shown ? pureJoins(shown, drawn) : [];
     const result = new Map(problems);
     for (const edge of edges) {
-      const own = edge.via ? problems.get(edge.via) : undefined;
-      if (own) {
+      // A joined copy: also the problems of its parts.
+      const hidden = edge.via ? withCopyParts(joins, [edge.via]) : [];
+      const own = hidden.flatMap((id) => problems.get(id) ?? []);
+      if (own.length > 0) {
         result.set(edge.to.node, [...(result.get(edge.to.node) ?? []), ...own]);
       }
     }
@@ -289,6 +364,11 @@ export function useViaWires(deps: {
   let wrappedBefore: Map<string, string> | null = null;
   /** Inputs a Get was wired into by graph-only edits just written. */
   let wiredInputs: WiredGet[] = [];
+  /**
+   * Wired from a pure node (not a Get): the code copies its expression
+   * into the input; the copy is drawn as that node (a join, like UE).
+   */
+  let wiredCopy: { host: string; input: PinRef } | null = null;
 
   function keepWired(overlay: GraphOverlay, wrote: boolean): Positions {
     const shown = deps.shownDoc.value;
@@ -311,6 +391,14 @@ export function useViaWires(deps: {
 
   function beforeOp(op: GraphOp, doc: GraphDocument | null): void {
     pending = null;
+    const wiredFrom =
+      doc && op.type === 'connect' ? findNode(doc, op.from.node) : undefined;
+    wiredCopy =
+      op.type === 'connect' &&
+      wiredFrom?.purity === 'pure' &&
+      wiredFrom.kind !== 'getVar'
+        ? { host: wiredFrom.id, input: op.to }
+        : null;
     const layout = doc
       ? doc === deps.shownDoc.value
         ? shownLayout.value
@@ -381,13 +469,15 @@ export function useViaWires(deps: {
     const drawn = drawnBefore;
     const wrapped = wrappedBefore;
     const inputs = wiredInputs;
+    const copied = wiredCopy;
     pending = null;
     drawnBefore = null;
     wrappedBefore = null;
     wiredInputs = [];
+    wiredCopy = null;
     if (
       !previous ||
-      (!wired && !drawn && !wrapped?.size && inputs.length === 0)
+      (!wired && !drawn && !wrapped?.size && inputs.length === 0 && !copied)
     ) {
       return {};
     }
@@ -401,6 +491,7 @@ export function useViaWires(deps: {
       ...(wrapped?.size
         ? keptWrapped(wrapped, next, rename, nextLayout())
         : {}),
+      ...(copied ? joinedCopy(next, copied, rename) : {}),
     };
     if (!wired) {
       return patch;

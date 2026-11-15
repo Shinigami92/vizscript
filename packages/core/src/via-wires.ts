@@ -7,6 +7,7 @@ import type {
   PinRef,
   Positions,
 } from './ir';
+import { copyTree, pureSignature, statementJoins } from './pure-joins';
 import type { TextChange } from './reconcile';
 import { renamedNodes } from './reconcile';
 
@@ -392,14 +393,25 @@ export function foldVias(
     }
   }
 
+  // Identical pure expressions of one statement share one node too.
+  const hosts = new Set(joins.values());
+  for (const [id, host] of statementJoins(doc)) {
+    if (!remembered.has(id) && !joins.has(id) && !hosts.has(id)) {
+      joins.set(id, host);
+    }
+  }
+
   if (gets.size === 0 && joins.size === 0) {
     return doc;
   }
 
   let changed = false;
   const functions = doc.functions.map((fn) => {
-    // Hidden Get → the output its wires are drawn from.
+    // Hidden node → the output its wires are drawn from (`pin` empty: the
+    // same pin of a joined copy's host).
     const hidden = new Map<string, PinRef>();
+    // The parts of hidden copies: drawn as the host's parts.
+    const dropped = new Set<string>();
     for (const node of fn.nodes) {
       // A Get the user wired (joined, or kept as its node) stays so.
       const setter =
@@ -412,24 +424,53 @@ export function foldVias(
     }
 
     const nodes = new Map(fn.nodes.map((n) => [n.id, n]));
+    const memo = new Map<string, string | undefined>();
     for (const [id, hostId] of joins) {
-      if (id === hostId) {
+      const copy = nodes.get(id);
+      const host = nodes.get(hostId);
+      if (
+        id === hostId ||
+        !copy ||
+        !host ||
+        hidden.has(id) ||
+        dropped.has(id) ||
+        dropped.has(hostId) ||
+        (joins.get(hostId) ?? hostId) !== hostId
+      ) {
         continue;
       }
 
-      const get = nodes.get(id);
-      const host = nodes.get(hostId);
-      const out = host?.pins.find((p) => p.direction === 'out');
+      const out = host.pins.find((p) => p.direction === 'out');
       if (
-        get?.kind === 'getVar' &&
-        host?.kind === 'getVar' &&
-        host.title === get.title &&
-        out &&
-        !hidden.has(id) &&
-        (joins.get(hostId) ?? hostId) === hostId
+        copy.kind === 'getVar' &&
+        host.kind === 'getVar' &&
+        host.title === copy.title &&
+        out
       ) {
         // A host drawn from its SET draws the joined wires from there too.
         hidden.set(id, hidden.get(hostId) ?? { node: hostId, pin: out.id });
+        continue;
+      }
+
+      const signature = pureSignature(fn, id, memo);
+      if (
+        copy.kind !== 'getVar' &&
+        signature !== undefined &&
+        signature === pureSignature(fn, hostId, memo)
+      ) {
+        hidden.set(id, { node: hostId, pin: '' });
+        for (const part of copyTree(fn, id)) {
+          if (part !== id) {
+            dropped.add(part);
+          }
+        }
+      }
+    }
+
+    // A join whose host went with a hidden copy stays its own node.
+    for (const [id, via] of hidden) {
+      if (dropped.has(via.node)) {
+        hidden.delete(id);
       }
     }
 
@@ -438,18 +479,27 @@ export function foldVias(
     }
 
     changed = true;
-    const edges: GraphEdge[] = fn.edges.map((edge) => {
-      const from = hidden.get(edge.from.node);
-      if (!from) {
-        return edge;
+    const gone = (node: string): boolean =>
+      hidden.has(node) || dropped.has(node);
+    const edges: GraphEdge[] = fn.edges.flatMap((edge) => {
+      if (gone(edge.to.node) || dropped.has(edge.from.node)) {
+        return [];
       }
 
-      return { ...edge, id: edgeId(from, edge.to), from, via: edge.from.node };
+      const via = hidden.get(edge.from.node);
+      if (!via) {
+        return [edge];
+      }
+
+      const from = via.pin ? via : { node: via.node, pin: edge.from.pin };
+      return [
+        { ...edge, id: edgeId(from, edge.to), from, via: edge.from.node },
+      ];
     });
     return {
       ...fn,
-      nodes: fn.nodes.filter((n) => !hidden.has(n.id)),
-      edges: edges.filter((e) => !hidden.has(e.to.node)),
+      nodes: fn.nodes.filter((n) => !gone(n.id)),
+      edges,
     };
   });
   return changed ? { ...doc, functions } : doc;

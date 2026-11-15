@@ -2,6 +2,7 @@ import type { GraphDocument, GraphNode } from '@vizscript/core';
 import {
   adjacentVias,
   foldVias,
+  joinedNode,
   joinKey,
   keptWrapped,
   nodeKey,
@@ -275,5 +276,94 @@ describe('a Get wired again (UE uses the same node)', () => {
     expect(Object.keys(entries)).toEqual([
       joinKey(newJoined?.id ?? '', newHost?.id ?? ''),
     ]);
+  });
+});
+
+const LOOP = (body: string): string =>
+  `interface Item { price: number; quantity: number }\ndeclare function g(n: number): void;\nfunction f(items: Item[]) {\n  for (const item of items) {\n${body}\n  }\n}\n`;
+const quantities = (doc: GraphDocument): GraphNode[] =>
+  doc.functions.flatMap((f) => f.nodes).filter((n) => n.title === '.quantity');
+
+describe('pure node joins (UE: one pure node, many wires)', () => {
+  it('draws identical expressions of one statement as one node', () => {
+    const doc = parseTypeScript(
+      LOOP('    g(item.price * item.quantity + item.quantity);'),
+      'a.ts'
+    );
+    const [host, copy] = quantities(doc);
+    if (!host || !copy) {
+      throw new Error('no .quantity');
+    }
+
+    const drawn = foldVias(doc, new Set());
+    expect(quantities(drawn).map((n) => n.id)).toEqual([host.id]);
+    const wires = drawn.functions
+      .flatMap((f) => f.edges)
+      .filter((e) => e.from.node === host.id);
+    expect(wires).toHaveLength(2);
+    expect(wires.some((e) => e.via === copy.id)).toBe(true);
+  });
+
+  it('keeps identical expressions of two statements apart', () => {
+    const doc = parseTypeScript(
+      LOOP('    g(item.quantity);\n    g(item.quantity);'),
+      'a.ts'
+    );
+    expect(quantities(foldVias(doc, new Set()))).toHaveLength(2);
+  });
+
+  it('draws a copy the user wired as its host, across statements', () => {
+    const doc = parseTypeScript(
+      LOOP('    g(item.quantity);\n    g(item.quantity);'),
+      'a.ts'
+    );
+    const [host, copy] = quantities(doc);
+    if (!host || !copy) {
+      throw new Error('no .quantity');
+    }
+
+    const joins = viaJoins({ [joinKey(copy.id, host.id)]: { x: 0, y: 0 } });
+    const drawn = foldVias(doc, new Set(), joins);
+    expect(quantities(drawn).map((n) => n.id)).toEqual([host.id]);
+    // The copy's own input (the loop item) is not drawn twice.
+    const fn = drawn.functions.find((f) => f.name === 'f');
+    expect(fn?.edges.filter((e) => e.to.node === copy.id)).toEqual([]);
+  });
+
+  it('ignores a join of different expressions', () => {
+    const doc = parseTypeScript(
+      LOOP('    g(item.quantity);\n    g(item.price);'),
+      'a.ts'
+    );
+    const host = node(doc, '.quantity');
+    const other = node(doc, '.price');
+    const joins = viaJoins({ [joinKey(other.id, host.id)]: { x: 0, y: 0 } });
+    const drawn = foldVias(doc, new Set(), joins);
+    expect(
+      drawn.functions.flatMap((f) => f.nodes).some((n) => n.id === other.id)
+    ).toBe(true);
+  });
+});
+
+describe('edits of a joined pure node', () => {
+  it('finds the node of a copy that stands where a node of its host does', () => {
+    const doc = parseTypeScript(
+      LOOP('    g(item.quantity + 1);\n    g(item.quantity + 1);'),
+      'a.ts'
+    );
+    const fn = doc.functions.find((f) => f.name === 'f');
+    const [host, copy] = (fn?.nodes ?? []).filter((n) => n.title === '+');
+    const [hostQuantity, copyQuantity] = quantities(doc);
+    const loop = fn?.nodes.find((n) => n.kind === 'forEach');
+    if (!fn || !host || !copy || !hostQuantity || !copyQuantity || !loop) {
+      throw new Error('missing nodes');
+    }
+
+    expect(joinedNode(fn, host.id, copy.id, host.id)).toBe(copy.id);
+    expect(joinedNode(fn, host.id, copy.id, hostQuantity.id)).toBe(
+      copyQuantity.id
+    );
+    // Not a part of the expression: no node of the copy stands for it.
+    expect(joinedNode(fn, host.id, copy.id, loop.id)).toBeUndefined();
   });
 });
