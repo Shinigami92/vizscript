@@ -281,6 +281,7 @@ const {
     positionOf: (id) => canvas.value?.getPositions()[id] ?? positions.value[id],
     typeFloating: (edit, source) => typeFloating(edit, source),
     placed: (ids) => {
+      placedNodes(ids);
       const moved: Positions = {};
       for (const [from, to] of Object.entries(ids)) {
         const p = pinned.value[from];
@@ -358,13 +359,20 @@ const layoutOptions = {
   commentBoxTop: COMMENT_BOX_TOP,
 };
 
-const { canvasDoc, throughVias, viaProblems, keepWired, beforeOp, afterParse } =
-  useViaWires({
-    shownDoc,
-    parsedDoc,
-    pinned,
-    autoLayout: (shown) => layoutDocument(shown, layoutOptions),
-  });
+const {
+  canvasDoc,
+  throughVias,
+  viaProblems,
+  keepWired,
+  placedNodes,
+  beforeOp,
+  afterParse,
+} = useViaWires({
+  shownDoc,
+  parsedDoc,
+  pinned,
+  autoLayout: (shown) => layoutDocument(shown, layoutOptions),
+});
 const {
   selectedSymbol,
   onSelectionChange,

@@ -42,6 +42,11 @@ export interface ViaWires {
    * when the code stays the same (`wrote` false).
    */
   keepWired: (overlay: GraphOverlay, wrote: boolean) => Positions;
+  /**
+   * Floating nodes were written as code (their ids → the written nodes'):
+   * the inputs `keepWired` noted follow them.
+   */
+  placedNodes: (ids: Readonly<Record<string, string>>) => void;
   /** Notes an op that wires a SET's output somewhere (before it runs). */
   beforeOp: (op: GraphOp, doc: GraphDocument | null) => void;
   /** The `~via|` entries of the Gets that op made (after the re-parse). */
@@ -425,10 +430,39 @@ export function useViaWires(deps: {
     const parsed = deps.parsedDoc.value;
     if (wrote || !parsed) {
       wiredInputs = inputs;
+      // Written as code: the graph stays drawn as it is (like an op).
+      noteDrawn(wrote ? deps.shownDoc.value : null);
       return {};
     }
 
     return keptGets(parsed, inputs, new Map(), () => deps.autoLayout(parsed));
+  }
+
+  function placedNodes(ids: Readonly<Record<string, string>>): void {
+    wiredInputs = wiredInputs.map((w) => ({
+      ...w,
+      input: { ...w.input, node: ids[w.input.node] ?? w.input.node },
+    }));
+  }
+
+  /** What the graph draws before an edit, kept by `afterParse`. */
+  function noteDrawn(doc: GraphDocument | null): void {
+    const layout = doc
+      ? doc === deps.shownDoc.value
+        ? shownLayout.value
+        : deps.autoLayout(doc)
+      : {};
+    drawnBefore = doc ? adjacentVias(doc, layout) : null;
+    // What the user wired or kept wins over the shared Get (`foldVias`).
+    const remembered = viaGets(deps.pinned.value);
+    const joins = viaJoins(deps.pinned.value);
+    wrappedBefore = doc
+      ? new Map(
+          [...wrappedVias(doc, layout)].filter(
+            ([id]) => !remembered.has(id) && !joins.has(id)
+          )
+        )
+      : null;
   }
 
   function beforeOp(op: GraphOp, doc: GraphDocument | null): void {
@@ -448,22 +482,7 @@ export function useViaWires(deps: {
         : usedFrom?.purity === 'pure'
           ? { host: usedFrom.id }
           : null;
-    const layout = doc
-      ? doc === deps.shownDoc.value
-        ? shownLayout.value
-        : deps.autoLayout(doc)
-      : {};
-    drawnBefore = doc ? adjacentVias(doc, layout) : null;
-    // What the user wired or kept wins over the shared Get (`foldVias`).
-    const remembered = viaGets(deps.pinned.value);
-    const joins = viaJoins(deps.pinned.value);
-    wrappedBefore = doc
-      ? new Map(
-          [...wrappedVias(doc, layout)].filter(
-            ([id]) => !remembered.has(id) && !joins.has(id)
-          )
-        )
-      : null;
+    noteDrawn(doc);
     const source = sourceOf(op);
     const setter = source && doc ? findNode(doc, source.node) : undefined;
     // Wired from a Get: the new read joins it (UE uses the same node).
@@ -590,6 +609,7 @@ export function useViaWires(deps: {
     throughVias,
     viaProblems,
     keepWired,
+    placedNodes,
     beforeOp,
     afterParse,
   };
