@@ -22,9 +22,16 @@ export function useGraphClipboard(
   ctx: CanvasContext & { pointer: Readonly<Point> }
 ): GraphClipboard {
   const { props, emitOp, show } = ctx;
+  // The menus copy plain text: whether it was a lone value is kept here.
+  let lastCopy = { code: '', expression: false };
 
   async function copyCode(ids: ReadonlyArray<string>): Promise<boolean> {
-    const { code } = selectionCode(ctx.index.value, props.text, ids);
+    const { code, expression } = selectionCode(
+      ctx.index.value,
+      props.text,
+      ids
+    );
+    lastCopy = { code, expression };
     if (!code) {
       show('These nodes have no source code to copy.');
       return false;
@@ -66,7 +73,8 @@ export function useGraphClipboard(
     pasteCode(
       code,
       world,
-      node?.purity === 'impure' ? continuation(node) : undefined
+      node?.purity === 'impure' ? continuation(node) : undefined,
+      lastCopy.code === code && lastCopy.expression
     );
   }
 
@@ -80,16 +88,21 @@ export function useGraphClipboard(
       return;
     }
 
-    const { code } = selectionCode(ctx.index.value, props.text, selection);
+    const { code, expression } = selectionCode(
+      ctx.index.value,
+      props.text,
+      selection
+    );
     if (!code) {
       return;
     }
 
+    lastCopy = { code, expression };
     event.preventDefault();
     event.clipboardData?.setData('text/plain', code);
     event.clipboardData?.setData(
       NODES_MIME,
-      JSON.stringify({ language: props.doc?.language ?? '' })
+      JSON.stringify({ language: props.doc?.language ?? '', expression })
     );
     if (cut && props.editable) {
       emitOp({ type: 'deleteNodes', nodeIds: [...selection] });
@@ -119,8 +132,13 @@ export function useGraphClipboard(
    * Inserts code as nodes: after the selected statement, else at the end of
    * the function under the pointer, where the pointer is.
    */
-  function pasteCode(code: string, world: Point, after?: PinRef): void {
-    const template: NodeTemplate = { type: 'code', code };
+  function pasteCode(
+    code: string,
+    world: Point,
+    after?: PinRef,
+    expression = false
+  ): void {
+    const template: NodeTemplate = { type: 'code', code, expression };
     if (after) {
       emitOp({ type: 'addNode', template, after, position: world });
       return;
@@ -143,10 +161,12 @@ export function useGraphClipboard(
     }
 
     event.preventDefault();
+    let expression = false;
     try {
       const from = JSON.parse(
         event.clipboardData?.getData(NODES_MIME) || '{}'
-      ) as { language?: string };
+      ) as { language?: string; expression?: boolean };
+      expression = from.expression === true;
       if (from.language && from.language !== props.doc?.language) {
         show(
           `Pasted ${from.language} code into a ${props.doc?.language} file.`
@@ -167,7 +187,8 @@ export function useGraphClipboard(
       world,
       entry?.node.purity === 'impure' && sameFunction
         ? continuation(entry.node)
-        : undefined
+        : undefined,
+      expression
     );
   }
 
@@ -177,7 +198,7 @@ export function useGraphClipboard(
       return;
     }
 
-    const { code, statements } = selectionCode(
+    const { code, statements, expression } = selectionCode(
       ctx.index.value,
       props.text,
       selection
@@ -193,7 +214,7 @@ export function useGraphClipboard(
       ? { x: origin.x + 40, y: origin.y + 40 }
       : pointerWorld();
     if (world) {
-      pasteCode(code, world, last ? continuation(last) : undefined);
+      pasteCode(code, world, last ? continuation(last) : undefined, expression);
     }
   }
 

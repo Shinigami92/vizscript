@@ -363,6 +363,8 @@ export function selectionCode(
 ): {
   code: string;
   statements: GraphNode[];
+  /** Only a value (a pure node): it has no statement end yet. */
+  expression: boolean;
 } {
   const nodes = ids
     .map((id) => index.nodes.get(id)?.node)
@@ -370,6 +372,7 @@ export function selectionCode(
   const ranges = nodes
     .map((node) => ({
       node,
+      statement: getMeta<StatementMeta>(node).stmt !== undefined,
       range: getMeta<StatementMeta>(node).stmt ?? node.range,
     }))
     .filter(({ range }) => range.end > range.start);
@@ -395,6 +398,7 @@ export function selectionCode(
     .join('\n');
   return {
     code,
+    expression: outer.length === 1 && outer[0]?.statement === false,
     statements: outer
       .map(({ node }) => node)
       .filter((n) => n.purity === 'impure'),

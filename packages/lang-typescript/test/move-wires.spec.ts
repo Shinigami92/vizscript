@@ -151,4 +151,18 @@ describe('pasting code', () => {
       'function f() {\n  start();\n  if (ready) {\n    go();\n  }\n  done();\n}\n'
     );
   });
+
+  it('ends a duplicated value like a statement', () => {
+    const text = 'function f() {\n  start();\n}\n';
+    const call = parseTypeScript(text, 't.ts')
+      .functions.find((fn) => fn.name === 'f')
+      ?.nodes.find((n) => n.kind === 'call');
+    expect(
+      apply(text, {
+        type: 'addNode',
+        template: { type: 'code', code: '`Total: ${n} EUR`', expression: true },
+        after: { node: call?.id ?? '', pin: 'then' },
+      })
+    ).toBe('function f() {\n  start();\n  `Total: ${n} EUR`;\n}\n');
+  });
 });

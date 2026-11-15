@@ -141,9 +141,14 @@ export function templateSnippet(
   indent: string,
   unit: string
 ): string | undefined {
-  return template.type === 'code'
-    ? reindentCode(template.code, indent, unit)
-    : syntax.template(template, indent, unit);
+  if (template.type !== 'code') {
+    return syntax.template(template, indent, unit);
+  }
+
+  const code = template.expression
+    ? asStatement(template.code.trim(), syntax)
+    : template.code;
+  return reindentCode(code, indent, unit);
 }
 
 /** Indentation step of a file: a tab, or the smallest space indent. */

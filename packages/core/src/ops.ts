@@ -58,9 +58,10 @@ export type NodeTemplate =
   | { type: 'flow'; flow: FlowTemplate }
   /**
    * Statements as source text (pasted or duplicated nodes), re-indented to
-   * where they go.
+   * where they go. `expression`: one value without its statement end (a
+   * copied pure node), written as a statement of the language.
    */
-  | { type: 'code'; code: string };
+  | { type: 'code'; code: string; expression?: boolean };
 
 /**
  * Language-agnostic graph edit operations. Each language backend translates
