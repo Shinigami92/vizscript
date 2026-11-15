@@ -30,7 +30,7 @@ import {
 } from './insert-ops';
 import type { GraphDocument, PinLiteral } from './ir';
 import { setInput, setLiteral } from './literal-ops';
-import { failed, succeeded } from './op-result';
+import { failed, mergeEdits, succeeded } from './op-result';
 import type { GraphOp, NodeTemplate, OpResult, TextEdit } from './ops';
 import { findNode } from './reconcile';
 import { replaceReference, setAssignOperator } from './reference-ops';
@@ -494,6 +494,12 @@ function applyTextOpEdits(
       return addImport(text, doc, op.import, syntax.declarations);
     }
 
+    case 'all': {
+      return mergeEdits(
+        op.ops.map((each) => applyTextOpEdits(text, doc, each, syntax))
+      );
+    }
+
     case 'withImport': {
       // One edit (one undo step): the import and what uses the name.
       const imported = addImport(text, doc, op.import, syntax.declarations);
@@ -552,7 +558,7 @@ function applyTextOpEdits(
     }
 
     case 'disconnect': {
-      return disconnect(text, doc, op.pin, syntax);
+      return disconnect(text, doc, op.pin, syntax, op.drop === true);
     }
 
     case 'disconnectNode': {

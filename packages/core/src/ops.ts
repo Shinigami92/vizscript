@@ -82,7 +82,15 @@ export type GraphOp =
        */
       drop?: boolean;
     }
-  | { type: 'disconnect'; pin: PinRef }
+  | {
+      type: 'disconnect';
+      pin: PinRef;
+      /**
+       * An input's value goes along instead of staying as a statement
+       * (a copy of a joined pure node: its wire is all there was of it).
+       */
+      drop?: boolean;
+    }
   /** The operator of an assignment: `=`, `+=`, `-=` … (not of declarations). */
   | { type: 'setAssignOperator'; node: string; operator: string }
   /**
@@ -301,6 +309,11 @@ export type GraphOp =
   | { type: 'setScriptSetting'; setting: string; value: string }
   /** Another op that uses a name of another file, plus its import. */
   | { type: 'withImport'; import: ImportRequest; op: GraphOp }
+  /**
+   * Several ops on the same text as one edit (one undo step): an edit of
+   * a joined pure node written at each copy of its code.
+   */
+  | { type: 'all'; ops: GraphOp[] }
   /** Only the import of a name (its use floats in the graph). */
   | { type: 'addImport'; import: ImportRequest };
 

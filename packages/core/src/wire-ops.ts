@@ -16,7 +16,7 @@ import type {
   PinRef,
   SourceRange,
 } from './ir';
-import { failed, succeeded } from './op-result';
+import { failed, mergeEdits, succeeded } from './op-result';
 import { operandText } from './operand-parens';
 import type { OpResult, TextEdit } from './ops';
 import { applyTextEdits } from './ops';
@@ -103,34 +103,7 @@ export function referenceOutput(
   return 'This output cannot be referenced.';
 }
 
-/**
- * Edits of several ops on the same text as one: identical edits once (two
- * wires may need the same new variable), overlapping ones fail.
- */
-function mergeEdits(results: ReadonlyArray<OpResult>): OpResult {
-  const edits = new Map<string, TextEdit>();
-  for (const result of results) {
-    if (!result.ok) {
-      return result;
-    }
-
-    for (const edit of result.edits) {
-      edits.set(`${edit.start}:${edit.end}:${edit.text}`, edit);
-    }
-  }
-
-  const sorted = [...edits.values()].toSorted(
-    (a, b) => a.start - b.start || a.end - b.end
-  );
-  for (const [i, edit] of sorted.entries()) {
-    const next = sorted[i + 1];
-    if (next && next.start < edit.end) {
-      return failed('These wires cannot be moved together.');
-    }
-  }
-
-  return succeeded(sorted);
-}
+const MOVE_OVERLAP = 'These wires cannot be moved together.';
 
 export function moveWires(
   text: string,
@@ -169,7 +142,8 @@ export function moveWires(
     // Every input the old output fed takes the new one; the old node stays
     // (unwired, like UE's).
     return mergeEdits(
-      edges.map((e) => connectReplacing(text, doc, to, e.to, syntax))
+      edges.map((e) => connectReplacing(text, doc, to, e.to, syntax)),
+      MOVE_OVERLAP
     );
   }
 
@@ -210,7 +184,8 @@ export function moveWires(
         ...(kept ? [kept] : []),
         ...cleared.filter((edit) => !inTarget(edit)),
       ]),
-    ])
+    ]),
+    MOVE_OVERLAP
   );
 }
 
@@ -686,7 +661,9 @@ export function disconnect(
   text: string,
   doc: GraphDocument,
   ref: PinRef,
-  syntax: StatementSyntax
+  syntax: StatementSyntax,
+  /** The value wired into the input goes, not kept as a statement. */
+  drop = false
 ): OpResult {
   const node = findNode(doc, ref.node);
   const pin = findPin(node, ref.pin);
@@ -714,7 +691,9 @@ export function disconnect(
   }
 
   if (pin.direction === 'in') {
-    const edits = clearInput(text, doc, node, pin, syntax);
+    const edits = drop
+      ? clearInput(text, doc, node, pin, syntax, null)
+      : clearInput(text, doc, node, pin, syntax);
     return edits.length > 0
       ? succeeded(edits)
       : failed('Nothing to disconnect.');
