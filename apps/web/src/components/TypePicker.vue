@@ -112,6 +112,29 @@ const known = computed(() =>
     .map((c) => c.name)
 );
 
+/** What Enter in the search picks: the first type that matches. */
+const firstMatch = computed<{ name: string; option?: TypeOption } | null>(
+  () => {
+    if (!query.value.trim()) {
+      return null;
+    }
+
+    const option = basic.value[0];
+    if (option) {
+      return { name: option.name, option };
+    }
+
+    const name = own.value[0] ?? known.value[0];
+    return name === undefined ? null : { name };
+  }
+);
+
+function pickFirst(): void {
+  if (firstMatch.value) {
+    pick(firstMatch.value.name, firstMatch.value.option);
+  }
+}
+
 /** The operator for "type of the value" (`:=`), where it applies. */
 const inferOperator = computed(() =>
   props.inferable ? props.types.inferredType : undefined
@@ -286,6 +309,7 @@ function color(dataType: DataType): string {
             class="input py-1 text-xs"
             placeholder="Search types"
             aria-label="Search types"
+            @keydown.enter.prevent="pickFirst"
           />
           <div
             class="flex items-center gap-1"
@@ -330,14 +354,19 @@ function color(dataType: DataType): string {
         </div>
 
         <div class="min-h-0 flex-1 overflow-y-auto py-1">
-          <button v-if="!required" type="button" class="option" @click="clear">
+          <button
+            v-if="!required && !query.trim()"
+            type="button"
+            class="option"
+            @click="clear"
+          >
             <span class="size-2 shrink-0 rounded-full bg-zinc-600" />
             <span class="text-zinc-400 italic">{{
               types.inferredType ? 'No type (untyped)' : 'No type (inferred)'
             }}</span>
           </button>
           <button
-            v-if="inferOperator"
+            v-if="inferOperator && !query.trim()"
             type="button"
             class="option"
             @click="pickInferred"
@@ -356,6 +385,7 @@ function color(dataType: DataType): string {
             :key="option.name"
             type="button"
             class="option"
+            :class="{ 'bg-zinc-800': firstMatch?.name === option.name }"
             @click="pick(option.name, option)"
           >
             <span
@@ -371,6 +401,9 @@ function color(dataType: DataType): string {
               :key="name"
               type="button"
               class="option"
+              :class="{
+                'bg-zinc-800': !firstMatch?.option && firstMatch?.name === name,
+              }"
               @click="pick(name)"
             >
               <span
@@ -387,6 +420,9 @@ function color(dataType: DataType): string {
               :key="name"
               type="button"
               class="option"
+              :class="{
+                'bg-zinc-800': !firstMatch?.option && firstMatch?.name === name,
+              }"
               @click="pick(name)"
             >
               <span
