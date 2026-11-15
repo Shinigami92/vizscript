@@ -251,7 +251,7 @@ export function setSymbolType(
     !defaultValue ||
     isValuelessField(doc, symbol, syntax) ||
     !typeText?.trim() ||
-    (current !== undefined && !PLACEHOLDERS.has(current))
+    (current !== undefined && !isPlaceholder(current, syntax))
   ) {
     return result;
   }
@@ -274,7 +274,13 @@ export function setSymbolType(
     : result;
 }
 
-const PLACEHOLDERS = new Set(['undefined', 'null', 'None']);
+/** Values that only say "no value yet". */
+const NO_VALUES = new Set(['undefined', 'null', 'None']);
+
+/** Whether a value only holds the place: the language's placeholder too. */
+function isPlaceholder(value: string, syntax: DeclarationSyntax): boolean {
+  return value === syntax.typeSystem.placeholder || NO_VALUES.has(value);
+}
 
 /** A field of a class in a language whose fields take no value (Rust). */
 export function isValuelessField(
