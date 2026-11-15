@@ -1,6 +1,7 @@
 import type { InputPinMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import type { GraphNode, Pin } from './ir';
+import { canAddPin } from './operator-chain';
 
 export type TextStyle =
   | 'title'
@@ -141,9 +142,10 @@ export function compactTitle(node: GraphNode): string {
     return 'SET';
   }
 
+  // Two values or more (`a * b * c`); one is a sign (`-x`).
   const binary =
     node.pins.filter((p) => p.direction === 'in' && p.kind === 'data')
-      .length === 2;
+      .length >= 2;
   return (isOperatorGlyph(node) && binary && GLYPHS[node.title]) || node.title;
 }
 
@@ -256,7 +258,8 @@ export function computeNodeGeometry(
   const left = sortPins(node.pins.filter((p) => p.direction === 'in'));
   const right = sortPins(node.pins.filter((p) => p.direction === 'out'));
   const compact = isCompact(node);
-  const addPin = node.addPin === true && !compact;
+  // UE's math nodes have it too, under their values.
+  const addPin = canAddPin(node) && (!compact || isMathNode(node));
   const rows = Math.max(
     left.length + (addPin ? 1 : 0),
     right.length,

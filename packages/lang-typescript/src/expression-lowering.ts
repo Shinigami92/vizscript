@@ -1,5 +1,11 @@
 import type * as t from '@babel/types';
-import { conversionCall, isTypeConstant } from '@vizscript/core';
+import {
+  CHAIN_OPERATORS,
+  chainPinId,
+  conversionCall,
+  flattenChain,
+  isTypeConstant,
+} from '@vizscript/core';
 import type { DataType, Pin } from '@vizscript/core';
 import type { InsertPoint, OutputPinMeta } from '@vizscript/core';
 import { arrayElementType, arrayOfAll, truncate } from '@vizscript/core';
@@ -12,6 +18,32 @@ import {
   simpleChain,
   unwrap,
 } from './lower-utils';
+
+/** The type of `left op right`. */
+function binaryType(
+  op: string,
+  logical: boolean,
+  left: DataType,
+  right: DataType
+): DataType {
+  if (COMPARISON_OPERATORS.has(op)) {
+    return 'bool';
+  }
+
+  if (logical) {
+    return left === right ? left : 'any';
+  }
+
+  if (op === '+') {
+    return left === 'string' || right === 'string'
+      ? 'string'
+      : left === 'number' && right === 'number'
+        ? 'number'
+        : 'any';
+  }
+
+  return left === 'bigint' ? 'bigint' : 'number';
+}
 
 /** Lowers expressions into pure nodes, hoisted calls and literals. */
 export abstract class ExpressionLowering extends GraphBuilder {
@@ -280,42 +312,7 @@ export abstract class ExpressionLowering extends GraphBuilder {
 
       case 'BinaryExpression':
       case 'LogicalExpression': {
-        const leftExpr = expr.left as t.Expression;
-        const left = this.lowerExpr(leftExpr, `${path}.a`, mode);
-        const right = this.lowerExpr(
-          expr.right,
-          `${path}.b`,
-          expr.type === 'LogicalExpression' ? 'lazy' : mode
-        );
-        const op = expr.operator;
-        let type: DataType;
-        if (COMPARISON_OPERATORS.has(op)) {
-          type = 'bool';
-        } else if (expr.type === 'LogicalExpression') {
-          type = left.type === right.type ? left.type : 'any';
-        } else if (op === '+') {
-          type =
-            left.type === 'string' || right.type === 'string'
-              ? 'string'
-              : left.type === 'number' && right.type === 'number'
-                ? 'number'
-                : 'any';
-        } else {
-          type = left.type === 'bigint' ? 'bigint' : 'number';
-        }
-
-        return this.pureNode({
-          kind: 'operator',
-          title: op,
-          expr,
-          path,
-          inputs: [
-            { pin: this.dataIn('a', '', rangeOf(leftExpr)), value: left },
-            { pin: this.dataIn('b', '', rangeOf(expr.right)), value: right },
-          ],
-          outType: type,
-          compact: true,
-        });
+        return this.lowerBinary(expr, path, mode);
       }
 
       case 'ConditionalExpression': {
@@ -551,6 +548,55 @@ export abstract class ExpressionLowering extends GraphBuilder {
         });
       }
     }
+  }
+
+  /**
+   * `a + b`, and chains of one operator as one node with a pin per value
+   * (`a + b + c`), like UE's math nodes with "Add pin +".
+   */
+  protected lowerBinary(
+    expr: t.BinaryExpression | t.LogicalExpression,
+    path: string,
+    mode: EvalMode
+  ): ValueSource {
+    const op = expr.operator;
+    const logical = expr.type === 'LogicalExpression';
+    const operands = CHAIN_OPERATORS.has(op)
+      ? flattenChain<t.Expression>(
+          expr,
+          (e) =>
+            e.type === expr.type && e.operator === op
+              ? [e.left as t.Expression, e.right]
+              : undefined,
+          (e) => e.start ?? 0
+        )
+      : [expr.left as t.Expression, expr.right];
+    const values = operands.map((operand, index) =>
+      this.lowerExpr(
+        operand,
+        `${path}.${chainPinId(index)}`,
+        logical && index > 0 ? 'lazy' : mode
+      )
+    );
+    const type = values
+      .slice(1)
+      .reduce<DataType>(
+        (left, right) => binaryType(op, logical, left, right.type),
+        values[0]?.type ?? 'any'
+      );
+
+    return this.pureNode({
+      kind: 'operator',
+      title: op,
+      expr,
+      path,
+      inputs: operands.map((operand, index) => ({
+        pin: this.dataIn(chainPinId(index), '', rangeOf(operand)),
+        value: values[index] as ValueSource,
+      })),
+      outType: type,
+      compact: true,
+    });
   }
 
   protected lowerObject(

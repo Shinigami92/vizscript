@@ -1,6 +1,12 @@
 import type { ContextTarget, GraphView } from '@vizscript/canvas';
 import type { InputPinMeta, Point } from '@vizscript/core';
-import { ARG_PIN, getMeta, linkPin, referenceName } from '@vizscript/core';
+import {
+  ARG_PIN,
+  chainValues,
+  getMeta,
+  linkPin,
+  referenceName,
+} from '@vizscript/core';
 import type { Ref } from 'vue';
 import { toRaw } from 'vue';
 import { pinEdges } from '../../graph/doc-index';
@@ -446,11 +452,11 @@ export function createContextEntries(
                     }),
                 }))
               : []),
-            ...(argument
+            ...(argument || (chainValues(entry.node)?.length ?? 0) > 2
               ? [
                   {
                     // UE's "Remove pin" (for added pins).
-                    label: 'Remove argument pin',
+                    label: argument ? 'Remove argument pin' : 'Remove pin',
                     icon: 'i-mdi-minus-circle-outline',
                     danger: true,
                     action: () =>

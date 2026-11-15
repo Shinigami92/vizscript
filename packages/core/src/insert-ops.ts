@@ -10,6 +10,7 @@ import { getMeta, owningStatement } from './edit-meta';
 import type { GraphDocument, GraphNode, Pin, PinRef, SourceRange } from './ir';
 import { setInput } from './literal-ops';
 import { failed, succeeded } from './op-result';
+import { chainValues, MAX_CHAIN_PINS } from './operator-chain';
 import type { NodeTemplate, OpResult, TextEdit } from './ops';
 import { findNode } from './reconcile';
 import { removeListItem } from './symbol-edits';
@@ -407,6 +408,11 @@ export function addArgument(
   syntax: StatementSyntax
 ): OpResult {
   const node = findNode(doc, nodeId);
+  const values = node ? chainValues(node) : undefined;
+  if (node && values) {
+    return addChainValue(text, node, values, syntax);
+  }
+
   const close = node?.kind === 'call' ? callClose(text, node) : undefined;
   if (!node || close === undefined) {
     return failed('Arguments can only be added to calls.');
@@ -445,6 +451,116 @@ export function addArgument(
   ]);
 }
 
+/** A value with the parentheses around it: `(b)` of `a + (b)`. */
+function operandSpan(text: string, range: SourceRange): SourceRange {
+  let { start, end } = range;
+  for (;;) {
+    let before = start;
+    while (before > 0 && /\s/.test(text[before - 1] ?? '')) {
+      before--;
+    }
+
+    let after = end;
+    while (after < text.length && /\s/.test(text[after] ?? '')) {
+      after++;
+    }
+
+    if (text[before - 1] !== '(' || text[after] !== ')') {
+      return { start, end };
+    }
+
+    start = before - 1;
+    end = after + 1;
+  }
+}
+
+/** The value a new pin of a chain starts with: one that changes nothing. */
+function neutralValue(
+  text: string,
+  node: GraphNode,
+  values: ReadonlyArray<Pin>,
+  syntax: StatementSyntax
+): string {
+  const op = node.title;
+  const type = node.pins.find(
+    (p) => p.direction === 'out' && p.kind === 'data'
+  )?.type;
+  if (type === 'string' && op === '+') {
+    const literal = values.find((p) => p.literal?.kind === 'string')?.literal;
+    return syntax.quote(
+      '',
+      literal ?? { value: '', raw: '', kind: 'string', editable: true }
+    );
+  }
+
+  if (type === 'bool') {
+    const booleans = syntax.booleans ?? { true: 'true', false: 'false' };
+    if (op === '&&' || op === 'and') {
+      return booleans.true;
+    }
+
+    if (op === '||' || op === 'or') {
+      return booleans.false;
+    }
+  }
+
+  const value = ['*', '/', '//'].includes(op)
+    ? '1'
+    : ['+', '-', '|', '^'].includes(op)
+      ? '0'
+      : undefined;
+  const last = values.at(-1)?.range;
+  if (type === 'number' && value && last) {
+    const previous = text.slice(last.start, last.end);
+    return syntax.number?.(value, previous) ?? value;
+  }
+
+  return syntax.placeholder;
+}
+
+/** UE's "Add pin +" on a math node: `a + b` → `a + b + 0`. */
+function addChainValue(
+  text: string,
+  node: GraphNode,
+  values: ReadonlyArray<Pin>,
+  syntax: StatementSyntax
+): OpResult {
+  const last = values.at(-1)?.range;
+  if (!last || values.length >= MAX_CHAIN_PINS) {
+    return failed(`An operator takes at most ${MAX_CHAIN_PINS} values.`);
+  }
+
+  const at = operandSpan(text, last).end;
+  const value = neutralValue(text, node, values, syntax);
+  return succeeded([{ start: at, end: at, text: ` ${node.title} ${value}` }]);
+}
+
+/** Removes a value of an operator chain with its operator. */
+function removeChainValue(
+  text: string,
+  values: ReadonlyArray<Pin>,
+  pinId: string
+): OpResult {
+  const at = values.findIndex((p) => p.id === pinId);
+  const range = values[at]?.range;
+  if (!range) {
+    return failed('Only values written in the operator can be removed.');
+  }
+
+  if (values.length <= 2) {
+    return failed('An operator needs two values.');
+  }
+
+  const span = operandSpan(text, range);
+  // The first value goes with the operator after it, others with the one
+  // before them.
+  const next = at === 0 ? values[1]?.range : undefined;
+  const previous = at > 0 ? values[at - 1]?.range : undefined;
+  const start = previous ? operandSpan(text, previous).end : span.start;
+  const end = next ? operandSpan(text, next).start : span.end;
+  return succeeded([{ start, end, text: '' }]);
+}
+
 /** `...`, `*`, `**` or `name=` written before an argument's value. */
 const ARG_PREFIX = /(?<=[(,]\s*)(?:\.\.\.|\*{1,2}|[A-Za-z_]\w*\s*=(?!=))\s*$/;
 
@@ -455,6 +571,11 @@ export function removeArgument(
   ref: PinRef
 ): OpResult {
   const node = findNode(doc, ref.node);
+  const values = node ? chainValues(node) : undefined;
+  if (values) {
+    return removeChainValue(text, values, ref.pin);
+  }
+
   const pin = findPin(node, ref.pin);
   if (node?.kind !== 'call' || !pin?.range || !ARG_PIN.test(pin.id)) {
     return failed('Only arguments written in a call can be removed.');
