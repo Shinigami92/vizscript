@@ -7,6 +7,7 @@ import {
   keptWrapped,
   nodeKey,
   reconcileVias,
+  statementJoins,
   viaGets,
   viaJoins,
   viaSetter,
@@ -184,6 +185,26 @@ describe('wires from a SET (UE)', () => {
       [nodeKey(second.id)]: { x: 0, y: 0 },
       [joinKey(first.id, second.id)]: { x: 0, y: 0 },
     });
+    // Still wrapped, but the new layout would pick the other read.
+    const fn = doc.functions.find((f) => f.name === 'f');
+    const setter = fn ? viaSetter(fn, first) : undefined;
+    const other = {
+      [setter?.id ?? '']: { x: 900, y: 0 },
+      [first.id]: { x: 100, y: 200 },
+      [second.id]: { x: 300, y: 260 },
+    };
+    expect(Object.keys(keptWrapped(before, doc, new Map(), other))).toEqual([
+      nodeKey(second.id),
+      joinKey(first.id, second.id),
+    ]);
+    // Drawn as before by the new layout: nothing to keep.
+    const same = {
+      ...other,
+      [first.id]: { x: 300, y: 200 },
+      [second.id]: { x: 100, y: 260 },
+    };
+    expect(keptWrapped(before, doc, new Map(), same)).toEqual({});
+
     const drawn = foldVias(
       doc,
       new Set(),
@@ -302,6 +323,24 @@ describe('pure node joins (UE: one pure node, many wires)', () => {
       .filter((e) => e.from.node === host.id);
     expect(wires).toHaveLength(2);
     expect(wires.some((e) => e.via === copy.id)).toBe(true);
+  });
+
+  it('draws the leftmost copy in the layout as the shared node', () => {
+    const doc = parseTypeScript(
+      LOOP('    g(item.price * item.quantity + item.quantity);'),
+      'a.ts'
+    );
+    const [first, second] = quantities(doc);
+    if (!first || !second) {
+      throw new Error('no .quantity');
+    }
+
+    const layout = {
+      [first.id]: { x: 300, y: 0 },
+      [second.id]: { x: 100, y: 0 },
+    };
+    expect(statementJoins(doc, layout).get(first.id)).toBe(second.id);
+    expect(statementJoins(doc).get(second.id)).toBe(first.id);
   });
 
   it('keeps identical expressions of two statements apart', () => {

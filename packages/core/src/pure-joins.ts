@@ -1,5 +1,11 @@
 import { owningStatement } from './edit-meta';
-import type { FunctionGraph, GraphDocument, GraphNode, PinRef } from './ir';
+import type {
+  FunctionGraph,
+  GraphDocument,
+  GraphNode,
+  PinRef,
+  Positions,
+} from './ir';
 
 /**
  * UE wires one pure node (`.quantity`, `a + b`) into several inputs and
@@ -114,11 +120,16 @@ function size(node: GraphNode): number {
 /**
  * Identical pure expressions within one statement (`x * x`,
  * `item.price * item.quantity + item.quantity`): nothing runs between
- * them, so one node, the first in the code, feeds all their uses. Each
+ * them, so one node feeds all their uses: the leftmost in the generated
+ * `layout` (its wires all run forward), else the first in the code. Each
  * copy maps to that node, like `wrappedVias`. Only the outermost copies
  * join: the parts inside a joined copy go with it.
  */
-export function statementJoins(doc: GraphDocument): Map<string, string> {
+export function statementJoins(
+  doc: GraphDocument,
+  layout?: Positions
+): Map<string, string> {
+  const x = (node: GraphNode): number | undefined => layout?.[node.id]?.x;
   const result = new Map<string, string>();
   for (const fn of doc.functions) {
     const memo = new Map<string, string | undefined>();
@@ -142,7 +153,9 @@ export function statementJoins(doc: GraphDocument): Map<string, string> {
     for (const group of ordered) {
       const [host, ...copies] = group
         .filter((n) => !covered.has(n.id))
-        .toSorted((a, b) => a.range.start - b.range.start);
+        .toSorted(
+          (a, b) => (x(a) ?? 0) - (x(b) ?? 0) || a.range.start - b.range.start
+        );
       if (!host) {
         continue;
       }

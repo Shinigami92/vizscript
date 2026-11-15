@@ -331,8 +331,9 @@ export function wrappedVias(
 /**
  * `~via|` entries keeping reads that shared one Get before an edit
  * (`before`, from `wrappedVias`) on that Get, where the generated layout
- * of the edited graph no longer wraps them: the nodes stay where they
- * were drawn, so wires from the SET would run back across the row.
+ * of the edited graph no longer wraps them or picks another of them: the
+ * nodes stay where they were drawn, so wires from the SET would run back
+ * across the row, or another Get would show up where none was.
  */
 export function keptWrapped(
   before: ReadonlyMap<string, string>,
@@ -351,15 +352,20 @@ export function keptWrapped(
   }
 
   const adjacent = adjacentVias(next, layout);
+  const wrapped = wrappedVias(next, layout);
   const patch: Positions = {};
   for (const [host, reads] of groups) {
     const [first] = reads;
-    if (first === undefined || !reads.some((id) => adjacent.has(id))) {
+    const kept = rename.get(host) ?? host;
+    const shared = reads.includes(kept) ? kept : first;
+    // Still drawn as that Get by the new layout: nothing to keep.
+    if (
+      shared === undefined ||
+      reads.every((id) => !adjacent.has(id) && wrapped.get(id) === shared)
+    ) {
       continue;
     }
 
-    const kept = rename.get(host) ?? host;
-    const shared = reads.includes(kept) ? kept : first;
     for (const id of reads) {
       patch[id === shared ? nodeKey(id) : joinKey(id, shared)] = {
         x: 0,
@@ -395,7 +401,7 @@ export function foldVias(
 
   // Identical pure expressions of one statement share one node too.
   const hosts = new Set(joins.values());
-  for (const [id, host] of statementJoins(doc)) {
+  for (const [id, host] of statementJoins(doc, layout)) {
     if (!remembered.has(id) && !joins.has(id) && !hosts.has(id)) {
       joins.set(id, host);
     }
