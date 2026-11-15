@@ -86,3 +86,58 @@ describe.each(LANGUAGES)('counting loops in $name', (language) => {
     );
   });
 });
+
+/** Two loops with the same name: renaming the second keeps the first. */
+const TWO_LOOPS: ReadonlyArray<{
+  language: Language;
+  text: string;
+  renamed: string;
+}> = [
+  {
+    language: LANGUAGES[0] as Language,
+    text: 'function f(n: number) {\n  for (let i = 0; i < n; i++) {\n    g(i);\n  }\n  for (let i = 0; i < n; i++) {\n    g(i);\n  }\n}\n',
+    renamed:
+      'function f(n: number) {\n  for (let i = 0; i < n; i++) {\n    g(i);\n  }\n  for (let j = 0; j < n; j++) {\n    g(j);\n  }\n}\n',
+  },
+  {
+    language: LANGUAGES[1] as Language,
+    text: 'def f(n):\n    for i in range(n):\n        print(i)\n    for i in range(n):\n        print(i)\n',
+    renamed:
+      'def f(n):\n    for i in range(n):\n        print(i)\n    for j in range(n):\n        print(j)\n',
+  },
+  {
+    language: LANGUAGES[2] as Language,
+    text: 'func f(n):\n\tfor i in range(n):\n\t\tprint(i)\n\tfor i in range(n):\n\t\tprint(i)\n',
+    renamed:
+      'func f(n):\n\tfor i in range(n):\n\t\tprint(i)\n\tfor j in range(n):\n\t\tprint(j)\n',
+  },
+  {
+    language: LANGUAGES[3] as Language,
+    text: 'fn f(n: i32) {\n    for i in 0..n {\n        g(i);\n    }\n    for i in 0..n {\n        g(i);\n    }\n}\n',
+    renamed:
+      'fn f(n: i32) {\n    for i in 0..n {\n        g(i);\n    }\n    for j in 0..n {\n        g(j);\n    }\n}\n',
+  },
+];
+
+describe.each(TWO_LOOPS)(
+  'renaming a loop variable in $language.name',
+  ({ language, text, renamed }) => {
+    it('renames it and its uses in that loop only', () => {
+      const loops = language
+        .parse(text)
+        .functions.flatMap((f) => f.nodes)
+        .filter((n) => n.title === 'For Loop');
+      const result = language.apply(text, {
+        type: 'renameBinding',
+        node: loops[1]?.id ?? '',
+        pin: 'element',
+        name: 'j',
+      });
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+
+      expect(applyTextEdits(text, result.edits)).toBe(renamed);
+    });
+  }
+);

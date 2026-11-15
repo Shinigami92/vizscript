@@ -204,6 +204,28 @@ function commitLiteralValue(node: GraphNode, pin: Pin, value: string): void {
   }
 }
 
+/**
+ * A name the node binds for its block (a loop's index or element, a
+ * caught error): renamed here with its uses, like UE's pin names.
+ */
+function bindsName(node: GraphNode, pin: Pin): boolean {
+  return (
+    pin.kind === 'data' &&
+    pin.range !== undefined &&
+    (node.kind === 'forEach' || node.kind === 'try')
+  );
+}
+
+function commitBinding(node: GraphNode, pin: Pin, event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const name = input.value.trim();
+  // A failed rename (toast) leaves the field as it was.
+  input.value = pin.name;
+  if (name && name !== pin.name) {
+    emit('op', { type: 'renameBinding', node: node.id, pin: pin.id, name });
+  }
+}
+
 function commitComment(node: GraphNode, event: Event): void {
   const value = (event.target as HTMLTextAreaElement).value;
   if (value.trim() !== (node.comment?.text ?? '').trim()) {
@@ -626,7 +648,22 @@ function deleteSelection(): void {
           <div v-for="pin in outputs" :key="pin.id" class="pin-row">
             <div class="flex items-center gap-1.5">
               <PinIcon :pin="pin" :size="9" />
-              <span class="text-zinc-200">{{ pinLabel(pin) }}</span>
+              <input
+                v-if="editable && bindsName(single.node, pin)"
+                :value="pin.name"
+                class="input min-w-0 flex-1 py-0.5 font-mono text-xs"
+                :aria-label="`Name of ${pin.name}`"
+                spellcheck="false"
+                @keydown.enter.prevent="
+                  ($event.target as HTMLInputElement).blur()
+                "
+                @keydown.escape.prevent="
+                  ($event.target as HTMLInputElement).value = pin.name;
+                  ($event.target as HTMLInputElement).blur();
+                "
+                @change="commitBinding(single.node, pin, $event)"
+              />
+              <span v-else class="text-zinc-200">{{ pinLabel(pin) }}</span>
               <span class="ml-auto text-[11px] text-zinc-500">{{
                 pin.kind === 'exec' ? 'exec' : pin.type
               }}</span>

@@ -210,6 +210,11 @@ export type GraphOp =
   | { type: 'addType'; name: string }
   /** Renames a symbol and its uses in the file. */
   | { type: 'renameSymbol'; symbol: string; name: string }
+  /**
+   * Renames the name an output of a node binds for its block (a loop's
+   * index or element, a caught error) and its uses there.
+   */
+  | { type: 'renameBinding'; node: string; pin: string; name: string }
   /** Removes the declaration of a symbol (its uses stay). */
   | { type: 'deleteSymbol'; symbol: string }
   /**

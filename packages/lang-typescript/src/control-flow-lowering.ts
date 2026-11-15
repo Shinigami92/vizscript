@@ -125,7 +125,13 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
         this.execIn(),
         ...inputs.map((i) => i.pin),
         this.execOut('body', 'Loop Body', this.blockInsert(stmt.body)),
-        this.dataOut('element', name, 'number', { sourceText: name }),
+        this.dataOut(
+          'element',
+          name,
+          'number',
+          { sourceText: name },
+          rangeOf(decl.id)
+        ),
         this.execOut(
           'completed',
           'Completed',
@@ -261,9 +267,14 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
         this.execIn(),
         arrayPin,
         this.execOut('body', 'Loop Body', this.blockInsert(stmt.body)),
-        this.dataOut('element', elementName, elementType, {
-          sourceText: elementName,
-        }),
+        this.dataOut(
+          'element',
+          elementName,
+          elementType,
+          { sourceText: elementName },
+          // The name to rename (a destructuring pattern has several).
+          pattern?.type === 'Identifier' ? rangeOf(pattern) : undefined
+        ),
         this.execOut(
           'completed',
           'Completed',

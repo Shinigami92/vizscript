@@ -1,4 +1,5 @@
 import { blankValue, insertElement, moveElement } from './array-ops';
+import { renameBinding } from './binding-rename';
 import { collapseToFunction } from './collapse';
 import type { CommentSyntax } from './comment-ops';
 import {
@@ -619,6 +620,17 @@ function applyTextOpEdits(
       return set
         ? set(text, doc, op.setting, op.value)
         : failed('This language has no script settings.');
+    }
+
+    case 'renameBinding': {
+      return renameBinding(
+        text,
+        doc,
+        op.node,
+        op.pin,
+        op.name,
+        syntax.declarations
+      );
     }
 
     case 'collapseToFunction': {
