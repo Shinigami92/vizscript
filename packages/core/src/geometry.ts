@@ -144,8 +144,8 @@ export function compactTitle(node: GraphNode): string {
 
   // Two values or more (`a * b * c`); one is a sign (`-x`).
   const binary =
-    node.pins.filter((p) => p.direction === 'in' && p.kind === 'data')
-      .length >= 2;
+    node.pins.filter((p) => p.direction === 'in' && p.kind === 'data').length >=
+    2;
   return (isOperatorGlyph(node) && binary && GLYPHS[node.title]) || node.title;
 }
 

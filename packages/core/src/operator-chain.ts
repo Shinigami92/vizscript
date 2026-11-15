@@ -75,9 +75,35 @@ export function chainValues(node: GraphNode): Pin[] | undefined {
     : undefined;
 }
 
-/** UE's "Add pin +": a call with a rest parameter or an operator chain. */
+/** Literals that grow like UE's Make Array (not tuples, sets or `[x; n]`). */
+const GROWING_ARRAYS: ReadonlySet<string> = new Set([
+  'Make Array',
+  'Make List',
+  'Make Vec',
+]);
+
+/** A Make Array node of a literal (`[a, b]`): its elements. */
+export function arrayElements(node: GraphNode): Pin[] | undefined {
+  if (
+    node.kind !== 'makeArray' ||
+    !GROWING_ARRAYS.has(node.title) ||
+    node.subtitle !== undefined
+  ) {
+    return undefined;
+  }
+
+  const inputs = chainInputs(node);
+  return inputs.every((p) => /^e\d+$/.test(p.id) && p.range !== undefined)
+    ? inputs
+    : undefined;
+}
+
+/**
+ * UE's "Add pin +": a call with a rest parameter, an operator chain or a
+ * Make Array.
+ */
 export function canAddPin(node: GraphNode): boolean {
-  if (node.addPin === true) {
+  if (node.addPin === true || arrayElements(node) !== undefined) {
     return true;
   }
 

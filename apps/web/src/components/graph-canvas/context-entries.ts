@@ -2,6 +2,7 @@ import type { ContextTarget, GraphView } from '@vizscript/canvas';
 import type { InputPinMeta, Point } from '@vizscript/core';
 import {
   ARG_PIN,
+  arrayElements,
   chainValues,
   getMeta,
   linkPin,
@@ -341,6 +342,7 @@ export function createContextEntries(
       entry.node.kind === 'call' && pin.range && ARG_PIN.test(pin.id)
         ? pin.range
         : undefined;
+    const element = arrayElements(entry.node)?.some((p) => p.id === pin.id);
     const fallback = getMeta<InputPinMeta>(pin).defaultValue;
     const current = pin.range
       ? props.text.slice(pin.range.start, pin.range.end)
@@ -452,11 +454,17 @@ export function createContextEntries(
                     }),
                 }))
               : []),
-            ...(argument || (chainValues(entry.node)?.length ?? 0) > 2
+            ...(argument ||
+            element ||
+            (chainValues(entry.node)?.length ?? 0) > 2
               ? [
                   {
                     // UE's "Remove pin" (for added pins).
-                    label: argument ? 'Remove argument pin' : 'Remove pin',
+                    label: argument
+                      ? 'Remove argument pin'
+                      : element
+                        ? 'Remove array element pin'
+                        : 'Remove pin',
                     icon: 'i-mdi-minus-circle-outline',
                     danger: true,
                     action: () =>
