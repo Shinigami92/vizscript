@@ -110,7 +110,12 @@ export const RUST_TYPES: TypeSystemInfo = {
     { name: 'f64', dataType: 'number', defaultValue: '0.0' },
     { name: 'bool', dataType: 'bool', defaultValue: 'false' },
     { name: 'char', dataType: 'string', defaultValue: "' '" },
-    { name: 'String', dataType: 'string', defaultValue: 'String::new()' },
+    {
+      name: 'String',
+      dataType: 'string',
+      defaultValue: 'String::new()',
+      defaultIsNode: true,
+    },
     { name: '&str', dataType: 'string', defaultValue: '""' },
   ],
   array: 'Vec<T>',
@@ -532,7 +537,7 @@ export const RUST_SYNTAX: StatementSyntax = {
     switch (template.type) {
       case 'flow': {
         const flows: Partial<Record<string, string>> = {
-          forEach: `for item in [0; 0] {\n${indent}}`,
+          forEach: `for item in todo!() {\n${indent}}`,
           forRange: `for i in 0..10 {\n${indent}}`,
           while: `while false {\n${indent}}`,
           switch: `match () {\n${indent}${unit}_ => {}\n${indent}}`,

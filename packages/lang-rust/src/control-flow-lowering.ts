@@ -1,5 +1,6 @@
 import type {
   GraphNode,
+  InputSpec,
   InsertPoint,
   Pin,
   SourceRange,
@@ -282,15 +283,43 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
       rangeOf(stmt.iter),
       'array'
     );
-    const iterable = this.lowerExpr(stmt.iter, `${path}.iter`, 'eager');
-    const name = stmt.pattern.simple;
-    const elementName = this.src(rangeOf(stmt.pattern));
-    const elementType = name ? arrayElementType(iterable.type) : 'any';
     const iter = unwrap(stmt.iter);
     const isRange = iter.type === 'Range';
+    // `A..B` / `A..=B` is UE's For Loop: First / End (Last) Index pins, no
+    // range node.
+    const counting: InputSpec[] | undefined =
+      iter.type === 'Range' && iter.from && iter.to
+        ? [
+            {
+              pin: this.dataIn(
+                'first',
+                'First Index',
+                rangeOf(iter.from),
+                'number'
+              ),
+              value: this.lowerExpr(iter.from, `${path}.first`, 'eager'),
+            },
+            {
+              pin: this.dataIn(
+                iter.op === '..=' ? 'last' : 'end',
+                iter.op === '..=' ? 'Last Index' : 'End Index',
+                rangeOf(iter.to),
+                'number'
+              ),
+              value: this.lowerExpr(iter.to, `${path}.end`, 'eager'),
+            },
+          ]
+        : undefined;
+    const iterable = counting
+      ? undefined
+      : this.lowerExpr(stmt.iter, `${path}.iter`, 'eager');
+    const name = stmt.pattern.simple;
+    const elementName = this.src(rangeOf(stmt.pattern));
+    const elementType =
+      name && iterable ? arrayElementType(iterable.type) : 'any';
     const pins: Pin[] = [
       this.execIn(),
-      iterPin,
+      ...(counting ? counting.map((i) => i.pin) : [iterPin]),
       this.execOut('body', 'Loop Body', this.blockInsert(stmt.body)),
     ];
     if (name) {
@@ -325,7 +354,12 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
       path,
       meta,
     });
-    this.feed(node.id, iterPin, iterable);
+    if (counting) {
+      this.feedAll(node.id, counting);
+    } else if (iterable) {
+      this.feed(node.id, iterPin, iterable);
+    }
+
     this.chain(node, 'body');
     this.withScope(() => {
       if (name) {

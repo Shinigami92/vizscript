@@ -120,12 +120,71 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
     }
   }
 
+  /**
+   * `for i in range(B)` / `range(A, B)` is UE's For Loop: First / End Index
+   * pins (a missing start is `0`, inserted when set) and the index as an
+   * output, no `range` call node. Iterables of the pins otherwise.
+   */
+  private countingInputs(
+    stmt: Extract<Stmt, { type: 'For' }>,
+    path: string
+  ): InputSpec[] | undefined {
+    const iter = unwrap(stmt.iter);
+    const callee = iter.type === 'Call' ? unwrap(iter.callee) : undefined;
+    const args = iter.type === 'Call' ? iter.args : [];
+    const [from, to] = args.length === 1 ? [undefined, args[0]] : args;
+    if (
+      callee?.type !== 'Name' ||
+      callee.name !== 'range' ||
+      args.length === 0 ||
+      args.length > 2 ||
+      args.some((a) => a.keyword !== undefined || a.star !== undefined) ||
+      !to ||
+      unwrap(stmt.target).type !== 'Name'
+    ) {
+      return undefined;
+    }
+
+    const end: InputSpec = {
+      pin: this.dataIn('end', 'End Index', rangeOf(to.value), 'number'),
+      value: this.lowerExpr(to.value, `${path}.end`, 'eager'),
+    };
+    const first: InputSpec = from
+      ? {
+          pin: this.dataIn(
+            'first',
+            'First Index',
+            rangeOf(from.value),
+            'number'
+          ),
+          value: this.lowerExpr(from.value, `${path}.first`, 'eager'),
+        }
+      : {
+          pin: this.dataIn('first', 'First Index', undefined, 'number', {
+            insertInitAt: rangeOf(to.value).start,
+            insertPrefix: '',
+            insertSuffix: ', ',
+          }),
+          value: {
+            literal: { kind: 'number', value: '0', raw: '0', editable: true },
+            type: 'number',
+          },
+        };
+    return [first, end];
+  }
+
   protected lowerFor(
     stmt: Extract<Stmt, { type: 'For' }>,
     path: string,
     meta: Record<string, unknown>,
     insert: InsertPoint | undefined
   ): void {
+    const counting = this.countingInputs(stmt, path);
+    if (counting) {
+      this.lowerCountingFor(stmt, counting, path, meta, insert);
+      return;
+    }
+
     const iterPin = this.dataIn(
       'array',
       'Iterable',
@@ -176,6 +235,59 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
         });
       }
 
+      this.lowerBlock(stmt.body, `${path}/body`);
+    });
+    if (stmt.orelse) {
+      this.cursor = { node: node.id, pin: 'else' };
+      this.lowerBlock(stmt.orelse, `${path}/else`);
+    }
+
+    this.cursor = { node: node.id, pin: 'completed' };
+  }
+
+  private lowerCountingFor(
+    stmt: Extract<Stmt, { type: 'For' }>,
+    inputs: InputSpec[],
+    path: string,
+    meta: Record<string, unknown>,
+    insert: InsertPoint | undefined
+  ): void {
+    const target = unwrap(stmt.target);
+    const name = this.src(rangeOf(target));
+    const pins: Pin[] = [
+      this.execIn(),
+      ...inputs.map((i) => i.pin),
+      this.execOut('body', 'Loop Body', this.blockInsert(stmt.body)),
+      this.dataOut(
+        'element',
+        name,
+        'number',
+        { sourceText: name },
+        rangeOf(target)
+      ),
+    ];
+    if (stmt.orelse) {
+      pins.push(this.execOut('else', 'Else', this.blockInsert(stmt.orelse)));
+    }
+
+    pins.push(this.execOut('completed', 'Completed', insert, true));
+    const node = this.addNode({
+      kind: 'forEach',
+      title: 'For Loop',
+      category: 'flow',
+      purity: 'impure',
+      range: rangeOf(stmt),
+      pins,
+      path,
+      meta,
+    });
+    this.feedAll(node.id, inputs);
+    this.chain(node, 'body');
+    this.withScope(() => {
+      this.declare(name, {
+        source: { node: node.id, pin: 'element' },
+        type: 'number',
+      });
       this.lowerBlock(stmt.body, `${path}/body`);
     });
     if (stmt.orelse) {

@@ -88,22 +88,26 @@ export function emptyInput(
 ): string {
   const { empty } = expression;
   const given = typeof empty === 'string' ? empty : empty?.[slot - 1];
-  const typed =
+  const option =
     expression.result === undefined && wireType && wireType !== 'any'
-      ? types?.primitives.find((t) => t.dataType === wireType)?.defaultValue
+      ? types?.primitives.find((t) => t.dataType === wireType)
       : undefined;
+  // A default that is a node of its own would add a second node.
+  const typed = option?.defaultIsNode ? undefined : option?.defaultValue;
   return given ?? typed ?? types?.placeholder ?? 'undefined';
 }
 
 /**
  * The value a new Set of a variable starts with: its type's default (`0` for
- * an `int`), so the value pin is typed; otherwise the language's placeholder.
+ * an `int`), so the value pin is typed; otherwise (also for a default that
+ * is a node of its own, `Vector2.ZERO`) the language's placeholder.
  */
 export function typeDefault(
   types: TypeSystemInfo | null | undefined,
   type: string | undefined
 ): string | undefined {
-  return types?.primitives.find((t) => t.name === type)?.defaultValue;
+  const option = types?.primitives.find((t) => t.name === type);
+  return option?.defaultIsNode ? undefined : option?.defaultValue;
 }
 
 /** A value picked for an input from the action menu goes where it opened. */

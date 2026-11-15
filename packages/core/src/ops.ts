@@ -328,6 +328,11 @@ export interface TypeOption {
   dataType: DataType;
   /** Value of a new variable of this type (`""`, `0`, `Vector2.ZERO`). */
   defaultValue: string;
+  /**
+   * The default is a node of its own (a call, a Get, an object), not an
+   * inline value: a new Set node starts empty instead (one node, like UE).
+   */
+  defaultIsNode?: boolean;
 }
 
 /** An operator or value node offered by the action menu. */

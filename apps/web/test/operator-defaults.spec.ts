@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   emptyInput,
   fillTemplate,
+  typeDefault,
 } from '../src/components/graph-canvas/graph-helpers';
 
 function system(types: TypeSystemInfo | undefined): TypeSystemInfo {
@@ -61,5 +62,14 @@ describe('operators start with values that fit', () => {
     expect(fill(ts, '== (equal)', '$value', 'bool')).toBe(
       '$value === undefined'
     );
+  });
+});
+
+describe('defaults of new Set nodes', () => {
+  it('starts with an inline default, not a node of its own', () => {
+    expect(typeDefault(TS, 'number')).toBe('0');
+    // `{}` and `new Date()` would add a Make Object / call node.
+    expect(typeDefault(TS, 'object')).toBeUndefined();
+    expect(typeDefault(TS, 'Date')).toBeUndefined();
   });
 });

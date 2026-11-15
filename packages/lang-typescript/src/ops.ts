@@ -84,8 +84,18 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
     { name: 'number', dataType: 'number', defaultValue: '0' },
     { name: 'boolean', dataType: 'bool', defaultValue: 'false' },
     { name: 'bigint', dataType: 'bigint', defaultValue: '0n' },
-    { name: 'object', dataType: 'object', defaultValue: '{}' },
-    { name: 'Date', dataType: 'Date', defaultValue: 'new Date()' },
+    {
+      name: 'object',
+      dataType: 'object',
+      defaultValue: '{}',
+      defaultIsNode: true,
+    },
+    {
+      name: 'Date',
+      dataType: 'Date',
+      defaultValue: 'new Date()',
+      defaultIsNode: true,
+    },
     { name: 'RegExp', dataType: 'regexp', defaultValue: '/(?:)/' },
     { name: 'unknown', dataType: 'any', defaultValue: 'undefined' },
   ],
@@ -717,12 +727,12 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
     switch (template.type) {
       case 'flow': {
         return {
-          forEach: `for (const item of []) {\n${indent}}`,
+          forEach: `for (const item of undefined) {\n${indent}}`,
           forRange: `for (let i = 0; i < 10; i++) {\n${indent}}`,
           while: `while (false) {\n${indent}}`,
           switch: `switch (undefined) {\n${indent}${unit}case 0:\n${indent}${unit}${unit}break;\n${indent}${unit}default:\n${indent}${unit}${unit}break;\n${indent}}`,
           try: `try {\n${indent}} catch (error) {\n${indent}}`,
-          throw: 'throw new Error();',
+          throw: 'throw undefined;',
           break: 'break;',
           continue: 'continue;',
         }[template.flow];

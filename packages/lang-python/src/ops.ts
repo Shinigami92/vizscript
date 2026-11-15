@@ -437,12 +437,12 @@ export const PYTHON_SYNTAX: StatementSyntax = {
     switch (template.type) {
       case 'flow': {
         return {
-          forEach: `for item in []:\n${indent}${unit}pass`,
+          forEach: `for item in None:\n${indent}${unit}pass`,
           forRange: `for i in range(10):\n${indent}${unit}pass`,
           while: `while False:\n${indent}${unit}pass`,
           switch: `match None:\n${indent}${unit}case _:\n${indent}${unit}${unit}pass`,
           try: `try:\n${indent}${unit}pass\n${indent}except Exception as error:\n${indent}${unit}pass`,
-          throw: 'raise Exception()',
+          throw: 'raise None',
           break: 'break',
           continue: 'continue',
         }[template.flow];

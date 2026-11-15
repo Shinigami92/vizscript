@@ -60,11 +60,107 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
     this.cursor = { node: node.id, pin: 'completed' };
   }
 
+  /**
+   * A counting loop (`for (let i = A; i < B; i++)`, also `<=` and
+   * `i += 1`) is UE's For Loop: First / End (or Last) Index pins and the
+   * index as an output, no nodes for its condition. `false` for others.
+   */
+  protected lowerCountingLoop(
+    stmt: t.ForStatement,
+    path: string,
+    inline: boolean
+  ): boolean {
+    const [decl, ...more] =
+      stmt.init?.type === 'VariableDeclaration' ? stmt.init.declarations : [];
+    const name = decl?.id.type === 'Identifier' ? decl.id.name : undefined;
+    const test = stmt.test;
+    const update = stmt.update;
+    const counts =
+      (update?.type === 'UpdateExpression' &&
+        update.operator === '++' &&
+        update.argument.type === 'Identifier' &&
+        update.argument.name === name) ||
+      (update?.type === 'AssignmentExpression' &&
+        update.operator === '+=' &&
+        update.left.type === 'Identifier' &&
+        update.left.name === name &&
+        update.right.type === 'NumericLiteral' &&
+        update.right.value === 1);
+    if (
+      !name ||
+      !decl?.init ||
+      more.length > 0 ||
+      test?.type !== 'BinaryExpression' ||
+      (test.operator !== '<' && test.operator !== '<=') ||
+      test.left.type !== 'Identifier' ||
+      test.left.name !== name ||
+      !counts
+    ) {
+      return false;
+    }
+
+    const last = test.operator === '<=';
+    const inputs: InputSpec[] = [
+      {
+        pin: this.dataIn('first', 'First Index', rangeOf(decl.init), 'number'),
+        value: this.lowerExpr(decl.init, `${path}.first`, 'eager'),
+      },
+      {
+        pin: this.dataIn(
+          last ? 'last' : 'end',
+          last ? 'Last Index' : 'End Index',
+          rangeOf(test.right),
+          'number'
+        ),
+        value: this.lowerExpr(test.right, `${path}.end`, 'eager'),
+      },
+    ];
+    const node = this.addNode({
+      kind: 'forEach',
+      title: 'For Loop',
+      category: 'flow',
+      purity: 'impure',
+      range: rangeOf(stmt),
+      pins: [
+        this.execIn(),
+        ...inputs.map((i) => i.pin),
+        this.execOut('body', 'Loop Body', this.blockInsert(stmt.body)),
+        this.dataOut('element', name, 'number', { sourceText: name }),
+        this.execOut(
+          'completed',
+          'Completed',
+          this.statementInsert(stmt, inline),
+          true
+        ),
+      ],
+      path,
+      meta: this.statementMeta(stmt, inline),
+    });
+    this.feedAll(node.id, inputs);
+    this.chain(node, 'body');
+    this.withScope(() => {
+      this.declare(name, {
+        source: { node: node.id, pin: 'element' },
+        type: 'number',
+      });
+      this.lowerBody(stmt.body, `${path}/body`);
+    });
+    this.cursor = { node: node.id, pin: 'completed' };
+    return true;
+  }
+
   protected lowerLoop(
     stmt: t.ForStatement | t.WhileStatement | t.DoWhileStatement,
     path: string,
     inline: boolean
   ): void {
+    if (
+      stmt.type === 'ForStatement' &&
+      this.lowerCountingLoop(stmt, path, inline)
+    ) {
+      return;
+    }
+
     const title =
       stmt.type === 'ForStatement'
         ? 'For Loop'

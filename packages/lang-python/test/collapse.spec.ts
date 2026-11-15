@@ -122,7 +122,7 @@ describe('flow-control nodes', () => {
       return result.ok ? applyTextEdits(text, result.edits) : result.error;
     };
     expect(add('forEach')).toBe(
-      'def f():\n    start()\n    for item in []:\n        pass\n'
+      'def f():\n    start()\n    for item in None:\n        pass\n'
     );
     expect(add('switch')).toBe(
       'def f():\n    start()\n    match None:\n        case _:\n            pass\n'

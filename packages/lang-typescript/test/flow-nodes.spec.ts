@@ -33,10 +33,11 @@ function addFlow(flow: FlowTemplate): { text: string; kinds: string[] } {
 describe('flow-control nodes', () => {
   it('adds loops', () => {
     expect(addFlow('forEach')).toMatchObject({
-      text: 'function f() {\n  start();\n  for (const item of []) {\n  }\n}\n',
+      text: 'function f() {\n  start();\n  for (const item of undefined) {\n  }\n}\n',
       kinds: expect.arrayContaining(['forEach']),
     });
-    expect(addFlow('forRange').kinds).toContain('loop');
+    // A counting loop is one For Loop node with index pins (like UE).
+    expect(addFlow('forRange').kinds).toEqual(['entry', 'call', 'forEach']);
     expect(addFlow('while').kinds).toContain('loop');
   });
 
@@ -47,5 +48,13 @@ describe('flow-control nodes', () => {
     });
     expect(addFlow('try').kinds).toContain('try');
     expect(addFlow('throw').kinds).toContain('throw');
+  });
+
+  it('adds one node, its empty inputs are pin values (like UE)', () => {
+    for (const flow of ['forEach', 'forRange', 'throw'] as const) {
+      const { kinds } = addFlow(flow);
+      // The entry, `start()` and the new node: no Make Array, no `new Error`.
+      expect(kinds).toHaveLength(3);
+    }
   });
 });
