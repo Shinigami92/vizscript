@@ -11,6 +11,7 @@ import { computed, ref, watch } from 'vue';
 import NumberField from '../NumberField.vue';
 import ArrayValueField from '../value-fields/ArrayValueField.vue';
 import ValueFields from '../ValueFields.vue';
+import { PLACEHOLDER_VALUES, stringValue, valueKindOf } from './value-kinds';
 
 /** The (default) value row of a variable's details: `<dt>` and `<dd>`. */
 const props = defineProps<{
@@ -45,51 +46,11 @@ const valueCode = computed(() => {
   return (range ? props.text.slice(range.start, range.end) : '').trim();
 });
 
-/** The text of a simple string literal (`"a"`, `'b'`), else `undefined`. */
-function stringValue(literal: string): string | undefined {
-  const match = literal.match(/^([&^]?)(["'])((?:\\.|(?!\2).)*)\2$/s);
-  if (!match) {
-    return undefined;
-  }
-
-  return (match[3] ?? '').replaceAll(/\\(.)/g, (_, char: string) =>
-    char === 'n' ? '\n' : char === 't' ? '\t' : char
-  );
-}
-
-const BOOLEANS = new Set(['true', 'false', 'True', 'False']);
-
 /** How the value is edited: like UE, the widget follows the type. */
-const valueKind = computed<ValueKind>(() => {
-  const dataType = String(props.symbol.dataType);
-  const current = valueCode.value;
-  if (dataType === 'bool' && (current === '' || BOOLEANS.has(current))) {
-    return 'bool';
-  }
+const valueKind = computed<ValueKind>(() =>
+  valueKindOf(props.symbol.dataType, valueCode.value)
+);
 
-  if (
-    dataType === 'number' &&
-    (current === '' || /^[-+]?[\d_.]+(?:e[-+]?\d+)?$/i.test(current))
-  ) {
-    return 'number';
-  }
-
-  if (
-    dataType === 'string' &&
-    (current === '' || stringValue(current) !== undefined)
-  ) {
-    return 'string';
-  }
-
-  return 'expression';
-});
-
-/** `undefined`, `null`, `None`: shown as an empty field, typing replaces it. */
-const PLACEHOLDER_VALUES: ReadonlySet<string> = new Set([
-  'undefined',
-  'null',
-  'None',
-]);
 const placeholderValue = computed(() =>
   PLACEHOLDER_VALUES.has(valueCode.value.trim()) ? valueCode.value.trim() : ''
 );

@@ -80,6 +80,7 @@ import { useGraphOverlay } from './script-workspace/use-graph-overlay';
 import { useImports } from './script-workspace/use-imports';
 import { useLanguageVersion } from './script-workspace/use-language-version';
 import { useLayoutHistory } from './script-workspace/use-layout-history';
+import { provideParseValue } from './script-workspace/use-parse-value';
 import { useProblems } from './script-workspace/use-problems';
 import { useTypeLibs } from './script-workspace/use-type-libs';
 import { useViaWires } from './script-workspace/use-via-wires';
@@ -751,6 +752,15 @@ watch(
 
 /** Types and modifiers of the file's language (for the Details panel). */
 const typeSystem = shallowRef<TypeSystemInfo | null>(null);
+
+// A function input's default is no node: Details edits it in a host file.
+provideParseValue({
+  client,
+  text,
+  typeSystem,
+  path: () => props.path,
+  imports: () => importDeclarations(),
+});
 watch(
   () => props.path,
   async (path) => {

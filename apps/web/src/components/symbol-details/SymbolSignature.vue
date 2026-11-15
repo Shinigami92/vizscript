@@ -6,15 +6,19 @@ import type {
   ScriptSymbol,
   SourceRange,
   TypeSystemInfo,
+  ValueKind,
 } from '@vizscript/core';
-import { fieldValue, pinColor } from '@vizscript/core';
+import { fieldValue, isArrayType, pinColor } from '@vizscript/core';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useTheme } from '../../composables/use-theme';
 import { usesSnakeCase } from '../../graph/languages';
 import { parameterUses } from '../../graph/symbols';
 import DetailsSection from '../DetailsSection.vue';
+import NumberField from '../NumberField.vue';
 import TypePicker from '../TypePicker.vue';
 import ValueFields from '../ValueFields.vue';
+import ArrayDefaultField from './ArrayDefaultField.vue';
+import { PLACEHOLDER_VALUES, stringValue, valueKindOf } from './value-kinds';
 
 /** Inputs and output of a function or signal (UE: Inputs / Outputs). */
 const props = defineProps<{
@@ -182,6 +186,48 @@ function setParameterDefault(index: number, value: string): void {
   });
 }
 
+/**
+ * An input of an array type: its default gets UE's array rows, across the
+ * whole width with the label in their header.
+ */
+function isArrayParam(
+  param: NonNullable<ScriptSymbol['params']>[number]
+): boolean {
+  return (
+    (param.dataType === 'array' || isArrayType(param.dataType)) &&
+    !defaultFields(param)
+  );
+}
+
+/** How an input's default is edited: the widget follows its type. */
+function defaultKind(
+  param: NonNullable<ScriptSymbol['params']>[number]
+): ValueKind {
+  const current = code(param.defaultRange).trim();
+  return valueKindOf(
+    param.dataType,
+    PLACEHOLDER_VALUES.has(current) ? '' : current
+  );
+}
+
+/** A typed default; an empty number or flag removes it, `''` is text. */
+function setTypedDefault(index: number, value: string, kind: ValueKind): void {
+  const param = props.symbol.params?.[index];
+  const current = code(param?.defaultRange).trim();
+  const next = kind === 'string' ? value : value.trim();
+  if (kind === 'string' ? stringValue(current) === next : current === next) {
+    return;
+  }
+
+  emit('op', {
+    type: 'setParameterValue',
+    symbol: props.symbol.id,
+    index,
+    value: next === '' && kind !== 'string' ? null : next,
+    kind,
+  });
+}
+
 function setReturnType(typeText: string | null): void {
   emit('op', { type: 'setReturnType', symbol: props.symbol.id, typeText });
 }
@@ -262,11 +308,14 @@ function setReturnType(typeText: string | null): void {
           <template
             v-if="!typeInfo?.noParameterDefaults && symbol.kind !== 'signal'"
           >
-            <dt class="text-zinc-500">Default value</dt>
+            <dt v-if="!isArrayParam(param)" class="text-zinc-500">
+              Default value
+            </dt>
             <dd
               v-for="fields in [defaultFields(param)]"
               :key="param.name"
-              class="min-w-0"
+              class="flex min-w-0 items-center gap-1"
+              :class="{ 'col-span-2': isArrayParam(param) }"
             >
               <ValueFields
                 v-if="fields"
@@ -274,6 +323,78 @@ function setReturnType(typeText: string | null): void {
                 :editable="true"
                 :label="`Default value of ${param.name}`"
                 @set="(value) => setParameterDefault(index, value)"
+              />
+              <ArrayDefaultField
+                v-else-if="isArrayParam(param)"
+                :symbol="symbol"
+                :index="index"
+                :text="text"
+                :editable="true"
+                :types="types"
+                @op="emit('op', $event)"
+              >
+                <template #label>
+                  <span class="mr-1 w-[6.5rem] shrink-0 text-zinc-500"
+                    >Default value</span
+                  >
+                </template>
+                <input
+                  class="input w-full py-0.5 font-mono text-xs"
+                  :value="code(param.defaultRange)"
+                  :aria-label="`Default value of ${param.name}`"
+                  spellcheck="false"
+                  @keydown.enter.prevent="
+                    ($event.target as HTMLInputElement).blur()
+                  "
+                  @change="setParameterValue(index, $event)"
+                />
+              </ArrayDefaultField>
+              <label
+                v-else-if="defaultKind(param) === 'bool'"
+                class="flex cursor-pointer items-center gap-1.5 px-1 py-0.5"
+              >
+                <input
+                  type="checkbox"
+                  class="accent-amber-500"
+                  :checked="/^true$/i.test(code(param.defaultRange))"
+                  :aria-label="`Default value of ${param.name}`"
+                  @change="
+                    setTypedDefault(
+                      index,
+                      String(($event.target as HTMLInputElement).checked),
+                      'bool'
+                    )
+                  "
+                />
+                <span class="font-mono text-zinc-300">{{
+                  code(param.defaultRange) || 'none'
+                }}</span>
+              </label>
+              <NumberField
+                v-else-if="defaultKind(param) === 'number'"
+                :value="code(param.defaultRange)"
+                :editable="true"
+                placeholder="none"
+                :label="`Default value of ${param.name}`"
+                @commit="(value) => setTypedDefault(index, value, 'number')"
+              />
+              <input
+                v-else-if="defaultKind(param) === 'string'"
+                class="input w-full py-0.5 text-xs"
+                :value="stringValue(code(param.defaultRange)) ?? ''"
+                :placeholder="param.defaultRange ? '' : 'none'"
+                :aria-label="`Default value of ${param.name}`"
+                spellcheck="false"
+                @keydown.enter.prevent="
+                  ($event.target as HTMLInputElement).blur()
+                "
+                @change="
+                  setTypedDefault(
+                    index,
+                    ($event.target as HTMLInputElement).value,
+                    'string'
+                  )
+                "
               />
               <input
                 v-else
