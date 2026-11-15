@@ -54,7 +54,7 @@ function wiredIn(): GraphOverlay {
   };
 }
 
-function setup(): {
+function setup(pinned = shallowRef<Positions>({})): {
   overlay: ReturnType<typeof useGraphOverlay>;
   text: Ref<string>;
 } {
@@ -63,8 +63,19 @@ function setup(): {
   const doc = shallowRef(parsed);
   const overlay = useGraphOverlay(
     {
-      pinned: shallowRef<Positions>({}),
-      patchLayout: () => undefined,
+      pinned,
+      patchLayout: (patch) => {
+        const next = { ...pinned.value };
+        for (const [key, point] of Object.entries(patch)) {
+          if (point) {
+            next[key] = point;
+          } else {
+            delete next[key];
+          }
+        }
+
+        pinned.value = next;
+      },
       path: () => 't.ts',
       text,
       client: fakeClient(),
@@ -115,5 +126,38 @@ describe('loose graph-only nodes', () => {
     await settle();
     expect(text.value).toContain('  g(x * 3);\n');
     expect(overlay.overlay.value.edits).toEqual([loose]);
+  });
+
+  it('are stored again under the new ids of the code they read', () => {
+    const pinned = shallowRef<Positions>({});
+    const { overlay } = setup(pinned);
+    const loose = group('x + 1', 'a');
+    const readFrom = (node: string): GraphOverlay => ({
+      edits: [
+        loose,
+        {
+          type: 'addEdge',
+          kind: 'data',
+          from: { node, pin: 'value' },
+          to: { node: loose.nodes[0]?.id ?? '', pin: 'a' },
+        },
+      ],
+    });
+    const wireKeys = (): string[] =>
+      Object.keys(pinned.value).filter((k) => k.startsWith('~loosewire|'));
+
+    overlay.setOverlay(readFrom('fn:f/getVar:x#0'));
+    expect(wireKeys()).toHaveLength(1);
+    expect(wireKeys()[0]).toContain('fn:f/getVar:x#0');
+
+    // A re-parse gave the Get another id: the stored wire follows it.
+    overlay.followCode(readFrom('fn:f/getVar:x#1'));
+    expect(wireKeys()).toHaveLength(1);
+    expect(wireKeys()[0]).toContain('fn:f/getVar:x#1');
+    expect(overlay.overlay.value).toEqual(readFrom('fn:f/getVar:x#1'));
+
+    // Deleted: its entries leave the layout.
+    overlay.setOverlay({ edits: [] });
+    expect(Object.keys(pinned.value)).toEqual([]);
   });
 });

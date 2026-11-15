@@ -14,9 +14,7 @@ import {
   findDefinition,
   findNode,
   layoutDocument,
-  reconcilePositions,
-  reconcileReroutes,
-  reconcileVias,
+  reconcileLayout,
   remapOverlay,
   renamedNodes,
   rerouteEntries,
@@ -240,6 +238,7 @@ const {
   syncNodes,
   syncProblems,
   addEdits,
+  followCode,
   addFloating,
   floatValueUse,
   floatReceiver,
@@ -648,7 +647,7 @@ async function reparse(): Promise<void> {
       );
     }
 
-    overlay.value = remapped.overlay;
+    followCode(remapped.overlay);
     emit('update:overlay', remapped.overlay);
   }
 
@@ -658,18 +657,7 @@ async function reparse(): Promise<void> {
   followRename(previous, shown);
 
   pinned.value = previous
-    ? {
-        ...reconcilePositions(
-          previous,
-          shown,
-          pinned.value,
-          change,
-          positionMemory
-        ),
-        ...reconcileReroutes(previous, shown, pinned.value, change),
-        ...reconcileVias(previous, shown, pinned.value, change),
-        ...boxColorEntries(pinned.value),
-      }
+    ? reconcileLayout(previous, shown, pinned.value, change, positionMemory)
     : pinned.value;
   if (role !== 'earlier') {
     // Wired from a SET's output: the new Get is drawn as that wire (UE).

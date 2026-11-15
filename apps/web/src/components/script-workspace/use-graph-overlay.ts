@@ -91,6 +91,12 @@ export interface WorkspaceGraphOverlay {
   /** Keeps edits in the graph only; writes code once it is valid. */
   addEdits: (edits: ReadonlyArray<GraphEdit>) => void;
   /**
+   * The overlay remapped to a new parse of the code (same edits, the code's
+   * nodes under their new ids): its loose nodes are stored again, since
+   * their wires name nodes of the code.
+   */
+  followCode: (overlay: GraphOverlay) => void;
+  /**
    * Nodes with no place in the code yet: they float where they were dropped
    * until they are wired in.
    */
@@ -595,6 +601,10 @@ export function useGraphOverlay(
     syncNodes,
     syncProblems,
     addEdits,
+    followCode: (next) => {
+      overlay.value = next;
+      looseNodes.store(next);
+    },
     addFloating,
     floatValueUse,
     floatReceiver,
