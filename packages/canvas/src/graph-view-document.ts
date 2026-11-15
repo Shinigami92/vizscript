@@ -28,6 +28,7 @@ import type {
   NodeBannerKind,
   NodeState,
 } from './graph-view-types';
+import { resolvePin } from './pin-ref';
 
 /** The shown document, selection, reroute points, edits and alignment. */
 export abstract class GraphViewDocument extends GraphViewRenderer {
@@ -166,6 +167,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
       this.setHoverEdge(null);
     }
 
+    this.resolveDragPins();
     this.fadeInNewNodes(previous, now);
     this.rebuildIndex();
     if (!this.hasFramed && this.nodes.size > 0 && this.width > 0) {
@@ -174,6 +176,37 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     }
 
     this.requestRender();
+  }
+
+  /**
+   * A wire being dragged keeps going in the new document: its pins are
+   * looked up by id. It ends when the pin it started from is gone.
+   */
+  private resolveDragPins(): void {
+    if (this.pendingWire) {
+      const from = resolvePin(this.nodes, this.pendingWire.from);
+      this.pendingWire = from ? { ...this.pendingWire, from } : null;
+    }
+
+    const drag = this.drag;
+    if (drag?.type !== 'wire' && drag?.type !== 'moveWires') {
+      return;
+    }
+
+    const from = resolvePin(this.nodes, drag.from);
+    if (!from) {
+      this.drag = null;
+      return;
+    }
+
+    drag.from = from;
+    drag.target = drag.target && resolvePin(this.nodes, drag.target);
+    if (drag.type === 'moveWires') {
+      drag.ends = drag.ends.flatMap((end) => {
+        const resolved = resolvePin(this.nodes, end);
+        return resolved ? [resolved] : [];
+      });
+    }
   }
 
   /** Rendered size of a node; use it for layout so both agree. */

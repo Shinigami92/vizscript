@@ -9,6 +9,7 @@ import {
 } from './graph-view-constants';
 import { GraphViewDocument } from './graph-view-document';
 import type { AlignMode, GraphViewOptions } from './graph-view-types';
+import { samePin } from './pin-ref';
 import { clickSelection, marqueeSelection } from './selection';
 import type { SelectionModifiers } from './selection';
 
@@ -464,11 +465,11 @@ export class GraphView extends GraphViewDocument {
         drag.currentWorld = world;
         const hit = this.hitTest(world);
         const problem =
-          hit?.type === 'pin' && hit.pg !== drag.from.pg
+          hit?.type === 'pin' && !samePin(hit, drag.from)
             ? this.moveProblem(drag, hit)
             : null;
         drag.target =
-          hit?.type === 'pin' && hit.pg !== drag.from.pg && !problem
+          hit?.type === 'pin' && !samePin(hit, drag.from) && !problem
             ? { ns: hit.ns, pg: hit.pg }
             : null;
         drag.problem = problem;
@@ -481,11 +482,11 @@ export class GraphView extends GraphViewDocument {
         drag.currentWorld = world;
         const hit = this.hitTest(world);
         const problem =
-          hit?.type === 'pin' && hit.pg !== drag.from.pg
+          hit?.type === 'pin' && !samePin(hit, drag.from)
             ? this.connectProblem(drag.from, hit)
             : null;
         drag.target =
-          hit?.type === 'pin' && hit.pg !== drag.from.pg && !problem
+          hit?.type === 'pin' && !samePin(hit, drag.from) && !problem
             ? { ns: hit.ns, pg: hit.pg }
             : null;
         drag.problem = problem;

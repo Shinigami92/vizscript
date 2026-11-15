@@ -256,7 +256,7 @@ export abstract class GraphViewHitTest extends GraphViewBase {
     // UE's wording: "Exec is not compatible with Boolean."
     const label = (pin: typeof pa): string =>
       pin.kind === 'exec' ? 'Exec' : String(pin.type);
-    if (a.ns === b.ns) {
+    if (a.ns.node.id === b.ns.node.id) {
       return 'Both are on the same node.';
     }
 
