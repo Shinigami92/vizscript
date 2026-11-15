@@ -812,7 +812,19 @@ function freezeLayout(): void {
   }
 }
 
-async function onOp(requested: GraphOp): Promise<void> {
+let opQueue: Promise<void> = Promise.resolve();
+
+/**
+ * Ops run one after the other, so each sees the code the one before left
+ * (a description saved on blur by the click on `export`).
+ */
+function onOp(op: GraphOp): Promise<void> {
+  const next = opQueue.then(() => runOp(op));
+  opQueue = next.catch(() => undefined);
+  return next;
+}
+
+async function runOp(requested: GraphOp): Promise<void> {
   if (!editable.value) {
     return;
   }
@@ -833,7 +845,7 @@ async function onOp(requested: GraphOp): Promise<void> {
     floatsUntilWired(added.template)
   ) {
     if (op.type === 'withImport') {
-      await onOp({ type: 'addImport', import: op.import });
+      await runOp({ type: 'addImport', import: op.import });
     }
 
     freezeLayout();
