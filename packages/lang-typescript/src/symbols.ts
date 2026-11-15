@@ -164,6 +164,42 @@ class SymbolCollector {
     this.symbols.push({ ...symbol, id, modifiers: symbol.modifiers ?? [] });
   }
 
+  /**
+   * The properties of an interface or object type as members of it, like a
+   * class's fields (no values), so My Script and Details edit them.
+   */
+  private typeMembers(
+    owner: string,
+    members: ReadonlyArray<t.TSTypeElement>
+  ): void {
+    for (const member of members) {
+      if (
+        member.type !== 'TSPropertySignature' ||
+        member.key.type !== 'Identifier' ||
+        member.computed
+      ) {
+        continue;
+      }
+
+      const type = this.typeRef(member.typeAnnotation);
+      this.add({
+        kind: 'variable',
+        name: member.key.name,
+        scope: owner,
+        range: rangeOf(member),
+        nameRange: nameRangeOf(member.key),
+        ...(type ? { type } : {}),
+        dataType: member.typeAnnotation
+          ? typeFromAnnotation(member.typeAnnotation)
+          : 'any',
+        modifiers: [
+          ...(member.readonly ? ['readonly'] : []),
+          ...(member.optional ? ['optional'] : []),
+        ],
+      });
+    }
+  }
+
   /** Fields and methods of an interface or object type literal. */
   private fields(members: ReadonlyArray<t.TSTypeElement>): SymbolField[] {
     return members.flatMap((member): SymbolField[] => {
@@ -628,6 +664,7 @@ class SymbolCollector {
           ],
           ...(fields.length > 0 ? { fields } : {}),
         });
+        this.typeMembers(node.id.name, body);
         break;
       }
 

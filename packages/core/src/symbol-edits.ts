@@ -282,10 +282,12 @@ export function isValuelessField(
   symbol: ScriptSymbol,
   syntax: DeclarationSyntax
 ): boolean {
+  const owner =
+    symbol.kind === 'variable' ? classOf(doc, symbol.scope) : undefined;
+  // Fields of interfaces never have values; of classes, in some languages.
   return (
-    syntax.typeSystem.noFieldValues === true &&
-    symbol.kind === 'variable' &&
-    classOf(doc, symbol.scope) !== undefined
+    owner !== undefined &&
+    (owner.kind === 'type' || syntax.typeSystem.noFieldValues === true)
   );
 }
 

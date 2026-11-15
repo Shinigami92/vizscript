@@ -113,6 +113,17 @@ export function qualifiedName(symbol: ScriptSymbol): string {
   return symbol.scope ? `${symbol.scope}.${symbol.name}` : symbol.name;
 }
 
+/**
+ * A type whose body lists fields (an interface, an object type), so its
+ * fields are members like a class's (without values).
+ */
+export function holdsFields(symbol: ScriptSymbol): boolean {
+  return (
+    symbol.kind === 'type' &&
+    (symbol.modifiers.includes('interface') || (symbol.fields?.length ?? 0) > 0)
+  );
+}
+
 /** Builds the id of a symbol. */
 export function symbolId(
   kind: SymbolKind,

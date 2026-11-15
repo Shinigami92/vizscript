@@ -34,6 +34,11 @@ export interface DeclarationSyntax {
     name: string,
     options: { constant: boolean; member: boolean }
   ) => string;
+  /**
+   * A new field of a type that only describes values (`name: string;` in
+   * an interface); none: such types get no fields from the UI.
+   */
+  field?: (name: string) => string;
   /** A new signal (GDScript). */
   signal?: (name: string) => string;
   /** A new empty type (`interface X {}`, `class X:`); none: no `+`. */

@@ -38,22 +38,23 @@ describe('typeScriptSymbols', () => {
     ].join('\n');
     expect(summarizeSymbols(parseTypeScript(text, 'cart.ts')))
       .toMatchInlineSnapshot(`
-      "type Item ~Item [interface]
-      type Id ~Id [type]
-      enum Color ~Color
-      class Cart ~Cart [export]
-      variable Cart::count ~number = … [static]
-      variable Cart::items: Item[] = … [private]
-      variable Cart::#secret ~string = …
-      method Cart::size.get(): number [get] → Cart.size
-      method Cart::add(item: Item, ...rest: Item[]): Promise<void> [async] → Cart.add
-      local Cart.add::total = … [const]
-      local Cart.add::other [const]
-      local Cart.add::seen ~bool = … [let]
-      local Cart.add::inner ~function = … [const]
-      function greet({ name }: Item, times = …) → greet
-      variable counter [let]"
-    `);
+        "type Item ~Item [interface]
+        variable Item::name: string
+        type Id ~Id [type]
+        enum Color ~Color
+        class Cart ~Cart [export]
+        variable Cart::count ~number = … [static]
+        variable Cart::items: Item[] = … [private]
+        variable Cart::#secret ~string = …
+        method Cart::size.get(): number [get] → Cart.size
+        method Cart::add(item: Item, ...rest: Item[]): Promise<void> [async] → Cart.add
+        local Cart.add::total = … [const]
+        local Cart.add::other [const]
+        local Cart.add::seen ~bool = … [let]
+        local Cart.add::inner ~function = … [const]
+        function greet({ name }: Item, times = …) → greet
+        variable counter [let]"
+      `);
   });
 });
 

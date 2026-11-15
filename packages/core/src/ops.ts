@@ -409,7 +409,13 @@ export interface TypeSystemInfo {
   /** Modifiers the Details panel offers per kind of symbol. */
   modifiers: Partial<
     Record<
-      'variable' | 'constant' | 'member' | 'local' | 'function' | 'method',
+      | 'variable'
+      | 'constant'
+      | 'member'
+      | 'field'
+      | 'local'
+      | 'function'
+      | 'method',
       {
         /** Mutually exclusive declaration keywords (`const` / `let`). */
         keywords?: string[];

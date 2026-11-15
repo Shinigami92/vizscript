@@ -314,6 +314,7 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
     constant: { keywords: KINDS, flags: ['export'] },
     local: { keywords: KINDS },
     member: { access: ACCESS, flags: ['static', 'readonly'] },
+    field: { flags: ['readonly'] },
     function: { flags: ['export', 'async'] },
     method: { access: ACCESS, flags: ['static', 'async'] },
   },
@@ -613,6 +614,7 @@ function declarations(text: string, fileName?: string): DeclarationSyntax {
     typeDeclaration: (name) => `interface ${name} {\n}`,
     fn: (name, _unit, method) =>
       method ? `${name}() {\n}` : `function ${name}() {\n}`,
+    field: (name) => `${name}: string;`,
     variable: (name, { constant, member }) => {
       if (member) {
         return `${name} = undefined;`;

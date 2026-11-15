@@ -494,6 +494,15 @@ export function renameTypeScriptSymbol(
       return { ok: false, error: 'Private # members cannot be renamed yet.' };
     }
 
+    // A field of an interface: uses need the checker to tell its values
+    // apart, so only the declaration changes (the checker shows the rest).
+    if (symbols.some((s) => s.kind === 'type' && s.name === symbol.scope)) {
+      return {
+        ok: true,
+        edits: [{ ...symbol.nameRange, text: name }],
+      };
+    }
+
     const cls = symbols.find(
       (s) => s.kind === 'class' && s.name === symbol.scope
     );

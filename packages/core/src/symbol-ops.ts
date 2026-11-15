@@ -5,7 +5,7 @@ import { failed, succeeded } from './op-result';
 import type { OpResult, TextEdit } from './ops';
 import { isBlank, lineEndOf } from './symbol-helpers';
 import type { ScriptSymbol } from './symbols';
-import { qualifiedName } from './symbols';
+import { holdsFields, qualifiedName } from './symbols';
 import { lineIndent, lineStart } from './text-utils';
 
 /** Checks a new name: valid, not reserved, not taken in its scope. */
@@ -105,7 +105,7 @@ export function classOf(
   scope: string
 ): ScriptSymbol | undefined {
   return doc.symbols?.find(
-    (s) => s.kind === 'class' && qualifiedName(s) === scope
+    (s) => (s.kind === 'class' || holdsFields(s)) && qualifiedName(s) === scope
   );
 }
 
@@ -239,7 +239,14 @@ export function addVariable(
       return failed(`There is no class ${scope}.`);
     }
 
-    const line = syntax.variable(name, { constant, member: true });
+    const line =
+      cls.kind === 'type'
+        ? syntax.field?.(name)
+        : syntax.variable(name, { constant, member: true });
+    if (line === undefined) {
+      return failed(`${scope} cannot get fields here.`);
+    }
+
     const last = doc.symbols?.findLast(isVariable);
     if (last) {
       const indent = lineIndent(text, last.range.start);
