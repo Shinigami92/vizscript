@@ -1,5 +1,6 @@
 import { addPinValue, removePinValue } from './add-pin-ops';
 import { ARG_PIN, callClose } from './call-pins';
+import type { DeclarationSyntax } from './declaration-syntax';
 import type {
   ExecOutPinMeta,
   InputPinMeta,
@@ -14,7 +15,7 @@ import { failed, succeeded } from './op-result';
 import { substituteValue } from './operand-parens';
 import type { NodeTemplate, OpResult, TextEdit } from './ops';
 import { findNode } from './reconcile';
-import { removeListItem } from './symbol-edits';
+import { removeListItem, setModifier } from './symbol-edits';
 import {
   detectIndentUnit,
   findPin,
@@ -306,8 +307,23 @@ export function useValue(
   doc: GraphDocument,
   ref: PinRef,
   expression: string,
-  syntax: StatementSyntax
+  syntax: StatementSyntax,
+  inPlace = false
 ): OpResult {
+  // `await` goes around the call itself: its result is the awaited value.
+  const pin = inPlace ? findPin(findNode(doc, ref.node), ref.pin) : undefined;
+  const bind = pin ? getMeta<OutputPinMeta>(pin).bind : undefined;
+  if (bind) {
+    const code = text.slice(bind.expr.start, bind.expr.end);
+    return succeeded([
+      {
+        start: bind.expr.start,
+        end: bind.expr.end,
+        text: substituteValue(expression, code),
+      },
+    ]);
+  }
+
   const chained = chainedCall(text, doc, ref, expression);
   if (chained) {
     return succeeded([chained]);
@@ -317,6 +333,46 @@ export function useValue(
     type: 'value',
     expression: substituteValue(expression, value),
   }));
+}
+
+/**
+ * An op's edits plus `async` on the function around `nodeId` when it lacks
+ * it and its language has the keyword (`await` needs it; GDScript doesn't).
+ */
+export function withAsync(
+  text: string,
+  doc: GraphDocument,
+  nodeId: string,
+  result: OpResult,
+  declarations: DeclarationSyntax | undefined
+): OpResult {
+  const node = findNode(doc, nodeId);
+  if (!result.ok || !node || !declarations) {
+    return result;
+  }
+
+  const owner = (doc.symbols ?? [])
+    .filter(
+      (s) =>
+        (s.kind === 'function' || s.kind === 'method') &&
+        s.range.start <= node.range.start &&
+        node.range.end <= s.range.end
+    )
+    .toSorted(
+      (a, b) => a.range.end - a.range.start - (b.range.end - b.range.start)
+    )[0];
+  const kind = owner?.kind === 'method' ? 'method' : 'function';
+  const flags = declarations.typeSystem.modifiers[kind]?.flags;
+  if (
+    !owner ||
+    owner.modifiers.includes('async') ||
+    !flags?.includes('async')
+  ) {
+    return result;
+  }
+
+  const made = setModifier(text, doc, owner.id, 'async', true, declarations);
+  return made.ok ? succeeded([...result.edits, ...made.edits]) : result;
 }
 
 /**

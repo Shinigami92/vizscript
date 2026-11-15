@@ -131,7 +131,17 @@ export type GraphOp =
    * Uses the value of a data output in a new expression (`$value` marks it),
    * e.g. `$value + undefined` for a `+` node (UE: drag from an output).
    */
-  | { type: 'useValue'; pin: PinRef; expression: string; position?: Point }
+  | {
+      type: 'useValue';
+      pin: PinRef;
+      expression: string;
+      position?: Point;
+      /**
+       * Waits for the value (`await $value`): a call's result is wrapped in
+       * place (`await fetch(url)`) and its function becomes `async`.
+       */
+      awaits?: boolean;
+    }
   /** Sets the comment above a node's code (empty text removes it). */
   | {
       type: 'setComment';
@@ -292,6 +302,8 @@ export interface ExpressionTemplate {
    * placeholder.
    */
   empty?: string | ReadonlyArray<string>;
+  /** Waits for its input (`await $1`, see `useValue.awaits`). */
+  awaits?: boolean;
   /** Pin type of the result (for the Context Sensitive filter). */
   result?: DataType;
   /** Extra words that find it (`add`, `plus`, `equals`). */
@@ -308,6 +320,8 @@ export interface TypeSystemInfo {
   map?: string;
   set?: string;
   optional?: string;
+  /** Type of a result that comes later (`Promise<T>`), for async code. */
+  promise?: string;
   /** Values of new containers (`[]`, `new Map()`, `set()`). */
   containerDefaults?: { array?: string; map?: string; set?: string };
   /** Value of an empty input (`undefined`, `None`, `null`). */

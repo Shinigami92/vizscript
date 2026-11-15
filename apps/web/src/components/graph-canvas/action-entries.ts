@@ -111,6 +111,7 @@ export function createActionEntries(
                 pin: source,
                 expression: fill(expression, '$value', found.pin.type),
                 position: { ...state.world },
+                ...(expression.awaits ? { awaits: true } : {}),
               }),
           },
         ];

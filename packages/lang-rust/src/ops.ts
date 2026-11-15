@@ -124,6 +124,13 @@ export const RUST_TYPES: TypeSystemInfo = {
   placeholder: 'todo!()',
   expressions: [
     {
+      label: 'Await',
+      category: 'Values',
+      template: '$1.await',
+      awaits: true,
+      keywords: 'await async future wait later',
+    },
+    {
       label: '+ (add)',
       category: 'Math',
       template: '$1 + $2',

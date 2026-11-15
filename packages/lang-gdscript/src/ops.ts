@@ -126,6 +126,13 @@ export const GDSCRIPT_TYPES: TypeSystemInfo = {
   placeholder: 'null',
   expressions: [
     {
+      label: 'Await',
+      category: 'Values',
+      template: 'await $1',
+      awaits: true,
+      keywords: 'await signal coroutine wait later',
+    },
+    {
       label: '+ (add)',
       category: 'Math',
       template: '$1 + $2',

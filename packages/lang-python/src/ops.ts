@@ -100,6 +100,13 @@ export const PYTHON_TYPES: TypeSystemInfo = {
   placeholder: 'None',
   expressions: [
     {
+      label: 'Await',
+      category: 'Values',
+      template: 'await $1',
+      awaits: true,
+      keywords: 'await async coroutine wait later',
+    },
+    {
       label: '+ (add)',
       category: 'Math',
       template: '$1 + $2',

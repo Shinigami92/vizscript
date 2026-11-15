@@ -7,6 +7,7 @@ import type {
   ScriptSymbol,
   StatementSyntax,
   SymbolParam,
+  TextEdit,
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
@@ -90,8 +91,16 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
   map: 'Map<K, V>',
   set: 'Set<T>',
   optional: 'T | null',
+  promise: 'Promise<T>',
   placeholder: 'undefined',
   expressions: [
+    {
+      label: 'Await',
+      category: 'Values',
+      template: 'await $1',
+      awaits: true,
+      keywords: 'await async promise wait later',
+    },
     {
       label: '+ (add)',
       category: 'Math',
@@ -475,10 +484,23 @@ function setModifier(
   }
 
   if (modifier === 'async') {
+    // An async function returns a `Promise` of its declared type.
+    const returns = symbol.returns;
+    const wrapped = returns ? /^Promise<(.*)>$/s.exec(returns.text) : null;
     if (!enabled) {
-      return removeModifier(text, symbol, 'async');
+      const removed = removeModifier(text, symbol, 'async');
+      return removed.ok && returns && wrapped?.[1]
+        ? {
+            ok: true,
+            edits: [...removed.edits, { ...returns.range, text: wrapped[1] }],
+          }
+        : removed;
     }
 
+    const promised: TextEdit[] =
+      returns && !wrapped
+        ? [{ ...returns.range, text: `Promise<${returns.text}>` }]
+        : [];
     const start = (symbol.declarationRange ?? symbol.range).start;
     const head = text.slice(start, symbol.nameRange.start);
     const fn = head.search(/\bfunction\b/);
@@ -487,7 +509,10 @@ function setModifier(
       const star = head.trimEnd().endsWith('*')
         ? start + head.trimEnd().length - 1
         : symbol.nameRange.start;
-      return { ok: true, edits: [{ start: star, end: star, text: 'async ' }] };
+      return {
+        ok: true,
+        edits: [{ start: star, end: star, text: 'async ' }, ...promised],
+      };
     }
 
     if (fn === -1) {
@@ -496,7 +521,10 @@ function setModifier(
 
     return {
       ok: true,
-      edits: [{ start: start + fn, end: start + fn, text: 'async ' }],
+      edits: [
+        { start: start + fn, end: start + fn, text: 'async ' },
+        ...promised,
+      ],
     };
   }
 

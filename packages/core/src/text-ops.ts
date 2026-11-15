@@ -22,6 +22,7 @@ import {
   promote,
   removeArgument,
   useValue,
+  withAsync,
 } from './insert-ops';
 import type { GraphDocument, PinLiteral } from './ir';
 import { setInput, setLiteral } from './literal-ops';
@@ -634,7 +635,17 @@ function applyTextOpEdits(
     }
 
     case 'useValue': {
-      return useValue(text, doc, op.pin, op.expression, syntax);
+      const used = useValue(
+        text,
+        doc,
+        op.pin,
+        op.expression,
+        syntax,
+        op.awaits === true
+      );
+      return op.awaits === true
+        ? withAsync(text, doc, op.pin.node, used, syntax.declarations)
+        : used;
     }
 
     case 'addArgument': {
