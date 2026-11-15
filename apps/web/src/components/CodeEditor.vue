@@ -127,6 +127,8 @@ let hovered: monaco.editor.IEditorDecorationsCollection | undefined;
 let suppressChange = false;
 let unregisterLinks: (() => void) | undefined;
 let markerListener: monaco.IDisposable | undefined;
+/** On the model, which outlives the editor when `keepModel` is set. */
+let contentListener: monaco.IDisposable | undefined;
 
 function toRange(range: SourceRange): monaco.Range {
   const m = model as monaco.editor.ITextModel;
@@ -211,7 +213,7 @@ onMounted(() => {
   };
 
   emitHistory();
-  model.onDidChangeContent(() => {
+  contentListener = model.onDidChangeContent(() => {
     if (!suppressChange) {
       emit('change', model?.getValue() ?? '');
     }
@@ -268,6 +270,7 @@ watch(
 onBeforeUnmount(() => {
   unregisterLinks?.();
   markerListener?.dispose();
+  contentListener?.dispose();
   if (props.keepModel) {
     saveViewState(props.path, editor.value?.saveViewState() ?? null);
   }
