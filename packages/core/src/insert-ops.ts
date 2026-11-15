@@ -11,6 +11,7 @@ import { getMeta, owningStatement } from './edit-meta';
 import type { GraphDocument, GraphNode, Pin, PinRef, SourceRange } from './ir';
 import { setInput } from './literal-ops';
 import { failed, succeeded } from './op-result';
+import { substituteValue } from './operand-parens';
 import type { NodeTemplate, OpResult, TextEdit } from './ops';
 import { findNode } from './reconcile';
 import { removeListItem } from './symbol-edits';
@@ -314,7 +315,7 @@ export function useValue(
 
   return afterValue(text, doc, ref, syntax, (value) => ({
     type: 'value',
-    expression: expression.replaceAll('$value', value),
+    expression: substituteValue(expression, value),
   }));
 }
 
@@ -351,6 +352,32 @@ function chainedCall(
   };
 }
 
+/**
+ * The exec output into the block a value is bound in (`for (const item of
+ * items)` → Loop Body, `catch (error)` → Catch), if it is bound in one.
+ */
+function bindingBlock(node: GraphNode, pin: Pin): Pin | undefined {
+  const execOuts = node.pins.filter(
+    (p) => p.kind === 'exec' && p.direction === 'out'
+  );
+  const visibleIn = getMeta<OutputPinMeta>(pin).visibleIn;
+  if (visibleIn) {
+    return execOuts.find((p) => {
+      const at = getMeta<ExecOutPinMeta>(p).insert?.at;
+      return at !== undefined && at >= visibleIn.start && at <= visibleIn.end;
+    });
+  }
+
+  if (node.kind === 'forEach') {
+    return execOuts.find((p) => p.id === 'body');
+  }
+
+  const handler = node.kind === 'try' ? /^error(\d*)$/.exec(pin.id) : null;
+  return handler
+    ? execOuts.find((p) => p.id === `except${handler[1]}` || p.id === 'catch')
+    : undefined;
+}
+
 /** A new statement right after a value exists, made from the value. */
 function afterValue(
   text: string,
@@ -376,8 +403,14 @@ function afterValue(
     const then = node.pins.find((p) => p.kind === 'exec');
     insert = then ? getMeta<ExecOutPinMeta>(then).insert : undefined;
   } else {
-    const stmt = producingStatement(node, pin);
-    insert = stmt ? afterStatement(text, stmt) : undefined;
+    // A loop item or a caught error exists only in its block: at its start.
+    const block = bindingBlock(node, pin);
+    const stmt = block ? undefined : producingStatement(node, pin);
+    insert = block
+      ? getMeta<ExecOutPinMeta>(block).insert
+      : stmt
+        ? afterStatement(text, stmt)
+        : undefined;
   }
 
   if (!insert) {

@@ -17,6 +17,7 @@ import type {
   SourceRange,
 } from './ir';
 import { failed, succeeded } from './op-result';
+import { operandText } from './operand-parens';
 import type { OpResult, TextEdit } from './ops';
 import { applyTextEdits } from './ops';
 import { findNode } from './reconcile';
@@ -315,7 +316,14 @@ export function connectData(
   }
 
   const consumerAt = targetPin.range?.start ?? target.range.start;
-  if (reference.availableAt > consumerAt && source?.kind !== 'entry') {
+  const copied =
+    source?.purity === 'pure' && source.kind !== 'entry'
+      ? !inputsReadyAt(doc, source, consumerAt)
+      : false;
+  if (
+    copied ||
+    (reference.availableAt > consumerAt && source?.kind !== 'entry')
+  ) {
     return failed('That value is not available yet at this point of the code.');
   }
 
@@ -330,7 +338,11 @@ export function connectData(
 
     return succeeded([
       ...reference.edits,
-      inputEdit(targetPin, targetRange, wrap(reference.text)),
+      inputEdit(
+        targetPin,
+        targetRange,
+        operandText(target, targetPin, wrap(reference.text))
+      ),
     ]);
   }
 
@@ -342,12 +354,68 @@ export function connectData(
       {
         start: insertAt,
         end: insertAt,
-        text: `${inputMeta.insertPrefix ?? ' = '}${wrap(reference.text)}${inputMeta.insertSuffix ?? ''}`,
+        text: `${inputMeta.insertPrefix ?? ' = '}${operandText(target, targetPin, wrap(reference.text))}${inputMeta.insertSuffix ?? ''}`,
       },
     ]);
   }
 
   return failed('This input cannot be rewired.');
+}
+
+/**
+ * Whether every value an expression reads exists at `at`, so it can move
+ * there: computed before it, a parameter, or bound by a block around it.
+ */
+function inputsReadyAt(
+  doc: GraphDocument,
+  source: GraphNode,
+  at: number
+): boolean {
+  const fn = doc.functions.find((f) => f.nodes.some((n) => n.id === source.id));
+  if (!fn) {
+    return false;
+  }
+
+  const nodes = fn.nodes.filter((n) => contains(source.range, n.range));
+  // A local read before its declaration (`const k` further down).
+  const late = nodes.some((n) => {
+    const locals = (doc.symbols ?? []).filter(
+      (s) => n.kind === 'getVar' && s.kind === 'local' && s.name === n.title
+    );
+    return locals.length > 0 && locals.every((s) => s.range.start > at);
+  });
+  if (late) {
+    return false;
+  }
+
+  const inside = new Set(nodes.map((n) => n.id));
+  return fn.edges.every((edge) => {
+    if (edge.kind !== 'data' || !inside.has(edge.to.node)) {
+      return true;
+    }
+
+    if (inside.has(edge.from.node)) {
+      return true;
+    }
+
+    const from = fn.nodes.find((n) => n.id === edge.from.node);
+    if (!from) {
+      return false;
+    }
+
+    const visibleIn = getMeta<OutputPinMeta>(
+      findPin(from, edge.from.pin) ?? {}
+    ).visibleIn;
+    if (visibleIn && (at < visibleIn.start || at >= visibleIn.end)) {
+      return false;
+    }
+
+    return (
+      from.kind === 'entry' ||
+      from.range.end <= at ||
+      (from.range.start <= at && at < from.range.end)
+    );
+  });
 }
 
 /**
@@ -378,7 +446,13 @@ function inlineIntoNextStatement(
     // An unconnected value (`a + b;`) can move to any later statement.
     stmt = own.stmt;
     expr = source.range;
-    if (consumer.stmt.start < stmt.end) {
+    if (
+      consumer.stmt.start < stmt.end &&
+      // Back to an earlier statement only into operands and arguments: a
+      // moved receiver would take the id of the one it replaces.
+      (targetPin.id === 'target' ||
+        !inputsReadyAt(doc, source, consumer.stmt.start))
+    ) {
       return undefined;
     }
   } else if (bind?.isStatement) {
@@ -397,7 +471,11 @@ function inlineIntoNextStatement(
     return undefined;
   }
 
-  const expression = wrap(text.slice(expr.start, expr.end));
+  const expression = operandText(
+    target,
+    targetPin,
+    wrap(text.slice(expr.start, expr.end))
+  );
   const [removeStart, removeEnd] = lineAwareRange(text, stmt.start, stmt.end);
   const removal: TextEdit = { start: removeStart, end: removeEnd, text: '' };
   if (targetPin.range) {

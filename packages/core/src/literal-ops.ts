@@ -2,6 +2,7 @@ import type { InputPinMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import type { GraphDocument, LiteralKind, PinRef } from './ir';
 import { failed, succeeded } from './op-result';
+import { operandText } from './operand-parens';
 import type { OpResult } from './ops';
 import { findNode } from './reconcile';
 import { findPin, inputEdit } from './text-op-helpers';
@@ -129,7 +130,8 @@ export function setLiteral(
   value: string,
   syntax: StatementSyntax
 ): OpResult {
-  const pin = findPin(findNode(doc, nodeId), pinId);
+  const node = findNode(doc, nodeId);
+  const pin = findPin(node, pinId);
   const insert = pin ? getMeta<InputPinMeta>(pin) : undefined;
   if (pin?.literal && !pin.range && insert?.insertInitAt !== undefined) {
     // A missing argument: its value is inserted (UE: a pin's default box).
@@ -192,7 +194,9 @@ export function setLiteral(
         (literal.kind === 'undefined' || literal.kind === 'null') &&
         !looksLikeCode(value.trim(), doc)
           ? (syntax.declarations?.string(value) ?? JSON.stringify(value))
-          : value.trim();
+          : node
+            ? operandText(node, pin, value.trim())
+            : value.trim();
     }
   }
 
@@ -204,15 +208,18 @@ export function setInput(
   ref: PinRef,
   expression: string
 ): OpResult {
-  const pin = findPin(findNode(doc, ref.node), ref.pin);
-  if (!pin || pin.kind !== 'data' || pin.direction !== 'in') {
+  const node = findNode(doc, ref.node);
+  const pin = findPin(node, ref.pin);
+  if (!node || !pin || pin.kind !== 'data' || pin.direction !== 'in') {
     return failed('Only data inputs can be given a value.');
   }
 
-  const value = expression.trim();
-  if (!value || value.includes('\n')) {
+  const trimmed = expression.trim();
+  if (!trimmed || trimmed.includes('\n')) {
     return failed('Enter a single-line expression.');
   }
+
+  const value = operandText(node, pin, trimmed);
 
   if (pin.range) {
     return succeeded([inputEdit(pin, pin.range, value)]);
