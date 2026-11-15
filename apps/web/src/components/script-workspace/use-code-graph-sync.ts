@@ -24,6 +24,8 @@ export interface CodeGraphDeps {
   graphVisible: ComputedRef<boolean>;
   focus: Pick<FocusMode, 'focusFn' | 'focusFunction' | 'hiddenFunctionOf'>;
   onOp: (op: GraphOp) => Promise<void>;
+  /** Whether the editor holds the text `doc` was parsed from. */
+  textParsed: () => boolean;
 }
 
 export interface CodeGraphSync {
@@ -188,7 +190,8 @@ export function useCodeGraphSync(deps: CodeGraphDeps): CodeGraphSync {
   }
 
   function onCursor(offset: number): void {
-    if (!doc.value || !graphVisible.value) {
+    // While typing, offsets of the editor don't fit the graph's ranges yet.
+    if (!doc.value || !graphVisible.value || !deps.textParsed()) {
       return;
     }
 

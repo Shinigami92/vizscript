@@ -78,7 +78,9 @@ export function useOpRunner(deps: OpRunnerDeps): {
   /** The function a floating node is shown with. */
   function floatingFn(fnId?: string): string | undefined {
     return (
-      fnId ?? deps.focusFn() ?? topLevelGraph(deps.parsedDoc(), deps.text())?.id
+      fnId ??
+      deps.focusFn() ??
+      topLevelGraph(deps.parsedDoc(), deps.parsedText())?.id
     );
   }
 

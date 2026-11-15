@@ -406,6 +406,7 @@ const {
   graphVisible,
   focus: { focusFn, focusFunction, hiddenFunctionOf },
   onOp: (op) => onOp(op),
+  textParsed: () => text.value === docText.value,
 });
 const breadcrumbVisible = computed(
   () =>
@@ -420,7 +421,7 @@ function describeDefinition(nodeId: string): string | undefined {
   return describeTarget(
     findDefinitionTarget(
       doc.value,
-      text.value,
+      docText.value,
       references.value,
       resolveReference,
       nodeId
@@ -431,7 +432,7 @@ function describeDefinition(nodeId: string): string | undefined {
 async function goToDefinition(nodeId: string): Promise<void> {
   const target = findDefinitionTarget(
     doc.value,
-    text.value,
+    docText.value,
     references.value,
     resolveReference,
     nodeId
@@ -472,7 +473,7 @@ function usagesOf(entryId: string): Array<{ nodeId: string; label: string }> {
 
         const target = findDefinitionTarget(
           d,
-          text.value,
+          docText.value,
           references.value,
           resolveReference,
           node.id
@@ -481,7 +482,7 @@ function usagesOf(entryId: string): Array<{ nodeId: string; label: string }> {
       })
       .map((node) => ({
         nodeId: node.id,
-        label: `${other.name} · line ${text.value.slice(0, node.range.start).split('\n').length}`,
+        label: `${other.name} · line ${docText.value.slice(0, node.range.start).split('\n').length}`,
       }))
   );
 }
@@ -527,7 +528,7 @@ async function revealPendingSymbol(): Promise<void> {
   pendingSymbol = null;
   const { symbol: _, ...query } = route.query;
   void router.replace({ query });
-  const range = findDefinition(doc.value, text.value, symbol);
+  const range = findDefinition(doc.value, docText.value, symbol);
   if (!range) {
     show(`${symbol} was not found in this file.`);
     return;
@@ -545,7 +546,7 @@ async function revealPendingSymbol(): Promise<void> {
   // Once a freshly mounted editor has its size, show the definition near
   // the top (this also ends the scroll started by the node selection).
   await new Promise(requestAnimationFrame);
-  const line = text.value.slice(0, range.start).split('\n').length;
+  const line = docText.value.slice(0, range.start).split('\n').length;
   editor.value?.revealLine(line, true);
 }
 
@@ -971,7 +972,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         <GraphCanvas
           ref="canvas"
           :doc="canvasDoc"
-          :text="text"
+          :text="docText"
           :positions="positions"
           :editable="editable"
           :initial-camera="initialCamera"
@@ -1087,7 +1088,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
     <WorkbenchView v-if="visualizable" id="script">
       <MyScriptPanel
         :doc="doc"
-        :text="text"
+        :text="docText"
         :types="typeSystem"
         :selected-symbol="selectedSymbol?.id ?? null"
         :current-function="currentFunction"
@@ -1107,7 +1108,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
       <DetailsPanel
         class="h-full"
         :doc="doc"
-        :text="text"
+        :text="docText"
         :selection="selection"
         :editable="editable"
         :closable="isMobile"
@@ -1119,7 +1120,6 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :base-doc="baseDoc"
         :base-text="baseText"
         :types="typeSystem"
-        :doc-text="docText"
         @select="selectNodes"
         @select-function="selectFunction"
         @activate="onActivate"

@@ -40,8 +40,6 @@ const props = defineProps<{
   importPath?: string | null;
   /** Types and modifiers of the file's language. */
   types?: TypeSystemInfo | null;
-  /** The text `doc` was parsed from (symbol ranges point into it). */
-  docText?: string;
   /**
    * Variable of a selected Get / Set node, or function of a selected
    * entry, return or call node, shown above the node.
@@ -472,7 +470,7 @@ function deleteSelection(): void {
         :symbols="doc?.symbols ?? []"
         :doc="doc"
         :event="isEvent(shownSymbol)"
-        :text="docText ?? text"
+        :text="text"
         :uses="shownUses"
         :editable="editable"
         :types="types ?? null"
@@ -495,7 +493,7 @@ function deleteSelection(): void {
             :base="baseOf(shownNodeSymbol)"
             :symbols="doc?.symbols ?? []"
             :doc="doc"
-            :text="docText ?? text"
+            :text="text"
             :uses="0"
             :editable="editable"
             :types="types ?? null"
@@ -845,7 +843,7 @@ function deleteSelection(): void {
               v-for="variable in defaults"
               :key="variable.symbol.id"
               :symbol="variable.symbol"
-              :text="docText ?? text"
+              :text="text"
               :editable="editable"
               :types="types ?? null"
               :symbols="doc?.symbols ?? []"
