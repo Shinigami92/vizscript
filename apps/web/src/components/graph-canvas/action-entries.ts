@@ -21,6 +21,7 @@ import {
   variablesNear,
   withImport,
 } from './graph-helpers';
+import { makeEntries } from './make-entries';
 import {
   EXPRESSION_ICONS,
   FLOW_ENTRIES,
@@ -782,6 +783,7 @@ export function createActionEntries(
             ),
         };
       }),
+      ...makeEntries(props.doc, state.from, pinOf, emitOp),
       ...expressionActions(state),
       ...(extract.type === undefined || extract.type === 'item'
         ? [

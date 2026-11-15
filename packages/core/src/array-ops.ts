@@ -124,8 +124,7 @@ function blankOfType(
       s.defaultRange.end === node.range.end
   )?.type?.text;
   const template = syntax.declarations?.typeSystem.array;
-  const write = syntax.objectEntry;
-  if (!declared || !template || !write) {
+  if (!declared || !template) {
     return undefined;
   }
 
@@ -136,15 +135,28 @@ function blankOfType(
     declared.startsWith(before) && declared.endsWith(after)
       ? declared.slice(before.length, declared.length - after.length).trim()
       : undefined;
-  const owner = element
-    ? doc.symbols?.find((s) => holdsFields(s) && s.name === element)
-    : undefined;
+  return element ? blankValue(text, doc, element, syntax) : undefined;
+}
+
+/**
+ * UE's Make <Struct>: a value of a type that lists fields (an interface,
+ * an object type) with each field's empty value (`Item` →
+ * `{ name: '', price: 0, quantity: 0 }`); `undefined` for other types.
+ */
+export function blankValue(
+  text: string,
+  doc: GraphDocument,
+  typeName: string,
+  syntax: StatementSyntax
+): string | undefined {
+  const write = syntax.objectEntry;
+  const owner = doc.symbols?.find((s) => holdsFields(s) && s.name === typeName);
   const fields = owner
     ? (doc.symbols ?? []).filter(
         (s) => s.kind === 'variable' && s.scope === owner.name
       )
     : [];
-  if (fields.length === 0) {
+  if (!write || fields.length === 0) {
     return undefined;
   }
 

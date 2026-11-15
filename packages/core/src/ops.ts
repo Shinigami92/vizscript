@@ -131,6 +131,17 @@ export type GraphOp =
       /** Where a node written by the expression goes (UI only). */
       position?: Point;
     }
+  /**
+   * UE's Make <Struct> into a data input: a value of a type with fields,
+   * each with its empty value (`blankValue`).
+   */
+  | {
+      type: 'makeValue';
+      pin: PinRef;
+      typeName: string;
+      /** Where the new node goes (UI only). */
+      position?: Point;
+    }
   /** Moves the expression feeding a data input into a new variable. */
   | {
       type: 'extract';

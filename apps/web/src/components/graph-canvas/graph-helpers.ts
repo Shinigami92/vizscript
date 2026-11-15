@@ -112,7 +112,7 @@ export function withPosition(op: GraphOp, world: Point): GraphOp {
     return { ...op, op: withPosition(op.op, world) };
   }
 
-  return op.type === 'setInput' && !op.position
+  return (op.type === 'setInput' || op.type === 'makeValue') && !op.position
     ? { ...op, position: world }
     : op;
 }

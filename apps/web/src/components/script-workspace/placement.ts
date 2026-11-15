@@ -98,6 +98,7 @@ export function placementFor(
       placed.type === 'callWith' ||
       placed.type === 'useValue' ||
       placed.type === 'setInput' ||
+      placed.type === 'makeValue' ||
       placed.type === 'promote' ||
       placed.type === 'extract' ||
       placed.type === 'collapseToFunction') &&
@@ -110,6 +111,8 @@ export function placementFor(
       // The new SET node, not the call that moved into it.
       const title = `Set ${placed.name}`;
       matches = (n) => n.kind === 'setVar' && n.title === title;
+    } else if (placed.type === 'makeValue') {
+      matches = (n) => n.kind === 'makeObject';
     } else if (placed.type === 'collapseToFunction') {
       // The call of the new function (`name`, `this.name`, `self.name`).
       const name = placed.name;

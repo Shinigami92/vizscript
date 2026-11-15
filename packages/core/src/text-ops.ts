@@ -1,4 +1,4 @@
-import { insertElement, moveElement } from './array-ops';
+import { blankValue, insertElement, moveElement } from './array-ops';
 import { collapseToFunction } from './collapse';
 import type { CommentSyntax } from './comment-ops';
 import {
@@ -624,6 +624,13 @@ function applyTextOpEdits(
 
     case 'setInput': {
       return setInput(doc, op.pin, op.expression);
+    }
+
+    case 'makeValue': {
+      const value = blankValue(text, doc, op.typeName, syntax);
+      return value === undefined
+        ? failed(`${op.typeName} has no fields to make it from.`)
+        : setInput(doc, op.pin, value);
     }
 
     case 'extract': {

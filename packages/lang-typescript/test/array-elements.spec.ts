@@ -133,3 +133,40 @@ describe('array defaults of inputs (no nodes: edited on a host file)', () => {
     );
   });
 });
+
+describe('Make <Struct> (UE: Make Item)', () => {
+  const PUSH = `interface Item {
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+const cart: Item[] = [];
+cart.push(null);
+`;
+
+  it('writes the fields of an interface with empty values into an input', () => {
+    const push = parseTypeScript(PUSH, 't.ts')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'call' && n.title === 'push');
+    const pin = push?.pins.find(
+      (p) => p.direction === 'in' && p.kind === 'data' && p.literal
+    );
+    if (!push || !pin) {
+      throw new Error('No push(null)');
+    }
+
+    const result = applyTypeScriptOp(
+      PUSH,
+      {
+        type: 'makeValue',
+        pin: { node: push.id, pin: pin.id },
+        typeName: 'Item',
+      },
+      't.ts'
+    );
+    expect(result.ok && applyTextEdits(PUSH, result.edits)).toContain(
+      "cart.push({ name: '', price: 0, quantity: 0 });"
+    );
+  });
+});
