@@ -2,6 +2,7 @@ import {
   boxColorIndex,
   COMMENT_BOX_COLORS,
   extractReroutes,
+  noReroutesKey,
   pinKey,
   reroutePatch,
   wiredNodes,
@@ -126,6 +127,21 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
           edgeId,
           points.map((p) => ({ ...p }))
         );
+      }
+    }
+
+    // Exec chains wrapped to a lower row get two reroute points in the gap
+    // above it, like one would route them in UE. They follow the nodes
+    // until the user moves or removes one (then they are saved).
+    for (const { edge } of this.edges) {
+      const knots =
+        edge.kind === 'exec' &&
+        !this.reroutes.has(edge.id) &&
+        !positions[noReroutesKey(edge.id)]
+          ? this.wrapKnots(edge)
+          : undefined;
+      if (knots) {
+        this.reroutes.set(edge.id, knots);
       }
     }
 

@@ -13,6 +13,7 @@ import {
   layoutDocument,
   NODE_METRICS,
   NodeIdFactory,
+  noReroutesKey,
   pinColor,
   reconcilePositions,
   reconcileReroutes,
@@ -444,7 +445,14 @@ describe('reroutes', () => {
         { x: 30, y: 40 },
       ]
     );
-    const positions = { a: { x: 0, y: 0 }, ...patch } as Positions;
+    // Applied like a layout patch: `null` removes an entry.
+    const positions: Positions = { a: { x: 0, y: 0 } };
+    for (const [key, point] of Object.entries(patch)) {
+      if (point) {
+        positions[key] = point;
+      }
+    }
+
     expect(extractReroutes(positions)).toEqual({
       [edge]: [
         { x: 10, y: 20 },
@@ -462,6 +470,18 @@ describe('reroutes', () => {
       [{ x: 5, y: 5 }]
     );
     expect(shrink[rerouteKey(edge, 1)]).toBeNull();
+  });
+
+  it('marks a wire whose points were all removed (no generated ones)', () => {
+    const edge = 'a::then->b::exec';
+    const cleared = reroutePatch(edge, [{ x: 1, y: 2 }], []);
+    expect(cleared[noReroutesKey(edge)]).toEqual({ x: 0, y: 0 });
+    const positions: Positions = { [noReroutesKey(edge)]: { x: 0, y: 0 } };
+    expect(extractReroutes(positions)).toEqual({});
+    // A new point takes the mark away again.
+    expect(reroutePatch(edge, [], [{ x: 1, y: 2 }])[noReroutesKey(edge)]).toBe(
+      null
+    );
   });
 
   it('follows nodes matched by structural path', () => {

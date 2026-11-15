@@ -15,7 +15,14 @@ export interface Wire {
  * and reaches its full size sooner, so the wire loops out of its pin and
  * into the other in an S, like in Blueprints.
  */
-export function wireCurve(from: Point, to: Point): Wire {
+export function wireCurve(
+  from: Point,
+  to: Point,
+  /** -1: the wire leaves `from` to the left (a reversed reroute knot). */
+  startDirection: 1 | -1 = 1,
+  /** -1: the wire enters `to` from the right (a reversed reroute knot). */
+  endDirection: 1 | -1 = 1
+): Wire {
   const dx = to.x - from.x;
   const dy = Math.abs(to.y - from.y);
   const tangent =
@@ -26,8 +33,8 @@ export function wireCurve(from: Point, to: Point): Wire {
   const offset = tangent / 3;
   return {
     p0: from,
-    c0: { x: from.x + offset, y: from.y },
-    c1: { x: to.x - offset, y: to.y },
+    c0: { x: from.x + startDirection * offset, y: from.y },
+    c1: { x: to.x - endDirection * offset, y: to.y },
     p1: to,
   };
 }
@@ -79,64 +86,28 @@ function distanceToSegment(p: Point, a: Point, b: Point): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
-/** A wire is either a bezier curve or an orthogonal route with round corners. */
-export type WireShape =
-  | { type: 'curve'; curve: Wire; bounds: Rect }
-  | { type: 'route'; points: Point[]; bounds: Rect };
-
-function pointsBounds(points: ReadonlyArray<Point>): Rect {
-  const xs = points.map((p) => p.x);
-  const ys = points.map((p) => p.y);
-  const x = Math.min(...xs);
-  const y = Math.min(...ys);
-  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
+/** A wire: UE's spline with its bounds. */
+export interface WireShape {
+  curve: Wire;
+  bounds: Rect;
 }
 
-/**
- * Shape for a wire between two pins. With `laneY`, wires that run backwards
- * (exec chains wrapped to a lower row) are routed through the gap there
- * instead of cutting diagonally across the row; others are UE's spline.
- */
-export function wireShape(from: Point, to: Point, laneY?: number): WireShape {
-  const backwards = to.x < from.x - 60;
-  if (backwards && laneY !== undefined) {
-    const out = 28;
-    const points = [
-      from,
-      { x: from.x + out, y: from.y },
-      { x: from.x + out, y: laneY },
-      { x: to.x - out, y: laneY },
-      { x: to.x - out, y: to.y },
-      to,
-    ];
-    return { type: 'route', points, bounds: pointsBounds(points) };
-  }
-
+/** Shape for a wire between two pins: UE's spline, also backwards. */
+export function wireShape(from: Point, to: Point): WireShape {
   const curve = wireCurve(from, to);
-  return { type: 'curve', curve, bounds: wireBounds(curve) };
+  return { curve, bounds: wireBounds(curve) };
 }
 
-/** Distance from `p` to a wire shape (curve or orthogonal route). */
+/** Distance from `p` to a wire shape. */
 export function distanceToShape(shape: WireShape, p: Point): number {
-  if (shape.type === 'curve') {
-    return distanceToWire(shape.curve, p);
-  }
-
-  let best = Number.POSITIVE_INFINITY;
-  for (let i = 1; i < shape.points.length; i++) {
-    const a = shape.points[i - 1];
-    const b = shape.points[i];
-    if (a && b) {
-      best = Math.min(best, distanceToSegment(p, a, b));
-    }
-  }
-
-  return best;
+  return distanceToWire(shape.curve, p);
 }
 
 /**
- * Shape through reroute points: one curve per segment, so each knot keeps
- * the horizontal tangents of a Blueprint reroute node.
+ * Shape through reroute points: one UE spline per segment, horizontal at
+ * each knot. Like UE's `ShouldChangeTangentForKnot`, a knot feeding a point
+ * left of the one feeding it is reversed: the wire passes it right to left,
+ * so it turns outside the knot instead of sticking out of it.
  */
 export function reroutedShapes(
   from: Point,
@@ -144,12 +115,21 @@ export function reroutedShapes(
   knots: ReadonlyArray<Point>
 ): WireShape[] {
   const points = [from, ...knots, to];
+  const direction = (i: number): 1 | -1 => {
+    const before = points[i - 1];
+    const after = points[i + 1];
+    // The pins at both ends always face their own way.
+    return before && after && after.x < before.x ? -1 : 1;
+  };
   const shapes: WireShape[] = [];
   for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1] as Point;
-    const b = points[i] as Point;
-    const curve = wireCurve(a, b);
-    shapes.push({ type: 'curve', curve, bounds: wireBounds(curve) });
+    const curve = wireCurve(
+      points[i - 1] as Point,
+      points[i] as Point,
+      direction(i - 1),
+      direction(i)
+    );
+    shapes.push({ curve, bounds: wireBounds(curve) });
   }
 
   return shapes;

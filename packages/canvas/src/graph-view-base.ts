@@ -386,24 +386,34 @@ export abstract class GraphViewBase {
       );
     }
 
-    // Data wires are UE's spline, also backwards (an S-loop).
-    if (edge.kind !== 'exec') {
-      return [
-        wireShape(this.pinWorld(from, fromPin), this.pinWorld(to, toPin)),
-      ];
+    // UE's spline, also backwards (an S-loop) and for wrapped exec chains.
+    return [wireShape(this.pinWorld(from, fromPin), this.pinWorld(to, toPin))];
+  }
+
+  /**
+   * Reroute points for a wire running back to a lower row (a wrapped exec
+   * chain): one right of its output, one left of its input, both in the
+   * gap above the lower row. `undefined` for other wires.
+   */
+  protected wrapKnots(edge: GraphEdge): Point[] | undefined {
+    const from = this.nodes.get(edge.from.node);
+    const to = this.nodes.get(edge.to.node);
+    const fromPin = from?.geom.pins.get(edge.from.pin);
+    const toPin = to?.geom.pins.get(edge.to.pin);
+    if (!from || !to || !fromPin || !toPin) {
+      return undefined;
     }
 
-    // Exec chains wrapped to a lower row go through the gap above it.
-    const fromBottom = from.y + from.geom.height;
-    const toBottom = to.y + to.geom.height;
-    const laneY =
-      to.y > fromBottom + 24
-        ? to.y - 22
-        : from.y > toBottom + 24
-          ? from.y - 22
-          : Math.max(fromBottom, toBottom) + 22;
+    const start = this.pinWorld(from, fromPin);
+    const end = this.pinWorld(to, toPin);
+    if (end.x > start.x - 60 || to.y < from.y + from.geom.height + 24) {
+      return undefined;
+    }
+
+    const laneY = Math.round(to.y - 22);
     return [
-      wireShape(this.pinWorld(from, fromPin), this.pinWorld(to, toPin), laneY),
+      { x: Math.round(start.x + 40), y: laneY },
+      { x: Math.round(end.x - 40), y: laneY },
     ];
   }
 

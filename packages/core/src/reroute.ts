@@ -20,6 +20,14 @@ export function rerouteKey(edge: string, index: number): string {
   return `${REROUTE_PREFIX}${edge}|${index}`;
 }
 
+/**
+ * Marks a wire whose reroute points the user removed: it gets no generated
+ * ones either (the canvas adds two to exec wires wrapped to a lower row).
+ */
+export function noReroutesKey(edge: string): string {
+  return `${REROUTE_PREFIX}${edge}|none`;
+}
+
 export function isRerouteKey(key: string): boolean {
   return key.startsWith(REROUTE_PREFIX);
 }
@@ -90,6 +98,13 @@ export function reroutePatch(
 
   for (let i = after.length; i < before.length; i++) {
     patch[rerouteKey(edge, i)] = null;
+  }
+
+  // Removing them all keeps the wire without (also generated) points.
+  if (after.length === 0 && before.length > 0) {
+    patch[noReroutesKey(edge)] = { x: 0, y: 0 };
+  } else if (after.length > 0) {
+    patch[noReroutesKey(edge)] = null;
   }
 
   return patch;

@@ -312,27 +312,9 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
   ): void {
     const { ctx } = this;
     ctx.beginPath();
-    for (const wire of shapes) {
-      if (wire.type === 'curve') {
-        const c = wire.curve;
-        ctx.moveTo(c.p0.x, c.p0.y);
-        ctx.bezierCurveTo(c.c0.x, c.c0.y, c.c1.x, c.c1.y, c.p1.x, c.p1.y);
-        continue;
-      }
-
-      const [first, ...rest] = wire.points;
-      if (first) {
-        ctx.moveTo(first.x, first.y);
-      }
-
-      for (const [i, point] of rest.entries()) {
-        const next = rest[i + 1];
-        if (next) {
-          ctx.arcTo(point.x, point.y, next.x, next.y, 14);
-        } else {
-          ctx.lineTo(point.x, point.y);
-        }
-      }
+    for (const { curve: c } of shapes) {
+      ctx.moveTo(c.p0.x, c.p0.y);
+      ctx.bezierCurveTo(c.c0.x, c.c0.y, c.c1.x, c.c1.y, c.p1.x, c.p1.y);
     }
 
     ctx.strokeStyle = this.wireColor(edge);
