@@ -57,4 +57,11 @@ describe('Make Array (UE Add pin)', () => {
     expect(removePin('const xs = [1, 2];\n', 'e1')).toBe('const xs = [1];\n');
     expect(removePin('const xs = [1];\n', 'e0')).toBe('const xs = [];\n');
   });
+
+  it('removes an element on a line of its own with that line', () => {
+    const list = 'const xs = [\n  1,\n  2,\n  3,\n];\n';
+    expect(removePin(list, 'e2')).toBe('const xs = [\n  1,\n  2,\n];\n');
+    expect(removePin(list, 'e0')).toBe('const xs = [\n  2,\n  3,\n];\n');
+    expect(removePin(addPin(list), 'e3')).toBe(list);
+  });
 });

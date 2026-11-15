@@ -49,6 +49,13 @@ export function removeListItem(
   const before = text.slice(0, start).match(/,\s*$/)?.[0];
   if (after) {
     end += after.length;
+    // An item on a line of its own takes the whole line with it.
+    const line = lineStart(text, start);
+    const rest = text.slice(end).match(/^[ \t]*\n/)?.[0];
+    if (rest !== undefined && /^[ \t]*$/.test(text.slice(line, start))) {
+      start = line;
+      end += rest.length;
+    }
   } else if (before) {
     start -= before.length;
   } else if (!keepBrackets) {
