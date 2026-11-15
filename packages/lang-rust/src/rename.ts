@@ -7,8 +7,9 @@ import type {
   SourceRange,
   TextEdit,
 } from '@vizscript/core';
-import { qualifiedName } from '@vizscript/core';
-import { parseRustTree } from './convert';
+import { qualifiedName, rangeKey } from '@vizscript/core';
+import { parseRust, parseRustTree } from './convert';
+import { rustTypes } from './type-lookup';
 
 const COMMENTS = new Set(['LineComment', 'BlockComment']);
 
@@ -97,6 +98,15 @@ function visitWithMacros(
   };
 
   walk(root, { text, shift: 0 });
+}
+
+/** `&mut a::Item<T>` → `Item`. */
+function typeName(type: string): string {
+  const bare = type
+    .replace(/^&(?:'\w+\s+)?(?:mut\s+)?/, '')
+    .replace(/<[\s\S]*$/, '')
+    .trim();
+  return bare.split('::').at(-1) ?? bare;
 }
 
 /** Whether a function (its range) binds `name` itself (shadowing). */
@@ -332,6 +342,21 @@ export function renameRustSymbol(
 
     case 'method': {
       const owner = symbol.scope.split('.').at(-1) ?? symbol.scope;
+      const types = rustTypes(source, parseRust(source).items);
+      // `x.len()` calls another type's `len` when `x` is known to be of
+      // another type. Unknown receivers (and macro arguments, which have
+      // no types) are renamed.
+      const ofOtherType = (call: SyntaxNode, piece: Piece): boolean => {
+        const receiver = children(call)[0];
+        if (piece.shift !== 0 || piece.text !== text || !receiver) {
+          return false;
+        }
+
+        const type = types.get(
+          rangeKey({ start: receiver.from, end: receiver.to })
+        )?.text;
+        return type !== undefined && typeName(type) !== owner;
+      };
       visitWithMacros(top, text, (node, piece) => {
         if (piece.text.slice(node.from, node.to) !== old) {
           return true;
@@ -352,7 +377,8 @@ export function renameRustSymbol(
           node.name === 'FieldIdentifier' &&
           node.parent?.name === 'FieldExpression' &&
           (node.parent.parent?.name === 'CallExpression' ||
-            node.parent.parent?.name === 'GenericFunction')
+            node.parent.parent?.name === 'GenericFunction') &&
+          !ofOtherType(node.parent, piece)
         ) {
           edits.push(edit);
         } else if (

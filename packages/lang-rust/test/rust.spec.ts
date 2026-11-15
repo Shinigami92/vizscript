@@ -252,6 +252,38 @@ describe('applyRustOp', () => {
     expect(next).toContain('self.cost * self.quantity');
   });
 
+  it('renames a method only at calls on its own type', () => {
+    const text = [
+      'struct S {',
+      '    items: Vec<i32>,',
+      '}',
+      '',
+      'impl S {',
+      '    fn len(&self) -> usize {',
+      '        self.items.len()',
+      '    }',
+      '',
+      '    fn twice(&self) -> usize {',
+      '        self.len() * 2',
+      '    }',
+      '}',
+      '',
+      'fn count(s: &S, v: Vec<u8>) -> usize {',
+      '    s.len() + v.len() + "ab".len()',
+      '}',
+      '',
+    ].join('\n');
+    const next = apply(text, {
+      type: 'renameSymbol',
+      symbol: 'method:S.len',
+      name: 'size',
+    });
+    expect(next).toContain('fn size(&self) -> usize {');
+    expect(next).toContain('self.items.len()');
+    expect(next).toContain('self.size() * 2');
+    expect(next).toContain('s.size() + v.len() + "ab".len()');
+  });
+
   it('switches function qualifiers in order', () => {
     const doc = parseRustDocument(shop, 'shop.rs');
     const find = doc.symbols?.find((s) => s.id === 'function:find');
