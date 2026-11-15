@@ -241,14 +241,13 @@ describe('graph-only edits', () => {
       from: pin(doc, 'Set b', 'then'),
       to: pin(doc, 'log', 'exec'),
     });
-    // The Get of `a` it replaced stays, unwired (UE).
+    // The Get of `a` it replaced leaves the code (the graph keeps it).
     expect(resolveOverlay(source, overlay, backend)).toEqual({
       status: 'synced',
       text: [
         'function show(): void {',
         '  const a = 1;',
         '  const b = 2;',
-        '  a;',
         '  console.log(b);',
         '}',
         '',

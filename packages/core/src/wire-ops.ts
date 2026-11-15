@@ -575,15 +575,11 @@ function withLeadingComment(
 }
 
 /**
- * Edits that take the value out of a data input. Nodes computed right in
- * that input stay as a statement of their own (`return load()` → `load();`
- * then `return;`, `foo(a + b)` → `a + b;` then `foo(undefined)`), like
- * Blueprint nodes that just lose their wire.
- */
-/**
- * The value node wired into an input, kept as a statement before its
- * consumer (UE: a node whose wire is cut stays in the graph). `null` when
- * the input holds no node of its own (a literal, a parameter).
+ * The calls of the value wired into an input, kept as statements before
+ * its consumer: they run in the flow, so they stay in the code (`return
+ * load()` → `load();` then `return;`). Its pure parts leave the code (the
+ * graph keeps them as loose nodes, like UE's nodes that lose their wire).
+ * `null` when the value has no call.
  */
 function keptValue(
   text: string,
@@ -594,20 +590,32 @@ function keptValue(
   keep: (r: SourceRange) => string
 ): TextEdit | null {
   const range = pin.range;
-  const edge = edgesOf(doc, target.id).find(
-    (e) => e.to.node === target.id && e.to.pin === pin.id
-  );
-  const source = edge ? findNode(doc, edge.from.node) : undefined;
   const consumer = owningStatement(target);
-  if (
-    !range ||
-    !source ||
-    source.kind === 'entry' ||
-    !contains(range, source.range) ||
-    !consumer ||
-    consumer.meta.inline ||
-    range.end <= range.start
-  ) {
+  if (!range || !consumer || consumer.meta.inline || range.end <= range.start) {
+    return null;
+  }
+
+  const fn = doc.functions.find((f) => f.nodes.includes(target));
+  const calls = (fn?.nodes ?? []).filter(
+    (n) =>
+      n.purity === 'impure' &&
+      n.kind !== 'entry' &&
+      !getMeta<StatementMeta>(n).stmt &&
+      contains(range, n.range)
+  );
+  const outer = calls
+    .filter(
+      (n) =>
+        !calls.some(
+          (other) =>
+            other !== n &&
+            contains(other.range, n.range) &&
+            (other.range.start !== n.range.start ||
+              other.range.end !== n.range.end)
+        )
+    )
+    .toSorted((a, b) => a.range.start - b.range.start);
+  if (outer.length === 0) {
     return null;
   }
 
@@ -615,7 +623,9 @@ function keptValue(
   return {
     start: consumer.stmt.start,
     end: consumer.stmt.start,
-    text: `${asStatement(keep(range), syntax)}\n${indent}`,
+    text: outer
+      .map((n) => `${asStatement(keep(n.range), syntax)}\n${indent}`)
+      .join(''),
   };
 }
 

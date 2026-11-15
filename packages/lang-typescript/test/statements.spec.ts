@@ -144,13 +144,13 @@ describe('const without a value', () => {
 });
 
 describe('deleting a value node', () => {
-  it('keeps the nodes wired into it, like UE', () => {
+  it('leaves its pure inputs to the graph (out of the code)', () => {
     const text =
       "// The cart\nconst cart: Item[] = [\n  { name: 'Keyboard', price: 89.9 },\n  { name: 'Cable', price: 4.5 },\n];\nlog(cart);\n";
     const doc = parseTypeScript(text, 'a.ts');
     const array = node(doc, (n) => n.title === 'Make Array');
     expect(apply(text, { type: 'deleteNodes', nodeIds: [array.id] })).toBe(
-      "({ name: 'Keyboard', price: 89.9 });\n({ name: 'Cable', price: 4.5 });\n// The cart\nconst cart: Item[] = undefined;\nlog(cart);\n"
+      '// The cart\nconst cart: Item[] = undefined;\nlog(cart);\n'
     );
   });
 

@@ -271,7 +271,7 @@ describe('applyPythonOp', () => {
     ).toBe('def f(xs):\n    total = sum(xs)\n    log()\n    show(total + 1)\n');
   });
 
-  it('disconnects inputs with None and keeps the value node', () => {
+  it('disconnects inputs with None (the value leaves the code)', () => {
     const text = 'print(total)\n';
     const doc = parsePythonDocument(text);
     const print = fn(doc, 'Module').nodes.find((n) => n.title === 'print');
@@ -280,7 +280,7 @@ describe('applyPythonOp', () => {
         type: 'disconnect',
         pin: { node: print?.id ?? '', pin: 'arg0' },
       })
-    ).toBe('total\nprint(None)\n');
+    ).toBe('print(None)\n');
   });
 
   it('shows an unused value as unconnected nodes', () => {

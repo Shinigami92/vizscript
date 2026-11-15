@@ -312,13 +312,13 @@ describe('deleting and restoring a return', () => {
     const text = 'const total = price * count;\nlog(total, price);\n';
     const doc = parseTypeScript(text);
     const times = node(doc, (n) => n.kind === 'operator');
-    // Its value stays as a statement, with its own inputs cleared.
+    // Its value leaves the code (the graph keeps it as a loose node).
     expect(apply(text, { type: 'disconnectNode', node: times.id })).toBe(
-      'price;\ncount;\nundefined * undefined;\nconst total = undefined;\nlog(total, price);\n'
+      'const total = undefined;\nlog(total, price);\n'
     );
     const log = node(doc, (n) => n.title === 'log');
     expect(apply(text, { type: 'disconnectNode', node: log.id })).toBe(
-      'const total = price * count;\ntotal;\nprice;\nlog(undefined, undefined);\n'
+      'const total = price * count;\nlog(undefined, undefined);\n'
     );
   });
 
@@ -518,38 +518,15 @@ describe('deleting and restoring a return', () => {
     ).toBe('bar(1);\nfoo(undefined, 2);\n');
   });
 
-  it('keeps value nodes when their wire is removed and wires them back', () => {
+  it('takes a pure value out of the code when its wire is removed', () => {
     const text =
       'function greet(person: string): string {\n  return "Hello, " + person;\n}\n';
     const doc = parseTypeScript(text);
     const ret = node(doc, (n) => n.kind === 'return');
-    const removed = apply(text, {
-      type: 'disconnect',
-      pin: { node: ret.id, pin: 'value' },
-    });
-    expect(removed).toBe(
-      'function greet(person: string): string {\n  "Hello, " + person;\n  return;\n}\n'
-    );
-
-    // Shown as an unconnected "+" node (no exec node), then wired back.
-    const doc2 = parseTypeScript(removed);
-    const plus = node(doc2, (n) => n.kind === 'operator');
+    // The graph keeps the `+` as a loose node; the code only runs `return`.
     expect(
-      doc2.functions.flatMap((f) => f.nodes).some((n) => n.kind === 'unknown')
-    ).toBe(false);
-    const ret2 = node(doc2, (n) => n.kind === 'return');
-    expect(
-      apply(removed, {
-        type: 'connect',
-        from: { node: plus.id, pin: 'value' },
-        to: { node: ret2.id, pin: 'value' },
-      })
-    ).toBe(text);
-
-    // Deleting the unconnected node removes its line.
-    expect(apply(removed, { type: 'deleteNodes', nodeIds: [plus.id] })).toBe(
-      'function greet(person: string): string {\n  return;\n}\n'
-    );
+      apply(text, { type: 'disconnect', pin: { node: ret.id, pin: 'value' } })
+    ).toBe('function greet(person: string): string {\n  return;\n}\n');
   });
 
   it('keeps the key of shorthand properties', () => {
@@ -561,17 +538,16 @@ describe('deleting and restoring a return', () => {
       pin: { node: obj.id, pin: 'p0' },
     });
     expect(removed).toBe(
-      'const length = 4;\nlength;\nhex({ length: undefined, casing: "lower" });\n'
+      'const length = 4;\nhex({ length: undefined, casing: "lower" });\n'
     );
-    const doc2 = parseTypeScript(removed);
-    const obj2 = node(doc2, (n) => n.kind === 'makeObject');
+    const obj2 = node(parseTypeScript(removed), (n) => n.kind === 'makeObject');
     expect(obj2.pins[0]?.name).toBe('length');
-    const getter = node(doc2, (n) => n.kind === 'getVar');
+    // Setting it to the name again writes the shorthand.
     expect(
       apply(removed, {
-        type: 'connect',
-        from: { node: getter.id, pin: 'value' },
-        to: { node: obj2.id, pin: 'p0' },
+        type: 'setInput',
+        pin: { node: obj2.id, pin: 'p0' },
+        expression: 'length',
       })
     ).toBe(text);
   });
@@ -618,13 +594,13 @@ describe('deleting and restoring a return', () => {
     );
   });
 
-  it('wraps object literals that become statements of their own', () => {
+  it('takes an object literal out of the code with its wire', () => {
     const text = 'foo({ a: 1 });\n';
     const doc = parseTypeScript(text);
     const foo = node(doc, (n) => n.title === 'foo');
     expect(
       apply(text, { type: 'disconnect', pin: { node: foo.id, pin: 'arg0' } })
-    ).toBe('({ a: 1 });\nfoo(undefined);\n');
+    ).toBe('foo(undefined);\n');
   });
 
   it('keeps the call of a deleted variable declaration', () => {

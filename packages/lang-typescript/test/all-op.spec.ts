@@ -61,9 +61,6 @@ describe('disconnect with drop', () => {
       (p) => p.range && TEXT.slice(p.range.start, p.range.end) === 'a + 1'
     );
     const pinRef = { node: call?.id ?? '', pin: pin?.id ?? '' };
-    expect(apply(TEXT, { type: 'disconnect', pin: pinRef })).toContain(
-      'a + 1;\n  g('
-    );
     expect(
       apply(TEXT, { type: 'disconnect', pin: pinRef, drop: true })
     ).not.toContain('a + 1;\n  g(');

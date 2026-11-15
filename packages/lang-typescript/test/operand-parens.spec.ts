@@ -90,7 +90,7 @@ describe('values written into operands keep their meaning', () => {
         },
         to: { node: node(nodes, '*').id, pin: 'a' },
       }))
-    ).toMatch(/\nconst v = \(a \+ b\) \* 2;\n$/);
+    ).toMatch(/^const v = \(a \+ b\) \* 2;\n$/);
     expect(
       apply('const v = a * undefined;\n', (nodes) => ({
         type: 'setLiteral',

@@ -62,8 +62,10 @@ function keptCalls(
 }
 
 /**
- * Nodes wired into a deleted value node that aren't deleted with it, like
- * UE keeps them: the outermost nodes inside its expression.
+ * Calls wired into a deleted value node that aren't deleted with it: the
+ * outermost calls inside its expression, which run in the flow and stay
+ * in the code. Its pure parts leave the code (the graph keeps them as
+ * loose nodes, like UE keeps a deleted node's inputs).
  */
 function keptInputs(
   doc: GraphDocument,
@@ -76,6 +78,7 @@ function keptInputs(
       n !== node &&
       !deleted.has(n.id) &&
       n.kind !== 'entry' &&
+      n.purity === 'impure' &&
       !getMeta<StatementMeta>(n).stmt &&
       contains(node.range, n.range) &&
       !sameRange(node.range, n.range)

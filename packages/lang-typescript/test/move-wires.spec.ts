@@ -60,7 +60,7 @@ describe('moving wires (Ctrl+drag)', () => {
     );
   });
 
-  it('keeps the node it replaces, without the moved value', () => {
+  it('moves the value, the one it replaces leaves the code', () => {
     const text =
       'const RATE = 0.19;\nfunction f(d: number) {\n  return d * (1 + RATE);\n}\n';
     const nodes =
@@ -68,7 +68,8 @@ describe('moving wires (Ctrl+drag)', () => {
         ?.nodes ?? [];
     const plus = nodes.find((n) => n.kind === 'operator' && n.title === '+');
     const times = nodes.find((n) => n.kind === 'operator' && n.title === '*');
-    // RATE moves from `+` onto `*`'s lower input: `1 + …` stays unwired.
+    // RATE moves from `+` onto `*`'s lower input: `1 + …` is left without
+    // a consumer (the graph keeps it as a loose node).
     expect(
       apply(text, {
         type: 'moveWires',
@@ -76,11 +77,11 @@ describe('moving wires (Ctrl+drag)', () => {
         to: { node: times?.id ?? '', pin: 'b' },
       })
     ).toBe(
-      'const RATE = 0.19;\nfunction f(d: number) {\n  1 + undefined;\n  return d * (RATE);\n}\n'
+      'const RATE = 0.19;\nfunction f(d: number) {\n  return d * (RATE);\n}\n'
     );
   });
 
-  it('keeps the node a new wire replaces, like UE', () => {
+  it('replaces the value a new wire replaces in the code', () => {
     const text =
       'const RATE = 0.19;\nfunction f(d: number) {\n  return d * (1 + RATE);\n}\n';
     const nodes =
@@ -95,11 +96,11 @@ describe('moving wires (Ctrl+drag)', () => {
         to: { node: times?.id ?? '', pin: 'b' },
       })
     ).toBe(
-      'const RATE = 0.19;\nfunction f(d: number) {\n  1 + RATE;\n  return d * (RATE);\n}\n'
+      'const RATE = 0.19;\nfunction f(d: number) {\n  return d * (RATE);\n}\n'
     );
   });
 
-  it('keeps the node whose output wires moved, like UE', () => {
+  it('moves the output wires to another Get', () => {
     const text =
       'function f(a: number) {\n  let t = a;\n  const d = t - t * 2;\n}\n';
     const [upper, lower] =
@@ -113,7 +114,7 @@ describe('moving wires (Ctrl+drag)', () => {
         to: { node: upper?.id ?? '', pin: 'value' },
       })
     ).toBe(
-      'function f(a: number) {\n  let t = a;\n  t;\n  const d = t - t * 2;\n}\n'
+      'function f(a: number) {\n  let t = a;\n  const d = t - t * 2;\n}\n'
     );
   });
 
