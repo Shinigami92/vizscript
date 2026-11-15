@@ -1,7 +1,7 @@
 import type { Conversion } from './conversions';
 import type { EngineClass } from './engine-classes';
 import type { ImportRequest, ParseOptions } from './imports';
-import type { DataType, GraphDocument, PinRef, Point } from './ir';
+import type { DataType, GraphDocument, PinRef, Point, SourceRange } from './ir';
 import type { LanguageVersion, ProjectFile } from './language-version';
 import type { ModuleReference } from './module-refs';
 
@@ -97,6 +97,11 @@ export type GraphOp =
   | { type: 'insertElement'; node: string; index: number; copy?: boolean }
   /** Moves an array element (Details: drag its grip). */
   | { type: 'moveElement'; node: string; from: number; to: number }
+  /**
+   * An op on a value that is no node of the graph (a function input's
+   * default, at `range`): applied to its `valueHost` file.
+   */
+  | { type: 'inValue'; range: SourceRange; typeText?: string; op: GraphOp }
   /** Breaks every data wire of a node (UE: "Break Node Link(s)"). */
   | { type: 'disconnectNode'; node: string }
   /**
@@ -334,6 +339,12 @@ export interface TypeSystemInfo {
   optional?: string;
   /** Type of a result that comes later (`Promise<T>`), for async code. */
   promise?: string;
+  /**
+   * A declaration that holds a value which is no node (a function input's
+   * default) so it can be edited like a variable's (`valueHost`): `$type`
+   * and `$value` (`const __value__: $type = $value;`).
+   */
+  valueHost?: { typed: string; untyped: string };
   /**
    * Opener of a value in a text template (`${` in TypeScript, `{` in
    * Python's f-strings): Details edits the format of Format Text nodes.

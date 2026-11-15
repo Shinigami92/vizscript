@@ -1,7 +1,16 @@
 import type { GraphNode, GraphOp } from '@vizscript/core';
-import { applyTextEdits } from '@vizscript/core';
+import { applyTextEdits, valueHost } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { applyTypeScriptOp, parseTypeScript } from '../src';
+import { applyTypeScriptOp, parseTypeScript, typescriptBackend } from '../src';
+
+function typeScriptTypes(): NonNullable<typeof typescriptBackend.typeSystem> {
+  const types = typescriptBackend.typeSystem;
+  if (!types) {
+    throw new Error('No type system');
+  }
+
+  return types;
+}
 
 const CART = `const cart = [
   { name: 'Keyboard', price: 89.9, quantity: 1 },
@@ -75,6 +84,52 @@ describe('array elements (UE: Insert, Duplicate, Delete, drag)', () => {
       apply(CART, (n) => ({ type: 'moveElement', node: n.id, from: 1, to: 0 }))
     ).toBe(
       "const cart = [\n  { name: 'Cable', price: 4.5, quantity: 3 },\n  { name: 'Keyboard', price: 89.9, quantity: 1 },\n];\n"
+    );
+  });
+});
+
+const FN =
+  'interface Item {\n  name: string;\n  price: number;\n}\n\nfunction total(items: Item[] = []) {\n  return items;\n}\n';
+
+function inDefault(text: string, op: (node: GraphNode) => GraphOp): string {
+  const param = parseTypeScript(text, 't.ts').symbols?.find(
+    (s) => s.name === 'total'
+  )?.params?.[0];
+  const range = param?.defaultRange;
+  const host = range
+    ? valueHost(text, range, param?.type?.text, typeScriptTypes())
+    : undefined;
+  const node = parseTypeScript(host?.text ?? '', 't.ts')
+    .functions.flatMap((f) => f.nodes)
+    .find((n) => n.kind === 'makeArray' && n.range.start === host?.start);
+  if (!range || !node) {
+    throw new Error('No default array');
+  }
+
+  const result = applyTypeScriptOp(
+    text,
+    { type: 'inValue', range, typeText: param?.type?.text, op: op(node) },
+    't.ts'
+  );
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+
+  return applyTextEdits(text, result.edits);
+}
+
+describe('array defaults of inputs (no nodes: edited on a host file)', () => {
+  it('adds an element of the declared type to an empty default', () => {
+    const once = inDefault(FN, (n) => ({ type: 'addArgument', node: n.id }));
+    expect(once).toContain("items: Item[] = [{ name: '', price: 0 }]");
+    const twice = inDefault(once, (n) => ({
+      type: 'insertElement',
+      node: n.id,
+      index: 0,
+      copy: true,
+    }));
+    expect(twice).toContain(
+      "items: Item[] = [{ name: '', price: 0 }, { name: '', price: 0 }]"
     );
   });
 });

@@ -11,6 +11,7 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  applyInValue,
   applyTextOp,
   removeListItem,
   removeModifier,
@@ -93,6 +94,10 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
   optional: 'T | null',
   promise: 'Promise<T>',
   placeholder: 'undefined',
+  valueHost: {
+    typed: 'const __value__: $type = $value;',
+    untyped: 'const __value__ = $value;',
+  },
   templateOpen: '${',
   expressions: [
     {
@@ -773,6 +778,12 @@ export function applyTypeScriptOp(
   fileName?: string,
   options?: ParseOptions
 ): OpResult {
+  if (op.type === 'inValue') {
+    return applyInValue(text, op, TYPESCRIPT_TYPES, (host) =>
+      applyTypeScriptOp(host, op.op, fileName, options)
+    );
+  }
+
   return applyTextOp(
     text,
     parseTypeScript(text, fileName, options),

@@ -12,6 +12,7 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  applyInValue,
   applyTextOp,
   checkName,
   classOf,
@@ -122,6 +123,10 @@ export const RUST_TYPES: TypeSystemInfo = {
     set: 'HashSet::new()',
   },
   placeholder: 'todo!()',
+  valueHost: {
+    typed: 'fn __value__() {\n    let value: $type = $value;\n}',
+    untyped: 'fn __value__() {\n    let value = $value;\n}',
+  },
   expressions: [
     {
       label: 'Await',
@@ -816,6 +821,12 @@ export function applyRustOp(
   fileName?: string,
   options?: ParseOptions
 ): OpResult {
+  if (op.type === 'inValue') {
+    return applyInValue(text, op, RUST_TYPES, (host) =>
+      applyRustOp(host, op.op, fileName, options)
+    );
+  }
+
   const doc = parseRustDocument(text, fileName, options);
   if (op.type === 'addFunction' && op.scope !== '') {
     return addMethod(text, doc, op.scope, op.name);

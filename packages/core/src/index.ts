@@ -28,6 +28,7 @@ export * from './overlay-sync';
 export * from './array-ops';
 export * from './format-text';
 export * from './operator-chain';
+export * from './value-host';
 export * from './ops';
 export * from './reconcile';
 export * from './reroute';

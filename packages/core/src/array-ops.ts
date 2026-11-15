@@ -4,6 +4,7 @@ import { failed, succeeded } from './op-result';
 import { arrayElements } from './operator-chain';
 import type { OpResult, TextEdit } from './ops';
 import { findNode } from './reconcile';
+import { holdsFields } from './symbols';
 import type { StatementSyntax } from './text-ops';
 import { lineIndent } from './text-utils';
 import { arrayElementType } from './types';
@@ -104,7 +105,53 @@ export function blankElement(
     }
   }
 
-  return undefined;
+  return blankOfType(text, doc, node, syntax);
+}
+
+/**
+ * A new element from the declared element type when there is none to copy
+ * (`const cart: Item[] = []` → `{ name: '', price: 0, quantity: 0 }`).
+ */
+function blankOfType(
+  text: string,
+  doc: GraphDocument,
+  node: GraphNode,
+  syntax: StatementSyntax
+): string | undefined {
+  const declared = doc.symbols?.find(
+    (s) =>
+      s.defaultRange?.start === node.range.start &&
+      s.defaultRange.end === node.range.end
+  )?.type?.text;
+  const template = syntax.declarations?.typeSystem.array;
+  const write = syntax.objectEntry;
+  if (!declared || !template || !write) {
+    return undefined;
+  }
+
+  const at = template.indexOf('T');
+  const before = template.slice(0, at);
+  const after = template.slice(at + 1);
+  const element =
+    declared.startsWith(before) && declared.endsWith(after)
+      ? declared.slice(before.length, declared.length - after.length).trim()
+      : undefined;
+  const owner = element
+    ? doc.symbols?.find((s) => holdsFields(s) && s.name === element)
+    : undefined;
+  const fields = owner
+    ? (doc.symbols ?? []).filter(
+        (s) => s.kind === 'variable' && s.scope === owner.name
+      )
+    : [];
+  if (fields.length === 0) {
+    return undefined;
+  }
+
+  const entries = fields
+    .map((f) => write.write(f.name, emptyValue(text, f.dataType, [], syntax)))
+    .join(', ');
+  return write.padded ? `{ ${entries} }` : `{${entries}}`;
 }
 
 function elementsOf(

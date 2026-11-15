@@ -7,7 +7,7 @@ import type {
   StatementSyntax,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { applyTextOp, removeModifier } from '@vizscript/core';
+import { applyInValue, applyTextOp, removeModifier } from '@vizscript/core';
 import { CONVERSIONS } from './conversions';
 import { parsePython } from './convert';
 import { splitString } from './convert-utils';
@@ -98,6 +98,10 @@ export const PYTHON_TYPES: TypeSystemInfo = {
   set: 'set[T]',
   optional: 'T | None',
   placeholder: 'None',
+  valueHost: {
+    typed: '__value__: $type = $value',
+    untyped: '__value__ = $value',
+  },
   templateOpen: '{',
   expressions: [
     {
@@ -481,6 +485,12 @@ export function applyPythonOp(
   fileName?: string,
   options?: ParseOptions
 ): OpResult {
+  if (op.type === 'inValue') {
+    return applyInValue(text, op, PYTHON_TYPES, (host) =>
+      applyPythonOp(host, op.op, fileName, options)
+    );
+  }
+
   return applyTextOp(
     text,
     parsePythonDocument(text, fileName, options),

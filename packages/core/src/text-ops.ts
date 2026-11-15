@@ -687,6 +687,11 @@ function applyTextOpEdits(
       return clearArguments(text, doc, op.node, syntax);
     }
 
+    case 'inValue': {
+      // Needs a parse of its host file: each backend's apply function.
+      return failed('This value cannot be edited here.');
+    }
+
     default: {
       return applySymbolOp(text, doc, op, syntax);
     }

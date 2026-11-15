@@ -10,6 +10,7 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  applyInValue,
   applyTextOp,
   lineStart,
   removeModifier,
@@ -124,6 +125,10 @@ export const GDSCRIPT_TYPES: TypeSystemInfo = {
   array: 'Array[T]',
   map: 'Dictionary[K, V]',
   placeholder: 'null',
+  valueHost: {
+    typed: 'var __value__: $type = $value',
+    untyped: 'var __value__ = $value',
+  },
   expressions: [
     {
       label: 'Await',
@@ -601,6 +606,12 @@ export function applyGDScriptOp(
   fileName?: string,
   options?: ParseOptions
 ): OpResult {
+  if (op.type === 'inValue') {
+    return applyInValue(text, op, GDSCRIPT_TYPES, (host) =>
+      applyGDScriptOp(host, op.op, fileName, options)
+    );
+  }
+
   return applyTextOp(
     text,
     parseGDScriptDocument(text, fileName, options),
