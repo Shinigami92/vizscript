@@ -221,6 +221,7 @@ pnpm db:up && pnpm preflight
 set -a && . ./.env && set +a && pnpm exec vitest run   # includes API e2e tests
 ```
 
+- **Web logic:** `apps/web/test` tests the web app's plain modules and its workspace composables without the UI (placement, via wires and pure joins, graph-only and loose nodes, undo history). `fake-client.ts` answers the worker's requests in place with the TypeScript backend, `settle()` lets their promises finish.
 - **Snapshots:** graph lowering uses readable snapshots (`summarizeGraph`). `pnpm preflight` updates them; review the diff.
 - **Parser changes:** run the corpus checks against a real project, e.g. `GD_CORPUS=/path/to/godot/project pnpm exec vitest run packages/lang-gdscript` (and `PY_CORPUS=… packages/lang-python`, `RS_CORPUS=… packages/lang-rust`). They fail on any diagnostic.
 - **Naming UI parts:** important containers have a `data-ui` name (`workspace-toolbar`, `view-graph`, `details-panel`, …); search the inspector for `data-ui` to find them. New panels, toolbars, menus and dialogs get one too.
