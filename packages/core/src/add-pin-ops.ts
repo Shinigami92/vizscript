@@ -1,6 +1,7 @@
+import { blankElement } from './array-ops';
 import type { InputPinMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
-import type { GraphNode, Pin, SourceRange } from './ir';
+import type { GraphDocument, GraphNode, Pin, SourceRange } from './ir';
 import { failed, succeeded } from './op-result';
 import {
   arrayElements,
@@ -15,7 +16,7 @@ import { lineIndent } from './text-utils';
 import { arrayElementType } from './types';
 
 /** A value with the parentheses around it: `(b)` of `a + (b)`. */
-function operandSpan(text: string, range: SourceRange): SourceRange {
+export function operandSpan(text: string, range: SourceRange): SourceRange {
   let { start, end } = range;
   for (;;) {
     let before = start;
@@ -125,7 +126,7 @@ function removeChainValue(
 }
 
 /** The type's own empty value: `0`, `''`, `false`, else the placeholder. */
-function emptyValue(
+export function emptyValue(
   text: string,
   type: string,
   values: ReadonlyArray<Pin>,
@@ -207,17 +208,15 @@ function addArrayElement(
   text: string,
   node: GraphNode,
   elements: ReadonlyArray<Pin>,
-  syntax: StatementSyntax
+  syntax: StatementSyntax,
+  doc: GraphDocument | undefined
 ): OpResult {
   const type = node.pins.find(
     (p) => p.direction === 'out' && p.kind === 'data'
   )?.type;
-  const value = emptyValue(
-    text,
-    type ? arrayElementType(type) : 'any',
-    elements,
-    syntax
-  );
+  const value =
+    (doc ? blankElement(text, doc, node, syntax) : undefined) ??
+    emptyValue(text, type ? arrayElementType(type) : 'any', elements, syntax);
   return appendItem(
     text,
     node,
@@ -268,7 +267,9 @@ export function addPinValue(
   node: GraphNode,
   syntax: StatementSyntax,
   /** The key of a new object entry. */
-  key?: string
+  key?: string,
+  /** The parsed file: a new element of objects gets their shape. */
+  doc?: GraphDocument
 ): OpResult | undefined {
   const values = chainValues(node);
   if (values) {
@@ -281,7 +282,9 @@ export function addPinValue(
   }
 
   const elements = arrayElements(node);
-  return elements ? addArrayElement(text, node, elements, syntax) : undefined;
+  return elements
+    ? addArrayElement(text, node, elements, syntax, doc)
+    : undefined;
 }
 
 /**

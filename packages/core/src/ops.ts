@@ -90,6 +90,13 @@ export type GraphOp =
    * keep their values, new ones get a placeholder, left out ones go.
    */
   | { type: 'setFormat'; node: string; format: string }
+  /**
+   * UE's Insert / Duplicate of an array element (Details): an empty
+   * element before `index`, or with `copy` a copy of it after it.
+   */
+  | { type: 'insertElement'; node: string; index: number; copy?: boolean }
+  /** Moves an array element (Details: drag its grip). */
+  | { type: 'moveElement'; node: string; from: number; to: number }
   /** Breaks every data wire of a node (UE: "Break Node Link(s)"). */
   | { type: 'disconnectNode'; node: string }
   /**

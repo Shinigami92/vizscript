@@ -499,7 +499,7 @@ export function addArgument(
   name?: string
 ): OpResult {
   const node = findNode(doc, nodeId);
-  const added = node ? addPinValue(text, node, syntax, name) : undefined;
+  const added = node ? addPinValue(text, node, syntax, name, doc) : undefined;
   if (added) {
     return added;
   }

@@ -1,3 +1,4 @@
+import { insertElement, moveElement } from './array-ops';
 import { collapseToFunction } from './collapse';
 import type { CommentSyntax } from './comment-ops';
 import {
@@ -542,6 +543,21 @@ function applyTextOpEdits(
 
     case 'disconnectNode': {
       return disconnectNode(text, doc, op.node, syntax);
+    }
+
+    case 'insertElement': {
+      return insertElement(
+        text,
+        doc,
+        op.node,
+        op.index,
+        op.copy === true,
+        syntax
+      );
+    }
+
+    case 'moveElement': {
+      return moveElement(text, doc, op.node, op.from, op.to);
     }
 
     case 'setFormat': {
