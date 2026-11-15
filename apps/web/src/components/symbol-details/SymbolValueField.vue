@@ -7,6 +7,7 @@ import type {
 } from '@vizscript/core';
 import { fieldValue, isConstantValue } from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
+import NumberField from '../NumberField.vue';
 import ValueFields from '../ValueFields.vue';
 
 /** The (default) value row of a variable's details: `<dt>` and `<dd>`. */
@@ -19,12 +20,16 @@ const props = defineProps<{
   symbols?: ReadonlyArray<ScriptSymbol>;
   /** Value in the saved version of the file, for UE's reset ↶. */
   base?: { value: string | null; type: string | null };
+  /** The name links to the variable (Defaults lists several). */
+  linked?: boolean;
 }>();
 
 const emit = defineEmits<{
   op: [op: GraphOp];
   /** Select the SET node that computes the value. */
   showNode: [];
+  /** Show the variable (its linked name). */
+  selectSymbol: [];
 }>();
 
 const isVariable = computed(() =>
@@ -206,7 +211,17 @@ function resetValue(): void {
 
 <template>
   <!-- Named after the variable, like UE's Default Value rows. -->
-  <dt class="truncate pt-1 font-mono text-zinc-500" :title="symbol.name">
+  <dt v-if="linked" class="min-w-0">
+    <button
+      type="button"
+      class="link block max-w-full truncate font-mono"
+      :title="`Show ${symbol.name}`"
+      @click="emit('selectSymbol')"
+    >
+      {{ symbol.name }}
+    </button>
+  </dt>
+  <dt v-else class="truncate pt-1 font-mono text-zinc-500" :title="symbol.name">
     {{ symbol.name }}
   </dt>
   <dd class="flex min-w-0 items-center gap-1">
@@ -246,6 +261,20 @@ function resetValue(): void {
       :label="`Value of ${symbol.name}`"
       @set="setExpression"
     />
+    <NumberField
+      v-else-if="valueKind === 'number'"
+      :key="`${symbol.id}:number`"
+      :value="draft"
+      :editable="editable"
+      :placeholder="placeholderValue || 'No value'"
+      :label="`Value of ${symbol.name}`"
+      @commit="
+        (value) => {
+          draft = value;
+          commitValue();
+        }
+      "
+    />
     <input
       v-else
       :key="`${symbol.id}:${valueKind}`"
@@ -253,7 +282,6 @@ function resetValue(): void {
       class="input py-0.5 text-xs"
       :class="valueKind === 'string' ? '' : 'font-mono'"
       type="text"
-      :inputmode="valueKind === 'number' ? 'decimal' : undefined"
       :placeholder="
         placeholderValue || (valueKind === 'string' ? 'Text' : 'No value')
       "

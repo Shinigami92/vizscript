@@ -86,6 +86,11 @@ const GROUPS: ReadonlyArray<{
       },
       { action: 'Toggle a true / false value', input: 'Click its checkbox' },
       {
+        action: 'Change a number in Details',
+        input:
+          'Drag left / right on it (Shift ×10, Alt ×0.1), or click and type; ↑ / ↓ step',
+      },
+      {
         action: 'Rewire',
         input:
           'Drag from a pin to another pin (a message tells why one doesn’t fit)',

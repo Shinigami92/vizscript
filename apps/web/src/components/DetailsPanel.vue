@@ -14,9 +14,7 @@ import {
   CATEGORY_COLORS,
   COMMENT_BOX_COLORS,
   declaringNode,
-  fieldValue,
   getMeta,
-  isConstantValue,
   templateFormat,
   templateLayout,
 } from '@vizscript/core';
@@ -24,7 +22,9 @@ import { computed, provide, ref } from 'vue';
 import { indexDocument, pinPeers } from '../graph/doc-index';
 import { lineColumn, snippet } from '../graph/source';
 import DetailsSection, { DETAILS_QUERY } from './DetailsSection.vue';
+import NumberField from './NumberField.vue';
 import PinIcon from './PinIcon.vue';
+import SymbolValueField from './symbol-details/SymbolValueField.vue';
 import SymbolDetails from './SymbolDetails.vue';
 
 const props = defineProps<{
@@ -190,7 +190,10 @@ function pinExpression(pin: Pin): string {
 }
 
 function commitLiteral(node: GraphNode, pin: Pin, event: Event): void {
-  const value = (event.target as HTMLInputElement).value;
+  commitLiteralValue(node, pin, (event.target as HTMLInputElement).value);
+}
+
+function commitLiteralValue(node: GraphNode, pin: Pin, value: string): void {
   if (pin.literal && value !== pin.literal.value) {
     emit('op', { type: 'setLiteral', node: node.id, pin: pin.id, value });
   }
@@ -296,51 +299,23 @@ function setSetting(setting: string, value: string): void {
   emit('op', { type: 'setScriptSetting', setting, value });
 }
 
-/** Module variables with their values as code (UE's Class Defaults). */
-const defaults = computed(() => {
-  const code = props.docText ?? props.text;
-  return (props.doc?.symbols ?? [])
+/** Module variables with a value (UE's Class Defaults). */
+const defaults = computed(() =>
+  (props.doc?.symbols ?? [])
     .filter(
       (s) =>
         s.scope === '' &&
         (s.kind === 'variable' || s.kind === 'constant') &&
         s.defaultRange
     )
-    .map((symbol) => {
-      const value = symbol.defaultRange
-        ? code.slice(symbol.defaultRange.start, symbol.defaultRange.end)
-        : '';
-      // Computed values (`greeter(user)`) are no defaults to edit: the
-      // graph computes them, like a SET node in UE.
-      const computedBy =
-        props.doc && !isConstantValue(value) && !fieldValueOf(symbol, value)
-          ? declaringNode(props.doc, symbol)?.id
-          : undefined;
-      return { symbol, value, computedBy };
-    });
-});
+    .map((symbol) => ({ symbol }))
+);
 
-/** Vector, color and enum values have fields: they are constants too. */
-function fieldValueOf(symbol: ScriptSymbol, value: string): boolean {
-  return (
-    fieldValue(
-      value.trim(),
-      symbol.type?.text ?? String(symbol.dataType),
-      props.types ?? null,
-      props.doc?.symbols ?? [],
-      props.docText ?? props.text
-    ) !== undefined
-  );
-}
-
-function setDefault(symbol: ScriptSymbol, before: string, value: string): void {
-  if (value.trim() && value.trim() !== before.trim()) {
-    emit('op', {
-      type: 'setSymbolValue',
-      symbol: symbol.id,
-      value: value.trim(),
-      kind: 'expression',
-    });
+/** Shows the SET node that computes a variable's value in the graph. */
+function showDeclaringNode(symbol: ScriptSymbol): void {
+  const node = props.doc ? declaringNode(props.doc, symbol) : undefined;
+  if (node) {
+    emit('select', [node.id]);
   }
 }
 
@@ -633,6 +608,17 @@ function deleteSelection(): void {
                 >
               </button>
             </template>
+            <NumberField
+              v-else-if="pin.literal?.kind === 'number'"
+              :key="`${single.node.id}:${pin.id}`"
+              class="mt-1"
+              :value="pin.literal.value"
+              :editable="editable && pin.literal.editable"
+              :label="`Value of ${pinLabel(pin)}`"
+              @commit="
+                (value) => single && commitLiteralValue(single.node, pin, value)
+              "
+            />
             <input
               v-else-if="pin.literal"
               :key="`${single.node.id}:${pin.id}:${pin.literal.raw}`"
@@ -837,70 +823,20 @@ function deleteSelection(): void {
           <dl
             class="grid grid-cols-[6.5rem_1fr] items-center gap-x-2 gap-y-1.5 px-3 text-xs"
           >
-            <template v-for="variable in defaults" :key="variable.symbol.id">
-              <dt class="min-w-0">
-                <button
-                  type="button"
-                  class="link block max-w-full truncate font-mono"
-                  :title="`Show ${variable.symbol.name}`"
-                  @click="emit('selectSymbol', variable.symbol.id)"
-                >
-                  {{ variable.symbol.name }}
-                </button>
-              </dt>
-              <dd
-                v-if="variable.computedBy"
-                class="flex min-w-0 items-center gap-1"
-              >
-                <button
-                  type="button"
-                  class="link min-w-0 truncate px-1.5 text-left font-mono"
-                  :title="`${variable.value}\nComputed in the graph: show its SET node`"
-                  @click="emit('select', [variable.computedBy])"
-                >
-                  {{ variable.value }}
-                </button>
-                <span class="shrink-0 text-[11px] text-zinc-500">in graph</span>
-              </dd>
-              <dd v-else class="flex items-center gap-1">
-                <input
-                  :key="`${variable.symbol.id}:${variable.value}`"
-                  class="input py-1 font-mono text-xs"
-                  :value="variable.value"
-                  :readonly="!editable"
-                  :aria-label="`Default value of ${variable.symbol.name}`"
-                  spellcheck="false"
-                  @keydown.enter="($event.target as HTMLInputElement).blur()"
-                  @change="
-                    setDefault(
-                      variable.symbol,
-                      variable.value,
-                      ($event.target as HTMLInputElement).value
-                    )
-                  "
-                />
-                <button
-                  v-if="
-                    editable &&
-                    baseOf(variable.symbol) &&
-                    (baseOf(variable.symbol)?.value ?? '') !== variable.value
-                  "
-                  type="button"
-                  class="btn-ghost shrink-0 px-1 text-amber-400"
-                  :title="`Reset to the saved value (${baseOf(variable.symbol)?.value ?? 'none'})`"
-                  :aria-label="`Reset ${variable.symbol.name}`"
-                  @click="
-                    setDefault(
-                      variable.symbol,
-                      variable.value,
-                      baseOf(variable.symbol)?.value ?? ''
-                    )
-                  "
-                >
-                  <span class="i-mdi-restore" />
-                </button>
-              </dd>
-            </template>
+            <SymbolValueField
+              v-for="variable in defaults"
+              :key="variable.symbol.id"
+              :symbol="variable.symbol"
+              :text="docText ?? text"
+              :editable="editable"
+              :types="types ?? null"
+              :symbols="doc?.symbols ?? []"
+              :base="baseOf(variable.symbol)"
+              linked
+              @op="emit('op', $event)"
+              @select-symbol="emit('selectSymbol', variable.symbol.id)"
+              @show-node="showDeclaringNode(variable.symbol)"
+            />
           </dl>
         </DetailsSection>
 
