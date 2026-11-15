@@ -474,7 +474,7 @@ describe('applyRustOp', () => {
       name: 'b',
     });
     expect(next).toContain('fn f(a: u8, b: i32) {');
-    expect(next).toContain('f(1, todo!());');
+    expect(next).toContain('    f(1);');
     expect(
       applyRustOp(next, {
         type: 'setParameterType',

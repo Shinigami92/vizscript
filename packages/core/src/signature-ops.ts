@@ -206,10 +206,12 @@ export function addParameter(
     const value = argument ?? placeholder;
     return succeeded([
       { start: at, end: at, text: `(${param})` },
-      // Emits pass every argument (`changed.emit()` → `changed.emit(null)`).
-      ...callsOf(text, doc, symbol, syntax)
-        .filter((call) => call.args.length === 0)
-        .map((call) => appendItem(text, call, value)),
+      // With a given argument, emits pass it (`changed.emit(x)`).
+      ...(argument === undefined
+        ? []
+        : callsOf(text, doc, symbol, syntax)
+            .filter((call) => call.args.length === 0)
+            .map((call) => appendItem(text, call, value))),
     ]);
   }
 
@@ -227,8 +229,9 @@ export function addParameter(
   const param = `${name}${type ? `: ${type}` : ''}${needsDefault ? ` = ${value}` : ''}`;
   const edits: TextEdit[] = [appendItem(text, list, param)];
 
-  if (!needsDefault) {
-    // Calls that pass every argument get one for the new parameter.
+  if (!needsDefault && argument !== undefined) {
+    // Calls that pass every argument get the given one. Without it calls
+    // stay as they are: the missing argument shows as an empty pin.
     for (const call of callsOf(text, doc, symbol, syntax)) {
       if (call.args.length === params.length && !call.keywords?.length) {
         edits.push(appendItem(text, call, value));

@@ -200,7 +200,8 @@ export type GraphOp =
     }
   /**
    * Adds an input to a function (UE: Inputs `+`). Same-file calls get
-   * `argument` (or the language's placeholder) for it.
+   * `argument` when one is given, else they stay as they are (the missing
+   * argument shows as an empty pin).
    */
   | {
       type: 'addParameter';

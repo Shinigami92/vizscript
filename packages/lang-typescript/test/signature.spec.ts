@@ -22,7 +22,7 @@ const TEXT = [
 ].join('\n');
 
 describe('function signatures', () => {
-  it('adds inputs and updates calls that pass every argument', () => {
+  it('adds inputs and passes a given argument in calls that pass every one', () => {
     expect(
       apply('function f(a: number) {}\nf(1);\nf();\n', {
         type: 'addParameter',
@@ -46,7 +46,23 @@ describe('function signatures', () => {
         symbol: 'function:f',
         name: 'a',
       })
-    ).toBe('function f(a) {}\nf(undefined);\n');
+    ).toBe('function f(a) {}\nf();\n');
+  });
+
+  it('shows the argument a call lacks after a new input as an empty pin', () => {
+    const text = apply('function f(a: number) {}\nf(1);\n', {
+      type: 'addParameter',
+      symbol: 'function:f',
+      name: 'label',
+      typeText: 'string',
+    });
+    expect(text).toBe('function f(a: number, label: string) {}\nf(1);\n');
+    const call = parseTypeScript(text, 't.ts')
+      .functions.flatMap((fn) => fn.nodes)
+      .find((n) => n.kind === 'call' && n.title === 'f');
+    const label = call?.pins.find((p) => p.name === 'label');
+    expect(label?.direction).toBe('in');
+    expect(label?.range).toBeUndefined();
   });
 
   it('removes and moves inputs with the arguments of calls', () => {

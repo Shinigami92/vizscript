@@ -96,18 +96,20 @@ describe('Godot classes', () => {
 });
 
 describe('signal inputs', () => {
-  it('adds the first input of a signal and passes it to its emits', () => {
+  it('adds the first input of a signal and passes a given value to its emits', () => {
     const text = 'signal changed\n\n\nfunc a() -> void:\n\tchanged.emit()\n';
     const doc = parseGDScriptDocument(text, 'x.gd');
-    expect(
-      apply(text, {
-        type: 'addParameter',
-        symbol: symbolId(doc, 'changed'),
-        name: 'value',
-        typeText: 'int',
-      })
-    ).toBe(
-      'signal changed(value: int)\n\n\nfunc a() -> void:\n\tchanged.emit(null)\n'
+    const op = {
+      type: 'addParameter',
+      symbol: symbolId(doc, 'changed'),
+      name: 'value',
+      typeText: 'int',
+    } as const;
+    expect(apply(text, op)).toBe(
+      'signal changed(value: int)\n\n\nfunc a() -> void:\n\tchanged.emit()\n'
+    );
+    expect(apply(text, { ...op, argument: '0' })).toBe(
+      'signal changed(value: int)\n\n\nfunc a() -> void:\n\tchanged.emit(0)\n'
     );
   });
 
