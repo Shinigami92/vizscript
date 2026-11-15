@@ -67,7 +67,7 @@ export function looksLikeCode(value: string, doc: GraphDocument): boolean {
     return true;
   }
 
-  const leading = value.match(/^-?([A-Za-z_$][\w$]*)/)?.[1];
+  const leading = value.match(/^(?:[-!]|not\s+)*([A-Za-z_$][\w$]*)/)?.[1];
   if (!leading) {
     return false;
   }
@@ -102,16 +102,24 @@ function literalSource(
     }
 
     case 'number': {
-      return Number.isNaN(Number(trimmed.replaceAll('_', '')))
-        ? { error: `"${value}" is not a number.` }
-        : trimmed;
+      if (!Number.isNaN(Number(trimmed.replaceAll('_', '')))) {
+        return trimmed;
+      }
+
+      return looksLikeCode(trimmed, doc)
+        ? trimmed
+        : { error: `"${value}" is not a number.` };
     }
 
     case 'boolean': {
       const words = syntax.booleans ?? { true: 'true', false: 'false' };
       const normalized = trimmed.toLowerCase();
-      return normalized === 'true' || normalized === 'false'
-        ? words[normalized]
+      if (normalized === 'true' || normalized === 'false') {
+        return words[normalized];
+      }
+
+      return looksLikeCode(trimmed, doc)
+        ? trimmed
         : { error: `A boolean must be ${words.true} or ${words.false}.` };
     }
 
@@ -165,6 +173,12 @@ export function setLiteral(
     case 'number': {
       const trimmed = value.trim();
       if (trimmed === '' || Number.isNaN(Number(trimmed.replaceAll('_', '')))) {
+        // Code stays code (`count * 2`), like in an empty input.
+        if (node && looksLikeCode(trimmed, doc)) {
+          replacement = operandText(node, pin, trimmed);
+          break;
+        }
+
         return failed(`"${value}" is not a number.`);
       }
 
@@ -174,8 +188,15 @@ export function setLiteral(
 
     case 'boolean': {
       const words = syntax.booleans ?? { true: 'true', false: 'false' };
-      const normalized = value.trim().toLowerCase();
+      const trimmed = value.trim();
+      const normalized = trimmed.toLowerCase();
       if (normalized !== 'true' && normalized !== 'false') {
+        // Code stays code (`!response.ok`), like in an empty input.
+        if (node && looksLikeCode(trimmed, doc)) {
+          replacement = operandText(node, pin, trimmed);
+          break;
+        }
+
         return failed(`A boolean must be ${words.true} or ${words.false}.`);
       }
 

@@ -117,3 +117,32 @@ describe('values written into operands keep their meaning', () => {
     ).toContain('(a + b) * undefined');
   });
 });
+
+describe('typed values', () => {
+  it('take code in boolean and number values', () => {
+    expect(
+      apply('if (true) {\n}\n', (nodes) => ({
+        type: 'setLiteral',
+        node: node(nodes, 'Branch').id,
+        pin: 'condition',
+        value: '!x',
+      }))
+    ).toBe('if (!x) {\n}\n');
+    expect(
+      apply('const v = a * 2;\n', (nodes) => ({
+        type: 'setLiteral',
+        node: node(nodes, '*').id,
+        pin: 'b',
+        value: 'c + d',
+      }))
+    ).toBe('const v = a * (c + d);\n');
+    expect(() =>
+      apply('if (true) {\n}\n', (nodes) => ({
+        type: 'setLiteral',
+        node: node(nodes, 'Branch').id,
+        pin: 'condition',
+        value: 'maybe',
+      }))
+    ).toThrow('A boolean must be true or false.');
+  });
+});
