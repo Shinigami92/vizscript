@@ -50,6 +50,11 @@ const path = computed(() => {
   return Array.isArray(value) ? value.join('/') : (value ?? '');
 });
 
+/** Repository and branch: drafts, tabs and loaded files belong to it. */
+const scope = computed(
+  () => `${provider.value}/${owner.value}/${repo.value}@${ref_.value}`
+);
+
 /** Signed in: through the API; signed out: public repositories from GitHub. */
 const source = computed(() => repoSource(provider.value, session.me !== null));
 
@@ -65,7 +70,7 @@ const fileError = ref<string | null>(null);
 
 /** Local draft of a file's unsaved changes. */
 function draftKeyOf(filePath: string): string {
-  return `vizscript:draft:${provider.value}/${owner.value}/${repo.value}@${ref_.value}:${filePath}`;
+  return `vizscript:draft:${scope.value}:${filePath}`;
 }
 
 /** Draft of the file on screen (not the one still loading). */
@@ -130,10 +135,7 @@ async function loadTree(): Promise<void> {
 // ---------------------------------------------------------------- tabs
 
 /** Open files of this branch, like VS Code's editor tabs. */
-const tabsKey = computed(
-  () =>
-    `vizscript:tabs:${provider.value}/${owner.value}/${repo.value}@${ref_.value}`
-);
+const tabsKey = computed(() => `vizscript:tabs:${scope.value}`);
 const fileTabs = useFileTabs(tabsKey);
 
 /**
@@ -197,8 +199,9 @@ function readFile(filePath: string): Promise<string> {
   return read;
 }
 
-// Another branch has other files: start fresh.
-watch(ref_, () => {
+// Another repository or branch has other files: start fresh. The view is
+// reused when only the route's parameters change.
+watch(scope, () => {
   forget([...buffers.keys()]);
   readCache.clear();
 });
