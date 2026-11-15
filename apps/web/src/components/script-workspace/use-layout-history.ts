@@ -85,6 +85,12 @@ export interface LayoutHistory {
    * after the editor reported the new version.
    */
   recordOverlayCode: () => void;
+  /** Nodes a code edit left graph-only: one undo step with the edit. */
+  recordCodeOverlay: (
+    before: GraphOverlay,
+    after: GraphOverlay,
+    layout: LayoutPatch
+  ) => void;
   onLayoutChange: (patch: LayoutPatch) => void;
   /** Colors of comment boxes are layout entries, undone like moves. */
   boxColorOf: (boxId: string) => number;
@@ -260,6 +266,47 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     }
   }
 
+  /**
+   * Graph-only nodes an edit of the code left behind (loose nodes it took
+   * out of the code): one undo step with that edit and their places.
+   */
+  function recordCodeOverlay(
+    before: GraphOverlay,
+    after: GraphOverlay,
+    layout: LayoutPatch
+  ): void {
+    const top = undoStack.value.at(-1);
+    // Layout entries the same edit made (vias): part of this step.
+    const merged =
+      top?.kind === 'layout' &&
+      top.code === true &&
+      top.codeVersion === codeHistory.value.version
+        ? top
+        : undefined;
+    const layoutBefore: LayoutPatch = {};
+    for (const key of Object.keys(layout)) {
+      layoutBefore[key] = pinned.value[key] ?? null;
+    }
+
+    undoStack.value = [
+      ...undoStack.value.slice(merged ? 0 : -199, merged ? -1 : undefined),
+      {
+        kind: 'overlay',
+        before,
+        after,
+        codeVersion: codeHistory.value.version,
+        code: true,
+        beforeVersion: merged?.beforeVersion ?? editVersion,
+        layout: {
+          before: { ...layoutBefore, ...merged?.before },
+          after: { ...merged?.after, ...layout },
+        },
+      },
+    ];
+    redoStack.value = [];
+    applyLayoutPatch(layout);
+  }
+
   function undo(): void {
     const step = undoStack.value.at(-1);
     if (
@@ -396,6 +443,7 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     recordCodeLayout,
     parsed,
     recordOverlayCode,
+    recordCodeOverlay,
     onLayoutChange,
     boxColorOf,
     setBoxColor,

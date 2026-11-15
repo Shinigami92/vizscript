@@ -23,13 +23,19 @@ import {
   isCutReceiver,
   isEmptyOverlay,
   sameFloatingNodes,
+  splitLoose,
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
 import type { GraphClient } from '../../graph/graph-client';
 import type { Problem } from '../../graph/problems';
+import { useLooseNodes } from './use-loose-nodes';
 
 export interface GraphOverlayDeps {
+  /** The layout: loose graph-only nodes are stored with it. */
+  pinned: ShallowRef<Positions>;
+  /** Changes layout entries without an undo step. */
+  patchLayout: (patch: Record<string, Point | null>) => void;
   path: () => string;
   text: Ref<string>;
   client: GraphClient;
@@ -129,6 +135,8 @@ export interface WorkspaceGraphOverlay {
   discard: () => void;
   /** Writes the overlay as code when the graph is valid. */
   resolve: () => Promise<void>;
+  /** Loose nodes stored with the layout, made again (after loading). */
+  restoreLoose: () => Promise<void>;
 }
 
 /**
@@ -142,14 +150,26 @@ export function useGraphOverlay(
 ): WorkspaceGraphOverlay {
   const overlay = shallowRef<GraphOverlay>(initial ?? EMPTY_OVERLAY);
   const issues = shallowRef<OverlayIssue[]>([]);
-  const outOfSync = computed(() => !isEmptyOverlay(overlay.value));
+  /**
+   * Loose graph-only nodes (wired to nothing of the code) aren't part of
+   * the program: only the rest holds the code back.
+   */
+  const split = computed(() => splitLoose(overlay.value));
+  const outOfSync = computed(() => !isEmptyOverlay(split.value.active));
   /** The last change was the user's graph edit (its undo step takes code). */
   let userEdit = false;
   let told = false;
   let seq = 0;
 
+  const looseNodes = useLooseNodes({
+    ...deps,
+    overlay: () => overlay.value,
+    setOverlay: (next) => setOverlay(next),
+  });
+
   function setOverlay(next: GraphOverlay): void {
     overlay.value = next;
+    looseNodes.store(next);
     if (isEmptyOverlay(next)) {
       issues.value = [];
       told = false;
@@ -474,19 +494,22 @@ export function useGraphOverlay(
   }
 
   function discard(): void {
-    if (isEmptyOverlay(overlay.value)) {
+    const { loose, active } = split.value;
+    if (isEmptyOverlay(active)) {
       return;
     }
 
-    deps.record(overlay.value, EMPTY_OVERLAY);
+    // Loose nodes stay: they don't hold the code back.
+    deps.record(overlay.value, loose);
     userEdit = false;
-    setOverlay(EMPTY_OVERLAY);
+    setOverlay(loose);
   }
 
   async function resolve(): Promise<void> {
     const current = overlay.value;
+    const { loose, active } = split.value;
     const source = deps.text.value;
-    if (isEmptyOverlay(current)) {
+    if (isEmptyOverlay(active)) {
       issues.value = [];
       return;
     }
@@ -495,7 +518,7 @@ export function useGraphOverlay(
     const result = await deps.client.resolveOverlay(
       source,
       deps.path(),
-      current,
+      active,
       deps.imports()
     );
     // Something changed meanwhile: a newer resolve runs.
@@ -513,7 +536,7 @@ export function useGraphOverlay(
     }
 
     const wrote = result.text !== source;
-    deps.writing(current, wrote);
+    deps.writing(active, wrote);
 
     if (result.placed) {
       deps.placed(result.placed);
@@ -528,7 +551,8 @@ export function useGraphOverlay(
     }
 
     userEdit = false;
-    setOverlay(EMPTY_OVERLAY);
+    // Written: what stays graph-only is the loose nodes.
+    setOverlay(loose);
   }
 
   const syncNodes = computed(() => {
@@ -579,5 +603,6 @@ export function useGraphOverlay(
     setOverlay,
     discard,
     resolve,
+    restoreLoose: () => looseNodes.restore(),
   };
 }

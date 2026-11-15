@@ -655,7 +655,7 @@ function applyTextOpEdits(
     }
 
     case 'setInput': {
-      return setInput(doc, op.pin, op.expression);
+      return setInput(doc, op.pin, op.expression, text);
     }
 
     case 'makeValue': {

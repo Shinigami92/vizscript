@@ -5,7 +5,6 @@ import type {
   GraphNode,
   GraphOp,
   GraphOverlay,
-  LayoutPatch,
   Positions,
   TextEdit,
   TypeSystemInfo,
@@ -18,7 +17,6 @@ import {
   findNode,
   floatsUntilWired,
   graphEditsFor,
-  isExtraLayoutKey,
   layoutDocument,
   reconcilePositions,
   reconcileReroutes,
@@ -79,9 +77,11 @@ import { useCodeGraphSync } from './script-workspace/use-code-graph-sync';
 import { useFocusMode } from './script-workspace/use-focus-mode';
 import { useGraphOverlay } from './script-workspace/use-graph-overlay';
 import { useImports } from './script-workspace/use-imports';
+import { useKeptNodes } from './script-workspace/use-kept-nodes';
 import { useLanguageVersion } from './script-workspace/use-language-version';
 import { useLayoutHistory } from './script-workspace/use-layout-history';
 import { provideParseValue } from './script-workspace/use-parse-value';
+import { usePinnedLayout } from './script-workspace/use-pinned-layout';
 import { useProblems } from './script-workspace/use-problems';
 import { useTypeLibs } from './script-workspace/use-type-libs';
 import { useViaWires } from './script-workspace/use-via-wires';
@@ -215,6 +215,7 @@ const {
   recordCodeLayout,
   parsed,
   recordOverlayCode,
+  recordCodeOverlay,
   onLayoutChange,
   boxColorOf,
   setBoxColor,
@@ -247,8 +248,11 @@ const {
   setOverlay,
   discard: discardGraphChanges,
   resolve: resolveOverlay,
+  restoreLoose,
 } = useGraphOverlay(
   {
+    pinned,
+    patchLayout: (patch) => applyLayoutPatch(patch),
     path: () => props.path,
     text,
     client,
@@ -306,32 +310,13 @@ const {
   props.overlay
 );
 
-/** Pins positions without an undo step (like placing new nodes). */
-/** Whether any node has a saved place (not only reroutes and colors). */
-function hasPinnedNodes(): boolean {
-  return Object.keys(pinned.value).some((key) => !isExtraLayoutKey(key));
-}
-
-/** Node positions only (no reroutes, box colors or vias). */
-function nodePositions(all: Positions): Positions {
-  return Object.fromEntries(
-    Object.entries(all).filter(([key]) => !isExtraLayoutKey(key))
-  );
-}
-
-function movePinned(patch: Positions): void {
-  if (Object.keys(patch).length === 0) {
-    return;
-  }
-
-  // The first node placed keeps the rest of the graph where it is shown
-  // (else the other functions are laid out anew around a saved node).
-  const full: Positions = hasPinnedNodes()
-    ? patch
-    : { ...nodePositions(positions.value), ...patch };
-  pinned.value = { ...pinned.value, ...full };
-  void persist(full);
-}
+const { movePinned, freezeLayout } = usePinnedLayout({
+  pinned,
+  positions,
+  canvasPositions: () => canvas.value?.getPositions(),
+  persist: (patch) => persist(patch),
+  applyLayoutPatch,
+});
 watch(outOfSync, (value) => emit('out-of-sync', value), { immediate: true });
 watch(
   () => props.overlay,
@@ -375,6 +360,27 @@ const {
   parsedDoc,
   pinned,
   autoLayout: (shown) => layoutDocument(shown, layoutOptions),
+});
+const keptNodes = useKeptNodes({
+  parsedDoc: () => parsedDoc.value,
+  drawnDoc: () => canvasDoc.value,
+  text,
+  path: () => props.path,
+  client,
+  imports: () => importDeclarations(),
+  placeholder: () => typeSystem.value?.placeholder ?? 'undefined',
+  positionOf: (id) => canvas.value?.getPositions()[id] ?? positions.value[id],
+  typeFloating: (edit, source) => typeFloating(edit, source),
+  overlay: () => overlay.value,
+  keep: (before, after, layout) => {
+    setOverlay(after);
+    recordCodeOverlay(before, after, layout);
+  },
+  replace: (before, after, layout) => {
+    recordOverlay(before, after);
+    setOverlay(after);
+    applyLayoutPatch(layout);
+  },
 });
 const {
   selectedSymbol,
@@ -668,6 +674,8 @@ async function reparse(): Promise<void> {
     recordCodeLayout(vias);
   }
 
+  keptNodes.afterParse(next, change);
+
   parsed();
 
   let selectAfter: string[] | undefined;
@@ -818,26 +826,6 @@ const currentFunction = computed(() =>
  * layout first (it looks the same, so no undo step). Otherwise a node
  * placed relative to an edited one would jump.
  */
-function freezeLayout(): void {
-  // Also nodes the canvas doesn't draw (a Get shown as a wire from its SET,
-  // an implicit `self`): unsaved, they would count as new and move their
-  // function.
-  const current = {
-    ...nodePositions(positions.value),
-    ...canvas.value?.getPositions(),
-  };
-  const freeze: LayoutPatch = {};
-  for (const [id, p] of Object.entries(current)) {
-    if (!pinned.value[id]) {
-      freeze[id] = p;
-    }
-  }
-
-  if (Object.keys(freeze).length > 0) {
-    applyLayoutPatch(freeze);
-  }
-}
-
 let opQueue: Promise<void> = Promise.resolve();
 
 /**
@@ -895,6 +883,11 @@ async function runOp(requested: GraphOp): Promise<void> {
     return;
   }
 
+  // Deleting loose nodes keeps the rest of their groups.
+  if (op.type === 'deleteNodes' && (await keptNodes.deleteLoose(op.nodeIds))) {
+    return;
+  }
+
   // A receiver wired into a floating call: the call is made with it, so
   // it shows the typed pins of what it calls.
   if (
@@ -914,13 +907,16 @@ async function runOp(requested: GraphOp): Promise<void> {
   }
 
   const graphEdits = doc.value ? graphEditsFor(doc.value, op) : undefined;
-  if (outOfSync.value && graphEdits) {
+  // Loose graph-only nodes are edited in the graph too.
+  const loose = JSON.stringify(op).includes('"overlay:');
+  if ((outOfSync.value || loose) && graphEdits) {
     freezeLayout();
     addEdits(graphEdits);
     return;
   }
 
   beforeOp(op, doc.value);
+  keptNodes.beforeOp(op);
   beforeCodeEdit();
   const result = await client.applyOp(
     text.value,
@@ -930,6 +926,7 @@ async function runOp(requested: GraphOp): Promise<void> {
     checkedFor(text.value)
   );
   if (!result.ok) {
+    keptNodes.beforeOp({ type: 'deleteNodes', nodeIds: [] });
     if (graphEdits) {
       freezeLayout();
       addEdits(graphEdits);
@@ -983,6 +980,7 @@ onMounted(async () => {
   }
 
   await reparse();
+  await restoreLoose();
 });
 
 defineExpose({ frameAll: () => canvas.value?.frameAll() });

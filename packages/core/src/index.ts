@@ -17,6 +17,8 @@ export * from './via-wires';
 export * from './graph-builder';
 export * from './engine-classes';
 export * from './graph-overlay';
+export * from './loose-code';
+export * from './loose-overlay';
 export * from './ids';
 export * from './imports';
 export type * from './ir';

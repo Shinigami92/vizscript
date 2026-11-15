@@ -7,6 +7,7 @@ import type { OpResult } from './ops';
 import { findNode } from './reconcile';
 import { findPin, inputEdit } from './text-op-helpers';
 import type { StatementSyntax } from './text-ops';
+import { lineIndent } from './text-utils';
 
 /** Words that are values in every supported language. */
 const VALUE_WORDS = new Set([
@@ -227,7 +228,9 @@ export function setLiteral(
 export function setInput(
   doc: GraphDocument,
   ref: PinRef,
-  expression: string
+  expression: string,
+  /** The code: a value of several lines is indented like its input's line. */
+  text?: string
 ): OpResult {
   const node = findNode(doc, ref.node);
   const pin = findPin(node, ref.pin);
@@ -235,8 +238,19 @@ export function setInput(
     return failed('Only data inputs can be given a value.');
   }
 
-  const trimmed = expression.trim();
-  if (!trimmed || trimmed.includes('\n')) {
+  let trimmed = expression.trim();
+  if (trimmed.includes('\n')) {
+    const at = pin.range?.start ?? getMeta<InputPinMeta>(pin).insertInitAt;
+    if (text === undefined || at === undefined) {
+      return failed('Enter a single-line expression.');
+    }
+
+    // A loose value written back (`[\n  { … },\n]`).
+    const indent = lineIndent(text, at);
+    trimmed = trimmed.replaceAll('\n', `\n${indent}`);
+  }
+
+  if (!trimmed) {
     return failed('Enter a single-line expression.');
   }
 
