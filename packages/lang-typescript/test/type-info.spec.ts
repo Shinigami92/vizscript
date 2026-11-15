@@ -159,6 +159,26 @@ describe('type information from a checker', () => {
     expect(JSON.stringify(doc)).toBe(before);
   });
 
+  it('keeps a variable with an empty value untyped', () => {
+    const code = 'let x = undefined;\nlet y = 1;\n';
+    const parsed = parseTypeScript(code, 'v.ts');
+    const key = (name: string): string => {
+      const range = parsed.symbols?.find((s) => s.name === name)?.nameRange;
+      return `${range?.start}:${range?.end}`;
+    };
+    const typed = applyTypes(
+      parsed,
+      new Map([
+        [key('x'), { text: 'undefined', dataType: 'null' }],
+        [key('y'), { text: 'number', dataType: 'number' }],
+      ])
+    );
+    const dataType = (name: string): string | undefined =>
+      typed.symbols?.find((s) => s.name === name)?.dataType;
+    expect(dataType('x')).toBe('any');
+    expect(dataType('y')).toBe('number');
+  });
+
   it('keeps the parsed document when the provider fails', async () => {
     const failing: TypeProvider = {
       typesAt: () => Promise.reject(new Error('worker gone')),

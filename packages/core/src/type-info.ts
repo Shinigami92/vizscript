@@ -218,11 +218,20 @@ function typedFunction(
   return changed ? { ...fn, nodes } : fn;
 }
 
+/**
+ * Whether the checker's type of a variable is worth showing: not `any`,
+ * and not the type of an empty value (`let x = undefined` is still unset,
+ * like an empty input, and takes any value).
+ */
+function typesVariable(info: TypeInfo | undefined): info is TypeInfo {
+  return useful(info) && info.dataType !== 'null' && info.dataType !== 'void';
+}
+
 function typedParam(param: SymbolParam, types: TypeMap): SymbolParam {
   const info = untyped(param)
     ? types.get(rangeKey(param.nameRange))
     : undefined;
-  return useful(info) ? { ...param, dataType: info.dataType } : param;
+  return typesVariable(info) ? { ...param, dataType: info.dataType } : param;
 }
 
 function typedSymbol(symbol: ScriptSymbol, types: TypeMap): ScriptSymbol {
@@ -230,7 +239,9 @@ function typedSymbol(symbol: ScriptSymbol, types: TypeMap): ScriptSymbol {
     VARIABLE_KINDS.has(symbol.kind) && untyped(symbol)
       ? types.get(rangeKey(symbol.nameRange))
       : undefined;
-  let next = useful(info) ? { ...symbol, dataType: info.dataType } : symbol;
+  let next = typesVariable(info)
+    ? { ...symbol, dataType: info.dataType }
+    : symbol;
   if (symbol.params) {
     const params = symbol.params.map((p) => typedParam(p, types));
     if (params.some((p, i) => p !== symbol.params?.[i])) {
