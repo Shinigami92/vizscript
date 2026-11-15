@@ -148,3 +148,24 @@ export interface ExtractSyntax {
   /** Callee of a method of the same class (`this.name`, `self.name`). */
   method: (name: string, className: string, isStatic: boolean) => string;
 }
+
+/**
+ * Whether the type a backend parsed from `source` is all of the `input` it
+ * placed at `offset` (only whitespace around it). Otherwise the input holds
+ * more than a type (`string = 2`, `str  # note`) and would rewrite the
+ * declaration it is written into.
+ */
+export function typeCoversInput(
+  parsed: { start: number; end: number },
+  source: string,
+  offset: number,
+  input: string
+): boolean {
+  const end = offset + input.length;
+  return (
+    parsed.start >= offset &&
+    parsed.end <= end &&
+    source.slice(offset, parsed.start).trim() === '' &&
+    source.slice(parsed.end, end).trim() === ''
+  );
+}

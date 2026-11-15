@@ -7,7 +7,12 @@ import type {
   StatementSyntax,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { applyInValue, applyTextOp, removeModifier } from '@vizscript/core';
+import {
+  applyInValue,
+  applyTextOp,
+  removeModifier,
+  typeCoversInput,
+} from '@vizscript/core';
 import { CONVERSIONS } from './conversions';
 import { parsePython } from './convert';
 import { splitString } from './convert-utils';
@@ -338,12 +343,14 @@ export const PYTHON_TYPES: TypeSystemInfo = {
 const DECLARATIONS: DeclarationSyntax = {
   typeSystem: PYTHON_TYPES,
   validType: (type) => {
-    const { body, diagnostics } = parsePython(`x: ${type} = None\n`);
+    const source = `x: ${type} = None\n`;
+    const { body, diagnostics } = parsePython(source);
     const [stmt] = body;
     return diagnostics.length > 0 ||
       body.length !== 1 ||
       stmt?.type !== 'Assign' ||
-      !stmt.annotation
+      !stmt.annotation ||
+      !typeCoversInput(stmt.annotation, source, 'x: '.length, type)
       ? `"${type}" is not a valid Python type.`
       : undefined;
   },

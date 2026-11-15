@@ -17,6 +17,7 @@ import {
   removeListItem,
   removeModifier,
   replaceKeyword,
+  typeCoversInput,
   withStartValue,
 } from '@vizscript/core';
 import { addTypeScriptImport } from './add-import';
@@ -622,11 +623,32 @@ function declarations(text: string, fileName?: string): DeclarationSyntax {
       }
 
       try {
-        const parsed = parseFile(`let x: ${type};`, 'type.ts');
-        const body = parsed.program.body;
-        return (parsed.errors?.length ?? 0) > 0 || body.length !== 1
-          ? `"${type}" is not a valid TypeScript type.`
-          : undefined;
+        const source = `let x: ${type};`;
+        const parsed = parseFile(source, 'type.ts');
+        const [statement] = parsed.program.body;
+        const declarator =
+          statement?.type === 'VariableDeclaration' &&
+          statement.declarations.length === 1
+            ? statement.declarations[0]
+            : undefined;
+        const annotation =
+          declarator?.id.type === 'Identifier' &&
+          declarator.id.typeAnnotation?.type === 'TSTypeAnnotation'
+            ? declarator.id.typeAnnotation.typeAnnotation
+            : undefined;
+        const valid =
+          (parsed.errors?.length ?? 0) === 0 &&
+          parsed.program.body.length === 1 &&
+          !declarator?.init &&
+          annotation?.start != null &&
+          annotation.end != null &&
+          typeCoversInput(
+            { start: annotation.start, end: annotation.end },
+            source,
+            'let x: '.length,
+            type
+          );
+        return valid ? undefined : `"${type}" is not a valid TypeScript type.`;
       } catch {
         return `"${type}" is not a valid TypeScript type.`;
       }

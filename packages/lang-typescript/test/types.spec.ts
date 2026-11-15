@@ -58,6 +58,15 @@ describe('types and values', () => {
         typeText: 'string |',
       })
     ).toBe('"string |" is not a valid TypeScript type.');
+    for (const typeText of ['string = 2', 'string, evil', 'string; let b']) {
+      expect(
+        error('let a = 1;\n', {
+          type: 'setSymbolType',
+          symbol: 'variable:a',
+          typeText,
+        })
+      ).toBe(`"${typeText}" is not a valid TypeScript type.`);
+    }
     expect(
       error(
         'let a;\n',

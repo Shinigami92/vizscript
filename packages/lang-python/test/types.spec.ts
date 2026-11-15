@@ -13,6 +13,20 @@ function apply(text: string, op: GraphOp): string {
 }
 
 describe('python types and values', () => {
+  it('refuses types that would rewrite the declaration', () => {
+    for (const typeText of ['str  # note', 'str = 2', 'str\nimport os']) {
+      const result = applyPythonOp(
+        'count = 1\n',
+        { type: 'setSymbolType', symbol: 'variable:count', typeText },
+        'test.py'
+      );
+      expect(result).toEqual({
+        ok: false,
+        error: `"${typeText}" is not a valid Python type.`,
+      });
+    }
+  });
+
   it('annotates, retypes and writes values', () => {
     expect(
       apply('name = None\n', {
