@@ -21,7 +21,7 @@ import {
   variablesNear,
   withImport,
 } from './graph-helpers';
-import { makeEntries } from './make-entries';
+import { makeEntries, throwEntries } from './make-entries';
 import {
   EXPRESSION_ICONS,
   FLOW_ENTRIES,
@@ -650,6 +650,7 @@ export function createActionEntries(
                 })
               ),
           })),
+        ...throwEntries(props.types, source, state.world, emitOp),
         // Set a variable to this value (`score = value`).
         ...scopeVariables(props.doc, index.value.nodes.get(source.node)?.fn.id)
           .filter((variable) => !variable.constant)

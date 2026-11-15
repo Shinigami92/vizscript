@@ -4,6 +4,8 @@ import type {
   GraphOp,
   Pin,
   PinRef,
+  Point,
+  TypeSystemInfo,
 } from '@vizscript/core';
 import { holdsFields } from '@vizscript/core';
 import type { ActionEntry } from '../ActionMenu.vue';
@@ -44,4 +46,31 @@ export function makeEntries(
       action: () => emitOp({ type: 'makeValue', pin: source, typeName }),
     },
   ];
+}
+
+/** A Throw node with a dragged value wired in (`throw value`). */
+export function throwEntries(
+  types: TypeSystemInfo | null | undefined,
+  source: PinRef,
+  world: Point,
+  emitOp: (op: GraphOp) => void
+): ActionEntry[] {
+  const expression = types?.throwValue;
+  return expression
+    ? [
+        {
+          label: 'Throw error',
+          category: 'Flow control',
+          icon: 'i-mdi-alert-octagon-outline',
+          keywords: 'throw raise error exception',
+          action: () =>
+            emitOp({
+              type: 'useValue',
+              pin: source,
+              expression,
+              position: { ...world },
+            }),
+        },
+      ]
+    : [];
 }

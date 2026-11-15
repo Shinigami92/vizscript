@@ -41,6 +41,7 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
   callback: '() => {}',
   conversions: CONVERSIONS,
   keywords: [...KEYWORDS],
+  throwValue: 'throw $value',
   constructors: [
     'Error',
     'TypeError',

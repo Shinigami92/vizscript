@@ -85,6 +85,7 @@ export const PYTHON_TYPES: TypeSystemInfo = {
     'getattr',
     'setattr',
   ],
+  throwValue: 'raise $value',
   primitives: [
     { name: 'str', dataType: 'string', defaultValue: '""' },
     { name: 'int', dataType: 'number', defaultValue: '0' },

@@ -401,6 +401,11 @@ export interface TypeSystemInfo {
    */
   constructors?: ReadonlyArray<string>;
   /**
+   * Throwing a value (`throw $value`, `raise $value`): offered when a wire
+   * is dragged from an output, like a Throw node with it wired in.
+   */
+  throwValue?: string;
+  /**
    * Operators and values of the action menu (UE: `+`, Make Literal String,
    * Select, Make Array …). `$1`, `$2` … are their inputs.
    */
