@@ -5,7 +5,8 @@ import { modelUri } from './models';
 interface VizWorker {
   vizTypesAt(
     fileName: string,
-    ranges: ReadonlyArray<SourceRange>
+    ranges: ReadonlyArray<SourceRange>,
+    text: string
   ): Promise<Array<TypeInfo | undefined>>;
   vizTypesAtText(
     fileName: string,
@@ -55,7 +56,7 @@ export const typescriptTypes: TypeProvider = {
         ? await workerFor(uri)
         : undefined;
     return worker
-      ? worker.vizTypesAt(uri.toString(), ranges)
+      ? worker.vizTypesAt(uri.toString(), ranges, text)
       : ranges.map(() => undefined);
   },
 };

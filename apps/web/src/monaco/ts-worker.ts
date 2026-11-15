@@ -17,13 +17,19 @@ import { checkerTypesAt } from './checker-types';
 class VizTypeScriptWorker extends TypeScriptWorker {
   public vizTypesAt(
     fileName: string,
-    ranges: ReadonlyArray<SourceRange>
+    ranges: ReadonlyArray<SourceRange>,
+    /**
+     * The text the ranges point into: the file can change while the
+     * request is on its way (a Reset), and answers for another text would
+     * type the wrong pins.
+     */
+    text: string
   ): Array<TypeInfo | undefined> {
     const service = (
       this as unknown as { _languageService: TS.LanguageService }
     )._languageService;
     const program = service.getProgram();
-    return program
+    return program?.getSourceFile(fileName)?.text === text
       ? checkerTypesAt(ts.typescript, program, fileName, ranges)
       : ranges.map(() => undefined);
   }
