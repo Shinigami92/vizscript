@@ -11,12 +11,30 @@ export const CDN = 'https://cdn.jsdelivr.net/npm/';
 /** Files read during one session, by URL (shared by all workspaces). */
 const texts = new Map<string, Promise<string | undefined>>();
 
+/** A request to jsDelivr gives up after this long. */
+const FETCH_TIMEOUT_MS = 15_000;
+
+/**
+ * Text of a file, `undefined` when it can't be read. A missing file (404)
+ * stays missing for the session; other failures (network errors, timeouts,
+ * rate limits) are tried again on the next request.
+ */
 export function fetchText(url: string): Promise<string | undefined> {
   let text = texts.get(url);
   if (!text) {
-    text = fetch(url)
-      .then((response) => (response.ok ? response.text() : undefined))
-      .catch(() => undefined);
+    const forget = (): undefined => {
+      texts.delete(url);
+      return undefined;
+    };
+    text = fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+      .then((response) => {
+        if (response.ok) {
+          return response.text();
+        }
+
+        return response.status === 404 ? undefined : forget();
+      })
+      .catch(forget);
     texts.set(url, text);
   }
 
@@ -119,9 +137,28 @@ export function typesPackage(name: string): string {
   return `@types/${name.replace(/^@/, '').replace('/', '__')}`;
 }
 
+/**
+ * One resolution of a package's exports. Re-exports are followed one after
+ * another, so every file on `path` is an ancestor of the one being read.
+ */
+interface Walk {
+  /** Files being read on the current re-export path: a cycle ends there. */
+  readonly path: Set<string>;
+  /** Exports of the files this walk has read. */
+  readonly done: Map<string, ScriptSymbol[]>;
+}
+
+interface ParsedFile {
+  text: string;
+  doc: GraphDocument;
+}
+
 export class NpmTypes {
   private readonly manifests = new Map<string, Promise<Manifest | undefined>>();
-  private readonly files = new Map<string, Promise<ScriptSymbol[]>>();
+  /** Parsed declaration files, by URL. Reading one never waits on another. */
+  private readonly parsed = new Map<string, Promise<ParsedFile | undefined>>();
+  /** Exports of packages, by `name@range`. */
+  private readonly packages = new Map<string, Promise<ScriptSymbol[]>>();
 
   public constructor(
     private readonly parse: (
@@ -138,6 +175,7 @@ export class NpmTypes {
         `${CDN}${name}@${encodeURIComponent(range)}/package.json`
       ).then((text) => {
         if (!text) {
+          this.manifests.delete(key);
           return undefined;
         }
 
@@ -168,13 +206,33 @@ export class NpmTypes {
   }
 
   /** Exports of a package (`range` as in `package.json`, or `latest`). */
-  public async exportsOf(
+  public exportsOf(name: string, range = 'latest'): Promise<ScriptSymbol[]> {
+    const key = `${name}@${range}`;
+    let exports = this.packages.get(key);
+    if (!exports) {
+      exports = this.packageExports(name, range, {
+        path: new Set(),
+        done: new Map(),
+      });
+      this.packages.set(key, exports);
+    }
+
+    return exports;
+  }
+
+  private async packageExports(
     name: string,
-    range = 'latest'
+    range: string,
+    walk: Walk
   ): Promise<ScriptSymbol[]> {
     const manifest = await this.manifest(name, range);
     if (manifest?.types) {
-      return this.fileExports(manifest.base + manifest.types, manifest, 0);
+      return this.fileExports(
+        manifest.base + manifest.types,
+        manifest,
+        0,
+        walk
+      );
     }
 
     // No types of its own: DefinitelyTyped.
@@ -184,7 +242,8 @@ export class NpmTypes {
         return this.fileExports(
           types.base + (types.types ?? 'index.d.ts'),
           types,
-          0
+          0,
+          walk
         );
       }
     }
@@ -192,49 +251,78 @@ export class NpmTypes {
     return [];
   }
 
-  private fileExports(
+  private async fileExports(
     url: string,
     manifest: Manifest,
-    depth: number
+    depth: number,
+    walk: Walk
   ): Promise<ScriptSymbol[]> {
-    let exports = this.files.get(url);
-    if (!exports) {
-      // Cycles end here: a file being read has no exports yet.
-      this.files.set(url, Promise.resolve([]));
-      exports = this.readFile(url, manifest, depth);
-      this.files.set(url, exports);
+    const done = walk.done.get(url);
+    if (done) {
+      return done;
     }
 
-    return exports;
+    // A cycle (`a` re-exports `b`, `b` re-exports `a`): the file being read
+    // has no exports yet.
+    if (walk.path.has(url) || depth > 8) {
+      return [];
+    }
+
+    walk.path.add(url);
+    try {
+      const exports = await this.readFile(url, manifest, depth, walk);
+      walk.done.set(url, exports);
+      return exports;
+    } finally {
+      walk.path.delete(url);
+    }
+  }
+
+  private parsedFile(url: string): Promise<ParsedFile | undefined> {
+    let file = this.parsed.get(url);
+    if (!file) {
+      file = fetchText(url).then(async (text) => {
+        if (text === undefined) {
+          // Not cached: `fetchText` knows whether to try again.
+          this.parsed.delete(url);
+          return undefined;
+        }
+
+        return { text, doc: await this.parse(text, 'types.d.ts') };
+      });
+      this.parsed.set(url, file);
+    }
+
+    return file;
   }
 
   private async readFile(
     url: string,
     manifest: Manifest,
-    depth: number
+    depth: number,
+    walk: Walk
   ): Promise<ScriptSymbol[]> {
-    if (depth > 8) {
+    const file = await this.parsedFile(url);
+    if (!file) {
       return [];
     }
 
-    const text = await fetchText(url);
-    if (text === undefined) {
-      return [];
-    }
-
-    const doc = await this.parse(text, 'types.d.ts');
     return withReexports(
-      exportedSymbols(doc, text),
-      doc.reexports ?? [],
+      exportedSymbols(file.doc, file.text),
+      file.doc.reexports ?? [],
       async (specifier) => {
         const name = packageName(specifier);
         if (name) {
-          return this.exportsOf(name, manifest.dependencies[name] ?? 'latest');
+          return this.packageExports(
+            name,
+            manifest.dependencies[name] ?? 'latest',
+            walk
+          );
         }
 
         for (const candidate of declarationFiles(url, specifier)) {
           if ((await fetchText(candidate)) !== undefined) {
-            return this.fileExports(candidate, manifest, depth + 1);
+            return this.fileExports(candidate, manifest, depth + 1, walk);
           }
         }
 
