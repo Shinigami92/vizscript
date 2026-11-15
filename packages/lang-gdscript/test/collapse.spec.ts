@@ -184,6 +184,38 @@ describe('export hints', () => {
       'extends Node\n\n@export_range(0, 5)\nvar speed := 10\n'
     );
   });
+
+  it('replaces and removes an annotation with parentheses in its strings', () => {
+    const text =
+      'extends Node\n\n@export_enum("Small (S)", "Big") var speed := 0\n';
+    expect(setExport(text, '@export_range(0, 5)')).toBe(
+      'extends Node\n\n@export_range(0, 5) var speed := 0\n'
+    );
+    expect(setExport(text, '@export_enum', false)).toBe(
+      'extends Node\n\nvar speed := 0\n'
+    );
+  });
+
+  it('removes an annotation on its own line with the line', () => {
+    const text = 'extends Node\n\n@export_range(0, 5)\nvar speed := 10\n';
+    expect(setExport(text, '@export_range', false)).toBe(
+      'extends Node\n\nvar speed := 10\n'
+    );
+  });
+
+  it('keeps an export group above the variable', () => {
+    const text = 'extends Node\n\n@export_group("Move")\nvar speed := 10\n';
+    expect(setExport(text, '@export')).toBe(
+      'extends Node\n\n@export_group("Move")\n@export var speed := 10\n'
+    );
+  });
+
+  it('writes static before var, not inside an annotation string', () => {
+    const text = 'extends Node\n\n@export_enum("var", "func") var speed := 0\n';
+    expect(setExport(text, 'static')).toBe(
+      'extends Node\n\n@export_enum("var", "func") static var speed := 0\n'
+    );
+  });
 });
 
 describe('enum members', () => {

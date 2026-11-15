@@ -7,6 +7,7 @@ import type {
   ParseOptions,
   ScriptSymbol,
   StatementSyntax,
+  TextEdit,
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
@@ -18,6 +19,7 @@ import {
   withStartValue,
 } from '@vizscript/core';
 import { addGDScriptImport } from './add-import';
+import type { Annotation } from './ast';
 import { CONVERSIONS } from './conversions';
 import { godotClasses, godotSingletonCalls } from './godot';
 import { setGDScriptSymbolGroup } from './groups';
@@ -406,6 +408,65 @@ export const GDSCRIPT_TYPES: TypeSystemInfo = {
   },
 };
 
+const EXPORT_GROUPS = new Set([
+  'export_group',
+  'export_subgroup',
+  'export_category',
+]);
+
+/** Annotations of a member of the script, with their arguments' ranges. */
+function memberAnnotations(
+  text: string,
+  symbol: ScriptSymbol
+): ReadonlyArray<Annotation> {
+  for (const stmt of parseGDScript(text).script.body) {
+    if (
+      (stmt.type === 'Var' && stmt.nameSpan.start === symbol.nameRange.start) ||
+      (stmt.type === 'Func' && stmt.start === symbol.range.start)
+    ) {
+      return stmt.annotations;
+    }
+  }
+
+  return [];
+}
+
+/** Where the declaration's keywords start (`static`, `var`, `func`). */
+function keywordStart(
+  text: string,
+  symbol: ScriptSymbol,
+  annotations: ReadonlyArray<Annotation>
+): number {
+  let at = annotations.at(-1)?.end ?? symbol.range.start;
+  while (at < symbol.nameRange.start && /\s/.test(text[at] ?? '')) {
+    at++;
+  }
+
+  return at;
+}
+
+/** Removes an annotation, with its line when it stands alone there. */
+function removeAnnotation(text: string, annotation: Annotation): TextEdit {
+  let end = annotation.end;
+  while (text[end] === ' ' || text[end] === '\t') {
+    end++;
+  }
+
+  const line = lineStart(text, annotation.start);
+  const alone =
+    text.slice(line, annotation.start).trim() === '' &&
+    (end === text.length || text[end] === '\n' || text[end] === '\r');
+  if (!alone) {
+    return { start: annotation.start, end, text: '' };
+  }
+
+  if (text[end] === '\r') {
+    end++;
+  }
+
+  return { start: line, end: text[end] === '\n' ? end + 1 : end, text: '' };
+}
+
 function setModifier(
   text: string,
   _doc: GraphDocument,
@@ -447,34 +508,26 @@ function setModifier(
       return { ok: false, error: 'A const cannot be exported.' };
     }
 
-    // An annotation alone on the line above belongs to the declaration.
-    const own = lineStart(text, symbol.range.start);
-    const above = lineStart(text, Math.max(own - 1, 0));
-    const start =
-      own > 0 && /^\s*@\w+(?:\([^)]*\))?\s*$/.test(text.slice(above, own))
-        ? above
-        : own;
-    const head = text.slice(start, symbol.nameRange.start);
-    // Not the `@export_group(…)` line that may stand before it.
-    const current = head.match(
-      /@export(?!_group|_subgroup|_category)\w*(?:\([^)]*\))?/
+    const annotations = memberAnnotations(text, symbol);
+    // Not an `@export_group(…)` line that may stand before it.
+    const current = annotations.find(
+      (a) => a.name.startsWith('export') && !EXPORT_GROUPS.has(a.name)
     );
     if (!enabled) {
-      const name = current?.[0].replace(/\(.*$/s, '');
-      return name
-        ? removeModifier(text, symbol, name)
-        : { ok: true, edits: [] };
-    }
-
-    if (current?.index !== undefined) {
-      const at = start + current.index;
       return {
         ok: true,
-        edits: [{ start: at, end: at + current[0].length, text: modifier }],
+        edits: current ? [removeAnnotation(text, current)] : [],
       };
     }
 
-    const at = symbol.range.start;
+    if (current) {
+      return {
+        ok: true,
+        edits: [{ start: current.start, end: current.end, text: modifier }],
+      };
+    }
+
+    const at = keywordStart(text, symbol, annotations);
     return { ok: true, edits: [{ start: at, end: at, text: `${modifier} ` }] };
   }
 
@@ -486,8 +539,12 @@ function setModifier(
       };
     }
 
+    const annotations = memberAnnotations(text, symbol);
     if (!enabled) {
-      return removeModifier(text, symbol, modifier);
+      const onready = annotations.find((a) => a.name === 'onready');
+      return modifier === '@onready' && onready
+        ? { ok: true, edits: [removeAnnotation(text, onready)] }
+        : removeModifier(text, symbol, modifier);
     }
 
     if (symbol.modifiers.includes('const')) {
@@ -495,12 +552,7 @@ function setModifier(
     }
 
     // Annotations come first, `static` right before `var` / `func`.
-    const head = text.slice(symbol.range.start, symbol.nameRange.start);
-    const keyword = head.search(/\b(?:var|func)\b/);
-    const at =
-      modifier === 'static' && keyword !== -1
-        ? symbol.range.start + keyword
-        : symbol.range.start;
+    const at = keywordStart(text, symbol, annotations);
     return { ok: true, edits: [{ start: at, end: at, text: `${modifier} ` }] };
   }
 
