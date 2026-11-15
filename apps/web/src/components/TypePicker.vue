@@ -43,6 +43,8 @@ const open = ref(false);
 const query = ref('');
 const container = ref<Container>('single');
 const optional = ref(false);
+/** Wraps the type as a later result (`Promise<T>`). */
+const promise = ref(false);
 const custom = ref('');
 const root = useTemplateRef<HTMLDivElement>('root');
 const popover = useTemplateRef<HTMLDivElement>('popover');
@@ -139,13 +141,21 @@ function compose(base: string): string {
     type = template ? template.replace('T', base) : base;
   }
 
-  return optional.value && props.types.optional
-    ? props.types.optional.replace('T', type)
+  if (optional.value && props.types.optional) {
+    type = props.types.optional.replace('T', type);
+  }
+
+  return promise.value && props.types.promise
+    ? props.types.promise.replace('T', type)
     : type;
 }
 
 /** Default value of a picked type: only for plain basic types. */
 function defaultOf(option: TypeOption | undefined): string | undefined {
+  if (promise.value) {
+    return undefined;
+  }
+
   if (optional.value) {
     return props.types.primitives.find((p) => p.dataType === 'any')
       ?.defaultValue;
@@ -309,6 +319,14 @@ function color(dataType: DataType): string {
               Optional
             </label>
           </div>
+          <label
+            v-if="types.promise"
+            class="flex cursor-pointer items-center gap-1 text-zinc-400"
+            title="A result that comes later, from an async function"
+          >
+            <input v-model="promise" type="checkbox" class="accent-amber-500" />
+            {{ types.promise.replace('<T>', '') }}
+          </label>
         </div>
 
         <div class="min-h-0 flex-1 overflow-y-auto py-1">
