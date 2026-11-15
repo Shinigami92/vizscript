@@ -246,7 +246,7 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
       keywords: 'select ternary conditional if',
     },
     {
-      label: 'Join text',
+      label: 'Format Text',
       category: 'Text',
       template: '`${$1}${$2}`',
       empty: "''",
