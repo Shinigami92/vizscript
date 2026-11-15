@@ -1,4 +1,10 @@
-import type { Pin, PinRef, Point } from '@vizscript/core';
+import type {
+  DataType,
+  ExpressionTemplate,
+  Pin,
+  PinRef,
+  Point,
+} from '@vizscript/core';
 import { isTypeCompatible, qualifiedName } from '@vizscript/core';
 import { shortcut } from '../../graph/source';
 import { topLevelGraph } from '../../graph/symbols';
@@ -6,6 +12,7 @@ import type { ActionEntry } from '../ActionMenu.vue';
 import { engineMembers, scriptBaseClass } from './engine-entries';
 import {
   callSignature,
+  emptyInput,
   fillTemplate,
   fitsType,
   globalObjects,
@@ -61,8 +68,16 @@ export function createActionEntries(
       : [];
   const signatureOf = (callee: string): ReturnType<typeof callSignature> =>
     callSignature(props.doc, props.text, callee);
-  const fill = (template: string, first?: string): string =>
-    fillTemplate(template, props.types?.placeholder ?? 'undefined', first);
+  const fill = (
+    expression: ExpressionTemplate,
+    first?: string,
+    wireType?: DataType
+  ): string =>
+    fillTemplate(
+      expression.template,
+      (slot) => emptyInput(expression, slot, props.types, wireType),
+      first
+    );
 
   /**
    * Operator and value actions (UE: `+`, Make Literal String …) for a wire
@@ -78,10 +93,7 @@ export function createActionEntries(
         category: expression.category,
         icon: EXPRESSION_ICONS[expression.category],
         keywords: `${expression.keywords ?? ''} ${expression.template}`,
-        hint: fill(expression.template, '·').replaceAll(
-          props.types?.placeholder ?? 'undefined',
-          '·'
-        ),
+        hint: fillTemplate(expression.template, '·'),
       };
 
       if (source && found?.pin.direction === 'out') {
@@ -97,7 +109,7 @@ export function createActionEntries(
               emitOp({
                 type: 'useValue',
                 pin: source,
-                expression: fill(expression.template, '$value'),
+                expression: fill(expression, '$value', found.pin.type),
                 position: { ...state.world },
               }),
           },
@@ -114,7 +126,7 @@ export function createActionEntries(
               emitOp({
                 type: 'setInput',
                 pin: source,
-                expression: fill(expression.template),
+                expression: fill(expression, undefined, found.pin.type),
               }),
           },
         ];
@@ -128,7 +140,7 @@ export function createActionEntries(
             // It floats until it is wired in.
             emitOp(
               ctx.looseNode(
-                { type: 'value', expression: fill(expression.template) },
+                { type: 'value', expression: fill(expression) },
                 state.world
               )
             );

@@ -286,6 +286,12 @@ export interface ExpressionTemplate {
   category: string;
   /** Code with `$1`, `$2` … for its inputs, e.g. `$1 + $2`. */
   template: string;
+  /**
+   * Values of empty inputs, one for all or per input (`$1`, `$2` …):
+   * `x * 1`, `a && true`. Without one an input gets the language's
+   * placeholder.
+   */
+  empty?: string | ReadonlyArray<string>;
   /** Pin type of the result (for the Context Sensitive filter). */
   result?: DataType;
   /** Extra words that find it (`add`, `plus`, `equals`). */

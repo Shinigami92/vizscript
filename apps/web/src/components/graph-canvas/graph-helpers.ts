@@ -1,5 +1,6 @@
 import type {
   DataType,
+  ExpressionTemplate,
   GraphDocument,
   GraphNode,
   GraphOp,
@@ -60,12 +61,38 @@ export function memberAccess(
 /** Fills `$1`, `$2` … of an expression template (`first` goes into `$1`). */
 export function fillTemplate(
   template: string,
-  placeholder: string,
+  placeholder: string | ((slot: number) => string),
   first?: string
 ): string {
-  return template.replaceAll(/\$(\d)/g, (_, n: string) =>
-    n === '1' && first !== undefined ? first : placeholder
-  );
+  return template.replaceAll(/\$(\d)/g, (_, n: string) => {
+    if (n === '1' && first !== undefined) {
+      return first;
+    }
+
+    return typeof placeholder === 'string'
+      ? placeholder
+      : placeholder(Number(n));
+  });
+}
+
+/**
+ * The value of an empty input of an operator: the template's (`x * 1`),
+ * else for operators of the type they make (`+`, `??`) the empty value of
+ * the wire's type (`s + ''`), else the language's placeholder.
+ */
+export function emptyInput(
+  expression: ExpressionTemplate,
+  slot: number,
+  types: TypeSystemInfo | null | undefined,
+  wireType?: DataType
+): string {
+  const { empty } = expression;
+  const given = typeof empty === 'string' ? empty : empty?.[slot - 1];
+  const typed =
+    expression.result === undefined && wireType && wireType !== 'any'
+      ? types?.primitives.find((t) => t.dataType === wireType)?.defaultValue
+      : undefined;
+  return given ?? typed ?? types?.placeholder ?? 'undefined';
 }
 
 /**
