@@ -94,6 +94,29 @@ describe('values bound in a block', () => {
     expect(text).not.toContain('item.p + 1;');
   });
 
+  it('drops an empty value that a wire replaces', () => {
+    const code =
+      'function f(items: number[]) {\n  for (const item of []) {\n  }\n}\n';
+    const text = apply(code, (nodes) => {
+      const entry = find(
+        nodes,
+        (n) => n.kind === 'entry' && n.pins.some((p) => p.id === 'param0')
+      );
+      const loop = find(nodes, (n) => n.kind === 'forEach');
+      const array = loop.pins.find(
+        (p) => p.kind === 'data' && p.direction === 'in'
+      );
+      return {
+        type: 'connect',
+        from: { node: entry.id, pin: 'param0' },
+        to: { node: loop.id, pin: array?.id ?? '' },
+      };
+    });
+    expect(text).toBe(
+      'function f(items: number[]) {\n  for (const item of items) {\n  }\n}\n'
+    );
+  });
+
   it('moves a lone value back into a receiver', () => {
     const code = 'declare const a: string, b: string;\na.trim();\nb;\n';
     const text = apply(code, (nodes) => {

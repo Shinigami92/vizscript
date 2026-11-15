@@ -241,6 +241,16 @@ export function connectReplacing(
     return result;
   }
 
+  // A value made of nothing (`[]`, `{}`) would only be dead code.
+  const replaced = wired ? findNode(doc, wired.from.node) : undefined;
+  if (
+    replaced &&
+    replaced.kind !== 'getVar' &&
+    !replaced.pins.some((p) => p.kind === 'data' && p.direction === 'in')
+  ) {
+    return result;
+  }
+
   const kept = keptValue(text, doc, target, pin, syntax, (r) =>
     text.slice(r.start, r.end)
   );
