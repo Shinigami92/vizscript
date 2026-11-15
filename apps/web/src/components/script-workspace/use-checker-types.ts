@@ -106,7 +106,9 @@ export function useCheckerTypes(deps: CheckerTypeDeps): {
         deps.path(),
         typescriptTypesInText
       );
-      return types ? typedFloatingNodes(edit, types) : edit;
+      return types
+        ? typedFloatingNodes(edit, types, { placeholder: 'undefined' })
+        : edit;
     },
   };
 }

@@ -18,7 +18,6 @@ import {
   findNode,
   floatsUntilWired,
   graphEditsFor,
-  isCutReceiver,
   isExtraLayoutKey,
   layoutDocument,
   reconcilePositions,
@@ -241,6 +240,8 @@ const {
   addEdits,
   addFloating,
   floatValueUse,
+  floatReceiver,
+  fillCutReceiver,
   setOverlay,
   discard: discardGraphChanges,
   resolve: resolveOverlay,
@@ -876,38 +877,17 @@ async function runOp(requested: GraphOp): Promise<void> {
   // A value for a method's empty `this` (its wire broken in the graph):
   // its nodes are added in the graph and wired in; the code follows when
   // the overlay is written.
-  const shown = doc.value;
-  if (op.type === 'setInput' && shown && isCutReceiver(shown, op.pin)) {
-    const fn = shown.functions.find((f) =>
-      f.nodes.some((n) => n.id === op.pin.node)
-    );
-    freezeLayout();
-    // A parameter is wired from the entry node (it has no Get node).
-    const entry = fn?.nodes.find((n) => n.kind === 'entry');
-    const param = entry?.pins.find(
-      (p) =>
-        p.kind === 'data' &&
-        p.direction === 'out' &&
-        p.name === op.expression.trim()
-    );
-    if (entry && param) {
-      addEdits([
-        {
-          type: 'addEdge',
-          kind: 'data',
-          from: { node: entry.id, pin: param.id },
-          to: op.pin,
-        },
-      ]);
-    } else {
-      await addFloating(
-        { type: 'value', expression: op.expression },
-        op.position ?? { x: 0, y: 0 },
-        fn?.id,
-        { wireTo: op.pin }
-      );
-    }
+  if (op.type === 'setInput' && (await fillCutReceiver(op, freezeLayout))) {
+    return;
+  }
 
+  // A receiver wired into a floating call: the call is made with it, so
+  // it shows the typed pins of what it calls.
+  if (
+    op.type === 'connect' &&
+    (await floatReceiver(op, typeSystem.value?.placeholder ?? 'undefined'))
+  ) {
+    freezeLayout();
     return;
   }
 

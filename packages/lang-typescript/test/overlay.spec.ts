@@ -672,6 +672,47 @@ describe('nodes made from a dragged value', () => {
     );
   });
 
+  it('gives floating calls a pin per parameter of what they call', () => {
+    const floating = floatingNodes(
+      source,
+      { type: 'value', expression: 'Math.round()' },
+      'fn:f',
+      'g4',
+      backend
+    );
+    if (!floating.ok) {
+      throw new Error(floating.error);
+    }
+
+    const call = floating.edit.nodes.find((n) => n.title === 'round');
+    const result = call?.pins.find((p) => p.id === 'return');
+    const range = result?.range ?? { start: 0, end: 0 };
+    const typed = typedFloatingNodes(
+      floating.edit,
+      new Map([
+        [
+          `${range.start}:${range.end}`,
+          {
+            dataType: 'number',
+            text: 'number',
+            signature: [
+              {
+                name: 'x',
+                nameRange: { start: 0, end: 0 },
+                dataType: 'number',
+              },
+            ],
+          },
+        ],
+      ]),
+      { placeholder: 'undefined' }
+    );
+    const pins = typed.nodes.find((n) => n.title === 'round')?.pins;
+    expect(pins?.some((p) => p.direction === 'in' && p.name === 'x')).toBe(
+      true
+    );
+  });
+
   it('wires a value of the code into the call it was dragged to', () => {
     const entry = byTitle('f');
     const floating = floatingNodes(

@@ -9,7 +9,7 @@ import type { GraphOp, NodeTemplate, OpResult, TextEdit } from './ops';
 import { applyTextEdits } from './ops';
 import type { TextChange } from './reconcile';
 import { renamedNodes } from './reconcile';
-import type { TypeMap } from './type-info';
+import type { CallTyping, TypeMap } from './type-info';
 import { applyTypes } from './type-info';
 
 /** What graph-only edits need from a language backend. */
@@ -394,9 +394,16 @@ export function sameFloatingNodes(
  */
 export function typedFloatingNodes(
   edit: FloatingNodes,
-  types: TypeMap
+  types: TypeMap,
+  /** Calls get a pin per parameter of what they call (like code's). */
+  calls?: CallTyping['options']
 ): FloatingNodes {
-  const typed = applyTypes(floatingDoc(edit), types);
+  // Node ranges of floating nodes are relative to their code.
+  const typed = applyTypes(
+    floatingDoc(edit),
+    types,
+    calls ? { text: edit.code, options: calls } : undefined
+  );
   const nodes = typed.functions[0]?.nodes ?? edit.nodes;
   return {
     ...edit,

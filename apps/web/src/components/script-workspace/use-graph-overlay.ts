@@ -5,6 +5,7 @@ import type {
   GraphOp,
   GraphOverlay,
   ImportedDeclaration,
+  InputPinMeta,
   NodeTemplate,
   OverlayIssue,
   PinRef,
@@ -18,6 +19,8 @@ import {
   findNode,
   floatingGroup,
   floatingOutput,
+  getMeta,
+  isCutReceiver,
   isEmptyOverlay,
   sameFloatingNodes,
 } from '@vizscript/core';
@@ -57,8 +60,8 @@ export interface GraphOverlayDeps {
 export interface FloatingOptions {
   /** An input the new value is wired into (a method's empty `this`). */
   wireTo?: PinRef;
-  /** Floating nodes the new ones take over (with their places). */
-  replaces?: FloatingNodes;
+  /** Floating nodes the new ones take over (with places and wires). */
+  replaces?: ReadonlyArray<FloatingNodes>;
   /** A value of the code wired where the placeholder was written. */
   feed?: { from: PinRef; placeholder: string };
 }
@@ -92,6 +95,24 @@ export interface WorkspaceGraphOverlay {
   floatValueUse: (
     op: Extract<GraphOp, { type: 'useValue' | 'callWith' }>,
     placeholder: string
+  ) => Promise<boolean>;
+  /**
+   * A value wired into the empty `this` of a floating call (`round()`):
+   * the call is made again with it (`Math.round()`), so it gets the typed
+   * pins of what it calls. `false` for other wires.
+   */
+  floatReceiver: (
+    op: { from: PinRef; to: PinRef },
+    placeholder: string
+  ) => Promise<boolean>;
+  /**
+   * A value for a method's empty `this` (its wire broken in the graph): its
+   * nodes are added in the graph and wired in (a parameter from the entry
+   * node). `false` for other inputs.
+   */
+  fillCutReceiver: (
+    op: Extract<GraphOp, { type: 'setInput' }>,
+    before: () => void
   ) => Promise<boolean>;
   /** Replaces the overlay (draft loaded, undo, remapped after a parse). */
   setOverlay: (overlay: GraphOverlay) => void;
@@ -179,10 +200,17 @@ export function useGraphOverlay(
       edits.push(fed.edge);
     }
 
-    // Nodes taken over keep their places (the same Get, not a second one).
+    // Nodes taken over keep their places (the same Get, not a second one)
+    // and their graph-only wires.
     const fixed: Positions = {};
-    if (replaces) {
-      for (const [from, to] of sameFloatingNodes(replaces, edit)) {
+    const taken = new Map<string, string>();
+    for (const replaced of replaces ?? []) {
+      for (const [from, to] of sameFloatingNodes(replaced, edit)) {
+        if ([...taken.values()].includes(to)) {
+          continue;
+        }
+
+        taken.set(from, to);
         const p = deps.positionOf(from);
         if (p) {
           fixed[to] = p;
@@ -190,15 +218,38 @@ export function useGraphOverlay(
       }
     }
 
+    const groupNodes = new Set(
+      (replaces ?? []).flatMap((g) => g.nodes.map((n) => n.id))
+    );
+    const rewired = overlay.value.edits.flatMap((e): GraphEdit[] => {
+      if (
+        e.type !== 'addEdge' ||
+        (!groupNodes.has(e.from.node) && !groupNodes.has(e.to.node))
+      ) {
+        return [];
+      }
+
+      const from = groupNodes.has(e.from.node)
+        ? taken.get(e.from.node)
+        : e.from.node;
+      const to = groupNodes.has(e.to.node) ? taken.get(e.to.node) : e.to.node;
+      // Wires inside the replaced groups are part of the new one.
+      const inside = groupNodes.has(e.from.node) && groupNodes.has(e.to.node);
+      return from && to && !inside
+        ? [{ ...e, from: { ...e.from, node: from }, to: { ...e.to, node: to } }]
+        : [];
+    });
+
     deps.placeFloating(edit, world, fixed);
     const out = wireTo ? floatingOutput(edit) : undefined;
     addEdits([
       // Removing one node of a floating group drops all of it.
-      ...(replaces?.nodes[0]
-        ? [{ type: 'removeNode' as const, node: replaces.nodes[0].id }]
-        : []),
+      ...(replaces ?? []).flatMap((g) =>
+        g.nodes[0] ? [{ type: 'removeNode' as const, node: g.nodes[0].id }] : []
+      ),
       edit,
       ...edits,
+      ...rewired,
       ...(out && wireTo
         ? [
             {
@@ -242,7 +293,7 @@ export function useGraphOverlay(
         { type: 'value', expression: write(group.code.replace(/;\s*$/, '')) },
         world,
         fnId ?? group.fnId,
-        { replaces: group }
+        { replaces: [group] }
       );
       return true;
     }
@@ -261,6 +312,104 @@ export function useGraphOverlay(
         feed: { from: op.pin, placeholder },
       }
     );
+    return true;
+  }
+
+  async function floatReceiver(
+    op: { from: PinRef; to: PinRef },
+    placeholder: string
+  ): Promise<boolean> {
+    const name = floatingGroup(op.to.node);
+    const call = overlay.value.edits.find(
+      (e): e is FloatingNodes => e.type === 'addNodes' && e.id === name
+    );
+    const node = call?.nodes.find((n) => n.id === op.to.node);
+    const pin = node?.pins.find((p) => p.id === op.to.pin);
+    const meta = pin ? getMeta<InputPinMeta>(pin) : undefined;
+    if (
+      !call ||
+      node?.kind !== 'call' ||
+      !pin ||
+      pin.range ||
+      meta?.insertInitAt === undefined ||
+      floatingGroup(op.from.node) === name
+    ) {
+      return false;
+    }
+
+    // `round();` → `$value.round()`, the receiver where it goes.
+    const code = call.code.replace(/;?\s*$/, '');
+    const at = node.range.start;
+    const expression = `${code.slice(0, at)}${meta.insertPrefix ?? ''}$value${meta.insertSuffix ?? ''}${code.slice(at)}`;
+    const world = deps.positionOf(node.id) ?? { x: 0, y: 0 };
+    const sourceName = floatingGroup(op.from.node);
+    const source = overlay.value.edits.find(
+      (e): e is FloatingNodes => e.type === 'addNodes' && e.id === sourceName
+    );
+    if (source) {
+      // A floating value: one group with both (the same Get).
+      if (source.nodes.some((n) => n.pins.some((p) => p.kind === 'exec'))) {
+        return false;
+      }
+
+      const value = source.code.replace(/;?\s*$/, '');
+      await addFloating(
+        { type: 'value', expression: expression.replace('$value', value) },
+        world,
+        call.fnId,
+        { replaces: [call, source] }
+      );
+      return true;
+    }
+
+    await addFloating(
+      { type: 'value', expression: expression.replace('$value', placeholder) },
+      world,
+      call.fnId,
+      { replaces: [call], feed: { from: op.from, placeholder } }
+    );
+    return true;
+  }
+
+  async function fillCutReceiver(
+    op: Extract<GraphOp, { type: 'setInput' }>,
+    before: () => void
+  ): Promise<boolean> {
+    const shown = deps.doc.value;
+    if (!shown || !isCutReceiver(shown, op.pin)) {
+      return false;
+    }
+
+    const fn = shown.functions.find((f) =>
+      f.nodes.some((n) => n.id === op.pin.node)
+    );
+    before();
+    // A parameter is wired from the entry node (it has no Get node).
+    const entry = fn?.nodes.find((n) => n.kind === 'entry');
+    const param = entry?.pins.find(
+      (p) =>
+        p.kind === 'data' &&
+        p.direction === 'out' &&
+        p.name === op.expression.trim()
+    );
+    if (entry && param) {
+      addEdits([
+        {
+          type: 'addEdge',
+          kind: 'data',
+          from: { node: entry.id, pin: param.id },
+          to: op.pin,
+        },
+      ]);
+    } else {
+      await addFloating(
+        { type: 'value', expression: op.expression },
+        op.position ?? { x: 0, y: 0 },
+        fn?.id,
+        { wireTo: op.pin }
+      );
+    }
+
     return true;
   }
 
@@ -364,6 +513,8 @@ export function useGraphOverlay(
     addEdits,
     addFloating,
     floatValueUse,
+    floatReceiver,
+    fillCutReceiver,
     setOverlay,
     discard,
     resolve,
