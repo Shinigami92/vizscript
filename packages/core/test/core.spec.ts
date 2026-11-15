@@ -586,15 +586,21 @@ describe('layoutDocument with saved positions', () => {
 });
 
 describe('Add pin', () => {
-  it('adds a row under the input pins, like UE', () => {
+  it('sits in the lower right corner, like UE', () => {
+    // Inputs exec and `a`, output `then`: the last row has room on the right.
     const plain = node('c', 'impure', [execIn, execOut, dataIn]);
     const base = computeNodeGeometry(plain);
     const geom = computeNodeGeometry({ ...plain, addPin: true });
     expect(base.addPin).toBeUndefined();
-    expect(geom.height).toBe(base.height + NODE_METRICS.rowHeight);
-    // The row after the inputs (exec, then `a`).
-    expect(geom.addPin?.y).toBe(
-      (geom.pins.get('a')?.y ?? 0) + NODE_METRICS.rowHeight
+    expect(geom.height).toBe(base.height);
+    expect(geom.addPin?.y).toBe(geom.pins.get('a')?.y);
+    expect((geom.addPin?.x ?? 0) + (geom.addPin?.width ?? 0)).toBeGreaterThan(
+      geom.width - NODE_METRICS.pinInset
+    );
+    // As many outputs as inputs: a row of its own.
+    const full = node('d', 'impure', [execIn, execOut]);
+    expect(computeNodeGeometry({ ...full, addPin: true }).height).toBe(
+      computeNodeGeometry(full).height + NODE_METRICS.rowHeight
     );
   });
 });

@@ -425,7 +425,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         : ns.x + (left + geom.width - right) / 2;
       // A setter shows `SET` and, small below, how it declares (`const`).
       const sub = node.subtitle && !lod ? node.subtitle : '';
-      const centerY = ns.y + geom.height / 2 - (sub ? 6 : 0);
+      const centerY = ns.y + (geom.glyphY ?? geom.height / 2) - (sub ? 6 : 0);
       if (math) {
         // UE's big faded glyph or word, behind the pins and values.
         ctx.font = this.font('glyph');
@@ -522,7 +522,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     }
   }
 
-  /** UE's "Add pin ⊕" under the input pins. */
+  /** UE's "Add pin ⊕" in the lower right corner. */
   private drawAddPin(
     ns: NodeState,
     button: { x: number; y: number; width: number }

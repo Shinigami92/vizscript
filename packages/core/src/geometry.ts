@@ -66,14 +66,22 @@ export interface NodeGeometry {
   rightColumn: number;
   pins: Map<string, PinGeometry>;
   /**
-   * UE's "Add pin +" row under the input pins (`node.addPin`): its left
-   * edge, the middle of the row and its width, relative to the node.
+   * Where a math node's glyph sits when it isn't the middle of the node:
+   * above the "Add pin ⊕" dropped below its values.
+   */
+  glyphY?: number;
+  /**
+   * UE's "Add pin ⊕" in the lower right corner (`canAddPin`): its left
+   * edge, the middle of its row and its width, relative to the node.
    */
   addPin?: { x: number; y: number; width: number };
 }
 
 /** Text of the "Add pin" button, followed by a ⊕ icon. */
 export const ADD_PIN_LABEL = 'Add pin';
+
+/** How far math nodes drop "Add pin ⊕" below their last value (UE). */
+const MATH_ADD_PIN_DROP = 8;
 
 /** Width of the "Add pin ⊕" button. */
 function addPinWidth(measure: MeasureText): number {
@@ -258,13 +266,14 @@ export function computeNodeGeometry(
   const left = sortPins(node.pins.filter((p) => p.direction === 'in'));
   const right = sortPins(node.pins.filter((p) => p.direction === 'out'));
   const compact = isCompact(node);
-  // UE's math nodes have it too, under their values.
+  // UE's math nodes have it too.
   const addPin = canAddPin(node) && (!compact || isMathNode(node));
-  const rows = Math.max(
-    left.length + (addPin ? 1 : 0),
-    right.length,
-    compact ? 1 : 0
-  );
+  // Like UE: in the lower right corner, in the last row when the outputs
+  // leave it free, else in a row of its own.
+  const addRow = addPin ? Math.max(left.length - 1, right.length) : -1;
+  // UE's math nodes drop it a little below the last value.
+  const addDrop = addPin && isMathNode(node) ? MATH_ADD_PIN_DROP : 0;
+  const rows = Math.max(left.length, right.length, addRow + 1, compact ? 1 : 0);
 
   const headerHeight = compact
     ? 0
@@ -272,11 +281,11 @@ export function computeNodeGeometry(
       (node.subtitle ? NODE_METRICS.subtitleHeight : 0);
 
   const leftWidth = Math.max(
-    addPin ? addPinWidth(measure) : 0,
+    0,
     ...left.map((p) => pinColumnWidth(node, p, measure))
   );
   const rightWidth = Math.max(
-    0,
+    addPin ? addPinWidth(measure) : 0,
     ...right.map((p) => pinColumnWidth(node, p, measure))
   );
 
@@ -340,7 +349,7 @@ export function computeNodeGeometry(
   }
 
   width = Math.ceil(Math.max(width, compact ? 40 : NODE_METRICS.minWidth));
-  height = Math.ceil(height);
+  height = Math.ceil(height + addDrop);
 
   const pins = new Map<string, PinGeometry>();
   const rowTop = compact ? NODE_METRICS.compactPaddingY - 2 : headerHeight + 4;
@@ -376,11 +385,18 @@ export function computeNodeGeometry(
     leftColumn: leftWidth,
     rightColumn: rightWidth,
     pins,
+    ...(addDrop ? { glyphY: (height - addDrop) / 2 } : {}),
     ...(addPin
       ? {
           addPin: {
-            x: NODE_METRICS.pinInset - NODE_METRICS.pinRadius,
-            y: rowY(left.length),
+            // The ⊕ lines up with the output pins.
+            x:
+              width -
+              NODE_METRICS.pinInset +
+              NODE_METRICS.pinRadius +
+              2 -
+              addPinWidth(measure),
+            y: rowY(addRow) + addDrop,
             width: addPinWidth(measure),
           },
         }

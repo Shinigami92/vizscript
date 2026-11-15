@@ -101,7 +101,7 @@ const GROUPS: ReadonlyArray<{
       {
         action: 'Add an argument pin',
         input:
-          'Click Add pin ⊕ under a call with a rest parameter, an operator (a + b), a Make Array or a Make Object, or right-click a call → Add argument pin',
+          'Click Add pin ⊕ (lower right corner) on a call with a rest parameter, an operator (a + b), a Make Array or a Make Object, or right-click a call → Add argument pin',
       },
       {
         action: 'Show arguments left at their default',
