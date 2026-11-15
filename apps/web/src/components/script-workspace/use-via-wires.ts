@@ -12,12 +12,14 @@ import {
   findNode,
   foldVias,
   joinKey,
+  keptWrapped,
   nodeKey,
   renamedNodes,
   viaGets,
   viaJoins,
   viaKey,
   viaSetter,
+  wrappedVias,
 } from '@vizscript/core';
 import type { ComputedRef, ShallowRef } from 'vue';
 import { computed } from 'vue';
@@ -280,6 +282,11 @@ export function useViaWires(deps: {
    * graph around them does.
    */
   let drawnBefore: Set<string> | null = null;
+  /**
+   * Reads sharing one Get before an edit (wrapped to a new row): they
+   * keep it while their nodes stay where they are drawn.
+   */
+  let wrappedBefore: Map<string, string> | null = null;
   /** Inputs a Get was wired into by graph-only edits just written. */
   let wiredInputs: WiredGet[] = [];
 
@@ -304,10 +311,20 @@ export function useViaWires(deps: {
 
   function beforeOp(op: GraphOp, doc: GraphDocument | null): void {
     pending = null;
-    drawnBefore = doc
-      ? adjacentVias(
-          doc,
-          doc === deps.shownDoc.value ? shownLayout.value : deps.autoLayout(doc)
+    const layout = doc
+      ? doc === deps.shownDoc.value
+        ? shownLayout.value
+        : deps.autoLayout(doc)
+      : {};
+    drawnBefore = doc ? adjacentVias(doc, layout) : null;
+    // What the user wired or kept wins over the shared Get (`foldVias`).
+    const remembered = viaGets(deps.pinned.value);
+    const joins = viaJoins(deps.pinned.value);
+    wrappedBefore = doc
+      ? new Map(
+          [...wrappedVias(doc, layout)].filter(
+            ([id]) => !remembered.has(id) && !joins.has(id)
+          )
         )
       : null;
     const source = sourceOf(op);
@@ -362,11 +379,16 @@ export function useViaWires(deps: {
   ): Positions {
     const wired = pending;
     const drawn = drawnBefore;
+    const wrapped = wrappedBefore;
     const inputs = wiredInputs;
     pending = null;
     drawnBefore = null;
+    wrappedBefore = null;
     wiredInputs = [];
-    if (!previous || (!wired && !drawn && inputs.length === 0)) {
+    if (
+      !previous ||
+      (!wired && !drawn && !wrapped?.size && inputs.length === 0)
+    ) {
       return {};
     }
 
@@ -376,6 +398,9 @@ export function useViaWires(deps: {
     const patch: Positions = {
       ...keptGets(next, inputs, rename, nextLayout),
       ...(drawn ? stillDrawn(next, drawn, rename, nextLayout()) : {}),
+      ...(wrapped?.size
+        ? keptWrapped(wrapped, next, rename, nextLayout())
+        : {}),
     };
     if (!wired) {
       return patch;

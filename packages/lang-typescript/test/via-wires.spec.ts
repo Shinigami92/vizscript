@@ -3,6 +3,7 @@ import {
   adjacentVias,
   foldVias,
   joinKey,
+  keptWrapped,
   nodeKey,
   reconcileVias,
   viaGets,
@@ -157,6 +158,39 @@ describe('wires from a SET (UE)', () => {
         (e) => e.from.node === setter.id && e.via === first.id
       )
     ).toBe(true);
+  });
+
+  it('keeps the shared Get of wrapped reads after an edit', () => {
+    const doc = parseTypeScript(
+      'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    total += item;\n  }\n  const half = total - total / 2;\n  return half;\n}\n',
+      'a.ts'
+    );
+    const reads = doc.functions
+      .flatMap((f) => f.nodes)
+      .filter((n) => n.kind === 'getVar' && n.title === 'total');
+    const [first, second] = reads;
+    if (!first || !second) {
+      throw new Error('no reads of total');
+    }
+
+    const before = new Map([
+      [second.id, second.id],
+      [first.id, second.id],
+    ]);
+    // The edited graph's generated layout no longer wraps (no layout):
+    // the reads would become wires, but their nodes stay where they are.
+    expect(keptWrapped(before, doc, new Map(), {})).toEqual({
+      [nodeKey(second.id)]: { x: 0, y: 0 },
+      [joinKey(first.id, second.id)]: { x: 0, y: 0 },
+    });
+    const drawn = foldVias(
+      doc,
+      new Set(),
+      viaJoins(keptWrapped(before, doc, new Map(), {}))
+    ).functions.find((f) => f.name === 'f');
+    expect(
+      drawn?.nodes.filter((n) => n.kind === 'getVar' && n.title === 'total')
+    ).toEqual([second]);
   });
 
   it('draws reads after a loop that skips items before its SET', () => {

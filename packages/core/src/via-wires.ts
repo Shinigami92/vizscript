@@ -328,6 +328,49 @@ export function wrappedVias(
 }
 
 /**
+ * `~via|` entries keeping reads that shared one Get before an edit
+ * (`before`, from `wrappedVias`) on that Get, where the generated layout
+ * of the edited graph no longer wraps them: the nodes stay where they
+ * were drawn, so wires from the SET would run back across the row.
+ */
+export function keptWrapped(
+  before: ReadonlyMap<string, string>,
+  next: GraphDocument,
+  rename: ReadonlyMap<string, string>,
+  layout: Positions
+): Positions {
+  const ids = new Set(next.functions.flatMap((f) => f.nodes).map((n) => n.id));
+  // The shared Get → its reads still there, leftmost first.
+  const groups = new Map<string, string[]>();
+  for (const [get, host] of before) {
+    const id = rename.get(get) ?? get;
+    if (ids.has(id)) {
+      groups.set(host, [...(groups.get(host) ?? []), id]);
+    }
+  }
+
+  const adjacent = adjacentVias(next, layout);
+  const patch: Positions = {};
+  for (const [host, reads] of groups) {
+    const [first] = reads;
+    if (first === undefined || !reads.some((id) => adjacent.has(id))) {
+      continue;
+    }
+
+    const kept = rename.get(host) ?? host;
+    const shared = reads.includes(kept) ? kept : first;
+    for (const id of reads) {
+      patch[id === shared ? nodeKey(id) : joinKey(id, shared)] = {
+        x: 0,
+        y: 0,
+      };
+    }
+  }
+
+  return patch;
+}
+
+/**
  * The graph as drawn: remembered Gets and those right after their SET
  * (`adjacentVias`) become wires from the SET's output (`GraphEdge.via`
  * names the hidden Get). Gets without a SET before them stay nodes. With
