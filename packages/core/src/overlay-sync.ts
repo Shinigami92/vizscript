@@ -17,7 +17,13 @@ import {
   overlayIssues,
   remapOverlay,
 } from './graph-overlay';
-import type { FunctionGraph, GraphDocument, GraphEdge, PinRef } from './ir';
+import type {
+  FunctionGraph,
+  GraphDocument,
+  GraphEdge,
+  PinRef,
+  SourceRange,
+} from './ir';
 import type { GraphOp } from './ops';
 import { applyTextEdits } from './ops';
 import type { OverlayBackend } from './overlay-snippets';
@@ -146,9 +152,7 @@ function nextStructureOp(
 
 /**
  * The overlay once a receiver gets its new value: the old one is replaced
- * in the code (its graph-only deletion is done by that), and a value that
- * stands alone as a statement (`console;`, a Get placed in the graph) moves
- * into the receiver, so its statement goes.
+ * in the code (its graph-only deletion is done by that).
  */
 function replacedReceiver(
   doc: GraphDocument,
@@ -161,16 +165,28 @@ function replacedReceiver(
   const old = fn?.edges.find(
     (e) => e.to.node === edit.to.node && e.to.pin === edit.to.pin
   )?.from.node;
-  const source = fn?.nodes.find((n) => n.id === edit.from.node);
   const edits = overlay.edits.filter(
     (e) => !(e.type === 'removeNode' && e.node === old)
   );
-  const dropped = edits.length < overlay.edits.length;
-  if (source && getMeta<StatementMeta>(source).unused) {
-    edits.push({ type: 'removeNode', node: source.id });
-  }
+  return { overlay: { edits }, dropped: edits.length < overlay.edits.length };
+}
 
-  return { overlay: { edits }, dropped };
+/**
+ * A value standing alone as a statement (`console;`, a Get placed in the
+ * graph) that is wired into a receiver: the connect moves it there, else its
+ * statement must go.
+ */
+function strayStatement(
+  doc: GraphDocument,
+  from: PinRef
+): { id: string; stmt: SourceRange } | undefined {
+  const node = doc.functions
+    .flatMap((f) => f.nodes)
+    .find((n) => n.id === from.node);
+  const meta = node ? getMeta<StatementMeta>(node) : undefined;
+  return node && meta?.unused && meta.stmt
+    ? { id: node.id, stmt: meta.stmt }
+    : undefined;
 }
 
 /** An op that brings the code closer to the graph (and what it writes). */
@@ -291,8 +307,12 @@ export function resolveOverlay(
   const placed = new Map<string, string>();
 
   /** Applies one op; the error when it fails. */
-  const step = (op: GraphOp, group?: FloatingNodes): string | undefined => {
-    const result = backend.applyOp(source, op);
+  const step = (
+    op: GraphOp,
+    group?: FloatingNodes,
+    applied = backend.applyOp(source, op)
+  ): string | undefined => {
+    const result = applied;
     if (!result.ok) {
       return result.error;
     }
@@ -369,7 +389,26 @@ export function resolveOverlay(
               ...(drop ? { drop } : {}),
             };
     const done = edit.type === 'addEdge' && hasEdge(doc, edit.from, edit.to);
-    const error = done ? undefined : step(op, group);
+    const applied = done ? undefined : backend.applyOp(source, op);
+    const stray =
+      edit.type === 'addEdge' && !group
+        ? strayStatement(doc, edit.from)
+        : undefined;
+    const moved =
+      applied?.ok === true &&
+      applied.edits.some(
+        (e) =>
+          e.text === '' &&
+          e.start <= (stray?.stmt.start ?? -1) &&
+          (stray?.stmt.end ?? Infinity) <= e.end
+      );
+    if (stray && !moved) {
+      current = {
+        edits: [...current.edits, { type: 'removeNode', node: stray.id }],
+      };
+    }
+
+    const error = applied ? step(op, group, applied) : undefined;
     if (error !== undefined) {
       return pending(edit.to.node, error);
     }

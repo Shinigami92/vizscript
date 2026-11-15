@@ -448,10 +448,7 @@ function inlineIntoNextStatement(
     expr = source.range;
     if (
       consumer.stmt.start < stmt.end &&
-      // Back to an earlier statement only into operands and arguments: a
-      // moved receiver would take the id of the one it replaces.
-      (targetPin.id === 'target' ||
-        !inputsReadyAt(doc, source, consumer.stmt.start))
+      !inputsReadyAt(doc, source, consumer.stmt.start)
     ) {
       return undefined;
     }

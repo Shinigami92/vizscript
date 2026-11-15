@@ -80,6 +80,21 @@ describe('values bound in a block', () => {
     expect(text).not.toContain('item.p;');
   });
 
+  it('moves a lone value back into a receiver', () => {
+    const code = 'declare const a: string, b: string;\na.trim();\nb;\n';
+    const text = apply(code, (nodes) => {
+      const get = nodes.filter((n) => n.kind === 'getVar').at(-1);
+      const trim = find(nodes, (n) => n.title === 'trim');
+      return {
+        type: 'connect',
+        from: { node: get?.id ?? '', pin: 'value' },
+        to: { node: trim.id, pin: 'target' },
+        drop: true,
+      };
+    });
+    expect(text).toBe('declare const a: string, b: string;\nb.trim();\n');
+  });
+
   it('keeps a lone value in place when it reads a later variable', () => {
     const code =
       'function f(a: number) {\n  if (a <= 0) {\n  }\n  const k = 2;\n  k + 1;\n}\n';
