@@ -33,6 +33,7 @@ import type { GraphDocument, PinLiteral } from './ir';
 import { setInput, setLiteral } from './literal-ops';
 import { failed, mergeEdits, succeeded } from './op-result';
 import type { GraphOp, NodeTemplate, OpResult, TextEdit } from './ops';
+import { editsOverlap } from './ops';
 import { findNode } from './reconcile';
 import { replaceReference, setAssignOperator } from './reference-ops';
 import {
@@ -393,11 +394,15 @@ export function applyTextOp(
   op: GraphOp,
   syntax: StatementSyntax
 ): OpResult {
-  return withoutPlaceholderBodies(
+  const result = withoutPlaceholderBodies(
     text,
     applyTextOpEdits(text, doc, op, syntax),
     syntax
   );
+  // The editor refuses overlapping edits: a message instead of a throw.
+  return result.ok && editsOverlap(result.edits)
+    ? failed('These changes overlap.')
+    : result;
 }
 
 /** Width of a line's indentation. */

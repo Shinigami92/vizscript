@@ -6,6 +6,7 @@ import {
   arrayOf,
   computeNodeGeometry,
   createEdge,
+  editsOverlap,
   extractReroutes,
   hashString,
   isArrayType,
@@ -337,6 +338,64 @@ describe('applyTextEdits', () => {
         { start: 1, end: 3, text: '' },
       ])
     ).toThrow('Overlapping text edits');
+  });
+
+  // The order the code editor (Monaco) writes them in.
+  it('applies inserts at one offset in array order', () => {
+    expect(
+      applyTextEdits('abc', [
+        { start: 0, end: 0, text: 'X' },
+        { start: 0, end: 0, text: 'Y' },
+        { start: 0, end: 0, text: 'Z' },
+      ])
+    ).toBe('XYZabc');
+  });
+
+  it('inserts before a replacement at its start, after it at its end', () => {
+    for (const edits of [
+      [
+        { start: 0, end: 0, text: 'I' },
+        { start: 0, end: 3, text: 'R' },
+      ],
+      [
+        { start: 0, end: 3, text: 'R' },
+        { start: 0, end: 0, text: 'I' },
+      ],
+    ]) {
+      expect(applyTextEdits('abcdef', edits)).toBe('IRdef');
+    }
+
+    expect(
+      applyTextEdits('abcdef', [
+        { start: 3, end: 3, text: 'I' },
+        { start: 0, end: 3, text: 'R' },
+      ])
+    ).toBe('RIdef');
+  });
+});
+
+describe('editsOverlap', () => {
+  it('tells overlapping ranges from touching ones', () => {
+    expect(
+      editsOverlap([
+        { start: 2, end: 5, text: '' },
+        { start: 0, end: 3, text: '' },
+      ])
+    ).toBe(true);
+    expect(
+      editsOverlap([
+        { start: 0, end: 3, text: '' },
+        { start: 1, end: 1, text: 'x' },
+      ])
+    ).toBe(true);
+    expect(
+      editsOverlap([
+        { start: 0, end: 3, text: '' },
+        { start: 3, end: 5, text: '' },
+        { start: 0, end: 0, text: 'x' },
+        { start: 0, end: 0, text: 'y' },
+      ])
+    ).toBe(false);
   });
 });
 

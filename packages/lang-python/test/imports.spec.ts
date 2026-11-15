@@ -129,6 +129,37 @@ function useGreet(text: string, path: string, imported = 'greet'): string {
 }
 
 describe('adding imports', () => {
+  it('writes the import above a call added at the top of the file', () => {
+    const text = 'x = 1\n';
+    const doc = parsePythonDocument(text, 'app/main.py');
+    const entry = doc.functions[0]?.nodes.find((n) => n.kind === 'entry');
+    const result = applyPythonOp(
+      text,
+      {
+        type: 'withImport',
+        import: {
+          path: 'app/util.py',
+          from: 'app/main.py',
+          name: 'helper',
+          imported: 'helper',
+        },
+        op: {
+          type: 'addNode',
+          template: { type: 'call', callee: 'helper' },
+          after: { node: entry?.id ?? '', pin: 'then' },
+        },
+      },
+      'app/main.py'
+    );
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+
+    expect(applyTextEdits(text, result.edits)).toBe(
+      'from util import helper\n\nhelper()\nx = 1\n'
+    );
+  });
+
   it('imports from a module next to the file, below the docstring', () => {
     expect(
       useGreet('"""Main."""\n\n\ndef f():\n    pass\n', 'app/util.py')

@@ -536,19 +536,38 @@ export interface LanguageBackend {
 }
 
 /**
- * Applies non-overlapping edits. Edits are applied back to front so offsets
- * stay valid.
+ * Whether edits overlap: one starts inside another's range. Touching ranges
+ * and inserts at a replacement's start or end don't overlap.
+ */
+export function editsOverlap(edits: ReadonlyArray<TextEdit>): boolean {
+  const sorted = edits.toSorted((a, b) => a.start - b.start || a.end - b.end);
+  return sorted.some((edit, i) => {
+    const next = sorted[i + 1];
+    return next !== undefined && next.start < edit.end;
+  });
+}
+
+/**
+ * Applies non-overlapping edits like the editor (Monaco) does: inserts at
+ * one offset in array order, an insert at a replacement's start before it
+ * and at its end after it. Edits are applied back to front so offsets stay
+ * valid.
  */
 export function applyTextEdits(
   text: string,
   edits: ReadonlyArray<TextEdit>
 ): string {
-  const sorted = [...edits].toSorted(
-    (a, b) => b.start - a.start || b.end - a.end
-  );
+  const sorted = edits
+    .map((edit, index) => ({ edit, index }))
+    .toSorted(
+      (a, b) =>
+        b.edit.start - a.edit.start ||
+        b.edit.end - a.edit.end ||
+        b.index - a.index
+    );
   let result = text;
   let lastStart = Number.POSITIVE_INFINITY;
-  for (const edit of sorted) {
+  for (const { edit } of sorted) {
     if (edit.end > lastStart) {
       throw new Error(
         `Overlapping text edits at ${edit.start}-${edit.end} and ${lastStart}`
