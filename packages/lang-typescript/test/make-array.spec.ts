@@ -65,3 +65,13 @@ describe('Make Array (UE Add pin)', () => {
     expect(removePin(addPin(list), 'e3')).toBe(list);
   });
 });
+
+describe('long arrays', () => {
+  it('puts the elements on lines of their own past the print width', () => {
+    const text =
+      "interface Item {\n  name: string;\n  price: number;\n}\n\nconst cart: Item[] = [{ name: 'Keyboard', price: 89.9 }];\n";
+    expect(addPin(text)).toContain(
+      "const cart: Item[] = [\n  { name: 'Keyboard', price: 89.9 },\n  { name: '', price: 0 },\n];\n"
+    );
+  });
+});

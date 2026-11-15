@@ -11,6 +11,7 @@ import {
 } from './operator-chain';
 import type { OpResult } from './ops';
 import { removeListItem } from './symbol-edits';
+import { detectIndentUnit } from './text-op-helpers';
 import type { StatementSyntax } from './text-ops';
 import { lineIndent } from './text-utils';
 import { arrayElementType } from './types';
@@ -158,6 +159,9 @@ export function emptyValue(
  * last one, on its own line when the items are; an empty list (`[]`)
  * gets it between the brackets.
  */
+/** Line length the formatter keeps code within. */
+const PRINT_WIDTH = 80;
+
 function appendItem(
   text: string,
   node: GraphNode,
@@ -182,6 +186,40 @@ function appendItem(
               text: `\n${indent}${item},`,
             }
           : { start: end, end, text: `,\n${indent}${item}` },
+      ]);
+    }
+
+    // An array grown past the print width: one element per line.
+    const lineFrom = text.lastIndexOf('\n', node.range.start - 1) + 1;
+    const lineTo = text.indexOf('\n', end);
+    const width =
+      (lineTo === -1 ? text.length : lineTo) - lineFrom + item.length + 2;
+    // From its bracket (Rust's `vec![…]`).
+    const open = text.indexOf('[', node.range.start);
+    const own = text.slice(open, node.range.end);
+    if (
+      close === ']' &&
+      width > PRINT_WIDTH &&
+      open !== -1 &&
+      open < first.start &&
+      own.endsWith(']') &&
+      !own.includes('\n')
+    ) {
+      const indent = lineIndent(text, node.range.start);
+      const inner = `${indent}${detectIndentUnit(text)}`;
+      const values = [
+        ...items.map((r) => {
+          const span = operandSpan(text, r);
+          return text.slice(span.start, span.end);
+        }),
+        item,
+      ];
+      return succeeded([
+        {
+          start: open,
+          end: node.range.end,
+          text: `[\n${values.map((v) => `${inner}${v},`).join('\n')}\n${indent}]`,
+        },
       ]);
     }
 
