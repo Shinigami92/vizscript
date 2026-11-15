@@ -324,6 +324,21 @@ export function useValue(
     ]);
   }
 
+  // A lone value (`item.quantity;`) is used where it stands, like a
+  // wire from it: `item.quantity <= 0;`, not a second copy of it.
+  const node = findNode(doc, ref.node);
+  const own = node ? getMeta<StatementMeta>(node) : undefined;
+  if (node && own?.unused && own.stmt) {
+    const code = text.slice(node.range.start, node.range.end);
+    return succeeded([
+      {
+        start: node.range.start,
+        end: node.range.end,
+        text: substituteValue(expression, code),
+      },
+    ]);
+  }
+
   const chained = chainedCall(text, doc, ref, expression);
   if (chained) {
     return succeeded([chained]);

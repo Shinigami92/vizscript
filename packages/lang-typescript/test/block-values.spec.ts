@@ -80,6 +80,20 @@ describe('values bound in a block', () => {
     expect(text).not.toContain('item.p;');
   });
 
+  it('uses a lone value where it stands in a new expression', () => {
+    const code = LOOP.replace('    }\n  }', '    }\n    item.p + 1;\n  }');
+    const text = apply(code, (nodes) => {
+      const plus = find(nodes, (n) => n.title === '+');
+      return {
+        type: 'useValue',
+        pin: { node: plus.id, pin: output(plus) },
+        expression: '$value * 2',
+      };
+    });
+    expect(text).toContain('    }\n    (item.p + 1) * 2;\n  }');
+    expect(text).not.toContain('item.p + 1;');
+  });
+
   it('moves a lone value back into a receiver', () => {
     const code = 'declare const a: string, b: string;\na.trim();\nb;\n';
     const text = apply(code, (nodes) => {
