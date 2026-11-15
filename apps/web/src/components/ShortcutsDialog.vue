@@ -72,6 +72,10 @@ const GROUPS: ReadonlyArray<{
         input: 'Drag a node; all selected nodes and reroute points move',
       },
       {
+        action: 'Cancel a drag, then clear the selection',
+        input: '{Esc}',
+      },
+      {
         action: 'Context menu',
         input: 'Right-click a node, pin, wire, frame or empty space',
       },

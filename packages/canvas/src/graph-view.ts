@@ -48,6 +48,7 @@ export class GraphView extends GraphViewDocument {
   private readonly pointers = new Map<number, Point>();
   private readonly disposers: Array<() => void> = [];
   private spaceDown = false;
+  private stopWatchingPixelRatio: (() => void) | undefined;
 
   public constructor(
     canvas: HTMLCanvasElement,
@@ -61,7 +62,7 @@ export class GraphView extends GraphViewDocument {
     this.listen(canvas, 'pointerdown', (e) => this.onPointerDown(e));
     this.listen(canvas, 'pointermove', (e) => this.onPointerMove(e));
     this.listen(canvas, 'pointerup', (e) => this.onPointerUp(e));
-    this.listen(canvas, 'pointercancel', (e) => this.onPointerUp(e));
+    this.listen(canvas, 'pointercancel', (e) => this.onPointerCancel(e));
     this.listen(canvas, 'pointerleave', () => {
       this.setHoverEdge(null);
       this.setHover(null, null);
@@ -78,16 +79,37 @@ export class GraphView extends GraphViewDocument {
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
+    this.watchPixelRatio();
     this.resize();
   }
 
   public destroy(): void {
+    this.stopRendering();
+    this.stopWatchingPixelRatio?.();
     this.resizeObserver.disconnect();
     for (const dispose of this.disposers) {
       dispose();
     }
 
     this.emitter.clear();
+  }
+
+  /**
+   * Redraws sharp when the pixel ratio changes (the window moved to another
+   * screen, browser zoom): the canvas keeps its CSS size, so the resize
+   * observer doesn't fire.
+   */
+  private watchPixelRatio(): void {
+    const query = window.matchMedia(
+      `(resolution: ${window.devicePixelRatio}dppx)`
+    );
+    const onChange = (): void => {
+      this.resize();
+      this.watchPixelRatio();
+    };
+    query.addEventListener('change', onChange, { once: true });
+    this.stopWatchingPixelRatio = () =>
+      query.removeEventListener('change', onChange);
   }
 
   private listen<K extends keyof HTMLElementEventMap>(
@@ -677,6 +699,71 @@ export class GraphView extends GraphViewDocument {
     this.requestRender();
   }
 
+  /** The browser took the pointer over (a scroll, a system gesture). */
+  private onPointerCancel(e: PointerEvent): void {
+    this.pointers.delete(e.pointerId);
+    if (this.canvas.hasPointerCapture(e.pointerId)) {
+      this.canvas.releasePointerCapture(e.pointerId);
+    }
+
+    if (this.drag?.type !== 'pinch' || this.pointers.size === 0) {
+      this.cancelDrag();
+    }
+  }
+
+  /**
+   * Ends a drag without its result (Escape, a cancelled pointer): moved
+   * nodes and reroute points go back, a marquee restores the selection, a
+   * wire is dropped. Returns whether there was one.
+   */
+  private cancelDrag(): boolean {
+    const drag = this.drag;
+    if (!drag) {
+      return false;
+    }
+
+    this.drag = null;
+    switch (drag.type) {
+      case 'nodes': {
+        for (const [id, origin] of drag.origins) {
+          const ns = this.nodes.get(id);
+          if (ns) {
+            ns.x = origin.x;
+            ns.y = origin.y;
+          }
+        }
+
+        for (const [id, origin] of drag.knotOrigins) {
+          const { edgeId, index } = parseKnotId(id);
+          const p = this.reroutes.get(edgeId)?.[index];
+          if (p) {
+            p.x = origin.x;
+            p.y = origin.y;
+          }
+        }
+
+        this.framesDirty = true;
+        break;
+      }
+
+      case 'marquee': {
+        this.knotSelection = new Set(drag.baseKnots);
+        this.setSelectionInternal(new Set(drag.base));
+        break;
+      }
+
+      case 'pan':
+      case 'pinch':
+      case 'wire':
+      case 'moveWires': {
+        break;
+      }
+    }
+
+    this.requestRender();
+    return true;
+  }
+
   private onDoubleClick(e: MouseEvent): void {
     const world = this.toWorld(e);
     const hit = this.hitTest(world);
@@ -772,8 +859,9 @@ export class GraphView extends GraphViewDocument {
     }
 
     if (e.key === 'Escape') {
-      if (this.drag?.type === 'wire') {
-        this.drag = null;
+      // The first Escape cancels a drag, the next one clears the selection.
+      if (this.cancelDrag()) {
+        return;
       }
 
       this.knotSelection.clear();

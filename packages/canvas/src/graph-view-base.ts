@@ -98,7 +98,9 @@ export abstract class GraphViewBase {
   /** The node whose "Add pin +" button is under the cursor. */
   protected hoverAddPin: string | null = null;
   protected drag: Drag | null = null;
-  private frameRequested = false;
+  private frameRequest: number | null = null;
+  /** Set by `destroy`: no more frames. */
+  protected destroyed = false;
   protected hasFramed = false;
 
   public constructor(
@@ -130,15 +132,23 @@ export abstract class GraphViewBase {
   protected abstract render(): void;
 
   public requestRender(): void {
-    if (this.frameRequested) {
+    if (this.frameRequest !== null || this.destroyed) {
       return;
     }
 
-    this.frameRequested = true;
-    requestAnimationFrame(() => {
-      this.frameRequested = false;
+    this.frameRequest = requestAnimationFrame(() => {
+      this.frameRequest = null;
       this.render();
     });
+  }
+
+  /** Cancels the next frame; tweens can't request new ones. */
+  protected stopRendering(): void {
+    this.destroyed = true;
+    if (this.frameRequest !== null) {
+      cancelAnimationFrame(this.frameRequest);
+      this.frameRequest = null;
+    }
   }
 
   protected font(style: TextStyle): string {
