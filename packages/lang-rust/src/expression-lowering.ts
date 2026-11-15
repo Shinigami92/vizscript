@@ -2,6 +2,9 @@ import type { DataType, InputSpec, ValueSource } from '@vizscript/core';
 import {
   arrayElementType,
   arrayOf,
+  CHAIN_OPERATORS,
+  chainPinId,
+  flattenChain,
   isArrayType,
   truncate,
 } from '@vizscript/core';
@@ -11,6 +14,32 @@ import { dataTypeOf } from './data-type';
 import { only, rangeOf, unwrap } from './lower-utils';
 
 const COMPARISONS = new Set(['==', '!=', '<', '<=', '>', '>=']);
+
+/** The type of `left op right`. */
+function binaryType(
+  op: string,
+  logical: boolean,
+  left: DataType,
+  right: DataType
+): DataType {
+  if (COMPARISONS.has(op) || logical) {
+    return 'bool';
+  }
+
+  if (op === '+') {
+    return left === 'string'
+      ? 'string'
+      : left === 'number' || right === 'number'
+        ? 'number'
+        : 'any';
+  }
+
+  return left === 'number' || right === 'number'
+    ? 'number'
+    : left === 'bool' && right === 'bool'
+      ? 'bool'
+      : 'any';
+}
 
 /** Values: names, operators, literals, structs, closures and `if` values. */
 export abstract class ExpressionLowering extends CallLowering {
@@ -412,40 +441,39 @@ export abstract class ExpressionLowering extends CallLowering {
     mode: 'eager' | 'lazy'
   ): ValueSource {
     const logical = expr.op === '&&' || expr.op === '||';
-    const left = this.lowerExpr(expr.left, `${path}.a`, mode);
-    const right = this.lowerExpr(
-      expr.right,
-      `${path}.b`,
-      logical ? 'lazy' : mode
+    const operands = CHAIN_OPERATORS.has(expr.op)
+      ? flattenChain<Expr>(
+          expr,
+          (e) =>
+            e.type === 'Binary' && e.op === expr.op
+              ? [e.left, e.right]
+              : undefined,
+          (e) => rangeOf(e).start
+        )
+      : [expr.left, expr.right];
+    const values = operands.map((operand, index) =>
+      this.lowerExpr(
+        operand,
+        `${path}.${chainPinId(index)}`,
+        logical && index > 0 ? 'lazy' : mode
+      )
     );
-    let type: DataType;
-    if (COMPARISONS.has(expr.op) || logical) {
-      type = 'bool';
-    } else if (expr.op === '+') {
-      type =
-        left.type === 'string'
-          ? 'string'
-          : left.type === 'number' || right.type === 'number'
-            ? 'number'
-            : 'any';
-    } else {
-      type =
-        left.type === 'number' || right.type === 'number'
-          ? 'number'
-          : left.type === 'bool' && right.type === 'bool'
-            ? 'bool'
-            : 'any';
-    }
+    const type = values
+      .slice(1)
+      .reduce<DataType>(
+        (left, right) => binaryType(expr.op, logical, left, right.type),
+        values[0]?.type ?? 'any'
+      );
 
     return this.pureNode({
       kind: 'operator',
       title: expr.op,
       range: rangeOf(expr),
       path,
-      inputs: [
-        { pin: this.dataIn('a', '', rangeOf(expr.left)), value: left },
-        { pin: this.dataIn('b', '', rangeOf(expr.right)), value: right },
-      ],
+      inputs: operands.map((operand, index) => ({
+        pin: this.dataIn(chainPinId(index), '', rangeOf(operand)),
+        value: values[index] as ValueSource,
+      })),
       outType: type,
       compact: true,
     });

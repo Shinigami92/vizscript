@@ -9,6 +9,9 @@ import type {
 } from '@vizscript/core';
 import {
   arrayOfAll,
+  CHAIN_OPERATORS,
+  chainPinId,
+  flattenChain,
   GraphBuilderBase,
   isArrayType,
   truncate,
@@ -32,6 +35,30 @@ const COMPARISON_OPERATORS = new Set([
 ]);
 
 const LOGICAL_OPERATORS = new Set(['and', 'or', '&&', '||']);
+
+/** The type of `left op right`. */
+function binaryType(
+  op: string,
+  logical: boolean,
+  left: DataType,
+  right: DataType
+): DataType {
+  if (COMPARISON_OPERATORS.has(op) || logical) {
+    return 'bool';
+  }
+
+  if (op === '+' || op === '%') {
+    return left === 'string'
+      ? 'string'
+      : left === 'number' && right === 'number'
+        ? 'number'
+        : isArrayType(left) && op === '+'
+          ? left
+          : 'any';
+  }
+
+  return left === 'number' ? 'number' : 'any';
+}
 
 /**
  * The base of `FnGraphBuilder`: calls and other expressions. Control flow
@@ -313,42 +340,39 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
 
       case 'Binary': {
         const logical = LOGICAL_OPERATORS.has(expr.op);
-        const left = this.lowerExpr(expr.left, `${path}.a`, mode);
-        const right = this.lowerExpr(
-          expr.right,
-          `${path}.b`,
-          logical ? 'lazy' : mode
+        const operands = CHAIN_OPERATORS.has(expr.op)
+          ? flattenChain<Expr>(
+              expr,
+              (e) =>
+                e.type === 'Binary' && e.op === expr.op
+                  ? [e.left, e.right]
+                  : undefined,
+              (e) => rangeOf(e).start
+            )
+          : [expr.left, expr.right];
+        const values = operands.map((operand, index) =>
+          this.lowerExpr(
+            operand,
+            `${path}.${chainPinId(index)}`,
+            logical && index > 0 ? 'lazy' : mode
+          )
         );
-        let type: DataType;
-        if (COMPARISON_OPERATORS.has(expr.op) || logical) {
-          type = 'bool';
-        } else if (expr.op === '+' || expr.op === '%') {
-          type =
-            left.type === 'string'
-              ? 'string'
-              : left.type === 'number' && right.type === 'number'
-                ? 'number'
-                : isArrayType(left.type) && expr.op === '+'
-                  ? left.type
-                  : 'any';
-        } else {
-          type =
-            left.type === 'number' && right.type === 'number'
-              ? 'number'
-              : left.type === 'number'
-                ? 'number'
-                : 'any';
-        }
+        const type = values
+          .slice(1)
+          .reduce<DataType>(
+            (left, right) => binaryType(expr.op, logical, left, right.type),
+            values[0]?.type ?? 'any'
+          );
 
         return this.pureNode({
           kind: 'operator',
           title: expr.op,
           range: rangeOf(expr),
           path,
-          inputs: [
-            { pin: this.dataIn('a', '', rangeOf(expr.left)), value: left },
-            { pin: this.dataIn('b', '', rangeOf(expr.right)), value: right },
-          ],
+          inputs: operands.map((operand, index) => ({
+            pin: this.dataIn(chainPinId(index), '', rangeOf(operand)),
+            value: values[index] as ValueSource,
+          })),
           outType: type,
           compact: true,
         });
