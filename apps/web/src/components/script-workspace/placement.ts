@@ -21,6 +21,11 @@ export interface PendingPlacement {
   /** The node written as this code (`greeter()` given to an input). */
   code?: string;
   /**
+   * The asked-for node is the root of a new expression (its output not
+   * wired yet), not the SET binding the value it uses.
+   */
+  root?: boolean;
+  /**
    * Select afterwards: all new nodes (pasted ones), or only the placed one
    * (the call of collapsed nodes), like UE.
    */
@@ -111,6 +116,10 @@ export function placementFor(
       // The new SET node, not the call that moved into it.
       const title = `Set ${placed.name}`;
       matches = (n) => n.kind === 'setVar' && n.title === title;
+    } else if (placed.type === 'callWith') {
+      // The new call, not the SET binding the value it receives.
+      const name = placed.callee.split('.').at(-1);
+      matches = (n) => n.kind === 'call' && n.title === name;
     } else if (placed.type === 'makeValue') {
       matches = (n) => n.kind === 'makeObject';
     } else if (placed.type === 'collapseToFunction') {
@@ -125,6 +134,7 @@ export function placementFor(
       known: allNodeIds(doc),
       matches,
       ...(placed.type === 'setInput' ? { code: placed.expression.trim() } : {}),
+      ...(placed.type === 'useValue' ? { root: true } : {}),
       // Like UE, a node just placed is selected (pasted code: all of it).
       select:
         placed.type === 'addNode' && placed.template.type === 'code'
@@ -151,7 +161,7 @@ export function placeNewNodes(
   pinned: Positions,
   layoutOptions: LayoutOptions
 ): { placed?: Positions; selectAfter?: string[] } {
-  const { known, matches, code, select } = placement;
+  const { known, matches, code, root, select } = placement;
   // On the grid, like a node placed in UE.
   const world = snapToGrid(placement.world);
   // Old nodes whose id changed with their text (an `if` around the new
@@ -169,6 +179,9 @@ export function placeNewNodes(
   );
   const added =
     (matches && fresh.find(matches)) ??
+    (root
+      ? fresh.find((n) => n.purity === 'pure' && !used.has(n.id))
+      : undefined) ??
     (code === undefined
       ? undefined
       : fresh.find((n) => source.slice(n.range.start, n.range.end) === code)) ??
@@ -185,7 +198,10 @@ export function placeNewNodes(
     for (const node of origin ? fresh : []) {
       const p = auto[node.id];
       // Old nodes whose text changed kept their place (reconciled above).
-      if (node.id !== added.id && p && origin && !pinned[node.id]) {
+      // A new expression's SET binding its value stays on the exec chain,
+      // next to the statement it follows.
+      const chained = root && node.purity === 'impure';
+      if (node.id !== added.id && p && origin && !pinned[node.id] && !chained) {
         placed[node.id] = {
           x: world.x + p.x - origin.x,
           y: world.y + p.y - origin.y,
