@@ -152,14 +152,24 @@ function analyze(
 
   // Variables of the enclosing function, with their declarations.
   const scope = qualifiedName(owner);
-  const declared = new Map<string, { range?: SourceRange; type?: string }>();
+  const declared = new Map<
+    string,
+    { range?: SourceRange; type?: string; dataType: DataType }
+  >();
   for (const param of owner.params ?? []) {
-    declared.set(param.name, { type: param.type?.text });
+    declared.set(param.name, {
+      type: param.type?.text,
+      dataType: param.dataType,
+    });
   }
 
   for (const local of symbols) {
     if (local.kind === 'local' && local.scope === scope) {
-      declared.set(local.name, { range: local.range, type: local.type?.text });
+      declared.set(local.name, {
+        range: local.range,
+        type: local.type?.text,
+        dataType: local.dataType,
+      });
     }
   }
 
@@ -170,9 +180,20 @@ function analyze(
 
   // Inputs: values wired in from outside, and outer variables read inside.
   const used = new Map<string, number>();
-  const use = (name: string, at: number): void => {
-    if (!declaredInside(name) && !used.has(name)) {
+  // The checker's type of a value without a declared type (`let total =
+  // 0` → `number`), as the language writes it.
+  const inferred = new Map<string, string>();
+  const use = (name: string, at: number, typeText?: string): void => {
+    if (declaredInside(name)) {
+      return;
+    }
+
+    if (!used.has(name)) {
       used.set(name, at);
+    }
+
+    if (typeText && !inferred.has(name)) {
+      inferred.set(name, typeText);
     }
   };
 
@@ -190,8 +211,11 @@ function analyze(
     const name = pin?.range
       ? text.slice(pin.range.start, pin.range.end)
       : undefined;
+    const source = fn.nodes
+      .find((n) => n.id === edge.from.node)
+      ?.pins.find((p) => p.id === edge.from.pin);
     if (name && IDENTIFIER.test(name)) {
-      use(name, pin?.range?.start ?? 0);
+      use(name, pin?.range?.start ?? 0, source?.typeText);
     }
   }
 
@@ -201,7 +225,10 @@ function analyze(
         ? variableName(node)
         : undefined;
     if (name && declared.has(name)) {
-      use(name, node.range.start);
+      const out = node.pins.find(
+        (p) => p.direction === 'out' && p.kind === 'data'
+      );
+      use(name, node.range.start, out?.typeText);
     }
   }
 
@@ -248,8 +275,14 @@ function analyze(
   const params = [...used]
     .toSorted((a, b) => a[1] - b[1])
     .map(([name]) => {
-      const type = declared.get(name)?.type;
-      return type ? { name, type } : { name };
+      const variable = declared.get(name);
+      const type = variable?.type ?? inferred.get(name);
+      const dataType = variable?.dataType;
+      return {
+        name,
+        ...(type ? { type } : {}),
+        ...(dataType && dataType !== 'any' ? { dataType } : {}),
+      };
     });
   return {
     params,

@@ -106,8 +106,13 @@ export interface DeclarationSyntax {
 /** An input of a collapsed function. */
 export interface ExtractParam {
   name: string;
-  /** Declared type of the variable it comes from. */
+  /**
+   * Type of the variable it comes from: declared, else as the type checker
+   * wrote it.
+   */
   type?: string;
+  /** Its pin type, for a type to write when `type` is missing. */
+  dataType?: DataType;
 }
 
 /** Language syntax for "Collapse to function". */

@@ -1,5 +1,6 @@
 import type { GraphDocument } from '@vizscript/core';
-import { applyTextEdits, summarizeSymbols } from '@vizscript/core';
+import type { TypeInfo } from '@vizscript/core';
+import { applyTextEdits, rangeKey, summarizeSymbols } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
 
@@ -72,6 +73,36 @@ describe('collapse to function', () => {
         '}',
         '',
       ].join('\n')
+    );
+  });
+
+  it('types inputs without a declared type as the checker infers them', () => {
+    const doc = parseTypeScript(TOTAL, 't.ts');
+    // The checker's answers for the reads of `sum` and `discount`.
+    const types = new Map<string, TypeInfo>();
+    for (const node of doc.functions.flatMap((f) => f.nodes)) {
+      const out = node.pins.find((p) => p.direction === 'out' && p.range);
+      if (node.kind === 'getVar' && out?.range) {
+        types.set(rangeKey(out.range), { text: 'number', dataType: 'number' });
+      }
+    }
+
+    const result = applyTypeScriptOp(
+      TOTAL,
+      {
+        type: 'collapseToFunction',
+        nodes: nodesStarting(doc, TOTAL, ['const discounted']),
+        name: 'applyDiscount',
+      },
+      't.ts',
+      { checked: { text: TOTAL, types } }
+    );
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+
+    expect(applyTextEdits(TOTAL, result.edits)).toContain(
+      'function applyDiscount(sum: number, discount: number) {'
     );
   });
 
@@ -236,7 +267,7 @@ describe('expose on spawn', () => {
     const out = collapse(TOTAL, ['sum += '], 'addPrice');
     expect(out).toContain('    sum = addPrice(sum, item);');
     expect(out).toContain(
-      'function addPrice(sum, item) {\n  sum += item.price;\n  return sum;'
+      'function addPrice(sum: number, item) {\n  sum += item.price;\n  return sum;'
     );
     const update = collapse(
       'function f() {\n  let n = 0;\n  n++;\n  return n;\n}\n',

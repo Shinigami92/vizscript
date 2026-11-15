@@ -40,7 +40,7 @@ describe('collapse to function', () => {
         '\tshow_double(speed)',
         '',
         '',
-        'func show_double(speed):',
+        'func show_double(speed: int):',
         '\tvar doubled := speed * 2',
         '\tprint(doubled)',
         '',

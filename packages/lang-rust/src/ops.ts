@@ -476,7 +476,9 @@ const DECLARATIONS: DeclarationSyntax = {
     fn: (name, params, body, { method, isStatic, isAsync, returns }) => {
       const list = [
         ...(method && !isStatic ? ['&self'] : []),
-        ...params.map((p) => `${p.name}: ${p.type ?? '_'}`),
+        ...params.map(
+          (p) => `${p.name}: ${p.type ?? rustTypeOf(p.dataType ?? 'any')}`
+        ),
       ].join(', ');
       const result = returns
         ? ` -> ${returns.type ?? rustTypeOf(returns.dataType)}`

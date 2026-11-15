@@ -1,4 +1,5 @@
 import type {
+  DataType,
   DeclarationSyntax,
   GraphDocument,
   GraphOp,
@@ -630,7 +631,10 @@ function declarations(text: string, fileName?: string): DeclarationSyntax {
     extract: {
       fn: (name, params, body, { method, isStatic, isAsync }) => {
         const list = params
-          .map((p) => (p.type && !isJs ? `${p.name}: ${p.type}` : p.name))
+          .map((p) => {
+            const type = p.type ?? typeScriptTypeOf(p.dataType);
+            return type && !isJs ? `${p.name}: ${type}` : p.name;
+          })
           .join(', ');
         const head = method
           ? `${isStatic ? 'static ' : ''}${isAsync ? 'async ' : ''}${name}`
@@ -793,4 +797,23 @@ export function applyTypeScriptOp(
       declarations: declarations(text, fileName),
     }
   );
+}
+
+/** A pin type as TypeScript writes it, when it names one (`bool[]`). */
+function typeScriptTypeOf(dataType: DataType | undefined): string | undefined {
+  if (dataType?.endsWith('[]')) {
+    const inner = typeScriptTypeOf(dataType.slice(0, -2));
+    return inner ? `${inner}[]` : undefined;
+  }
+
+  if (dataType === 'bool') {
+    return 'boolean';
+  }
+
+  return dataType === 'number' ||
+    dataType === 'string' ||
+    dataType === 'bigint' ||
+    /^[A-Z]\w*$/.test(dataType ?? '')
+    ? dataType
+    : undefined;
 }
