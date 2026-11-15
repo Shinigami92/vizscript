@@ -91,6 +91,37 @@ const escape = (name: string): string =>
  * Nodes that use a symbol, to highlight them like UE highlights the uses of
  * a selected variable: calls of a function, gets and sets of a variable.
  */
+/**
+ * The uses among `ids` (from `symbolNodes`) to count: without the
+ * symbol's own declaration (the SET of `const x = 1`, a function's entry),
+ * which is highlighted but doesn't use it.
+ */
+export function countedUses(
+  doc: GraphDocument | null,
+  symbol: ScriptSymbol,
+  ids: ReadonlyArray<string>
+): number {
+  const own = symbol.declarationRange ?? symbol.range;
+  const nodes = new Map(
+    (doc?.functions ?? []).flatMap((f) =>
+      f.nodes.map((n) => [n.id, { fnId: f.id, node: n }] as const)
+    )
+  );
+  return ids.filter((id) => {
+    const found = nodes.get(id);
+    if (!found) {
+      return true;
+    }
+
+    const { fnId, node } = found;
+    const declares =
+      node.kind === 'setVar' &&
+      own.start <= node.range.start &&
+      node.range.end <= own.end;
+    return !declares && !(node.kind === 'entry' && fnId === symbol.fnId);
+  }).length;
+}
+
 export function symbolNodes(
   doc: GraphDocument | null,
   symbol: ScriptSymbol

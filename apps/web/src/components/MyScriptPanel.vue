@@ -23,6 +23,7 @@ import {
 import { useTheme } from '../composables/use-theme';
 import { usesSnakeCase } from '../graph/languages';
 import {
+  countedUses,
   DRAGGABLE_KINDS,
   SYMBOL_DRAG_MIME,
   SYMBOL_ICONS,
@@ -485,14 +486,7 @@ function remove(symbol: ScriptSymbol): void {
     return;
   }
 
-  const uses = symbolNodes(props.doc, symbol).filter(
-    (id) =>
-      !props.doc?.functions.some(
-        (f) =>
-          f.id === symbol.fnId &&
-          f.nodes.some((n) => n.id === id && n.kind === 'entry')
-      )
-  ).length;
+  const uses = countedUses(props.doc, symbol, symbolNodes(props.doc, symbol));
   const question =
     uses > 0
       ? `${symbol.name} is used by ${uses} node${uses === 1 ? '' : 's'}. Delete it anyway? Its uses stay and will show errors.`

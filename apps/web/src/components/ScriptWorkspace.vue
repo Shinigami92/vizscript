@@ -44,7 +44,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useToasts } from '../composables/use-toasts';
 import { GraphClient } from '../graph/graph-client';
 import { isPreviewable, isVisualizable } from '../graph/languages';
-import { symbolNodes, topLevelGraph } from '../graph/symbols';
+import { countedUses, symbolNodes, topLevelGraph } from '../graph/symbols';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
 import WorkbenchView from '../workbench/WorkbenchView.vue';
@@ -784,13 +784,11 @@ const symbolUses = computed(() =>
   selectedSymbol.value ? symbolNodes(doc.value, selectedSymbol.value) : []
 );
 watch(symbolUses, (ids) => canvas.value?.setHighlight(ids));
-/** Uses without the function's own entry node (highlighted, not counted). */
-const symbolUseCount = computed(
-  () =>
-    symbolUses.value.filter(
-      (id) =>
-        (doc.value ? findNode(doc.value, id)?.kind : undefined) !== 'entry'
-    ).length
+/** Uses without the symbol's own declaration (highlighted, not counted). */
+const symbolUseCount = computed(() =>
+  selectedSymbol.value
+    ? countedUses(doc.value, selectedSymbol.value, symbolUses.value)
+    : 0
 );
 
 /** Function whose local variables "My Script" lists. */
