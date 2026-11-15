@@ -98,6 +98,7 @@ export const PYTHON_TYPES: TypeSystemInfo = {
   set: 'set[T]',
   optional: 'T | None',
   placeholder: 'None',
+  templateOpen: '{',
   expressions: [
     {
       label: 'Await',

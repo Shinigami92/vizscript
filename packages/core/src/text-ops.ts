@@ -14,6 +14,7 @@ import {
   withoutDoubleBlankLines,
 } from './delete-ops';
 import { endOfFunction } from './flow';
+import { setFormat } from './format-text';
 import {
   addArgument,
   addNode,
@@ -541,6 +542,16 @@ function applyTextOpEdits(
 
     case 'disconnectNode': {
       return disconnectNode(text, doc, op.node, syntax);
+    }
+
+    case 'setFormat': {
+      return setFormat(
+        text,
+        findNode(doc, op.node),
+        op.format,
+        syntax.declarations?.typeSystem.templateOpen,
+        syntax.placeholder
+      );
     }
 
     case 'setAssignOperator': {

@@ -85,6 +85,11 @@ export type GraphOp =
   | { type: 'disconnect'; pin: PinRef }
   /** The operator of an assignment: `=`, `+=`, `-=` … (not of declarations). */
   | { type: 'setAssignOperator'; node: string; operator: string }
+  /**
+   * New format of a Format Text node (`Total: {0} EUR`): `{0}`, `{1}` …
+   * keep their values, new ones get a placeholder, left out ones go.
+   */
+  | { type: 'setFormat'; node: string; format: string }
   /** Breaks every data wire of a node (UE: "Break Node Link(s)"). */
   | { type: 'disconnectNode'; node: string }
   /**
@@ -322,6 +327,11 @@ export interface TypeSystemInfo {
   optional?: string;
   /** Type of a result that comes later (`Promise<T>`), for async code. */
   promise?: string;
+  /**
+   * Opener of a value in a text template (`${` in TypeScript, `{` in
+   * Python's f-strings): Details edits the format of Format Text nodes.
+   */
+  templateOpen?: string;
   /** Values of new containers (`[]`, `new Map()`, `set()`). */
   containerDefaults?: { array?: string; map?: string; set?: string };
   /** Value of an empty input (`undefined`, `None`, `null`). */

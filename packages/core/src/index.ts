@@ -25,6 +25,7 @@ export * from './layout';
 export * from './module-refs';
 export * from './overlay-snippets';
 export * from './overlay-sync';
+export * from './format-text';
 export * from './operator-chain';
 export * from './ops';
 export * from './reconcile';

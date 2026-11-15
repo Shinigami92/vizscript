@@ -93,6 +93,7 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
   optional: 'T | null',
   promise: 'Promise<T>',
   placeholder: 'undefined',
+  templateOpen: '${',
   expressions: [
     {
       label: 'Await',
