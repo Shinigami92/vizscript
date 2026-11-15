@@ -94,6 +94,23 @@ describe('values bound in a block', () => {
     expect(text).not.toContain('item.p + 1;');
   });
 
+  it('uses an unused call result where the call stands', () => {
+    const code =
+      'declare function total(): number;\nfunction f() {\n  total();\n}\n';
+    const text = apply(code, (nodes) => {
+      const call = find(nodes, (n) => n.title === 'total');
+      return {
+        type: 'useValue',
+        pin: { node: call.id, pin: output(call) },
+        expression: '$value + 1',
+      };
+    });
+    // No variable for the result: the call feeds the new node.
+    expect(text).toBe(
+      'declare function total(): number;\nfunction f() {\n  total() + 1;\n}\n'
+    );
+  });
+
   it('drops an empty value that a wire replaces', () => {
     const code =
       'function f(items: number[]) {\n  for (const item of []) {\n  }\n}\n';

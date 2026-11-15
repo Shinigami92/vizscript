@@ -344,6 +344,22 @@ export function useValue(
     return succeeded([chained]);
   }
 
+  // An unused call result is used where the call stands (`total(cart);` →
+  // `` `${total(cart)} EUR`; ``): the call keeps its place in the flow and
+  // feeds the new node, without a variable of its own (UE: one wire).
+  const result = findPin(node, ref.pin);
+  const unused = result ? getMeta<OutputPinMeta>(result).bind : undefined;
+  if (unused?.isStatement) {
+    const code = text.slice(unused.expr.start, unused.expr.end);
+    return succeeded([
+      {
+        start: unused.expr.start,
+        end: unused.expr.end,
+        text: substituteValue(expression, code),
+      },
+    ]);
+  }
+
   return afterValue(text, doc, ref, syntax, (value) => ({
     type: 'value',
     expression: substituteValue(expression, value),

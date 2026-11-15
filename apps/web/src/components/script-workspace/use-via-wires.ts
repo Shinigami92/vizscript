@@ -115,7 +115,15 @@ function keptGets(
 
   const adjacent = adjacentVias(next, layout());
   const patch: Positions = {};
-  for (const { input, at } of inputs) {
+  for (const { input, at, from } of inputs) {
+    // The code copied the value wired in (a Get, `item.quantity`): the copy
+    // is drawn as the node it was wired from (one node, two wires).
+    const joined = joinedCopy(next, { host: from, input }, rename);
+    if (Object.keys(joined).length > 0) {
+      Object.assign(patch, joined);
+      continue;
+    }
+
     const node = rename.get(input.node) ?? input.node;
     const source = next.functions
       .flatMap((f) => f.edges)
@@ -132,27 +140,43 @@ function keptGets(
   return patch;
 }
 
-/** A Get of graph-only edits wired into an input, and where it was. */
+/**
+ * A Get or pure node of graph-only edits wired into an input, and where
+ * it was.
+ */
 interface WiredGet {
   input: PinRef;
   at: Point | undefined;
+  from: string;
 }
 
 /**
- * The join of the copy a wire from a pure node wrote into an input: the
- * node now wired into it, when it is the same expression as its host.
+ * The join of the copy of a pure node (or Get) the code got when it was
+ * wired or used somewhere: the node now wired into `input`, or else a new
+ * node (not in `known`) computing the same expression as its host.
  */
 function joinedCopy(
   next: GraphDocument,
-  copied: { host: string; input: PinRef },
+  copied: { host: string; input?: PinRef; known?: ReadonlySet<string> },
   rename: ReadonlyMap<string, string>
 ): Positions {
   const host = rename.get(copied.host) ?? copied.host;
-  const input = rename.get(copied.input.node) ?? copied.input.node;
+  const input = copied.input
+    ? {
+        node: rename.get(copied.input.node) ?? copied.input.node,
+        pin: copied.input.pin,
+      }
+    : undefined;
   for (const fn of next.functions) {
-    const copy = fn.edges.find(
-      (e) => e.to.node === input && e.to.pin === copied.input.pin
-    )?.from.node;
+    const copy = input
+      ? fn.edges.find((e) => e.to.node === input.node && e.to.pin === input.pin)
+          ?.from.node
+      : fn.nodes.find(
+          (n) =>
+            n.id !== host &&
+            !copied.known?.has(n.id) &&
+            pureSignature(fn, n.id) === pureSignature(fn, host)
+        )?.id;
     const signature = copy ? pureSignature(fn, copy) : undefined;
     if (
       copy &&
@@ -165,6 +189,18 @@ function joinedCopy(
   }
 
   return {};
+}
+
+/** The nodes of `previous`, by their ids after an edit. */
+function knownAfter(
+  previous: GraphDocument,
+  rename: ReadonlyMap<string, string>
+): Set<string> {
+  return new Set(
+    previous.functions.flatMap((f) =>
+      f.nodes.map((n) => rename.get(n.id) ?? n.id)
+    )
+  );
 }
 
 /** The Gets of a variable. */
@@ -368,7 +404,7 @@ export function useViaWires(deps: {
    * Wired from a pure node (not a Get): the code copies its expression
    * into the input; the copy is drawn as that node (a join, like UE).
    */
-  let wiredCopy: { host: string; input: PinRef } | null = null;
+  let wiredCopy: { host: string; input?: PinRef } | null = null;
 
   function keepWired(overlay: GraphOverlay, wrote: boolean): Positions {
     const shown = deps.shownDoc.value;
@@ -376,8 +412,14 @@ export function useViaWires(deps: {
       e.type === 'addEdge' &&
       e.kind === 'data' &&
       shown &&
-      findNode(shown, e.from.node)?.kind === 'getVar'
-        ? [{ input: e.to, at: deps.pinned.value[e.from.node] }]
+      findNode(shown, e.from.node)?.purity === 'pure'
+        ? [
+            {
+              input: e.to,
+              at: deps.pinned.value[e.from.node],
+              from: e.from.node,
+            },
+          ]
         : []
     );
     const parsed = deps.parsedDoc.value;
@@ -393,12 +435,19 @@ export function useViaWires(deps: {
     pending = null;
     const wiredFrom =
       doc && op.type === 'connect' ? findNode(doc, op.from.node) : undefined;
+    // Used in a new expression: the code copies a pure value or Get.
+    const usedFrom =
+      doc && (op.type === 'useValue' || op.type === 'callWith')
+        ? findNode(doc, op.pin.node)
+        : undefined;
     wiredCopy =
       op.type === 'connect' &&
       wiredFrom?.purity === 'pure' &&
       wiredFrom.kind !== 'getVar'
         ? { host: wiredFrom.id, input: op.to }
-        : null;
+        : usedFrom?.purity === 'pure'
+          ? { host: usedFrom.id }
+          : null;
     const layout = doc
       ? doc === deps.shownDoc.value
         ? shownLayout.value
@@ -491,7 +540,13 @@ export function useViaWires(deps: {
       ...(wrapped?.size
         ? keptWrapped(wrapped, next, rename, nextLayout())
         : {}),
-      ...(copied ? joinedCopy(next, copied, rename) : {}),
+      ...(copied
+        ? joinedCopy(
+            next,
+            { ...copied, known: knownAfter(previous, rename) },
+            rename
+          )
+        : {}),
     };
     if (!wired) {
       return patch;
