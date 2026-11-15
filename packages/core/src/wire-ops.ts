@@ -272,6 +272,10 @@ export function connectData(
     return failed('Target must be a data input.');
   }
 
+  if (getMeta<InputPinMeta>(targetPin).format) {
+    return failed('The format is written in the text: edit it on the node.');
+  }
+
   if (functionOf(doc, from.node) !== functionOf(doc, to.node)) {
     return failed('Values can only be wired within the same function.');
   }

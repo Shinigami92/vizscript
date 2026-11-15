@@ -8,7 +8,12 @@ import {
 } from '@vizscript/core';
 import type { DataType, Pin } from '@vizscript/core';
 import type { InsertPoint, OutputPinMeta } from '@vizscript/core';
-import { arrayElementType, arrayOfAll, truncate } from '@vizscript/core';
+import {
+  arrayElementType,
+  arrayOfAll,
+  formatLiteral,
+  truncate,
+} from '@vizscript/core';
 import { CONVERSIONS } from './conversions';
 import { GraphBuilder } from './graph-builder';
 import type { EvalMode, InputSpec, ValueSource } from './lower-utils';
@@ -247,10 +252,6 @@ export abstract class ExpressionLowering extends GraphBuilder {
           return this.literal('template', cooked, raw, 'string');
         }
 
-        const inputs: InputSpec[] = expr.expressions.map((e, i) => ({
-          pin: this.dataIn(`part${i}`, `{${i}}`, rangeOf(e)),
-          value: this.lowerExpr(e as t.Expression, `${path}.part${i}`, mode),
-        }));
         let format = '';
         for (const [i, quasi] of expr.quasis.entries()) {
           format += quasi.value.raw;
@@ -259,10 +260,22 @@ export abstract class ExpressionLowering extends GraphBuilder {
           }
         }
 
+        // UE's Format pin first: the text, edited on the node.
+        const inputs: InputSpec[] = [
+          {
+            pin: this.dataIn('format', 'Format', undefined, 'string', {
+              format: true,
+            }),
+            value: { literal: formatLiteral(format), type: 'string' },
+          },
+          ...expr.expressions.map((e, i) => ({
+            pin: this.dataIn(`part${i}`, `{${i}}`, rangeOf(e)),
+            value: this.lowerExpr(e as t.Expression, `${path}.part${i}`, mode),
+          })),
+        ];
         return this.pureNode({
           kind: 'template',
           title: 'Format Text',
-          subtitle: truncate(format, 32),
           expr,
           path,
           inputs,

@@ -84,6 +84,11 @@ export interface InputPinMeta {
   shorthand?: boolean;
   /** Default value of the argument's parameter, as code. */
   defaultValue?: string;
+  /**
+   * The Format pin of a Format Text (UE): its text is the template's own,
+   * with `{0}`, `{1}` … for the values; editing it writes `setFormat`.
+   */
+  format?: boolean;
 }
 
 export interface ExecOutPinMeta {

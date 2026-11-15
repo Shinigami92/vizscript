@@ -14,6 +14,8 @@ import {
   withEmptiedBoxes,
   withoutDoubleBlankLines,
 } from './delete-ops';
+import type { InputPinMeta } from './edit-meta';
+import { getMeta } from './edit-meta';
 import { endOfFunction } from './flow';
 import { setFormat } from './format-text';
 import {
@@ -518,6 +520,18 @@ function applyTextOpEdits(
     }
 
     case 'setLiteral': {
+      const node = findNode(doc, op.node);
+      const pin = findPin(node, op.pin);
+      if (pin && getMeta<InputPinMeta>(pin).format) {
+        return setFormat(
+          text,
+          node,
+          op.value,
+          syntax.declarations?.typeSystem.templateOpen,
+          syntax.placeholder
+        );
+      }
+
       return setLiteral(doc, op.node, op.pin, op.value, syntax);
     }
 

@@ -33,7 +33,7 @@ function loadUsers
   #16 getVar "console" [>value:any]
   #17 getVar "parsed" [>value:any]
   #18 getProperty ".name" [<target:object >value:any]
-  #19 template "Format Text" (Loaded {0} from {1}) [<part0:any <part1:string >value:string]
+  #19 template "Format Text" [<format:string=Loaded {0} from {1} <part0:any <part1:string >value:string]
   #20 call "log" [<exec:▶ >then:▶ <target:object <arg0:string >return:any]
   #21 continue "Continue" [<exec:▶]
   #22 getVar "users" [>value:array]

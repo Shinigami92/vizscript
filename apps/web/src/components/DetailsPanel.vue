@@ -15,8 +15,6 @@ import {
   COMMENT_BOX_COLORS,
   declaringNode,
   getMeta,
-  templateFormat,
-  templateLayout,
 } from '@vizscript/core';
 import { computed, provide, ref } from 'vue';
 import { indexDocument, pinPeers } from '../graph/doc-index';
@@ -203,20 +201,6 @@ function commitLiteral(node: GraphNode, pin: Pin, event: Event): void {
 function commitLiteralValue(node: GraphNode, pin: Pin, value: string): void {
   if (pin.literal && value !== pin.literal.value) {
     emit('op', { type: 'setLiteral', node: node.id, pin: pin.id, value });
-  }
-}
-
-/** The format of a Format Text node (`Total: {0} EUR`), if editable. */
-function formatOf(node: GraphNode): string | undefined {
-  const open = props.types?.templateOpen;
-  const layout = open ? templateLayout(props.text, node, open) : undefined;
-  return layout ? templateFormat(layout) : undefined;
-}
-
-function commitFormat(node: GraphNode, event: Event): void {
-  const format = (event.target as HTMLInputElement).value;
-  if (format !== formatOf(node)) {
-    emit('op', { type: 'setFormat', node: node.id, format });
   }
 }
 
@@ -512,21 +496,7 @@ function deleteSelection(): void {
           }"
         >
           <div class="font-semibold text-zinc-50">{{ single.node.title }}</div>
-          <input
-            v-if="formatOf(single.node) !== undefined"
-            :key="`${single.node.id}:${formatOf(single.node)}`"
-            class="input mt-1.5 font-mono text-xs"
-            :value="formatOf(single.node)"
-            :readonly="!editable"
-            aria-label="Format"
-            title="{0}, {1} … are the values; a new number adds one"
-            @change="commitFormat(single.node, $event)"
-            @keydown.enter="($event.target as HTMLInputElement).blur()"
-          />
-          <div
-            v-else-if="single.node.subtitle"
-            class="text-xs italic text-zinc-400"
-          >
+          <div v-if="single.node.subtitle" class="text-xs italic text-zinc-400">
             {{ single.node.subtitle }}
           </div>
         </div>

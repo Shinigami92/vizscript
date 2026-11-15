@@ -12,6 +12,7 @@ import {
   CHAIN_OPERATORS,
   chainPinId,
   flattenChain,
+  formatLiteral,
   GraphBuilderBase,
   isArrayType,
   truncate,
@@ -242,16 +243,29 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       }
 
       case 'FString': {
+        // UE's Format pin first: the text between the quotes, edited on
+        // the node.
+        const quoted = expr.format.match(/^[A-Za-z]*("""|'''|"|')([\s\S]*)\1$/);
         return this.pureNode({
           kind: 'template',
           title: 'Format Text',
-          subtitle: truncate(expr.format, 32),
           range,
           path,
-          inputs: expr.parts.map((part, i) => ({
-            pin: this.dataIn(`part${i}`, `{${i}}`, rangeOf(part)),
-            value: this.lowerExpr(part, `${path}.part${i}`, mode),
-          })),
+          inputs: [
+            {
+              pin: this.dataIn('format', 'Format', undefined, 'string', {
+                format: true,
+              }),
+              value: {
+                literal: formatLiteral(quoted?.[2] ?? expr.format),
+                type: 'string',
+              },
+            },
+            ...expr.parts.map((part, i) => ({
+              pin: this.dataIn(`part${i}`, `{${i}}`, rangeOf(part)),
+              value: this.lowerExpr(part, `${path}.part${i}`, mode),
+            })),
+          ],
           outType: 'string',
           outName: 'Result',
         });

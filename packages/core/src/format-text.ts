@@ -1,4 +1,4 @@
-import type { GraphNode, SourceRange } from './ir';
+import type { GraphNode, PinLiteral, SourceRange } from './ir';
 import { failed, succeeded } from './op-result';
 import type { OpResult } from './ops';
 
@@ -86,6 +86,14 @@ export function templateFormat(layout: TemplateLayout): string {
   return layout.chunks
     .map((chunk, i) => (i < layout.values.length ? `${chunk}{${i}}` : chunk))
     .join('');
+}
+
+/**
+ * The literal of a Format Text's Format pin (UE): the template's text with
+ * `{0}`, `{1}` … for its values, edited on the node like any text.
+ */
+export function formatLiteral(format: string): PinLiteral {
+  return { value: format, raw: format, kind: 'template', editable: true };
 }
 
 /** Backslashes for the quote that ends the text and, in templates, `${`. */
