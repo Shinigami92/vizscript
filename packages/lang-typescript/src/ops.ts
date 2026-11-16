@@ -759,6 +759,8 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
       literal.kind === 'template' ? '`' : (literal.raw[0] ?? "'")
     ),
   appendToFile: true,
+  elseBranch: (body, indent, unit, elseIf) =>
+    elseIf ? ` else ${body}` : ` else {\n${indent}${unit}${body}\n${indent}}`,
   statementEnd: ';',
   expressionStatement,
   comment: {

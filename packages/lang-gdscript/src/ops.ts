@@ -632,6 +632,10 @@ export const GDSCRIPT_SYNTAX: StatementSyntax = {
       ? `${value}.0`
       : value,
   appendToFile: false,
+  elseBranch: (body, indent, unit, elseIf) =>
+    elseIf
+      ? `\n${indent}el${body}`
+      : `\n${indent}else:\n${indent}${unit}${body}`,
   declarations: DECLARATIONS,
   comment: {
     line: '#',

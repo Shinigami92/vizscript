@@ -436,6 +436,10 @@ export const PYTHON_SYNTAX: StatementSyntax = {
   declarePrefix: (name) => `${name} = `,
   quote,
   appendToFile: true,
+  elseBranch: (body, indent, unit, elseIf) =>
+    elseIf
+      ? `\n${indent}el${body}`
+      : `\n${indent}else:\n${indent}${unit}${body}`,
   definitionsRunInOrder: true,
   declarations: DECLARATIONS,
   comment: {

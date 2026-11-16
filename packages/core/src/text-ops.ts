@@ -111,6 +111,18 @@ export interface StatementSyntax {
    * that stand before the next statement, so it can call them.
    */
   definitionsRunInOrder?: boolean;
+  /**
+   * The `else` added behind an `if` that has none (a node on its False
+   * pin), inserted at the end of the `if`: `body` is the new code indented
+   * for the block, or for the `if` itself when `elseIf` (a Branch becomes
+   * `elif` / `else if`).
+   */
+  elseBranch?: (
+    body: string,
+    indent: string,
+    unit: string,
+    elseIf: boolean
+  ) => string;
   /** Boolean literals (default `true` / `false`). */
   booleans?: { true: string; false: string };
   /**

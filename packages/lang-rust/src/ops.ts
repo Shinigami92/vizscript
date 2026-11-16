@@ -525,6 +525,8 @@ export const RUST_SYNTAX: StatementSyntax = {
       : value,
   // Statements only live in functions; the file holds items.
   appendToFile: false,
+  elseBranch: (body, indent, unit, elseIf) =>
+    elseIf ? ` else ${body}` : ` else {\n${indent}${unit}${body}\n${indent}}`,
   statementEnd: ';',
   declarations: DECLARATIONS,
   comment: {

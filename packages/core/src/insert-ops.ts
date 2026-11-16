@@ -18,6 +18,7 @@ import { findNode } from './reconcile';
 import { removeListItem, setModifier } from './symbol-edits';
 import {
   detectIndentUnit,
+  edgesOf,
   findPin,
   inputEdit,
   insertText,
@@ -74,10 +75,16 @@ export function addNode(
     const pin = findPin(node, anchor.after.pin);
     insert = pin ? getMeta<ExecOutPinMeta>(pin).insert : undefined;
     if (!insert) {
+      const branch =
+        node && anchor.after.pin === 'false'
+          ? elseBranch(text, doc, node, template, unit, syntax)
+          : undefined;
       const split = node
         ? afterNestedCall(text, node, template, unit, syntax)
         : undefined;
-      return split ?? failed('Code cannot be inserted after this pin.');
+      return (
+        branch ?? split ?? failed('Code cannot be inserted after this pin.')
+      );
     }
   } else if (anchor.before) {
     const meta = getMeta<StatementMeta>(
@@ -118,6 +125,49 @@ export function addNode(
   }
 
   return succeeded([insertText(insert, snippet, text)]);
+}
+
+/**
+ * A node on the False pin of an `if` without `else`: the `if` gets one,
+ * holding the new code (a Branch becomes `elif` / `else if`). Not when the
+ * pin leads on already (into an `elif`).
+ */
+function elseBranch(
+  text: string,
+  doc: GraphDocument,
+  node: GraphNode,
+  template: NodeTemplate,
+  unit: string,
+  syntax: StatementSyntax
+): OpResult | undefined {
+  const stmt = getMeta<StatementMeta>(node).stmt;
+  const wired = edgesOf(doc, node.id).some(
+    (e) =>
+      e.kind === 'exec' && e.from.node === node.id && e.from.pin === 'false'
+  );
+  if (node.kind !== 'branch' || !syntax.elseBranch || !stmt || wired) {
+    return undefined;
+  }
+
+  const indent = lineIndent(text, stmt.start);
+  const elseIf = template.type === 'branch';
+  const body = templateSnippet(
+    syntax,
+    template,
+    elseIf ? indent : `${indent}${unit}`,
+    unit
+  );
+  if (!body) {
+    return failed('Invalid name.');
+  }
+
+  return succeeded([
+    {
+      start: stmt.end,
+      end: stmt.end,
+      text: syntax.elseBranch(body, indent, unit, elseIf),
+    },
+  ]);
 }
 
 /**
