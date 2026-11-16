@@ -165,8 +165,8 @@ function moduleOf(request: ImportRequest): string {
   return path.replaceAll('/', '.');
 }
 
-/** End of a module docstring (imports go below it). */
-function docstringEnd(text: string): number | undefined {
+/** End of a module docstring (imports and declarations go below it). */
+export function docstringEnd(text: string): number | undefined {
   const match = text.match(
     /^(?:[ \t]*(?:#.*)?\n)*[ \t]*[rRuUbB]?("""[\s\S]*?"""|'''[\s\S]*?'''|"[^"\n]*"|'[^'\n]*')/
   );
@@ -192,7 +192,7 @@ export function addPythonImport(
     const line = `import ${module}${bound ? '' : ` as ${name}`}`;
     return {
       ok: true,
-      edits: [insertImport(text, doc, syntax, line, docstringEnd(text))],
+      edits: [insertImport(text, doc, syntax, line)],
     };
   }
 
@@ -204,14 +204,6 @@ export function addPythonImport(
   const item = imported === name ? name : `${imported} as ${name}`;
   return {
     ok: true,
-    edits: [
-      insertImport(
-        text,
-        doc,
-        syntax,
-        `from ${module} import ${item}`,
-        docstringEnd(text)
-      ),
-    ],
+    edits: [insertImport(text, doc, syntax, `from ${module} import ${item}`)],
   };
 }

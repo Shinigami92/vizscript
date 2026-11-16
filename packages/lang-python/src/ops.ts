@@ -16,7 +16,7 @@ import {
 import { CONVERSIONS } from './conversions';
 import { parsePython } from './convert';
 import { splitString } from './convert-utils';
-import { addPythonImport } from './imports';
+import { addPythonImport, docstringEnd } from './imports';
 import { parsePythonDocument } from './lower';
 import { pythonCallSites, renamePythonSymbol } from './rename';
 
@@ -393,6 +393,8 @@ const DECLARATIONS: DeclarationSyntax = {
   blankLines: 2,
   bracedClasses: false,
   header: /^(?:import\b|from\s+\S+\s+import\b|#!|#.*coding[:=])/,
+  // The module docstring stays first, above new declarations.
+  leadingDoc: docstringEnd,
   typeDeclaration: (name, unit) => `class ${name}:\n${unit}pass`,
   fn: (name, unit, method) =>
     `def ${name}(${method ? 'self' : ''}):\n${unit}pass`,

@@ -97,7 +97,8 @@ function headerEnd(
     offset += line.length + 1;
   }
 
-  return end;
+  const doc = syntax.leadingDoc?.(text);
+  return doc === undefined ? end : Math.max(end ?? -1, doc);
 }
 
 export function classOf(
@@ -353,14 +354,13 @@ export function joinImport(
 
 /**
  * Inserts an import line after the file's last top-level import, else after
- * `fallback` (a Python docstring) or the header (`extends`), else on top.
+ * the header (`extends`, a Python docstring), else on top.
  */
 export function insertImport(
   text: string,
   doc: GraphDocument,
   syntax: DeclarationSyntax,
-  line: string,
-  fallback?: number
+  line: string
 ): TextEdit {
   const last = (doc.symbols ?? [])
     .filter(
@@ -378,9 +378,8 @@ export function insertImport(
     );
   }
 
-  // The later of both: a Python docstring may follow a shebang line.
-  const header = Math.max(headerEnd(text, syntax) ?? -1, fallback ?? -1);
-  if (header >= 0) {
+  const header = headerEnd(text, syntax);
+  if (header !== undefined) {
     return insertAfterLine(text, header, line, 1);
   }
 

@@ -27,6 +27,12 @@ export interface DeclarationSyntax {
    * code comes between).
    */
   headerDoc?: RegExp;
+  /**
+   * End of the file's leading documentation that belongs to the header
+   * (Python's module docstring, which may span lines): new declarations and
+   * imports go below it.
+   */
+  leadingDoc?: (text: string) => number | undefined;
   /** A new empty function or method (lines after the first not indented). */
   fn: (name: string, unit: string, method: boolean) => string;
   /** A new variable declaration. */

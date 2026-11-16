@@ -64,6 +64,28 @@ describe('python symbol ops', () => {
     ).toContain('def price(value, tax=TAX):\n    rounded = None\n    total');
   });
 
+  it('keeps the module docstring first', () => {
+    const doc = '"""Fetches a forecast\nand prints it."""\n';
+    expect(apply(doc, { type: 'addVariable', scope: '', name: 'API' })).toBe(
+      '"""Fetches a forecast\nand prints it."""\n\nAPI = None\n'
+    );
+    expect(apply(doc, { type: 'addType', name: 'Item' })).toBe(
+      '"""Fetches a forecast\nand prints it."""\n\n\nclass Item:\n    pass\n'
+    );
+    // What deleting everything leaves (blank lines after the docstring).
+    expect(
+      apply('"""Doc."""\n\n\n', { type: 'addVariable', scope: '', name: 'A' })
+    ).toBe('"""Doc."""\n\nA = None\n\n\n');
+    // Below the imports that follow the docstring.
+    expect(
+      apply('"""Doc."""\n\nimport json\n', {
+        type: 'addVariable',
+        scope: '',
+        name: 'API',
+      })
+    ).toBe('"""Doc."""\n\nimport json\n\nAPI = None\n');
+  });
+
   it('renames with Python scope rules', () => {
     const renamed = apply(SHOP, {
       type: 'renameSymbol',
