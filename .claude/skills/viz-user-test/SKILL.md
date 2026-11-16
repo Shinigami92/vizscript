@@ -76,7 +76,7 @@ Don't start a second copy.
      - Right-click nodes, pins and wires for their menus.
 3. **Never type into the code panel.** Typing is allowed only in inputs of the panels and menus: names, values and searches.
 4. After each step, read the code (see Tips) and compare it with the target. Note every detour, surprise, error banner and wrong placement.
-5. At the end, frame the graph and compare the code with the original. List the differences (order, blank lines, quotes, types) and whether the UI could have avoided them.
+5. At the end, frame the graph and compare the code with the original. List the differences (order, blank lines, quotes, types) and whether the UI could have avoided them. Judge them by the README's Goals: code that doesn't run or can't be made at all is a bug; layout the graph can't know (blank lines, spacing, which line a statement is on) is fine when the result is written the way the language is usually written.
 
 ## 4. Phase 2: random removals and edits
 
