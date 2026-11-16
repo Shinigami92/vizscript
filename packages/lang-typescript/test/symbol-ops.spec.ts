@@ -33,10 +33,16 @@ const GREETER = [
 ].join('\n');
 
 describe('adding symbols', () => {
-  it('adds functions at the end and variables after the last one', () => {
+  it('adds functions after the last one and variables after the last one', () => {
+    // Before the code that runs the module.
     expect(
       apply(GREETER, { type: 'addFunction', scope: '', name: 'farewell' })
-    ).toBe(`${GREETER}\nfunction farewell() {\n}\n`);
+    ).toContain(
+      '  return prefix + person;\n}\n\nfunction farewell() {\n}\n\nlog('
+    );
+    expect(
+      apply('const a = 1;\n', { type: 'addFunction', scope: '', name: 'f' })
+    ).toBe('const a = 1;\n\nfunction f() {\n}\n');
     expect(
       apply(GREETER, { type: 'addVariable', scope: '', name: 'count' })
     ).toContain('const user = "Jane";\nlet count;\n');

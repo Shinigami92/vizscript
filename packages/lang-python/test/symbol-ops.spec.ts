@@ -40,8 +40,11 @@ const SHOP = [
 
 describe('python symbol ops', () => {
   it('adds functions, methods, variables and locals', () => {
-    expect(apply(SHOP, { type: 'addFunction', scope: '', name: 'main' })).toBe(
-      `${SHOP}\n\ndef main():\n    pass\n`
+    // Before the code that runs the module.
+    expect(
+      apply(SHOP, { type: 'addFunction', scope: '', name: 'main' })
+    ).toContain(
+      '    return total\n\n\ndef main():\n    pass\n\n\nprint(price(10), TAX)\n'
     );
     expect(
       apply(SHOP, { type: 'addFunction', scope: 'Cart', name: 'clear' })

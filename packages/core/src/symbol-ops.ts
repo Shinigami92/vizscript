@@ -167,6 +167,27 @@ export function addToClass(
     : { start: close, end: close, text: `\n${indent}${body}\n` };
 }
 
+/**
+ * Whether the file has code after `from` that runs when the module is
+ * loaded: lines that are no declaration (of any kind) and no comment.
+ */
+function runsCode(text: string, doc: GraphDocument, from: number): boolean {
+  let rest = text.slice(from);
+  const declared = (doc.symbols ?? [])
+    .filter((s) => s.scope === '')
+    .map((s) => s.declarationRange ?? s.range)
+    .filter((r) => r.start >= from)
+    .toSorted((a, b) => b.start - a.start);
+  for (const r of declared) {
+    rest = rest.slice(0, r.start - from) + rest.slice(r.end - from);
+  }
+
+  return rest
+    .split('\n')
+    .map((line) => line.trim())
+    .some((line) => line !== '' && !/^(?:#|\/\/|\/\*|\*)/.test(line));
+}
+
 export function addFunction(
   text: string,
   doc: GraphDocument,
@@ -203,6 +224,23 @@ export function addFunction(
   const trimmed = text.trimEnd();
   if (trimmed === '') {
     return succeeded([{ start: 0, end: text.length, text: `${block}\n` }]);
+  }
+
+  // After the file's last function or class: code that runs the module
+  // (`main()`, `if __name__ == "__main__":`) stays at the end.
+  const last = (doc.symbols ?? [])
+    .filter(
+      (s) =>
+        s.scope === '' &&
+        (s.kind === 'function' || s.kind === 'class') &&
+        lineIndent(text, (s.declarationRange ?? s.range).start) === ''
+    )
+    .map((s) => (s.declarationRange ?? s.range).end)
+    .reduce((a, b) => Math.max(a, b), -1);
+  if (last > 0 && runsCode(text, doc, last)) {
+    return succeeded([
+      insertAfterLine(text, last - 1, block, syntax.blankLines),
+    ]);
   }
 
   const separator = '\n'.repeat(syntax.blankLines + 1);
