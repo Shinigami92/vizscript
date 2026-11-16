@@ -10,6 +10,8 @@ export interface InsertPoint {
   at: number;
   indent: string;
   mode: 'after' | 'before';
+  /** Blank lines before code inserted after `at` (below a definition). */
+  blankLines?: number;
 }
 
 /** Metadata attached to statement nodes. */

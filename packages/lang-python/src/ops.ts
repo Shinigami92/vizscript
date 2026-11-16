@@ -436,6 +436,7 @@ export const PYTHON_SYNTAX: StatementSyntax = {
   declarePrefix: (name) => `${name} = `,
   quote,
   appendToFile: true,
+  definitionsRunInOrder: true,
   declarations: DECLARATIONS,
   comment: {
     line: '#',

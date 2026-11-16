@@ -105,6 +105,12 @@ export interface StatementSyntax {
   ) => string | undefined;
   /** Whether statements may be appended at the end of the file. */
   appendToFile: boolean;
+  /**
+   * The module runs from top to bottom, its definitions too (Python): a
+   * new statement of the module's flow goes below the functions and classes
+   * that stand before the next statement, so it can call them.
+   */
+  definitionsRunInOrder?: boolean;
   /** Boolean literals (default `true` / `false`). */
   booleans?: { true: string; false: string };
   /**

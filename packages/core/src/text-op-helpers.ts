@@ -91,7 +91,7 @@ export function insertText(
   return {
     start: point.at,
     end: point.at,
-    text: `\n${point.indent}${snippet}${close}`,
+    text: `\n${'\n'.repeat(point.blankLines ?? 0)}${point.indent}${snippet}${close}`,
   };
 }
 

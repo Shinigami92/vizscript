@@ -108,12 +108,65 @@ export function addNode(
     ]);
   }
 
+  if (anchor.after) {
+    insert = belowDefinitions(text, doc, anchor.after.node, insert, syntax);
+  }
+
   const snippet = templateSnippet(syntax, template, insert.indent, unit);
   if (!snippet) {
     return failed('Invalid name.');
   }
 
   return succeeded([insertText(insert, snippet, text)]);
+}
+
+/**
+ * Where a statement added to the module's flow goes in a language that runs
+ * the module from top to bottom: below the functions and classes between
+ * its anchor and the next statement of the flow (`if __name__ ==
+ * "__main__":` after the `def`s it calls), else right after the anchor.
+ */
+function belowDefinitions(
+  text: string,
+  doc: GraphDocument,
+  anchorNode: string,
+  insert: InsertPoint,
+  syntax: StatementSyntax
+): InsertPoint {
+  const fn = doc.functions.find((f) =>
+    f.nodes.some((n) => n.id === anchorNode)
+  );
+  if (
+    !syntax.definitionsRunInOrder ||
+    insert.mode !== 'after' ||
+    insert.indent !== '' ||
+    !fn ||
+    !inTopLevel(text, doc, { after: { node: anchorNode, pin: '' } })
+  ) {
+    return insert;
+  }
+
+  const next = Math.min(
+    text.length,
+    ...fn.nodes
+      .map((n) => getMeta<StatementMeta>(n).stmt?.start ?? -1)
+      .filter((start) => start >= insert.at)
+  );
+  const definitions = (doc.symbols ?? [])
+    .filter(
+      (s) => s.scope === '' && (s.kind === 'function' || s.kind === 'class')
+    )
+    .map((s) => s.declarationRange ?? s.range)
+    .filter((r) => r.start >= insert.at && r.end <= next);
+  const last = Math.max(-1, ...definitions.map((r) => r.end));
+  return last < 0
+    ? insert
+    : {
+        at: last,
+        indent: '',
+        mode: 'after',
+        blankLines: syntax.declarations?.blankLines ?? 1,
+      };
 }
 
 /**
