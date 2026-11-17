@@ -1111,6 +1111,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         @select="selectNodes"
         @select-function="selectFunction"
         @activate="onActivate"
+        @go-to-definition="goToDefinition"
         @reveal="revealRange"
         @open-symbol="openSymbol"
         @open-import="openImport"

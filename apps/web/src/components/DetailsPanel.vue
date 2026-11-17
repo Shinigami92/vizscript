@@ -56,6 +56,8 @@ const emit = defineEmits<{
   select: [ids: string[]];
   selectFunction: [fnId: string];
   activate: [id: string];
+  /** The function a call leads to: its graph and entry node. */
+  goToDefinition: [nodeId: string];
   reveal: [range: SourceRange];
   openSymbol: [id: string];
   openImport: [id: string];
@@ -495,7 +497,7 @@ function deleteSelection(): void {
             :doc="doc"
             :text="text"
             :uses="0"
-            :editable="editable"
+            :editable="editable && !callOfFunction"
             :types="types ?? null"
             :declared="declaredTypes"
             :language="doc?.language ?? ''"
@@ -505,7 +507,25 @@ function deleteSelection(): void {
             @select="(ids) => emit('select', ids)"
             @set-operator="setAssignOperator"
             @op="onSymbolOp"
-          />
+          >
+            <!-- A call only passes values: its function, with its inputs
+                 and output, is edited at the definition (UE: the
+                 function's entry node). -->
+            <template v-if="callOfFunction" #header>
+              <div class="mt-1.5 flex items-center gap-2 text-xs text-zinc-500">
+                <span class="min-w-0 truncate">Edited at its definition</span>
+                <button
+                  type="button"
+                  class="link ml-auto shrink-0"
+                  data-ui="go-to-definition"
+                  title="Go to definition (F12)"
+                  @click="emit('goToDefinition', single.node.id)"
+                >
+                  Go to definition
+                </button>
+              </div>
+            </template>
+          </SymbolDetails>
         </template>
         <!-- Nodes of a variable or function are named by it above. -->
         <div

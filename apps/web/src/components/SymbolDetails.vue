@@ -412,6 +412,8 @@ function setModifier(modifier: string, enabled: boolean): void {
         {{ symbolLabel(symbol)
         }}<template v-if="symbol.scope"> in {{ symbol.scope }}</template>
       </div>
+      <!-- A selected call: where its function is edited. -->
+      <slot name="header" />
     </div>
 
     <DetailsSection
