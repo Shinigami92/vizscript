@@ -72,6 +72,11 @@ function setup(
 
 const draftKey = (file: string): string => `vizscript:draft:local/p1:${file}`;
 
+/** The data of a stored entry (without its envelope). */
+function stored(storage: Storage, key: string): unknown {
+  return (JSON.parse(storage.getItem(key) ?? '{}') as { data?: unknown }).data;
+}
+
 describe('file session', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
@@ -87,10 +92,10 @@ describe('file session', () => {
     await nextTick();
     vi.advanceTimersByTime(600);
 
-    expect(JSON.parse(s.storage.getItem(draftKey('a.py')) ?? '{}')).toEqual(
+    expect(stored(s.storage, draftKey('a.py'))).toEqual(
       expect.objectContaining({ version: 'a = 1\n', text: 'a = 2\n' })
     );
-    expect(JSON.parse(s.storage.getItem(draftKey('b.py')) ?? '{}')).toEqual(
+    expect(stored(s.storage, draftKey('b.py'))).toEqual(
       expect.objectContaining({ version: 'b = 1\n', text: 'b = 2\n' })
     );
     expect([...s.session.dirtyTabs.value].toSorted()).toEqual(['a.py', 'b.py']);
@@ -128,7 +133,7 @@ describe('file session', () => {
     await nextTick();
     await s.show('b.py');
 
-    s.session.markSaved('a.py', 'a = 2\n');
+    s.session.markSaved('a.py', 'a = 2\n', 'a = 2\n');
     expect(s.storage.getItem(draftKey('a.py'))).toBeNull();
     expect(s.session.dirtyTabs.value.has('a.py')).toBe(false);
     expect(s.session.file.value?.path).toBe('b.py');
@@ -137,9 +142,9 @@ describe('file session', () => {
     await s.show('a.py');
     s.session.text.value = 'a = 3\n';
     await nextTick();
-    s.session.markSaved('a.py', 'a = 2b\n');
+    s.session.markSaved('a.py', 'a = 2b\n', 'a = 2b\n');
     expect(s.session.file.value?.content).toBe('a = 2b\n');
-    expect(JSON.parse(s.storage.getItem(draftKey('a.py')) ?? '{}')).toEqual(
+    expect(stored(s.storage, draftKey('a.py'))).toEqual(
       expect.objectContaining({ version: 'a = 2b\n', text: 'a = 3\n' })
     );
   });
@@ -162,5 +167,48 @@ describe('file session', () => {
     await slow;
     expect(s.session.file.value?.path).toBe('b.py');
     expect(s.session.text.value).toBe('b = 1\n');
+  });
+
+  it('keeps edits of an older version aside and offers them', async () => {
+    const storage = memoryStorage();
+    storage.setItem(
+      draftKey('a.py'),
+      JSON.stringify({
+        v: 1,
+        at: 0,
+        data: { version: 'a = 0\n', text: 'a = 5\n' },
+      })
+    );
+    const s = setup({ 'a.py': 'a = 1\n' }, storage);
+    await s.show('a.py');
+    // The new version is shown, the old edits are not lost.
+    expect(s.session.text.value).toBe('a = 1\n');
+    expect(s.session.outdated.value).toEqual({ path: 'a.py', text: 'a = 5\n' });
+    vi.advanceTimersByTime(600);
+    expect(storage.getItem(`${draftKey('a.py')}#outdated`)).not.toBeNull();
+
+    s.session.restoreOutdated();
+    await nextTick();
+    expect(s.session.text.value).toBe('a = 5\n');
+    expect(s.session.outdated.value).toBeNull();
+    expect(storage.getItem(`${draftKey('a.py')}#outdated`)).toBeNull();
+    vi.advanceTimersByTime(600);
+    expect(stored(storage, draftKey('a.py'))).toEqual(
+      expect.objectContaining({ version: 'a = 1\n', text: 'a = 5\n' })
+    );
+  });
+
+  it('drops outdated edits when asked', async () => {
+    const storage = memoryStorage();
+    storage.setItem(
+      draftKey('a.py'),
+      JSON.stringify({ sha: 'old', text: 'a = 5\n' })
+    );
+    const s = setup({ 'a.py': 'a = 1\n' }, storage);
+    await s.show('a.py');
+    expect(s.session.outdated.value?.text).toBe('a = 5\n');
+    s.session.dropOutdated();
+    expect(s.session.outdated.value).toBeNull();
+    expect(storage.getItem(`${draftKey('a.py')}#outdated`)).toBeNull();
   });
 });

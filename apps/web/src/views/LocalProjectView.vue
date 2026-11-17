@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
+import OutdatedDraftNotice from '../components/OutdatedDraftNotice.vue';
 import ScriptWorkspace from '../components/ScriptWorkspace.vue';
 import { useFileSession } from '../composables/use-file-session';
 import { useToasts } from '../composables/use-toasts';
@@ -13,6 +14,7 @@ import { shortcut } from '../graph/source';
 import type { LocalProject, OpenResult } from '../local/projects';
 import { openProject } from '../local/projects';
 import { disposeModel } from '../monaco/models';
+import { textVersion } from '../storage/browser-storage';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
 import Workbench from '../workbench/Workbench.vue';
@@ -66,6 +68,9 @@ const {
   closeOtherTabs: closeSessionOthers,
   closeAllTabs: closeSessionAll,
   discard: discardChanges,
+  outdated,
+  restoreOutdated,
+  dropOutdated,
   markSaved,
   replaceShown,
 } = useFileSession({
@@ -78,8 +83,8 @@ const {
     }
 
     const content = await project.value.read(filePath);
-    // A file on disk has no version of its own: its text is it.
-    return { path: filePath, content, version: content };
+    // A file on disk has no version of its own: a short hash of its text.
+    return { path: filePath, content, version: textVersion(content) };
   },
   // Read-only folders are gone after a reload, so their drafts would be too.
   persistDrafts: () => project.value?.canWrite === true,
@@ -259,7 +264,7 @@ async function save(): Promise<void> {
     }
 
     await project.value.write(target, content);
-    markSaved(target, content);
+    markSaved(target, content, textVersion(content));
   } catch (error) {
     show(`Saving failed: ${(error as Error).message}`, 'error');
   } finally {
@@ -325,7 +330,7 @@ useEventListener(window, 'focus', async () => {
     }
 
     if (content !== saved.value) {
-      replaceShown({ path: target, content, version: content });
+      replaceShown({ path: target, content, version: textVersion(content) });
       version.value++;
     }
   } catch {
@@ -341,6 +346,17 @@ function selectFile(next: string, symbol?: string): void {
     params: { id: id.value, path: next.split('/') },
     query: symbol ? { symbol } : {},
   });
+}
+
+/** Older unsaved edits are dropped for good: ask first. */
+function dropOutdatedEdits(): void {
+  if (
+    globalThis.confirm(
+      "Discard your unsaved edits from the older version of this file? This can't be undone."
+    )
+  ) {
+    dropOutdated();
+  }
 }
 </script>
 
@@ -435,6 +451,11 @@ function selectFile(next: string, symbol?: string): void {
           class="i-mdi-loading shrink-0 animate-spin text-zinc-500"
           role="status"
           aria-label="Loading the file"
+        />
+        <OutdatedDraftNotice
+          v-if="outdated && outdated.path === file?.path"
+          @restore="restoreOutdated"
+          @discard="dropOutdatedEdits"
         />
         <template v-if="dirty">
           <span

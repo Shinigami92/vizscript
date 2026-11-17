@@ -3,6 +3,12 @@ import { EMPTY_OVERLAY } from '@vizscript/core';
 import { useDebounceFn } from '@vueuse/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, ref, shallowReactive, shallowRef, watch } from 'vue';
+import type { KeyValueStorage } from '../storage/browser-storage';
+import {
+  readStored,
+  removeStored,
+  writeStored,
+} from '../storage/browser-storage';
 import type { FileTabs } from './use-file-tabs';
 import { useFileTabs } from './use-file-tabs';
 
@@ -25,9 +31,53 @@ interface Draft {
   version: string;
   text: string;
   overlay?: GraphOverlay;
+  /** Local drafts written before versions: the whole file text. */
+  legacyBase?: string;
 }
 
-type DraftStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+/** Unsaved edits made on an older version of the file than the one read. */
+export interface OutdatedDraft {
+  path: string;
+  text: string;
+}
+
+function isOverlay(value: unknown): value is GraphOverlay {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray((value as GraphOverlay).edits)
+  );
+}
+
+/**
+ * A stored draft, checked; also drafts written before the shared session
+ * (`sha` of repositories, the whole `base` text of local files).
+ */
+function parseDraft(data: unknown): Draft | null {
+  if (typeof data !== 'object' || data === null) {
+    return null;
+  }
+
+  const value = data as Record<string, unknown>;
+  const version = [value.version, value.sha].find(
+    (v): v is string => typeof v === 'string'
+  );
+  const legacyBase = typeof value.base === 'string' ? value.base : undefined;
+  if (
+    typeof value.text !== 'string' ||
+    (!version && legacyBase === undefined)
+  ) {
+    return null;
+  }
+
+  return {
+    version: version ?? '',
+    text: value.text,
+    // Graph-only edits of another format are dropped, the text stays.
+    ...(isOverlay(value.overlay) ? { overlay: value.overlay } : {}),
+    ...(legacyBase === undefined ? {} : { legacyBase }),
+  };
+}
 
 export interface FileSessionOptions {
   /**
@@ -47,7 +97,7 @@ export interface FileSessionOptions {
   /** Shown when a draft was restored. */
   onRestored?: () => void;
   /** The browser's storage; tests pass their own. */
-  storage?: DraftStorage;
+  storage?: KeyValueStorage;
 }
 
 export interface FileSession {
@@ -74,28 +124,20 @@ export interface FileSession {
   /** Drops the open file's changes (the caller asks first). */
   discard: () => void;
   /**
+   * Unsaved edits of the open file made on an older version of it: kept
+   * aside until the user restores or drops them.
+   */
+  outdated: ShallowRef<OutdatedDraft | null>;
+  /** Puts the outdated edits into the editor (on top of the new version). */
+  restoreOutdated: () => void;
+  dropOutdated: () => void;
+  /**
    * `path` was written with `content`: its new base; changes made while it
    * was written stay as a draft.
    */
-  markSaved: (path: string, content: string, version?: string) => void;
+  markSaved: (path: string, content: string, version: string) => void;
   /** The open file changed elsewhere and has no changes here: show it. */
   replaceShown: (file: LoadedFile) => void;
-}
-
-function draftOf(raw: string | null): Draft | null {
-  const value = JSON.parse(raw ?? 'null') as
-    | (Partial<Draft> & { sha?: string; base?: string })
-    | null;
-  // Drafts written before the shared session: `sha` (repositories) or the
-  // whole `base` text (local folders).
-  const version = value?.version ?? value?.sha ?? value?.base;
-  return value && typeof value.text === 'string' && version !== undefined
-    ? {
-        version,
-        text: value.text,
-        ...(value.overlay ? { overlay: value.overlay } : {}),
-      }
-    : null;
 }
 
 /**
@@ -104,11 +146,12 @@ function draftOf(raw: string | null): Draft | null {
  * (RepoView and LocalProjectView).
  */
 export function useFileSession(options: FileSessionOptions): FileSession {
-  const storage = (): DraftStorage | undefined =>
+  const storage = (): KeyValueStorage | undefined =>
     options.storage ?? globalThis.localStorage;
   const persist = (): boolean => options.persistDrafts?.() ?? true;
 
   const file = shallowRef<LoadedFile | null>(null);
+  const outdated = shallowRef<OutdatedDraft | null>(null);
   const text = ref('');
   const overlay = shallowRef<GraphOverlay>(EMPTY_OVERLAY);
   const loadingFile = ref(false);
@@ -123,31 +166,31 @@ export function useFileSession(options: FileSessionOptions): FileSession {
     return `vizscript:draft:${options.scope.value}:${path}`;
   }
 
+  /** Where outdated edits wait for the user's choice. */
+  function outdatedKey(path: string): string {
+    return `${draftKey(path)}#outdated`;
+  }
+
   function readDraft(path: string): Draft | null {
-    try {
-      return draftOf(storage()?.getItem(draftKey(path)) ?? null);
-    } catch {
-      return null;
-    }
+    return readStored(draftKey(path), parseDraft, storage());
   }
 
   function writeDraft(path: string, buffer: Buffer): void {
-    try {
-      if (
-        persist() &&
-        (buffer.text !== buffer.file.content || buffer.overlay.edits.length > 0)
-      ) {
-        const draft: Draft = {
+    if (
+      persist() &&
+      (buffer.text !== buffer.file.content || buffer.overlay.edits.length > 0)
+    ) {
+      writeStored(
+        draftKey(path),
+        {
           version: buffer.file.version,
           text: buffer.text,
           overlay: buffer.overlay,
-        };
-        storage()?.setItem(draftKey(path), JSON.stringify(draft));
-      } else {
-        storage()?.removeItem(draftKey(path));
-      }
-    } catch {
-      // storage full or unavailable: the changes stay for this visit
+        },
+        storage()
+      );
+    } else {
+      removeStored(draftKey(path), storage());
     }
   }
 
@@ -193,6 +236,7 @@ export function useFileSession(options: FileSessionOptions): FileSession {
     fileError.value = null;
     if (!options.isFile.value) {
       file.value = null;
+      outdated.value = null;
       loadingFile.value = false;
       return;
     }
@@ -201,6 +245,7 @@ export function useFileSession(options: FileSessionOptions): FileSession {
     const cached = buffers.get(next);
     if (cached) {
       // An open tab: instant, with its unsaved changes.
+      outdated.value = persist() ? outdatedOf(next) : null;
       text.value = cached.text;
       overlay.value = cached.overlay;
       file.value = cached.file;
@@ -219,15 +264,31 @@ export function useFileSession(options: FileSessionOptions): FileSession {
       let initial = loaded.content;
       let initialOverlay = EMPTY_OVERLAY;
       const draft = persist() ? readDraft(loaded.path) : null;
-      if (
-        draft?.version === loaded.version &&
+      const changed =
+        draft !== null &&
         (draft.text !== loaded.content ||
-          (draft.overlay?.edits.length ?? 0) > 0)
-      ) {
+          (draft.overlay?.edits.length ?? 0) > 0);
+      const sameVersion =
+        draft !== null &&
+        (draft.legacyBase === undefined
+          ? // Local drafts once kept the whole text as their version.
+            draft.version === loaded.version || draft.version === loaded.content
+          : draft.legacyBase === loaded.content);
+      if (draft && changed && sameVersion) {
         initial = draft.text;
         initialOverlay = draft.overlay ?? EMPTY_OVERLAY;
         options.onRestored?.();
+      } else if (draft && changed) {
+        // Edits of an older version of the file: kept aside, offered.
+        writeStored(
+          outdatedKey(loaded.path),
+          { version: draft.version, text: draft.text },
+          storage()
+        );
+        removeStored(draftKey(loaded.path), storage());
       }
+
+      outdated.value = persist() ? outdatedOf(loaded.path) : null;
 
       // All at once: the workspace of the new file gets the new text.
       text.value = initial;
@@ -307,15 +368,35 @@ export function useFileSession(options: FileSessionOptions): FileSession {
     if (shown) {
       text.value = shown.content;
       overlay.value = EMPTY_OVERLAY;
-      try {
-        storage()?.removeItem(draftKey(shown.path));
-      } catch {
-        // storage unavailable
-      }
+      removeStored(draftKey(shown.path), storage());
     }
   }
 
-  function markSaved(path: string, content: string, version = content): void {
+  function outdatedOf(path: string): OutdatedDraft | null {
+    const stored = readStored(outdatedKey(path), parseDraft, storage());
+    return stored ? { path, text: stored.text } : null;
+  }
+
+  function restoreOutdated(): void {
+    const edits = outdated.value;
+    if (edits && file.value?.path === edits.path) {
+      // Its graph-only edits belonged to the old version's nodes: the text
+      // comes back, on top of the new version.
+      text.value = edits.text;
+      overlay.value = EMPTY_OVERLAY;
+      dropOutdated();
+    }
+  }
+
+  function dropOutdated(): void {
+    const edits = outdated.value;
+    if (edits) {
+      removeStored(outdatedKey(edits.path), storage());
+      outdated.value = null;
+    }
+  }
+
+  function markSaved(path: string, content: string, version: string): void {
     const saved: LoadedFile = { path, content, version };
     const buffer = buffers.get(path);
     const next: Buffer = buffer
@@ -355,6 +436,9 @@ export function useFileSession(options: FileSessionOptions): FileSession {
     closeOtherTabs,
     closeAllTabs,
     discard,
+    outdated,
+    restoreOutdated,
+    dropOutdated,
     markSaved,
     replaceShown,
   };

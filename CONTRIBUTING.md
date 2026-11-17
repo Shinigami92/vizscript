@@ -189,7 +189,9 @@ Like UE, a graph may be in states the code can't hold yet: an exec wire broken w
 
 Repositories are keyed by the provider's numeric id, so layouts survive renames. The playground uses browser storage only.
 
-Open files, tabs and drafts of a repository branch or local folder are one shared session (`composables/use-file-session.ts`, used by `RepoView` and `LocalProjectView`), keyed by its scope (`github/<owner>/<repo>@<ref>`, `local/<id>`): `vizscript:tabs:<scope>` and `vizscript:draft:<scope>:<path>`. A draft holds `{ version, text, overlay }`, where `version` is the blob sha (repositories) or the file's text (local folders); it is restored only for the same version.
+Open files, tabs and drafts of a repository branch or local folder are one shared session (`composables/use-file-session.ts`, used by `RepoView` and `LocalProjectView`), keyed by its scope (`github/<owner>/<repo>@<ref>`, `local/<id>`): `vizscript:tabs:<scope>` and `vizscript:draft:<scope>:<path>`. A draft holds `{ version, text, overlay }`, where `version` is the blob sha (repositories) or a short hash of the file's text (`textVersion`, local folders); it is restored only for the same version. A draft of an older version is kept aside under `…#outdated` and offered next to the file name (Restore puts its text on top of the current version, Discard drops it), never dropped silently.
+
+Per-file browser data (drafts, local layouts, cameras, tabs) goes through `storage/browser-storage.ts`: `writeStored` wraps it in `{ v, at, data }` (`STORAGE_VERSION`), `readStored` checks it with a parser and also reads entries from before the envelope, and leaves entries of a newer version alone. `pruneStored` removes entries not written for a while (drafts 90 days, layouts 180, cameras 60, tabs 120) once per page load; when the storage is full it first frees old entries (not drafts), then tells the user once. Local folder handles share one IndexedDB connection that closes when another tab upgrades the database.
 
 ### Signed in or not
 

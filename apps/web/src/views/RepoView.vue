@@ -11,6 +11,7 @@ import { repoSource } from '../api/repo-source';
 import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
 import GithubLimitStatus from '../components/GithubLimitStatus.vue';
+import OutdatedDraftNotice from '../components/OutdatedDraftNotice.vue';
 import RepoAccessHint from '../components/RepoAccessHint.vue';
 import ScriptWorkspace from '../components/ScriptWorkspace.vue';
 import { useFileSession } from '../composables/use-file-session';
@@ -83,6 +84,9 @@ const {
   closeOtherTabs: closeSessionOthers,
   closeAllTabs: closeSessionAll,
   discard: discardChanges,
+  outdated,
+  restoreOutdated,
+  dropOutdated,
 } = useFileSession({
   scope,
   path,
@@ -262,6 +266,17 @@ function switchBranch(event: Event): void {
   const next = (event.target as HTMLSelectElement).value;
   void router.push({ name: 'repo', params: { ...route.params, ref: next } });
 }
+
+/** Older unsaved edits are dropped for good: ask first. */
+function dropOutdatedEdits(): void {
+  if (
+    globalThis.confirm(
+      "Discard your unsaved edits from the older version of this file? This can't be undone."
+    )
+  ) {
+    dropOutdated();
+  }
+}
 </script>
 
 <template>
@@ -359,6 +374,11 @@ function switchBranch(event: Event): void {
           class="i-mdi-loading shrink-0 animate-spin text-zinc-500"
           role="status"
           aria-label="Loading the file"
+        />
+        <OutdatedDraftNotice
+          v-if="outdated && outdated.path === file?.path"
+          @restore="restoreOutdated"
+          @discard="dropOutdatedEdits"
         />
         <template v-if="dirty">
           <span
