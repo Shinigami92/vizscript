@@ -441,6 +441,7 @@ export const PYTHON_SYNTAX: StatementSyntax = {
       ? `\n${indent}el${body}`
       : `\n${indent}else:\n${indent}${unit}${body}`,
   definitionsRunInOrder: true,
+  requiredArguments: true,
   declarations: DECLARATIONS,
   comment: {
     line: '#',

@@ -345,7 +345,12 @@ export function withParamPins(
 
     let prefix: string;
     if (options.keywordArguments) {
-      prefix = `${args.length > 0 ? ', ' : ''}${param.name}=`;
+      // The next parameter in order is written like code usually is:
+      // positionally (`fetch("Berlin")`); later ones by name, so the
+      // defaults of the skipped ones stay.
+      const next =
+        index === positional.length && keywords.size === 0 && !afterRest;
+      prefix = `${args.length > 0 ? ', ' : ''}${next ? '' : `${param.name}=`}`;
     } else {
       // Skipped parameters before this one get a placeholder.
       const gap = index - positional.length;

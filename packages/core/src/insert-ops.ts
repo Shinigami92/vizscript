@@ -68,6 +68,8 @@ export function addNode(
     return failed('Return can only be used inside a function.');
   }
 
+  template = withRequiredArguments(doc, template, syntax);
+
   const unit = detectIndentUnit(text);
   let insert: InsertPoint | undefined;
   if (anchor.after) {
@@ -393,11 +395,59 @@ export function callWith(
   callee: string,
   syntax: StatementSyntax
 ): OpResult {
-  return afterValue(text, doc, ref, syntax, (value) => ({
-    type: 'call',
-    callee,
-    args: [value],
-  }));
+  return afterValue(text, doc, ref, syntax, (value) =>
+    withRequiredArguments(doc, { type: 'call', callee, args: [value] }, syntax)
+  );
+}
+
+/**
+ * A new call of a function of the file or an imported one, with the
+ * placeholder for each required parameter it doesn't get (`summary(None)`),
+ * in languages where a missing argument fails when the call runs.
+ */
+function withRequiredArguments(
+  doc: GraphDocument,
+  template: NodeTemplate,
+  syntax: StatementSyntax
+): NodeTemplate {
+  if (!syntax.requiredArguments || template.type !== 'call') {
+    return template;
+  }
+
+  const callee = template.callee.trim();
+  const fn = (doc.symbols ?? []).find(
+    (s) =>
+      s.scope === '' &&
+      s.name === callee &&
+      (s.kind === 'function' || s.kind === 'import') &&
+      s.params
+  );
+  let required = 0;
+  for (const param of fn?.params ?? []) {
+    if (
+      param.rest ||
+      param.defaultRange !== undefined ||
+      param.defaultText !== undefined
+    ) {
+      break;
+    }
+
+    required++;
+  }
+
+  const given = template.args ?? [];
+  return required > given.length
+    ? {
+        ...template,
+        args: [
+          ...given,
+          ...Array.from(
+            { length: required - given.length },
+            () => syntax.placeholder
+          ),
+        ],
+      }
+    : template;
 }
 
 /**

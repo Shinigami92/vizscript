@@ -91,6 +91,56 @@ describe('python argument pins', () => {
     ).toContain('greet("a", loud=True)');
   });
 
+  it('fills the next argument in order positionally', () => {
+    const text =
+      'def greet(name, times=2, loud=False):\n    pass\n\n\ngreet("a")\n';
+    const call = parsePythonDocument(text, 't.py')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'call');
+    expect(
+      apply(text, {
+        type: 'setLiteral',
+        node: call?.id ?? '',
+        pin: 'param:times',
+        value: '3',
+      })
+    ).toContain('greet("a", 3)');
+
+    const empty = 'def fetch(city):\n    pass\n\n\nfetch()\n';
+    const fetch = parsePythonDocument(empty, 't.py')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'call');
+    expect(
+      apply(empty, {
+        type: 'setLiteral',
+        node: fetch?.id ?? '',
+        pin: 'param:city',
+        value: 'Berlin',
+      })
+    ).toContain('fetch("Berlin")');
+  });
+
+  it('writes new calls with their required arguments', () => {
+    const text = 'def summary(data, units="metric"):\n    pass\n\n\nx = 1\n';
+    const set = parsePythonDocument(text, 't.py')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'setVar');
+    expect(
+      apply(text, {
+        type: 'addNode',
+        template: { type: 'call', callee: 'summary' },
+        after: { node: set?.id ?? '', pin: 'then' },
+      })
+    ).toContain('x = 1\nsummary(None)\n');
+    expect(
+      apply(text, {
+        type: 'callWith',
+        pin: { node: set?.id ?? '', pin: 'out' },
+        callee: 'summary',
+      })
+    ).toContain('summary(x)');
+  });
+
   it('removes keyword and star arguments with their name', () => {
     const text =
       'def greet(name, times=2):\n    pass\n\n\ngreet("a", times=3)\n';

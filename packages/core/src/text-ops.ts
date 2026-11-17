@@ -112,6 +112,11 @@ export interface StatementSyntax {
    */
   definitionsRunInOrder?: boolean;
   /**
+   * A call without its required arguments fails when it runs (Python): a
+   * new call of a known function gets the placeholder for each of them.
+   */
+  requiredArguments?: boolean;
+  /**
    * The `else` added behind an `if` that has none (a node on its False
    * pin), inserted at the end of the `if`: `body` is the new code indented
    * for the block, or for the `if` itself when `elseIf` (a Branch becomes
