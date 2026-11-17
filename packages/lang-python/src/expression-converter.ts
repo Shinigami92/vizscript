@@ -1,4 +1,5 @@
 import type { SyntaxNode } from '@lezer/common';
+import { valueSpec } from '@vizscript/core';
 import type { Arg, Expr, Param, Span } from './ast';
 import { children, isExpression, splitString } from './convert-utils';
 
@@ -298,9 +299,13 @@ export abstract class ExpressionConverter {
         let cursor = span.start;
         for (const [i, replacement] of replacements.entries()) {
           format += this.text.slice(cursor, replacement.from);
-          format += `{${i}}`;
           cursor = replacement.to;
           const inner = children(replacement).find((k) => isExpression(k));
+          // Its conversion and spec show in the Format: `{0!r}`, `{1:.1f}`.
+          const spec = inner
+            ? valueSpec(this.text.slice(inner.to, replacement.to - 1))
+            : '';
+          format += `{${i}${spec}}`;
           parts.push(inner ? this.expr(inner) : this.opaque(replacement));
         }
 

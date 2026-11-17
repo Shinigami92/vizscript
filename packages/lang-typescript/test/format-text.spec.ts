@@ -59,15 +59,13 @@ describe('Format Text', () => {
     );
     expect(
       result.ok && applyTextEdits(text, result.edits).slice(DECL.length)
-    ).toBe('const s = `${ m }, ${n} and ${undefined}`;\n');
+    ).toBe("const s = `${ m }, ${n} and ${''}`;\n");
   });
 
   it('writes a new format around the values', () => {
     const code = 'const s = `Total: ${n} EUR`;\n';
     expect(setFormat(code, 'Sum {0} €')).toBe('const s = `Sum ${n} €`;\n');
-    expect(setFormat(code, '{0} of {1}')).toBe(
-      'const s = `${n} of ${undefined}`;\n'
-    );
+    expect(setFormat(code, '{0} of {1}')).toBe("const s = `${n} of ${''}`;\n");
     expect(setFormat(code, 'no value')).toBe('const s = `no value`;\n');
     expect(setFormat(code, 'a ` b ${0}')).toBe('const s = `a \\` b $${n}`;\n');
     expect(setFormat('const s = `${n} and ${m}`;\n', '{1} before {0}')).toBe(

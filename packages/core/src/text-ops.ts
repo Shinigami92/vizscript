@@ -559,13 +559,7 @@ function applyTextOpEdits(
       const node = findNode(doc, op.node);
       const pin = findPin(node, op.pin);
       if (pin && getMeta<InputPinMeta>(pin).format) {
-        return setFormat(
-          text,
-          node,
-          op.value,
-          syntax.declarations?.typeSystem.templateOpen,
-          syntax.placeholder
-        );
+        return setFormat(text, node, op.value, syntax.declarations?.typeSystem);
       }
 
       return setLiteral(doc, op.node, op.pin, op.value, syntax);
@@ -615,8 +609,7 @@ function applyTextOpEdits(
         text,
         findNode(doc, op.node),
         op.format,
-        syntax.declarations?.typeSystem.templateOpen,
-        syntax.placeholder
+        syntax.declarations?.typeSystem
       );
     }
 

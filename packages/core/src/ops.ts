@@ -392,6 +392,11 @@ export interface TypeSystemInfo {
    * Python's f-strings): Details edits the format of Format Text nodes.
    */
   templateOpen?: string;
+  /**
+   * Values in a text template carry a conversion and format spec after the
+   * expression (`{n!r}`, `{x:.1f}` in Python): the Format shows them.
+   */
+  templateSpecs?: boolean;
   /** Values of new containers (`[]`, `new Map()`, `set()`). */
   containerDefaults?: { array?: string; map?: string; set?: string };
   /** Value of an empty input (`undefined`, `None`, `null`). */

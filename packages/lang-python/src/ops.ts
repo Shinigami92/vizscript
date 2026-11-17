@@ -109,6 +109,7 @@ export const PYTHON_TYPES: TypeSystemInfo = {
     untyped: '__value__ = $value',
   },
   templateOpen: '{',
+  templateSpecs: true,
   expressions: [
     {
       label: 'Await',
