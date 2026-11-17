@@ -6,11 +6,17 @@ import type {
   TypeSystemInfo,
   ValueKind,
 } from '@vizscript/core';
-import { arrayElements, fieldValue, isConstantValue } from '@vizscript/core';
+import {
+  arrayElements,
+  fieldValue,
+  isConstantValue,
+  objectEntries,
+} from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
 import NumberField from '../NumberField.vue';
 import PinType from '../PinType.vue';
 import ArrayValueField from '../value-fields/ArrayValueField.vue';
+import ObjectValueField from '../value-fields/ObjectValueField.vue';
 import ValueFields from '../ValueFields.vue';
 import { PLACEHOLDER_VALUES, stringValue, valueKindOf } from './value-kinds';
 
@@ -115,8 +121,11 @@ const showsCode = computed(
     placeholderValue.value === ''
 );
 
-/** The Make Array of an array literal value (UE: an array's elements). */
-const arrayNode = computed(() => {
+/**
+ * The Make Array or Make Object of an array, object or dictionary literal
+ * value: edited element by element, entry by entry (UE's container rows).
+ */
+const containerNode = computed(() => {
   const range = props.symbol.defaultRange;
   if (!range || !props.doc) {
     return undefined;
@@ -126,18 +135,24 @@ const arrayNode = computed(() => {
     .flatMap((f) => f.nodes)
     .find(
       (n) =>
-        n.kind === 'makeArray' &&
+        (n.kind === 'makeArray' || n.kind === 'makeObject') &&
         n.range.start === range.start &&
         n.range.end === range.end
     );
-  return node && arrayElements(node) ? node : undefined;
+  return node && (arrayElements(node) || objectEntries(node))
+    ? node
+    : undefined;
 });
+const isArray = computed(() => containerNode.value?.kind === 'makeArray');
 
-function clearArray(): void {
+/** 🗑 of a container: an empty one of the same kind. */
+function clearContainer(): void {
   emit('op', {
     type: 'setSymbolValue',
     symbol: props.symbol.id,
-    value: props.types?.containerDefaults?.array ?? '[]',
+    value: isArray.value
+      ? (props.types?.containerDefaults?.array ?? '[]')
+      : '{}',
     kind: 'expression',
   });
 }
@@ -215,17 +230,19 @@ function resetValue(): void {
 </script>
 
 <template>
-  <!-- An array: one row over both columns, its elements get the width. -->
-  <div v-if="arrayNode && doc" class="col-span-2 min-w-0">
-    <ArrayValueField
+  <!-- An array or object: one row over both columns, its elements and
+       entries get the width. -->
+  <div v-if="containerNode && doc" class="col-span-2 min-w-0">
+    <component
+      :is="isArray ? ArrayValueField : ObjectValueField"
       :doc="doc"
       :text="text"
-      :node="arrayNode"
+      :node="containerNode"
       :editable="editable"
       :types="types"
       clearable
       @op="emit('op', $event)"
-      @clear="clearArray"
+      @clear="clearContainer"
     >
       <template #label>
         <button
@@ -257,7 +274,7 @@ function resetValue(): void {
         </button>
         <PinType :type="symbol.dataType" />
       </template>
-    </ArrayValueField>
+    </component>
   </div>
   <template v-else>
     <!-- Named after the variable, like UE's Default Value rows. -->

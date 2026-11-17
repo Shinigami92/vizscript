@@ -6,15 +6,16 @@ import type {
   Pin,
   TypeSystemInfo,
 } from '@vizscript/core';
-import { arrayElements, inputSource } from '@vizscript/core';
+import { arrayElements, inputSource, objectEntries } from '@vizscript/core';
 import { computed } from 'vue';
 import NumberField from '../NumberField.vue';
 import ArrayValueField from './ArrayValueField.vue';
+import ObjectValueField from './ObjectValueField.vue';
 
 /**
  * The value of one input in an array or object of the Details panel: a
- * widget for its literal (number, text, true / false), a nested array, or
- * its code when the graph computes it.
+ * widget for its literal (number, text, true / false), a nested array or
+ * object, or its code when the graph computes it.
  */
 const props = defineProps<{
   doc: GraphDocument;
@@ -33,6 +34,9 @@ const emit = defineEmits<{
 const source = computed(() => inputSource(props.doc, props.node, props.pin));
 const nestedArray = computed(() =>
   source.value && arrayElements(source.value) ? source.value : undefined
+);
+const nestedObject = computed(() =>
+  source.value && objectEntries(source.value) ? source.value : undefined
 );
 const literal = computed(() => (source.value ? undefined : props.pin.literal));
 const code = computed(() => {
@@ -58,6 +62,15 @@ function set(value: string): void {
     :doc="doc"
     :text="text"
     :node="nestedArray"
+    :editable="editable"
+    :types="types"
+    @op="emit('op', $event)"
+  />
+  <ObjectValueField
+    v-else-if="nestedObject"
+    :doc="doc"
+    :text="text"
+    :node="nestedObject"
     :editable="editable"
     :types="types"
     @op="emit('op', $event)"
