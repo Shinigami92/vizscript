@@ -1,6 +1,6 @@
 import type { SymbolParam, TypeMember } from '@vizscript/core';
 import type { FunctionDef, Span } from './ast';
-import { PYTHON_BUILTINS } from './builtins';
+import { PYTHON_BUILTINS, PYTHON_LIBRARY_CLASSES } from './builtins';
 import { parsePython } from './convert';
 import { dataTypeOf } from './lower-utils';
 import { generic, known } from './type-text';
@@ -102,20 +102,31 @@ export function pythonBuiltins(): Builtins {
     return builtins;
   }
 
-  const text = PYTHON_BUILTINS;
   const result: Builtins = { classes: new Map(), functions: new Map() };
-  for (const stmt of parsePython(text).body) {
-    if (stmt.type === 'FunctionDef') {
-      result.functions.set(stmt.name, callableOf(text, stmt, false));
-    } else if (stmt.type === 'ClassDef') {
-      const methods = new Map<string, Callable>();
-      for (const member of stmt.body.body) {
-        if (member.type === 'FunctionDef') {
-          methods.set(member.name, callableOf(text, member, true));
+  for (const text of [PYTHON_BUILTINS, PYTHON_LIBRARY_CLASSES]) {
+    for (const stmt of parsePython(text).body) {
+      if (stmt.type === 'FunctionDef') {
+        result.functions.set(stmt.name, callableOf(text, stmt, false));
+      } else if (stmt.type === 'ClassDef') {
+        const methods = new Map<string, Callable>();
+        const fields = new Map<string, string | undefined>();
+        for (const member of stmt.body.body) {
+          if (member.type === 'FunctionDef') {
+            methods.set(member.name, callableOf(text, member, true));
+          } else if (
+            member.type === 'Assign' &&
+            member.annotation &&
+            member.targets[0]?.type === 'Name'
+          ) {
+            fields.set(
+              member.targets[0].name,
+              sliceOf(text, member.annotation)
+            );
+          }
         }
-      }
 
-      result.classes.set(stmt.name, { methods, fields: new Map() });
+        result.classes.set(stmt.name, { methods, fields });
+      }
     }
   }
 
@@ -172,17 +183,25 @@ export function builtinMembers(
     membersCache.set(
       type,
       cls
-        ? [...cls.methods].map(([member, method]): TypeMember => {
-            const returns = method.returns
-              ? substitute(method.returns, args)
-              : undefined;
-            return {
+        ? [
+            ...[...cls.fields].map(([member, annotation]): TypeMember => ({
               name: member,
-              kind: 'method',
-              type: dataTypeOf(returns),
-              detail: fill(method.detail, args),
-            };
-          })
+              kind: 'property',
+              type: dataTypeOf(annotation),
+              ...(annotation ? { detail: `${member}: ${annotation}` } : {}),
+            })),
+            ...[...cls.methods].map(([member, method]): TypeMember => {
+              const returns = method.returns
+                ? substitute(method.returns, args)
+                : undefined;
+              return {
+                name: member,
+                kind: 'method',
+                type: dataTypeOf(returns),
+                detail: fill(method.detail, args),
+              };
+            }),
+          ]
         : undefined
     );
   }

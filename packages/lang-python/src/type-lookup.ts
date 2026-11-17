@@ -497,6 +497,10 @@ class TypeLookup {
 
     const { name: base, args } = generic(type);
     const builtin = pythonBuiltins().classes.get(base);
+    if (builtin?.fields.has(name)) {
+      return { kind: 'value', type: normalize(builtin.fields.get(name)) };
+    }
+
     const method = builtin?.methods.get(name);
     if (!method) {
       return undefined;

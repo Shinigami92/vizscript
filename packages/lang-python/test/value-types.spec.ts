@@ -1,7 +1,7 @@
 import type { GraphNode } from '@vizscript/core';
-import { typeWildcardPins } from '@vizscript/core';
+import { exportedSymbols, typeWildcardPins } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { parsePythonDocument } from '../src';
+import { parsePythonDocument, pythonLibrary } from '../src';
 
 /** The types of the values of the Format Text nodes of `nodes`. */
 function formatValues(nodes: ReadonlyArray<GraphNode>): string[] {
@@ -60,5 +60,39 @@ describe('types of values read from flow nodes', () => {
         .find((n) => n.title === title)
         ?.pins.find((p) => p.direction === 'out' && p.kind === 'data')?.type;
     expect(outOf('sum')).toBe('number');
+  });
+
+  it('types the classes library functions return', () => {
+    const stub = pythonLibrary('urllib.request');
+    const members = exportedSymbols(
+      parsePythonDocument(stub?.text ?? '', stub?.fileName),
+      stub?.text ?? ''
+    );
+    const text =
+      'from urllib.request import urlopen\n\ndef f(url: str):\n    with urlopen(url) as response:\n        code = response.status\n        return response.read()\n';
+    const doc = parsePythonDocument(text, 't.py', {
+      imports: [
+        {
+          name: 'urlopen',
+          declaration: members.find((m) => m.name === 'urlopen'),
+        },
+      ],
+    });
+    const types = new Map(
+      doc.functions
+        .flatMap((f) => f.nodes)
+        .flatMap((n) => n.pins)
+        .filter((p) => p.direction === 'out' && p.kind === 'data' && p.range)
+        .map((p) => [
+          text.slice(p.range?.start ?? 0, p.range?.end ?? 0),
+          p.typeText ?? p.type,
+        ])
+    );
+    expect(types.get('response')).toBe('HTTPResponse');
+    expect(types.get('response.status')).toBe('int');
+    expect(types.get('response.read()')).toBe('bytes');
+    expect(
+      doc.typeMembers?.HTTPResponse?.map((m) => `${m.kind} ${m.name}`)
+    ).toContain('property status');
   });
 });
