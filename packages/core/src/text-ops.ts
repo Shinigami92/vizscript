@@ -1,3 +1,4 @@
+import { renameObjectEntry } from './add-pin-ops';
 import { blankValue, insertElement, moveElement } from './array-ops';
 import { renameBinding } from './binding-rename';
 import { collapseToFunction } from './collapse';
@@ -752,6 +753,16 @@ function applyTextOpEdits(
 
     case 'clearArguments': {
       return clearArguments(text, doc, op.node, syntax);
+    }
+
+    case 'renameEntry': {
+      return renameObjectEntry(
+        text,
+        findNode(doc, op.pin.node),
+        op.pin.pin,
+        op.key,
+        syntax
+      );
     }
 
     case 'inValue': {

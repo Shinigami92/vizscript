@@ -352,3 +352,82 @@ export function removePinValue(
     ? succeeded([removeListItem(text, operandSpan(text, range), true)])
     : undefined;
 }
+
+/**
+ * Renames the key of a Make Object entry and keeps how it is written:
+ * `{ a: 1 }` → `{ b: 1 }`, `{"a": 1}` → `{"b": 1}`, `{ a }` → `{ b: a }`.
+ */
+export function renameObjectEntry(
+  text: string,
+  node: GraphNode | undefined,
+  pinId: string,
+  key: string,
+  syntax: StatementSyntax
+): OpResult {
+  const entries = node ? objectEntries(node) : undefined;
+  const entry = entries?.find((p) => p.id === pinId);
+  const write = syntax.objectEntry;
+  if (!entries || !entry || !write) {
+    return failed('Only the entries of an object literal can be renamed.');
+  }
+
+  const name = key.trim();
+  if (name === '') {
+    return failed('The key must not be empty.');
+  }
+
+  if (name === entry.name) {
+    return succeeded([]);
+  }
+
+  if (entries.some((p) => p !== entry && p.name === name)) {
+    return failed(`"${name}" is in the object already.`);
+  }
+
+  const { property, shorthand } = getMeta<InputPinMeta>(entry);
+  const value = entry.range;
+  if (!property || !value) {
+    return failed('Cannot find this entry of the object.');
+  }
+
+  const code = text.slice(value.start, value.end);
+  if (shorthand) {
+    return succeeded([
+      {
+        start: property.start,
+        end: property.end,
+        text: write.write(name, code),
+      },
+    ]);
+  }
+
+  // The key as written: a name or a quoted text, else (`[k]`, `1`) none.
+  const written = text
+    .slice(property.start, value.start)
+    .match(/^(?:[A-Za-z_$][\w$]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/)?.[0];
+  if (!written) {
+    return failed('Only names and texts can be renamed as keys.');
+  }
+
+  const quote = written[0] === '"' || written[0] === "'" ? written[0] : '';
+  const end = property.start + written.length;
+  if (quote) {
+    const escaped = name
+      .replaceAll('\\', '\\\\')
+      .replaceAll(quote, `\\${quote}`);
+    return succeeded([
+      { start: property.start, end, text: `${quote}${escaped}${quote}` },
+    ]);
+  }
+
+  // A bare key: kept bare when the new one is a name, else written anew.
+  return /^[A-Za-z_$][\w$]*$/.test(name)
+    ? succeeded([{ start: property.start, end, text: name }])
+    : succeeded([
+        {
+          start: property.start,
+          end: property.end,
+          text: write.write(name, code),
+        },
+      ]);
+}

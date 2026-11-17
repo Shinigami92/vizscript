@@ -43,4 +43,33 @@ describe('Make Dictionary (UE Add pin)', () => {
       })
     ).toBe('d = {"a": 1}\n');
   });
+
+  it('renames a key and keeps its quotes', () => {
+    for (const [text, pin, key, expected] of [
+      ['d = {"a": 1, "b": 2}\n', 'p1', 'c', 'd = {"a": 1, "c": 2}\n'],
+      ["d = {'a': 1}\n", 'p0', "it's", "d = {'it\\'s': 1}\n"],
+    ] as const) {
+      expect(
+        apply(text, {
+          type: 'renameEntry',
+          pin: { node: makeObject(text)?.id ?? '', pin },
+          key,
+        })
+      ).toBe(expected);
+    }
+  });
+
+  it('refuses a key that is taken or not text', () => {
+    for (const [text, pin, key] of [
+      ['d = {"a": 1, "b": 2}\n', 'p1', 'a'],
+      ['d = {1: 1, "b": 2}\n', 'p0', 'c'],
+    ] as const) {
+      const op: GraphOp = {
+        type: 'renameEntry',
+        pin: { node: makeObject(text)?.id ?? '', pin },
+        key,
+      };
+      expect(applyPythonOp(text, op, 't.py').ok).toBe(false);
+    }
+  });
 });

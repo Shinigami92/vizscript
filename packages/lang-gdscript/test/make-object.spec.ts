@@ -46,4 +46,19 @@ describe('Make Dictionary (UE Add pin)', () => {
       })
     ).toBe('func f():\n\tvar d = {"a": 1}\n');
   });
+
+  it('renames a key in both dictionary styles', () => {
+    for (const [text, expected] of [
+      ['func f():\n\tvar d = {"a": 1}\n', 'func f():\n\tvar d = {"b": 1}\n'],
+      ['func f():\n\tvar d = {a = 1}\n', 'func f():\n\tvar d = {b = 1}\n'],
+    ] as const) {
+      expect(
+        apply(text, {
+          type: 'renameEntry',
+          pin: { node: makeObject(text)?.id ?? '', pin: 'p0' },
+          key: 'b',
+        })
+      ).toBe(expected);
+    }
+  });
 });

@@ -72,4 +72,40 @@ describe('Make Object (UE Add pin)', () => {
       'declare const c: number;\nconst o = { a: 1, b: 2 };\n'
     );
   });
+
+  it('renames a key', () => {
+    for (const [text, pin, key, expected] of [
+      ['const o = { a: 1, b: 2 };\n', 'p1', 'c', 'const o = { a: 1, c: 2 };\n'],
+      ["const o = { 'a': 1 };\n", 'p0', 'b', "const o = { 'b': 1 };\n"],
+      ['const o = { a: 1 };\n', 'p0', 'my key', "const o = { 'my key': 1 };\n"],
+      [
+        'const o = { length };\n',
+        'p0',
+        'size',
+        'const o = { size: length };\n',
+      ],
+    ] as const) {
+      expect(
+        apply(text, {
+          type: 'renameEntry',
+          pin: { node: makeObject(text)?.id ?? '', pin },
+          key,
+        })
+      ).toBe(expected);
+    }
+  });
+
+  it('refuses a key that is taken', () => {
+    const text = 'const o = { a: 1, b: 2 };\n';
+    const result = applyTypeScriptOp(
+      text,
+      {
+        type: 'renameEntry',
+        pin: { node: makeObject(text)?.id ?? '', pin: 'p1' },
+        key: 'a',
+      },
+      't.ts'
+    );
+    expect(result.ok ? '' : result.error).toBe('"a" is in the object already.');
+  });
 });

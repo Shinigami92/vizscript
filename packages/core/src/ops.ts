@@ -287,6 +287,8 @@ export type GraphOp =
    * the new entry as `name`.
    */
   | { type: 'addArgument'; node: string; name?: string }
+  /** Renames the key of a Make Object entry (`{ a: 1 }` → `{ b: 1 }`). */
+  | { type: 'renameEntry'; pin: PinRef; key: string }
   /** Removes an argument of a call with its comma (UE: "Remove pin"). */
   | { type: 'removeArgument'; pin: PinRef }
   /** Empties a call's argument list. */
