@@ -186,6 +186,7 @@ const {
   parseSeq: () => parseSeq,
   reparse: () => reparse(),
   open: (path, symbol) => emit('open', path, symbol),
+  version: () => languageVersion.value?.text,
 });
 
 useTypeLibs({ props, client, references, text });

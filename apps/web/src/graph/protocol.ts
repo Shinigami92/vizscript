@@ -41,6 +41,11 @@ export interface WorkerCalls {
       stub: { text: string; fileName: string } | null;
     };
   };
+  prepareLibrary: {
+    request: { fileName: string; text: string; version?: string };
+    /** The declaration file ready for the parser. */
+    response: string;
+  };
   versionFiles: {
     request: { fileName: string };
     response: ReadonlyArray<string>;

@@ -25,6 +25,7 @@ import {
   godotRoot,
   libraryNames,
 } from '../../graph/project-index';
+import { stubVersion, TypeshedStubs } from '../../graph/python-stubs';
 import type { FileLinkSource } from '../../monaco/file-links';
 import type { ResolveReference } from './symbol-lookup';
 import type { ScriptWorkspaceProps } from './types';
@@ -43,6 +44,8 @@ export interface ImportDeps {
   reparse: () => Promise<void>;
   /** Opens another repository file, at the definition of `symbol`. */
   open: (path: string, symbol?: string) => void;
+  /** The language version of the project (`3.12`, `≥3.11`), if stated. */
+  version?: () => string | undefined;
 }
 
 export interface WorkspaceImports {
@@ -319,25 +322,67 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     return nearestPackageRange(props.files, props.readFile, props.path, name);
   }
 
+  /** Exports of a stub file, parsed like a file of the language. */
+  async function stubExports(stub: {
+    text: string;
+    fileName: string;
+  }): Promise<ScriptSymbol[]> {
+    const parsed = await client.parse(stub.text, stub.fileName, undefined, {
+      background: true,
+    });
+    return exportedSymbols(parsed, stub.text);
+  }
+
+  /** typeshed's stubs, per Python version (they differ between them). */
+  const typeshed = new Map<string, TypeshedStubs>();
+
+  function typeshedFor(version: string | undefined): TypeshedStubs {
+    const key = version ?? '';
+    let stubs = typeshed.get(key);
+    if (!stubs) {
+      stubs = new TypeshedStubs(
+        (raw) => client.prepareLibrary(props.path, raw, version),
+        (source, fileName) =>
+          client.parse(source, fileName, undefined, { background: true })
+      );
+      typeshed.set(key, stubs);
+    }
+
+    return stubs;
+  }
+
   /**
-   * Exports of a library module: Python's standard library (stubs of the
-   * backend), npm packages (`.d.ts` files from jsDelivr).
+   * Exports of a Python library module: typeshed's stub (the standard
+   * library and stubs of other packages, for the project's Python
+   * version), with the backend's own stubs taking precedence by name
+   * (simpler, and with the classes they return, like `urlopen()` →
+   * `HTTPResponse`, where typeshed says `Any`).
+   */
+  async function pythonExports(module: string): Promise<ScriptSymbol[]> {
+    const [{ stub }, read] = await Promise.all([
+      client.library(props.path, module),
+      typeshedFor(stubVersion(deps.version?.()))
+        .exportsOf(module)
+        .catch(() => []),
+    ]);
+    const own = stub ? await stubExports(stub) : [];
+    const names = new Set(own.map((s) => s.name));
+    return [...own, ...read.filter((s) => !names.has(s.name))];
+  }
+
+  /**
+   * Exports of a library module: Python's standard library (typeshed and
+   * the backend's stubs), npm packages (`.d.ts` files from jsDelivr).
    */
   function libraryExports(module: string): Promise<ScriptSymbol[]> {
-    let exports = libraryCache.get(module);
+    // Stubs differ between Python versions.
+    const key = `${module}@${deps.version?.() ?? ''}`;
+    let exports = libraryCache.get(key);
     if (!exports) {
       exports = (async (): Promise<ScriptSymbol[]> => {
         const language = languageOf(props.path);
         if (language === 'python' && !module.startsWith('.')) {
-          const { stub } = await client.library(props.path, module);
-          return stub
-            ? exportedSymbols(
-                await client.parse(stub.text, stub.fileName, undefined, {
-                  background: true,
-                }),
-                stub.text
-              )
-            : [];
+          return pythonExports(module);
         }
 
         const name = packageName(module);
@@ -348,7 +393,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
 
         return [];
       })().catch(() => []);
-      libraryCache.set(module, exports);
+      libraryCache.set(key, exports);
     }
 
     return exports;

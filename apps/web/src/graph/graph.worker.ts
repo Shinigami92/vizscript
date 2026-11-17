@@ -25,6 +25,8 @@ const HANDLERS: {
     modules: backend.libraries ?? [],
     stub: r.module ? (backend.library?.(r.module) ?? null) : null,
   }),
+  prepareLibrary: (r, backend) =>
+    backend.prepareLibrary?.(r.text, r.version) ?? r.text,
   versionFiles: (_r, backend) => backend.versionFiles ?? [],
   version: (r, backend) => backend.version?.(r.files) ?? null,
   applyOp: (r, backend) =>

@@ -87,6 +87,22 @@ export class GraphClient {
     return this.send('typeSystem', { fileName }).catch(() => null);
   }
 
+  /**
+   * A library declaration file read from elsewhere, ready for the parser
+   * (Python: a typeshed stub for `version`).
+   */
+  public prepareLibrary(
+    fileName: string,
+    text: string,
+    version?: string
+  ): Promise<string> {
+    return this.send(
+      'prepareLibrary',
+      { fileName, text, ...(version ? { version } : {}) },
+      { priority: 'low' }
+    );
+  }
+
   /** Names of the project files that state the language's version. */
   public versionFiles(fileName: string): Promise<ReadonlyArray<string>> {
     return this.send('versionFiles', { fileName }).catch(() => []);
