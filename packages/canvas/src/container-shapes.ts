@@ -183,7 +183,8 @@ export function drawContainerPin(
 
 /**
  * UE's big faded container symbol behind the word of a container node
- * (GET), in the element's colors. Untyped containers draw nothing.
+ * (GET, LENGTH …), in the element's colors; untyped containers in their
+ * pin's color.
  */
 export function drawContainerSymbol(
   ctx: CanvasRenderingContext2D,
@@ -193,10 +194,6 @@ export function drawContainerSymbol(
   type: DataType,
   scheme: ColorScheme
 ): void {
-  if (type === 'array' || type === 'map' || type === 'set') {
-    return;
-  }
-
   const shape = containerShape(type);
   if (!shape) {
     return;
