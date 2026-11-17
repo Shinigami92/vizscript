@@ -1,3 +1,5 @@
+import type { SyntaxNode, Tree } from '@lezer/common';
+import { parser } from '@lezer/python';
 import type {
   CallSite,
   OpResult,
@@ -6,16 +8,70 @@ import type {
   TextEdit,
 } from '@vizscript/core';
 import { qualifiedName } from '@vizscript/core';
-import type { ClassDef, Expr, FunctionDef, Param, Stmt } from './ast';
+import type { ClassDef, Expr, FunctionDef, Param, Span, Stmt } from './ast';
+import { maskForParser } from './convert-utils';
 
 interface Scope {
-  kind: 'module' | 'function' | 'class' | 'lambda';
+  kind: 'module' | 'function' | 'class' | 'lambda' | 'comprehension';
   /** Qualified name of a function or class (`Cart.add`). */
   name: string;
   parent?: Scope;
   locals: Set<string>;
-  /** `global` / `nonlocal` names of a function. */
-  outer: Set<string>;
+  /** `global` names of a function: bound by the module. */
+  globals: Set<string>;
+  /** `nonlocal` names: bound by the nearest enclosing function. */
+  nonlocals: Set<string>;
+}
+
+const COMPREHENSIONS = new Set([
+  'ArrayComprehensionExpression',
+  'DictionaryComprehensionExpression',
+  'SetComprehensionExpression',
+  'ComprehensionExpression',
+]);
+
+function kids(node: SyntaxNode): SyntaxNode[] {
+  const result: SyntaxNode[] = [];
+  for (let child = node.firstChild; child; child = child.nextSibling) {
+    result.push(child);
+  }
+
+  return result;
+}
+
+/**
+ * A `VariableName` that names a variable: not the member after a `.`
+ * (`deco.x` in a decorator), a keyword (`f(key=1)`, `P(x=0)`), or the
+ * name after `as`.
+ */
+function isVariable(node: SyntaxNode): boolean {
+  const before = node.prevSibling?.name;
+  const after = node.nextSibling?.name;
+  return (
+    node.name === 'VariableName' &&
+    before !== '.' &&
+    !(after === 'AssignOp' && node.parent?.name === 'ArgList') &&
+    !(node.parent?.name === 'KeywordPattern' && !before)
+  );
+}
+
+/** Names a match pattern captures (`case [a, *rest] as c`). */
+function patternBindings(
+  node: SyntaxNode,
+  into: Set<string>,
+  text: string
+): void {
+  for (const kid of kids(node)) {
+    const captured =
+      kid.name === 'VariableName' &&
+      (node.name === 'CapturePattern' ||
+        (node.name === 'AsPattern' && kid.prevSibling?.name === 'as'));
+    if (captured) {
+      into.add(text.slice(kid.from, kid.to));
+    } else {
+      patternBindings(kid, into, text);
+    }
+  }
 }
 
 interface Occurrence {
@@ -25,6 +81,10 @@ interface Occurrence {
 }
 
 type AnyNode = Record<string, unknown>;
+
+function nodeSpan(node: AnyNode): Span {
+  return { start: node.start as number, end: node.end as number };
+}
 
 function isObject(value: unknown): value is AnyNode {
   return value !== null && typeof value === 'object';
@@ -48,7 +108,164 @@ function targetNames(target: Expr | undefined, into: Set<string>): void {
 class Resolver {
   readonly occurrences: Occurrence[] = [];
 
-  constructor(private readonly text: string) {}
+  constructor(
+    private readonly text: string,
+    private readonly tree: Tree
+  ) {}
+
+  /** The syntax nodes that make up `span` (outermost first). */
+  private nodesIn(span: Span): SyntaxNode[] {
+    const found: SyntaxNode[] = [];
+    this.tree.iterate({
+      from: span.start,
+      to: span.end,
+      enter: (ref) => {
+        if (ref.from >= span.start && ref.to <= span.end) {
+          found.push(ref.node);
+          return false;
+        }
+
+        return ref.to > span.start && ref.from < span.end;
+      },
+    });
+    return found;
+  }
+
+  /** The syntax node of a statement or expression the AST keeps whole. */
+  private nodeAt(
+    span: Span,
+    names: ReadonlySet<string>
+  ): SyntaxNode | undefined {
+    let node: SyntaxNode | null = this.tree.resolveInner(span.start, 1);
+    while (node && !(names.has(node.name) && node.from === span.start)) {
+      node = node.parent;
+    }
+
+    return node ?? undefined;
+  }
+
+  private record(node: SyntaxNode, scope: Scope): void {
+    const name = this.text.slice(node.from, node.to);
+    this.occurrences.push({
+      range: { start: node.from, end: node.to },
+      name,
+      scope: this.resolve(name, scope),
+    });
+  }
+
+  /**
+   * Names in code the AST keeps as a span (annotations, decorators,
+   * patterns) or only partly (comprehensions), from the syntax tree.
+   */
+  private spanNames(span: Span, scope: Scope): void {
+    for (const node of this.nodesIn(span)) {
+      this.treeNames(node, scope);
+    }
+  }
+
+  private treeNames(node: SyntaxNode, scope: Scope): void {
+    if (COMPREHENSIONS.has(node.name)) {
+      this.comprehension(node, scope);
+      return;
+    }
+
+    if (node.name === 'VariableName') {
+      if (isVariable(node)) {
+        this.record(node, scope);
+      }
+
+      return;
+    }
+
+    for (const kid of kids(node)) {
+      this.treeNames(kid, scope);
+    }
+  }
+
+  /**
+   * A comprehension is a scope of its own: its `for` targets are local,
+   * and only the first iterable is evaluated in the code around it.
+   */
+  private comprehension(node: SyntaxNode, scope: Scope): void {
+    const inner = this.newScope('comprehension', scope.name, scope);
+    // Without the brackets.
+    const parts = kids(node).slice(1, -1);
+    const clauses = (
+      visit: (
+        part: SyntaxNode,
+        clause: 'element' | 'target' | 'iter' | 'if',
+        first: boolean
+      ) => void
+    ): void => {
+      let clause: 'element' | 'target' | 'iter' | 'if' = 'element';
+      let fors = 0;
+      for (const part of parts) {
+        if (part.name === 'for') {
+          clause = 'target';
+          fors++;
+        } else if (part.name === 'in' && clause === 'target') {
+          clause = 'iter';
+        } else if (part.name === 'if') {
+          clause = 'if';
+        } else if (part.name !== 'async') {
+          visit(part, clause, fors === 1);
+        }
+      }
+    };
+
+    clauses((part, clause) => {
+      if (clause === 'target') {
+        this.boundNames(part, inner.locals);
+      }
+    });
+    clauses((part, clause, first) => {
+      this.treeNames(part, clause === 'iter' && first ? scope : inner);
+    });
+  }
+
+  /** Every name in an assignment target (`k`, `k, v`, `(a, [b])`). */
+  private boundNames(node: SyntaxNode, into: Set<string>): void {
+    if (node.name === 'VariableName') {
+      into.add(this.text.slice(node.from, node.to));
+      return;
+    }
+
+    for (const kid of kids(node)) {
+      this.boundNames(kid, into);
+    }
+  }
+
+  /** Names an import statement binds (`import a.b as c`, `from x import y`). */
+  private importBindings(span: Span, scope: Scope): void {
+    const node = this.nodeAt(span, new Set(['ImportStatement']));
+    if (!node) {
+      return;
+    }
+
+    const parts = kids(node);
+    const importAt = parts.findIndex((k) => k.name === 'import');
+    let item: SyntaxNode[] = [];
+    const bind = (): void => {
+      const asAt = item.findIndex((k) => k.name === 'as');
+      const named = asAt === -1 ? item[0] : item[asAt + 1];
+      // `import a.b` binds `a`; `from x import a` binds `a`.
+      if (named?.name === 'VariableName') {
+        scope.locals.add(this.text.slice(named.from, named.to));
+      }
+
+      item = [];
+    };
+
+    for (const part of parts.slice(importAt + 1)) {
+      if (part.name === ',') {
+        bind();
+      } else if (!['(', ')', 'Comment', '*'].includes(part.name)) {
+        item.push(part);
+      }
+    }
+
+    bind();
+  }
 
   /** Names a block binds (not inside nested functions or classes). */
   bindings(stmts: ReadonlyArray<Stmt>, scope: Scope): void {
@@ -116,6 +333,10 @@ class Resolver {
 
         case 'Match': {
           for (const branch of stmt.cases) {
+            for (const node of this.nodesIn(branch.pattern)) {
+              patternBindings(node, scope.locals, this.text);
+            }
+
             this.bindings(branch.body.body, scope);
           }
 
@@ -129,31 +350,21 @@ class Resolver {
         }
 
         case 'Import': {
-          // `import a.b as c`, `from x import a, b as c`
-          const source = this.text.slice(stmt.start, stmt.end);
-          const names = source
-            .replace(/^\s*from\s+\S+\s+import\s+/, '')
-            .replace(/^\s*import\s+/, '')
-            .replaceAll(/[()\\\n]/g, ' ')
-            .split(',');
-          for (const part of names) {
-            const alias = part.trim().split(/\s+as\s+/);
-            const name = (alias[1] ?? alias[0] ?? '').split('.')[0]?.trim();
-            if (name && name !== '*') {
-              scope.locals.add(name);
-            }
-          }
-
+          this.importBindings(stmt, scope);
           break;
         }
 
         case 'Scope': {
           // `global a, b` / `nonlocal a`
-          const source = this.text.slice(stmt.start, stmt.end);
-          for (const name of source
-            .replace(/^\s*(?:global|nonlocal)\s+/, '')
-            .split(',')) {
-            scope.outer.add(name.trim());
+          const node = this.nodeAt(stmt, new Set(['ScopeStatement']));
+          const outer =
+            node?.firstChild?.name === 'nonlocal'
+              ? scope.nonlocals
+              : scope.globals;
+          for (const kid of node ? kids(node) : []) {
+            if (kid.name === 'VariableName') {
+              outer.add(this.text.slice(kid.from, kid.to));
+            }
           }
 
           break;
@@ -171,20 +382,33 @@ class Resolver {
     let current: Scope | undefined = scope;
     let first = true;
     while (current) {
-      // Class bodies are only visible to code directly inside them.
-      const visible = current.kind !== 'class' || first;
-      if (visible && current.locals.has(name) && !current.outer.has(name)) {
-        return current;
-      }
-
-      if (current.outer.has(name) && current.kind === 'function') {
+      if (current.globals.has(name)) {
         // `global` skips to the module.
-        let module: Scope | undefined = current;
+        let module: Scope = current;
         while (module.parent) {
           module = module.parent;
         }
 
         return module.locals.has(name) ? module : undefined;
+      }
+
+      if (current.nonlocals.has(name)) {
+        // `nonlocal`: the nearest enclosing function that binds it.
+        let outer = current.parent;
+        while (
+          outer &&
+          !(outer.kind === 'function' && outer.locals.has(name))
+        ) {
+          outer = outer.parent;
+        }
+
+        return outer;
+      }
+
+      // Class bodies are only visible to code directly inside them.
+      const visible = current.kind !== 'class' || first;
+      if (visible && current.locals.has(name)) {
+        return current;
       }
 
       first = false;
@@ -195,7 +419,14 @@ class Resolver {
   }
 
   private newScope(kind: Scope['kind'], name: string, parent: Scope): Scope {
-    return { kind, name, parent, locals: new Set(), outer: new Set() };
+    return {
+      kind,
+      name,
+      parent,
+      locals: new Set(),
+      globals: new Set(),
+      nonlocals: new Set(),
+    };
   }
 
   private params(
@@ -207,7 +438,7 @@ class Resolver {
       scope.locals.add(param.name.replace(/^\*+/, ''));
       // Annotations and defaults are evaluated outside the function.
       if (param.annotation) {
-        this.walk(param.annotation, outer);
+        this.spanNames(param.annotation, outer);
       }
 
       if (param.defaultValue) {
@@ -218,7 +449,7 @@ class Resolver {
 
   private fn(def: FunctionDef, scope: Scope): void {
     for (const decorator of def.decorators) {
-      this.walk(decorator, scope);
+      this.spanNames(decorator, scope);
     }
 
     const qualified =
@@ -226,7 +457,7 @@ class Resolver {
     const inner = this.newScope('function', qualified, scope);
     this.params(def.params, inner, scope);
     if (def.returns) {
-      this.walk(def.returns, scope);
+      this.spanNames(def.returns, scope);
     }
 
     this.bindings(def.body.body, inner);
@@ -235,7 +466,7 @@ class Resolver {
 
   private cls(def: ClassDef, scope: Scope): void {
     for (const decorator of def.decorators) {
-      this.walk(decorator, scope);
+      this.spanNames(decorator, scope);
     }
 
     for (const base of def.bases) {
@@ -286,6 +517,37 @@ class Resolver {
         return;
       }
 
+      case 'Comprehension': {
+        const syntax = this.nodeAt(nodeSpan(node), COMPREHENSIONS);
+        if (syntax) {
+          this.comprehension(syntax, scope);
+        }
+
+        return;
+      }
+
+      case 'Assign': {
+        if (node.annotation) {
+          this.spanNames(node.annotation as Span, scope);
+        }
+
+        break;
+      }
+
+      case 'Match': {
+        for (const branch of node.cases as Array<{ pattern: Span }>) {
+          this.spanNames(branch.pattern, scope);
+        }
+
+        break;
+      }
+
+      case 'Scope': {
+        // The names of `global x` / `nonlocal x` themselves.
+        this.spanNames(nodeSpan(node), scope);
+        return;
+      }
+
       case 'Lambda': {
         const inner = this.newScope('lambda', scope.name, scope);
         this.params(node.params as Param[], inner, scope);
@@ -327,12 +589,13 @@ function resolveModule(
   body: ReadonlyArray<Stmt>,
   text: string
 ): { occurrences: Occurrence[]; module: Scope } {
-  const resolver = new Resolver(text);
+  const resolver = new Resolver(text, parser.parse(maskForParser(text)));
   const module: Scope = {
     kind: 'module',
     name: '',
     locals: new Set(),
-    outer: new Set(),
+    globals: new Set(),
+    nonlocals: new Set(),
   };
   // Bindings first: names may be used before they are assigned.
   resolver.bindings(body, module);
@@ -340,19 +603,25 @@ function resolveModule(
   return { occurrences: resolver.occurrences, module };
 }
 
-/** `self.name` / `cls.name` / `Class.name` uses of a class member. */
-function memberEdits(
+/**
+ * Walks the module knowing which names are `self` (or `cls`) of `owner`'s
+ * instances: the first parameter of its methods (not of static ones), also
+ * in functions nested in a method unless they take a parameter of that name.
+ */
+function walkWithSelves(
   body: ReadonlyArray<Stmt>,
-  cls: ScriptSymbol,
-  oldName: string,
-  newName: string
-): TextEdit[] {
-  const edits: TextEdit[] = [];
-  const className = cls.name;
-  const walk = (node: unknown, selves: ReadonlySet<string>): void => {
+  text: string,
+  owner: ScriptSymbol,
+  visit: (node: AnyNode, selves: ReadonlySet<string>) => void
+): void {
+  const walk = (
+    node: unknown,
+    selves: ReadonlySet<string>,
+    methods: boolean
+  ): void => {
     if (Array.isArray(node)) {
       for (const item of node) {
-        walk(item, selves);
+        walk(item, selves, methods);
       }
 
       return;
@@ -362,33 +631,59 @@ function memberEdits(
       return;
     }
 
+    visit(node, selves);
+    let inner = selves;
+    let innerMethods = methods;
+    if (node.type === 'ClassDef') {
+      const def = node as unknown as ClassDef;
+      // Functions directly in the owner's body are its methods.
+      innerMethods =
+        def.name === owner.name &&
+        def.start >= owner.range.start &&
+        def.end <= owner.range.end;
+    } else if (node.type === 'FunctionDef') {
+      const def = node as unknown as FunctionDef;
+      const params = def.params.map((p) => p.name.replace(/^\*+/, ''));
+      const isStatic = def.decorators.some((d) =>
+        /^@\s*staticmethod\b/.test(text.slice(d.start, d.end))
+      );
+      inner = methods
+        ? new Set(!isStatic && params[0] ? [params[0]] : [])
+        : new Set([...selves].filter((n) => !params.includes(n)));
+      innerMethods = false;
+    }
+
+    for (const [key, value] of Object.entries(node)) {
+      if (key !== 'type' && key !== 'start' && key !== 'end') {
+        walk(value, inner, innerMethods);
+      }
+    }
+  };
+
+  walk(body, new Set(), false);
+}
+
+/** `self.name` / `cls.name` / `Class.name` uses of a class member. */
+function memberEdits(
+  body: ReadonlyArray<Stmt>,
+  text: string,
+  cls: ScriptSymbol,
+  oldName: string,
+  newName: string
+): TextEdit[] {
+  const edits: TextEdit[] = [];
+  walkWithSelves(body, text, cls, (node, selves) => {
     if (node.type === 'Attribute' && node.name === oldName) {
       const object = node.object as AnyNode;
       if (
         object.type === 'Name' &&
-        (selves.has(object.name as string) || object.name === className)
+        (selves.has(object.name as string) || object.name === cls.name)
       ) {
         const end = node.end as number;
         edits.push({ start: end - oldName.length, end, text: newName });
       }
     }
-
-    let inner = selves;
-    if (node.type === 'FunctionDef') {
-      const def = node as unknown as FunctionDef;
-      const inClass = def.start >= cls.range.start && def.end <= cls.range.end;
-      const first = def.params[0]?.name;
-      inner = inClass && first ? new Set([first]) : selves;
-    }
-
-    for (const [key, value] of Object.entries(node)) {
-      if (key !== 'type' && key !== 'start' && key !== 'end') {
-        walk(value, inner);
-      }
-    }
-  };
-
-  walk(body, new Set());
+  });
   return edits;
 }
 
@@ -412,7 +707,7 @@ export function renamePythonSymbol(
   );
   if (owner) {
     // A method or class attribute: its declaration, `self.x`, `Class.x`.
-    const edits = memberEdits(body, owner, symbol.name, name);
+    const edits = memberEdits(body, text, owner, symbol.name, name);
     const { occurrences } = resolveModule(body, text);
     for (const o of occurrences) {
       if (
@@ -473,62 +768,54 @@ export function pythonCallSites(
   );
 
   const sites: CallSite[] = [];
-  const walk = (node: unknown, selves: ReadonlySet<string>): void => {
-    if (Array.isArray(node)) {
-      for (const item of node) {
-        walk(item, selves);
-      }
-
+  const visit = (node: AnyNode, selves: ReadonlySet<string>): void => {
+    if (node.type !== 'Call') {
       return;
     }
 
-    if (!isObject(node)) {
-      return;
-    }
-
-    if (node.type === 'Call') {
-      const callee = node.callee as AnyNode;
-      const object = callee.object as AnyNode | undefined;
-      const matches = owner
-        ? callee.type === 'Attribute' &&
-          callee.name === symbol.name &&
-          object?.type === 'Name' &&
-          (selves.has(object.name as string) || object.name === owner.name)
-        : callee.type === 'Name' && uses.has(callee.start as number);
-      const args = node.args as AnyNode[];
-      if (matches && !args.some((a) => a.star)) {
-        sites.push({
-          open: text.indexOf('(', callee.end as number) + 1,
-          close: (node.end as number) - 1,
-          args: args
-            .filter((a) => !a.keyword)
-            .map((a) => ({ start: a.start as number, end: a.end as number })),
-          keywords: args
-            .filter((a) => a.keyword)
-            .map((a) => ({
-              name: a.keyword as string,
-              range: { start: a.start as number, end: a.end as number },
-            })),
-        });
-      }
-    }
-
-    let inner = selves;
-    if (node.type === 'FunctionDef' && owner) {
-      const def = node as unknown as FunctionDef;
-      const inClass =
-        def.start >= owner.range.start && def.end <= owner.range.end;
-      const first = def.params[0]?.name;
-      inner = inClass && first ? new Set([first]) : selves;
-    }
-
-    for (const [key, value] of Object.entries(node)) {
-      if (key !== 'type' && key !== 'start' && key !== 'end') {
-        walk(value, inner);
-      }
+    const callee = node.callee as AnyNode;
+    const object = callee.object as AnyNode | undefined;
+    const matches = owner
+      ? callee.type === 'Attribute' &&
+        callee.name === symbol.name &&
+        object?.type === 'Name' &&
+        (selves.has(object.name as string) || object.name === owner.name)
+      : callee.type === 'Name' && uses.has(callee.start as number);
+    const args = node.args as AnyNode[];
+    if (matches && !args.some((a) => a.star)) {
+      sites.push({
+        open: text.indexOf('(', callee.end as number) + 1,
+        close: (node.end as number) - 1,
+        args: args
+          .filter((a) => !a.keyword)
+          .map((a) => ({ start: a.start as number, end: a.end as number })),
+        keywords: args
+          .filter((a) => a.keyword)
+          .map((a) => ({
+            name: a.keyword as string,
+            range: { start: a.start as number, end: a.end as number },
+          })),
+      });
     }
   };
 
-  walk(body, new Set());
+  if (owner) {
+    walkWithSelves(body, text, owner, visit);
+  } else {
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+      } else if (isObject(node)) {
+        visit(node, new Set());
+        for (const [key, value] of Object.entries(node)) {
+          if (key !== 'type' && key !== 'start' && key !== 'end') {
+            walk(value);
+          }
+        }
+      }
+    };
+    walk(body);
+  }
+
   return sites;
 }
