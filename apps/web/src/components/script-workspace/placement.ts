@@ -165,13 +165,17 @@ export function placeNewNodes(
   // On the grid, like a node placed in UE.
   const world = snapToGrid(placement.world);
   // Old nodes whose id changed with their text (an `if` around the new
-  // statement) are followed, not new.
-  const followed = new Set(
-    previous ? renamedNodes(previous, next, change).values() : []
-  );
+  // statement) are followed, not new. An id an old node left is new: a
+  // same-text node added before it takes its `#0` (and it becomes `#1`).
+  const renamed = previous
+    ? renamedNodes(previous, next, change)
+    : new Map<string, string>();
+  const followed = new Set(renamed.values());
   const fresh = next.functions
     .flatMap((f) => f.nodes)
-    .filter((n) => !known.has(n.id) && !followed.has(n.id));
+    .filter(
+      (n) => (!known.has(n.id) || renamed.has(n.id)) && !followed.has(n.id)
+    );
   // The node asked for (also a pure one, e.g. a lone Get), else the first
   // new statement, else the root of a new expression (output not wired).
   const used = new Set(

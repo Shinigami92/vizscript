@@ -3,6 +3,7 @@ import { applyTextEdits, floatingNodes } from '@vizscript/core';
 import { applyTypeScriptOp, parseTypeScript } from '@vizscript/lang-typescript';
 import { describe, expect, it } from 'vitest';
 import {
+  allNodeIds,
   anchoredTo,
   floatingLayout,
   placementFor,
@@ -65,6 +66,40 @@ describe('placing the nodes of an op', () => {
       '+'
     );
     expect(placed?.[plus.id]).toEqual({ x: 496, y: 304 });
+  });
+});
+
+describe('placing a node with the text of a later one', () => {
+  it('places the new node, not its same-text twin further down', () => {
+    const text =
+      'function f(item: { price: number }) {\n  console.log(1);\n  item.price;\n}\n';
+    const doc = parseTypeScript(text, 't.ts');
+    const at = text.indexOf('  console.log');
+    const edits = [{ start: at, end: at, text: '  item.price;\n' }];
+    const source = applyTextEdits(text, edits);
+    const next = parseTypeScript(source, 't.ts');
+    const prices = next.functions
+      .flatMap((f) => f.nodes)
+      .filter((n) => n.title === '.price')
+      .toSorted((a, b) => a.range.start - b.range.start);
+    const { placed, selectAfter } = placeNewNodes(
+      {
+        world: { x: 800, y: 400 },
+        known: allNodeIds(doc),
+        matches: (n) => n.title === '.price',
+        select: 'added',
+      },
+      doc,
+      next,
+      { before: text, edits },
+      source,
+      {},
+      LAYOUT
+    );
+    // The new one (first in the code, `#0`) goes where it was dropped.
+    expect(placed?.[prices[0]?.id ?? '']).toEqual({ x: 800, y: 400 });
+    expect(placed?.[prices[1]?.id ?? '']).toBeUndefined();
+    expect(selectAfter).toEqual([prices[0]?.id]);
   });
 });
 
