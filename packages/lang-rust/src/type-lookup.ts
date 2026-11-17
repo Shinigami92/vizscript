@@ -523,6 +523,12 @@ class TypeLookup {
           return 'str';
         }
 
+        // A range (`&v[1..3]`) is a slice: the same kind of container.
+        if (expr.index.type === 'Range') {
+          const item = itemOf(object);
+          return item === undefined ? undefined : `[${item}]`;
+        }
+
         const { name, args } = generic(object ?? '');
         return name.endsWith('Map') ? args[1] : itemOf(object);
       }
