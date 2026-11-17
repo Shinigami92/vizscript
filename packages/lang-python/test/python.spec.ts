@@ -88,6 +88,10 @@ describe('parsePythonDocument', () => {
     expect(dataTypeOf('tuple[int, str]')).toBe('array');
     expect(dataTypeOf('dict[str, int]')).toBe('Map<string, number>');
     expect(dataTypeOf('dict')).toBe('map');
+    expect(dataTypeOf('int | float')).toBe('number');
+    expect(dataTypeOf('int | str')).toBe('any');
+    expect(dataTypeOf('Union[str, None]')).toBe('string');
+    expect(dataTypeOf('Literal["utf-8", "utf-16"]')).toBe('string');
     expect(dataTypeOf('set[str]')).toBe('Set<string>');
     expect(dataTypeOf('Counter[str]')).toBe('Map<string, number>');
     expect(dataTypeOf('dict[str, list[int]]')).toBe('Map<string, number[]>');

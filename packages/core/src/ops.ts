@@ -542,6 +542,11 @@ export interface LanguageBackend {
   /** Library modules the backend knows (offered by the action menu). */
   libraries?: ReadonlyArray<string>;
   /**
+   * A library declaration file read from elsewhere (Python: a typeshed
+   * stub) made ready for the parser, for language `version` (`3.12`).
+   */
+  prepareLibrary?(text: string, version?: string): string;
+  /**
    * Names of project files that state the language version
    * (`package.json`, `pyproject.toml`), most telling first.
    */

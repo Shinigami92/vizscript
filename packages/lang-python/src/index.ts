@@ -3,6 +3,7 @@ import { LANGUAGE_ID, parsePythonDocument } from './lower';
 import { applyPythonOp, PYTHON_TYPES } from './ops';
 import { pythonReferences } from './references';
 import { PYTHON_LIBRARIES, pythonLibrary } from './stdlib';
+import { preparePythonStub } from './stub-text';
 import { PYTHON_VERSION_FILES, pythonVersion } from './version';
 
 export type * from './ast';
@@ -12,6 +13,7 @@ export { parsePythonDocument } from './lower';
 export { dataTypeOf } from './lower-utils';
 export { applyPythonOp, PYTHON_SYNTAX } from './ops';
 export { pythonReferences } from './references';
+export { preparePythonStub } from './stub-text';
 
 export const pythonBackend: LanguageBackend = {
   id: LANGUAGE_ID,
@@ -22,6 +24,7 @@ export const pythonBackend: LanguageBackend = {
   references: pythonReferences,
   typeSystem: PYTHON_TYPES,
   library: pythonLibrary,
+  prepareLibrary: preparePythonStub,
   libraries: PYTHON_LIBRARIES,
   versionFiles: PYTHON_VERSION_FILES,
   version: pythonVersion,

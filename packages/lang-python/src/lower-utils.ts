@@ -15,8 +15,8 @@ export const COMPARISONS = new Set([
   'is not',
 ]);
 
-/** Splits `A, B[C, D]` at top-level commas. */
-function splitTypes(text: string): string[] {
+/** Splits `A, B[C, D]` at top-level commas (or another separator). */
+function splitTypes(text: string, separator = ','): string[] {
   const parts: string[] = [];
   let depth = 0;
   let start = 0;
@@ -26,7 +26,7 @@ function splitTypes(text: string): string[] {
       depth++;
     } else if (char === ']' || char === ')') {
       depth--;
-    } else if (char === ',' && depth === 0) {
+    } else if (char === separator && depth === 0) {
       parts.push(text.slice(start, i));
       start = i + 1;
     }
@@ -43,9 +43,33 @@ export function dataTypeOf(annotation: string | undefined): DataType {
   }
 
   const type = annotation.replaceAll(/\s+/g, '');
-  const optional = type.match(/^(?:Optional\[(.+)\]|(.+)\|None|None\|(.+))$/);
+  const optional = type.match(/^Optional\[(.+)\]$/);
   if (optional) {
-    return dataTypeOf(optional[1] ?? optional[2] ?? optional[3]);
+    return dataTypeOf(optional[1]);
+  }
+
+  // `int | str`, `Union[int, str]`: one pin type when all parts agree.
+  const union = type.match(/^Union\[(.+)\]$/);
+  const parts = union ? splitTypes(union[1] ?? '') : splitTypes(type, '|');
+  if (parts.length > 1) {
+    const types = new Set(
+      parts.filter((p) => p !== 'None').map((p) => dataTypeOf(p))
+    );
+    const [only] = types;
+    return types.size === 1 && only !== undefined ? only : 'any';
+  }
+
+  // `Literal["a", "b"]`: the type of its values.
+  const literal = type.match(/^(?:typing\.)?Literal\[(.+)\]$/);
+  if (literal) {
+    const first = splitTypes(literal[1] ?? '')[0] ?? '';
+    return /^["']/.test(first)
+      ? 'string'
+      : /^(?:True|False)$/.test(first)
+        ? 'bool'
+        : /^-?\d/.test(first)
+          ? 'number'
+          : 'any';
   }
 
   if (/^(int|float|complex|Decimal)$/.test(type)) {
