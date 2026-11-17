@@ -632,6 +632,7 @@ export const GDSCRIPT_SYNTAX: StatementSyntax = {
       ? `${value}.0`
       : value,
   appendToFile: false,
+  requiredArguments: true,
   elseBranch: (body, indent, unit, elseIf) =>
     elseIf
       ? `\n${indent}el${body}`

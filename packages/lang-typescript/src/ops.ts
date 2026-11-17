@@ -759,6 +759,8 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
       literal.kind === 'template' ? '`' : (literal.raw[0] ?? "'")
     ),
   appendToFile: true,
+  // Classes and `const` functions don't exist before their line.
+  definitionsRunInOrder: true,
   elseBranch: (body, indent, unit, elseIf) =>
     elseIf ? ` else ${body}` : ` else {\n${indent}${unit}${body}\n${indent}}`,
   statementEnd: ';',

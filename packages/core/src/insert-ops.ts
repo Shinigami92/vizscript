@@ -210,8 +210,11 @@ function belowDefinitions(
     )
     .map((s) => s.declarationRange ?? s.range)
     .filter((r) => r.start >= insert.at && r.end <= next);
-  const last = Math.max(-1, ...definitions.map((r) => r.end));
-  return last < 0
+  const end = Math.max(-1, ...definitions.map((r) => r.end));
+  // To the end of its line: a `const` function's range ends before `;`.
+  const newline = text.indexOf('\n', end);
+  const last = newline === -1 ? text.length : newline;
+  return end < 0
     ? insert
     : {
         at: last,
@@ -401,9 +404,10 @@ export function callWith(
 }
 
 /**
- * A new call of a function of the file or an imported one, with the
- * placeholder for each required parameter it doesn't get (`summary(None)`),
- * in languages where a missing argument fails when the call runs.
+ * A new call of a function of the file or an imported one, with a value
+ * for each required parameter it doesn't get, in languages where a missing
+ * argument fails: the default of the parameter's type when it is a plain
+ * value (`heal(0)`), else the placeholder (`summary(None)`).
  */
 function withRequiredArguments(
   doc: GraphDocument,
@@ -422,7 +426,7 @@ function withRequiredArguments(
       (s.kind === 'function' || s.kind === 'import') &&
       s.params
   );
-  let required = 0;
+  const required: string[] = [];
   for (const param of fn?.params ?? []) {
     if (
       param.rest ||
@@ -432,21 +436,17 @@ function withRequiredArguments(
       break;
     }
 
-    required++;
+    const option = syntax.declarations?.typeSystem.primitives.find(
+      (p) => p.name === param.type?.text.trim()
+    );
+    required.push(
+      option && !option.defaultIsNode ? option.defaultValue : syntax.placeholder
+    );
   }
 
   const given = template.args ?? [];
-  return required > given.length
-    ? {
-        ...template,
-        args: [
-          ...given,
-          ...Array.from(
-            { length: required - given.length },
-            () => syntax.placeholder
-          ),
-        ],
-      }
+  return required.length > given.length
+    ? { ...template, args: [...given, ...required.slice(given.length)] }
     : template;
 }
 
