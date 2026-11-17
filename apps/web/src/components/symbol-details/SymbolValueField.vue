@@ -9,6 +9,7 @@ import type {
 import { arrayElements, fieldValue, isConstantValue } from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
 import NumberField from '../NumberField.vue';
+import PinType from '../PinType.vue';
 import ArrayValueField from '../value-fields/ArrayValueField.vue';
 import ValueFields from '../ValueFields.vue';
 import { PLACEHOLDER_VALUES, stringValue, valueKindOf } from './value-kinds';
@@ -254,6 +255,7 @@ function resetValue(): void {
         >
           <span class="i-mdi-restore" />
         </button>
+        <PinType :type="symbol.dataType" />
       </template>
     </ArrayValueField>
   </div>
@@ -375,6 +377,7 @@ function resetValue(): void {
       >
         <span class="i-mdi-restore" />
       </button>
+      <PinType :type="symbol.dataType" />
     </dd>
   </template>
 </template>

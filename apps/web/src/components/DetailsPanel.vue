@@ -21,7 +21,7 @@ import { indexDocument, pinPeers } from '../graph/doc-index';
 import { lineColumn, snippet } from '../graph/source';
 import DetailsSection, { DETAILS_QUERY } from './DetailsSection.vue';
 import NumberField from './NumberField.vue';
-import PinIcon from './PinIcon.vue';
+import PinType from './PinType.vue';
 import SymbolValueField from './symbol-details/SymbolValueField.vue';
 import SymbolDetails from './SymbolDetails.vue';
 
@@ -583,54 +583,59 @@ function deleteSelection(): void {
               </button>
             </div>
           </div>
-          <div v-for="pin in inputs" :key="pin.id" class="pin-row">
-            <div class="flex items-center gap-1.5">
-              <PinIcon :pin="pin" :size="9" />
-              <span class="text-zinc-200">{{ pinLabel(pin) }}</span>
-              <span class="ml-auto text-[11px] text-zinc-500">{{
-                pin.kind === 'exec' ? 'exec' : pin.type
+          <!-- UE's Details rows: name, value, the pin's type dot. -->
+          <div class="pin-grid" data-ui="node-input-rows">
+            <template v-for="pin in inputs" :key="pin.id">
+              <span class="pin-name" :title="pinLabel(pin)">{{
+                pinLabel(pin)
               }}</span>
-            </div>
-            <template v-if="pinPeers(index, single.node.id, pin).length > 0">
-              <button
-                v-for="(peer, i) in pinPeers(index, single.node.id, pin)"
-                :key="i"
-                type="button"
-                class="link mt-0.5 block truncate text-xs"
-                @click="emit('select', [peer.node.id])"
-              >
-                ← {{ peer.node.title
-                }}<span v-if="peer.pin?.name" class="text-zinc-500">
-                  · {{ peer.pin.name }}</span
+              <div class="min-w-0">
+                <template
+                  v-if="pinPeers(index, single.node.id, pin).length > 0"
                 >
-              </button>
+                  <button
+                    v-for="(peer, i) in pinPeers(index, single.node.id, pin)"
+                    :key="i"
+                    type="button"
+                    class="link block max-w-full truncate text-xs"
+                    @click="emit('select', [peer.node.id])"
+                  >
+                    ← {{ peer.node.title
+                    }}<span v-if="peer.pin?.name" class="text-zinc-500">
+                      · {{ peer.pin.name }}</span
+                    >
+                  </button>
+                </template>
+                <NumberField
+                  v-else-if="pin.literal?.kind === 'number'"
+                  :key="`${single.node.id}:${pin.id}`"
+                  :value="pin.literal.value"
+                  :editable="editable && pin.literal.editable"
+                  :label="`Value of ${pinLabel(pin)}`"
+                  @commit="
+                    (value) =>
+                      single && commitLiteralValue(single.node, pin, value)
+                  "
+                />
+                <input
+                  v-else-if="pin.literal"
+                  :key="`${single.node.id}:${pin.id}:${pin.literal.raw}`"
+                  class="input py-0.5 font-mono text-xs"
+                  :value="pin.literal.value"
+                  :disabled="!editable || !pin.literal.editable"
+                  :aria-label="`Value of ${pinLabel(pin)}`"
+                  @change="commitLiteral(single.node, pin, $event)"
+                  @keydown.enter="($event.target as HTMLInputElement).blur()"
+                />
+                <code
+                  v-else-if="pinExpression(pin)"
+                  class="block truncate rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-[11px] text-zinc-400"
+                  :title="pinExpression(pin)"
+                  >{{ pinExpression(pin) }}</code
+                >
+              </div>
+              <PinType :pin="pin" />
             </template>
-            <NumberField
-              v-else-if="pin.literal?.kind === 'number'"
-              :key="`${single.node.id}:${pin.id}`"
-              class="mt-1"
-              :value="pin.literal.value"
-              :editable="editable && pin.literal.editable"
-              :label="`Value of ${pinLabel(pin)}`"
-              @commit="
-                (value) => single && commitLiteralValue(single.node, pin, value)
-              "
-            />
-            <input
-              v-else-if="pin.literal"
-              :key="`${single.node.id}:${pin.id}:${pin.literal.raw}`"
-              class="input mt-1 py-1 font-mono text-xs"
-              :value="pin.literal.value"
-              :disabled="!editable || !pin.literal.editable"
-              :aria-label="`Value of ${pinLabel(pin)}`"
-              @change="commitLiteral(single.node, pin, $event)"
-              @keydown.enter="($event.target as HTMLInputElement).blur()"
-            />
-            <code
-              v-else-if="pinExpression(pin)"
-              class="mt-1 block truncate rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-[11px] text-zinc-400"
-              >{{ pinExpression(pin) }}</code
-            >
           </div>
         </DetailsSection>
 
@@ -643,13 +648,12 @@ function deleteSelection(): void {
           id="node-outputs"
           :title="callOfFunction ? 'Call outputs' : 'Outputs'"
         >
-          <div v-for="pin in outputs" :key="pin.id" class="pin-row">
-            <div class="flex items-center gap-1.5">
-              <PinIcon :pin="pin" :size="9" />
+          <div class="pin-grid" data-ui="node-output-rows">
+            <template v-for="pin in outputs" :key="pin.id">
               <input
                 v-if="editable && bindsName(single.node, pin)"
                 :value="pin.name"
-                class="input min-w-0 flex-1 py-0.5 font-mono text-xs"
+                class="input w-24 min-w-0 py-0.5 font-mono text-xs"
                 :aria-label="`Name of ${pin.name}`"
                 spellcheck="false"
                 @keydown.enter.prevent="
@@ -661,23 +665,25 @@ function deleteSelection(): void {
                 "
                 @change="commitBinding(single.node, pin, $event)"
               />
-              <span v-else class="text-zinc-200">{{ pinLabel(pin) }}</span>
-              <span class="ml-auto text-[11px] text-zinc-500">{{
-                pin.kind === 'exec' ? 'exec' : pin.type
+              <span v-else class="pin-name" :title="pinLabel(pin)">{{
+                pinLabel(pin)
               }}</span>
-            </div>
-            <button
-              v-for="(peer, i) in pinPeers(index, single.node.id, pin)"
-              :key="i"
-              type="button"
-              class="link mt-0.5 block truncate text-xs"
-              @click="emit('select', [peer.node.id])"
-            >
-              → {{ peer.node.title
-              }}<span v-if="peer.pin?.name" class="text-zinc-500">
-                · {{ peer.pin.name }}</span
-              >
-            </button>
+              <div class="min-w-0">
+                <button
+                  v-for="(peer, i) in pinPeers(index, single.node.id, pin)"
+                  :key="i"
+                  type="button"
+                  class="link block max-w-full truncate text-xs"
+                  @click="emit('select', [peer.node.id])"
+                >
+                  → {{ peer.node.title
+                  }}<span v-if="peer.pin?.name" class="text-zinc-500">
+                    · {{ peer.pin.name }}</span
+                  >
+                </button>
+              </div>
+              <PinType :pin="pin" />
+            </template>
           </div>
         </DetailsSection>
 
@@ -900,8 +906,12 @@ function deleteSelection(): void {
   @apply flex w-full items-center gap-2 px-3 py-1 text-left text-zinc-300 hover:bg-zinc-800/70;
 }
 
-.pin-row {
-  @apply px-3 py-1.5;
+.pin-grid {
+  @apply grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-3 pb-1.5 text-xs;
+}
+
+.pin-name {
+  @apply max-w-28 truncate text-zinc-300;
 }
 
 .link {

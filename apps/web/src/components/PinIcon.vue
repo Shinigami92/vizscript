@@ -5,7 +5,10 @@ import { computed } from 'vue';
 import { useTheme } from '../composables/use-theme';
 
 /** A pin's symbol like on the canvas: exec arrow, value dot or array grid. */
-const props = defineProps<{ pin: Pin; size?: number }>();
+const props = defineProps<{
+  pin: Pick<Pin, 'kind' | 'type'>;
+  size?: number;
+}>();
 
 const size = computed(() => props.size ?? 10);
 const { scheme } = useTheme();

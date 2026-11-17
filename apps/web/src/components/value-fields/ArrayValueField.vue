@@ -10,6 +10,7 @@ import { arrayElements, inputSource, objectEntries } from '@vizscript/core';
 import { computed, ref } from 'vue';
 import type { MenuEntry } from '../ContextMenu.vue';
 import ContextMenu from '../ContextMenu.vue';
+import PinType from '../PinType.vue';
 import PinValueField from './PinValueField.vue';
 
 /**
@@ -151,7 +152,7 @@ function drop(index: number): void {
       <template v-if="editable">
         <button
           type="button"
-          class="btn-ghost ml-auto shrink-0 px-1"
+          class="btn-ghost ml-auto shrink-0 px-0.5"
           title="Add an element"
           aria-label="Add an element"
           @click="add"
@@ -161,7 +162,7 @@ function drop(index: number): void {
         <button
           v-if="clearable && elements.length > 0"
           type="button"
-          class="btn-ghost shrink-0 px-1"
+          class="btn-ghost shrink-0 px-0.5"
           title="Remove all elements"
           aria-label="Remove all elements"
           @click="emit('clear')"
@@ -232,10 +233,11 @@ function drop(index: number): void {
               </div>
             </template>
           </template>
+          <PinType :pin="pin" />
           <button
             v-if="editable"
             type="button"
-            class="btn-ghost shrink-0 px-0.5"
+            class="btn-ghost flex w-4 shrink-0 justify-center px-0"
             :title="`Actions of element ${index}`"
             :aria-label="`Actions of element ${index}`"
             data-ui="array-element-menu"
@@ -247,7 +249,12 @@ function drop(index: number): void {
         <template v-for="object in [objectOf(pin)]" :key="`${pin.id}:entries`">
           <dl
             v-if="object && openItems.has(index)"
-            class="mb-1 ml-4 grid grid-cols-[4.5rem_1fr] items-center gap-x-1.5 gap-y-0.5 border-l border-zinc-800 pl-1.5"
+            :class="
+              editable
+                ? 'grid-cols-[4.5rem_minmax(0,1fr)_auto_auto]'
+                : 'grid-cols-[4.5rem_minmax(0,1fr)_auto]'
+            "
+            class="mb-1 ml-4 grid items-center gap-x-1 gap-y-0.5 border-l border-zinc-800 pl-1.5"
           >
             <template v-for="entry in object.entries" :key="entry.id">
               <dt class="truncate font-mono text-zinc-500" :title="entry.name">
@@ -265,6 +272,9 @@ function drop(index: number): void {
                   @op="emit('op', $event)"
                 />
               </dd>
+              <PinType :pin="entry" />
+              <!-- Keeps the type dots in line with the elements' ▼. -->
+              <span v-if="editable" class="w-4" aria-hidden="true" />
             </template>
           </dl>
         </template>
