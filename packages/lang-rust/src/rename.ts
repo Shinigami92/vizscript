@@ -184,6 +184,216 @@ function inMacroTokens(node: SyntaxNode): boolean {
   return false;
 }
 
+/** The pattern of a `let`: what is between `let` (or `mut`) and `=`/`:`. */
+function letParts(node: SyntaxNode): {
+  pattern: SyntaxNode[];
+  rest: SyntaxNode[];
+} {
+  const parts = children(node);
+  const at = parts.findIndex((k) => k.name === 'let');
+  const end = parts.findIndex(
+    (k, i) => i > at && (k.name === '=' || k.name === ':' || k.name === ';')
+  );
+  const stop = end === -1 ? parts.length : end;
+  return {
+    pattern: parts.slice(at + 1, stop),
+    rest: parts.slice(stop),
+  };
+}
+
+/** A name in a function and the binding it resolves to (its start). */
+interface LocalUse {
+  node: SyntaxNode;
+  name: string;
+  /** Offset of the name (inside a format string for `{name}`). */
+  start: number;
+  binding: number | undefined;
+}
+
+/**
+ * Every local name of a function resolved like Rust does: a block is a
+ * scope, `let` binds after its own value (`let x = x + 1` reads the old
+ * `x`) and shadows earlier ones, closure parameters, `if let` / `while let`,
+ * `for` and match arm patterns bind for their part only. Names inside macro
+ * arguments and `{name}` in their format strings count too.
+ */
+function localUses(fn: SyntaxNode, text: string): LocalUse[] {
+  const uses: LocalUse[] = [];
+  type Env = Map<string, number>;
+  const nameOf = (node: SyntaxNode): string => text.slice(node.from, node.to);
+
+  const bind = (pattern: SyntaxNode, env: Env): void => {
+    visit(pattern, (node) => {
+      if (node.name === 'BoundIdentifier') {
+        const name = nameOf(node);
+        env.set(name, node.from);
+        uses.push({ node, name, start: node.from, binding: node.from });
+      }
+
+      // Types and values in patterns (`Some(x)`, `1..=5`) bind nothing.
+      return !node.name.endsWith('Expression');
+    });
+  };
+
+  const walk = (node: SyntaxNode, env: Env): void => {
+    switch (node.name) {
+      case 'FunctionItem': {
+        // A nested function sees none of the outer locals.
+        const inner: Env = new Map();
+        for (const kid of children(node)) {
+          if (kid.name === 'ParamList') {
+            bind(kid, inner);
+          } else if (kid.name === 'Block') {
+            walk(kid, inner);
+          }
+        }
+
+        return;
+      }
+
+      case 'Block': {
+        const inner = new Map(env);
+        for (const kid of children(node)) {
+          walk(kid, inner);
+        }
+
+        return;
+      }
+
+      case 'LetDeclaration': {
+        // A statement: binds in the block it is in, after its value.
+        const { pattern, rest } = letParts(node);
+        for (const kid of rest) {
+          walk(kid, env);
+        }
+
+        for (const kid of pattern) {
+          bind(kid, env);
+        }
+
+        return;
+      }
+
+      case 'IfExpression':
+      case 'WhileExpression': {
+        // `if let p = v { … }`: `p` binds in the first block only.
+        let then: Env = env;
+        let bodyDone = false;
+        for (const kid of children(node)) {
+          if (kid.name === 'LetDeclaration') {
+            const { pattern, rest } = letParts(kid);
+            for (const part of rest) {
+              walk(part, env);
+            }
+
+            then = new Map(then);
+            for (const part of pattern) {
+              bind(part, then);
+            }
+          } else if (kid.name === 'Block' && !bodyDone) {
+            walk(kid, then);
+            bodyDone = true;
+          } else {
+            walk(kid, env);
+          }
+        }
+
+        return;
+      }
+
+      case 'ClosureExpression': {
+        const inner = new Map(env);
+        for (const kid of children(node)) {
+          if (kid.name === 'ParamList') {
+            bind(kid, inner);
+          } else {
+            walk(kid, inner);
+          }
+        }
+
+        return;
+      }
+
+      case 'ForExpression': {
+        const inner = new Map(env);
+        let state: 'pattern' | 'iter' | 'body' = 'pattern';
+        for (const kid of children(node)) {
+          if (kid.name === 'for') {
+            state = 'pattern';
+          } else if (kid.name === 'in') {
+            state = 'iter';
+          } else if (state === 'pattern') {
+            bind(kid, inner);
+          } else if (kid.name === 'Block') {
+            walk(kid, inner);
+            state = 'body';
+          } else {
+            walk(kid, env);
+          }
+        }
+
+        return;
+      }
+
+      case 'MatchArm': {
+        const inner = new Map(env);
+        let pattern = true;
+        for (const kid of children(node)) {
+          if (kid.name === 'Guard' || kid.name === '=>') {
+            pattern = false;
+          }
+
+          if (pattern) {
+            bind(kid, inner);
+          } else {
+            walk(kid, inner);
+          }
+        }
+
+        return;
+      }
+
+      case 'Identifier': {
+        if (node.parent?.name !== 'ScopedIdentifier') {
+          const name = nameOf(node);
+          uses.push({ node, name, start: node.from, binding: env.get(name) });
+        }
+
+        return;
+      }
+
+      case 'String': {
+        if (inMacroTokens(node)) {
+          // `{name}` / `{name:?}` in a format string.
+          const raw = nameOf(node);
+          for (const match of raw.matchAll(
+            /(?<!\{)\{([A-Za-z_]\w*)(?=[:}])/g
+          )) {
+            const name = match[1] ?? '';
+            uses.push({
+              node,
+              name,
+              start: node.from + (match.index ?? 0) + 1,
+              binding: env.get(name),
+            });
+          }
+        }
+
+        return;
+      }
+
+      default: {
+        for (const kid of children(node)) {
+          walk(kid, env);
+        }
+      }
+    }
+  };
+
+  walk(fn, new Map());
+  return uses;
+}
+
 function unique(edits: TextEdit[]): TextEdit[] {
   const seen = new Set<string>();
   return edits.filter((e) => {
@@ -248,34 +458,26 @@ export function renameRustSymbol(
           qualifiedName(s) === symbol.scope
       );
       const fn = owner ? functionAt(top, owner.range) : undefined;
-      const range = fn
-        ? { start: symbol.range.start, end: fn.to }
-        : symbol.range;
-      visit(top, (node) => {
-        if (
-          !inside(node, range) &&
-          !(node.from <= range.start && node.to >= range.end)
-        ) {
-          return node.from <= range.end && node.to >= range.start;
+      if (!fn) {
+        edits.push({ ...symbol.nameRange, text: name });
+        break;
+      }
+
+      // Only the names that resolve to this binding (Rust's block scopes,
+      // shadowing, closure and pattern bindings).
+      const binding = symbol.nameRange.start;
+      for (const use of localUses(fn, text)) {
+        if (use.name !== old || use.binding !== binding) {
+          continue;
         }
 
-        if (
-          (node.name === 'Identifier' || node.name === 'BoundIdentifier') &&
-          isName(node) &&
-          inside(node, range) &&
-          node.parent?.name !== 'ScopedIdentifier'
-        ) {
-          edits.push(occurrence(node, old, name));
-        } else if (
-          node.name === 'String' &&
-          inMacroTokens(node) &&
-          inside(node, range)
-        ) {
-          edits.push(...formatEdits(node, text, old, name));
-        }
+        edits.push(
+          use.node.name === 'String'
+            ? { start: use.start, end: use.start + old.length, text: name }
+            : occurrence(use.node, old, name)
+        );
+      }
 
-        return true;
-      });
       break;
     }
 
