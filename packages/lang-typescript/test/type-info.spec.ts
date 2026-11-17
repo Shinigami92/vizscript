@@ -232,3 +232,34 @@ describe('type information from a checker', () => {
     ).toBe(false);
   });
 });
+
+describe('containers', () => {
+  it('types a new map and the SET that keeps it', async () => {
+    const text = 'const prices = new Map<string, number>();\n';
+    const parsed = parseTypeScript(text, 'm.ts');
+    const call = parsed.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.title === 'new Map');
+    expect(
+      call?.pins.find((p) => p.direction === 'out' && p.kind === 'data')?.type
+    ).toBe('map');
+
+    const typed = await resolveTypes(
+      parsed,
+      text,
+      'm.ts',
+      fakeProvider({
+        prices: {
+          text: 'Map<string, number>',
+          dataType: 'Map<string, number>',
+        },
+      })
+    );
+    const set = typed.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'setVar');
+    expect(set?.pins.find((p) => p.id === 'value')?.type).toBe(
+      'Map<string, number>'
+    );
+  });
+});

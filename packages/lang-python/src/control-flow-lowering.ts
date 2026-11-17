@@ -5,12 +5,7 @@ import type {
   Pin,
   StatementMeta,
 } from '@vizscript/core';
-import {
-  arrayElementType,
-  lineEnd,
-  lineIndent,
-  truncate,
-} from '@vizscript/core';
+import { iteratedType, lineEnd, lineIndent, truncate } from '@vizscript/core';
 import type { Block, IfStmt, Span, Stmt } from './ast';
 import { ExpressionLowering } from './expression-lowering';
 import { rangeOf, unwrap } from './lower-utils';
@@ -195,7 +190,7 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
     const target = unwrap(stmt.target);
     const elementName = this.src(rangeOf(target));
     const elementType =
-      target.type === 'Name' ? arrayElementType(iterable.type) : 'any';
+      target.type === 'Name' ? iteratedType(iterable.type) : 'any';
     const pins: Pin[] = [
       this.execIn(),
       iterPin,

@@ -7,7 +7,7 @@ import type {
   StatementMeta,
   ValueSource,
 } from '@vizscript/core';
-import { arrayElementType, lineIndent, truncate } from '@vizscript/core';
+import { iteratedType, lineIndent, truncate } from '@vizscript/core';
 import type {
   Block,
   Expr,
@@ -316,7 +316,7 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
     const name = stmt.pattern.simple;
     const elementName = this.src(rangeOf(stmt.pattern));
     const elementType =
-      name && iterable ? arrayElementType(iterable.type) : 'any';
+      name && iterable ? iteratedType(iterable.type, 'pairs') : 'any';
     const pins: Pin[] = [
       this.execIn(),
       ...(counting ? counting.map((i) => i.pin) : [iterPin]),

@@ -1,6 +1,6 @@
 import type * as t from '@babel/types';
 import type { DataType } from '@vizscript/core';
-import { arrayOf } from '@vizscript/core';
+import { arrayOf, mapOf, setOf } from '@vizscript/core';
 
 /** Pin type of a TypeScript type annotation. */
 export function typeFromAnnotation(
@@ -80,8 +80,25 @@ export function typeFromAnnotation(
     case 'TSTypeReference': {
       const name =
         node.typeName.type === 'Identifier' ? node.typeName.name : undefined;
+      const params = node.typeArguments?.params;
       if (name === 'Array' || name === 'ReadonlyArray') {
-        return arrayOf(typeFromAnnotation(node.typeArguments?.params[0]));
+        return arrayOf(typeFromAnnotation(params?.[0]));
+      }
+
+      if (name === 'Set' || name === 'ReadonlySet' || name === 'WeakSet') {
+        return setOf(typeFromAnnotation(params?.[0]));
+      }
+
+      if (
+        name === 'Map' ||
+        name === 'ReadonlyMap' ||
+        name === 'WeakMap' ||
+        name === 'Record'
+      ) {
+        return mapOf(
+          typeFromAnnotation(params?.[0]),
+          typeFromAnnotation(params?.[1])
+        );
       }
 
       return name ?? 'object';

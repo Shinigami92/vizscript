@@ -96,7 +96,8 @@ describe('parseGDScriptDocument', () => {
     expect(dataTypeOf('Array[Node]')).toBe('Node[]');
     expect(dataTypeOf('PackedVector3Array')).toBe('Vector3[]');
     expect(dataTypeOf('Array')).toBe('array');
-    expect(dataTypeOf('Dictionary[String, int]')).toBe('object');
+    expect(dataTypeOf('Dictionary[String, int]')).toBe('Map<string, number>');
+    expect(dataTypeOf('Dictionary')).toBe('map');
     expect(dataTypeOf('Node3D')).toBe('Node3D');
   });
 

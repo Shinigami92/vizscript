@@ -1,6 +1,6 @@
 import type * as t from '@babel/types';
 import type { Pin } from '@vizscript/core';
-import { arrayElementType, lineIndent, truncate } from '@vizscript/core';
+import { iteratedType, lineIndent, truncate } from '@vizscript/core';
 import { ExpressionLowering } from './expression-lowering';
 import type { InputSpec } from './lower-utils';
 import { patternName, rangeOf } from './lower-utils';
@@ -255,7 +255,7 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
       isOf ? 'array' : 'object'
     );
     // `for (const x of names)` with `names: string[]` gives a typed element.
-    const elementType = isOf ? arrayElementType(iterable.type) : 'string';
+    const elementType = isOf ? iteratedType(iterable.type, 'pairs') : 'string';
     const node = this.addNode({
       kind: 'forEach',
       title: isOf ? 'For Each' : 'For Each Key',

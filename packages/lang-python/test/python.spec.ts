@@ -86,7 +86,11 @@ describe('parsePythonDocument', () => {
     expect(dataTypeOf('list[Item]')).toBe('Item[]');
     expect(dataTypeOf('tuple[int, ...]')).toBe('number[]');
     expect(dataTypeOf('tuple[int, str]')).toBe('array');
-    expect(dataTypeOf('dict[str, int]')).toBe('object');
+    expect(dataTypeOf('dict[str, int]')).toBe('Map<string, number>');
+    expect(dataTypeOf('dict')).toBe('map');
+    expect(dataTypeOf('set[str]')).toBe('Set<string>');
+    expect(dataTypeOf('Counter[str]')).toBe('Map<string, number>');
+    expect(dataTypeOf('dict[str, list[int]]')).toBe('Map<string, number[]>');
     expect(dataTypeOf('Item')).toBe('Item');
   });
 

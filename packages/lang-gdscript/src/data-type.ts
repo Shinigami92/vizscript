@@ -1,5 +1,5 @@
 import type { DataType } from '@vizscript/core';
-import { arrayOf } from '@vizscript/core';
+import { arrayOf, mapOf } from '@vizscript/core';
 import type { TypeRef } from './ast';
 
 /** Element types of Godot's packed arrays. */
@@ -61,8 +61,13 @@ export function dataTypeOf(ref: TypeRef | string | undefined): DataType {
     return 'array';
   }
 
-  if (/^Dictionary\b/.test(name)) {
-    return 'object';
+  // `Dictionary[String, int]` (Godot 4.4) → a typed map.
+  const dictionary = name.match(/^Dictionary(?:\[(.+),(.+)\])?$/);
+  if (dictionary) {
+    return mapOf(
+      dataTypeOf(dictionary[1]?.trim()),
+      dataTypeOf(dictionary[2]?.trim())
+    );
   }
 
   return name;

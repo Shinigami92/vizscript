@@ -5,12 +5,7 @@ import type {
   Pin,
   StatementMeta,
 } from '@vizscript/core';
-import {
-  arrayElementType,
-  lineEnd,
-  lineIndent,
-  truncate,
-} from '@vizscript/core';
+import { iteratedType, lineEnd, lineIndent, truncate } from '@vizscript/core';
 import type { Block, Expr, IfStmt, Span, Stmt } from './ast';
 import { dataTypeOf } from './data-type';
 import { ExpressionLowering } from './expression-lowering';
@@ -118,7 +113,7 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
       ? dataTypeOf(stmt.variableType)
       : counting
         ? 'number'
-        : arrayElementType(iterable?.type ?? 'any');
+        : iteratedType(iterable?.type ?? 'any');
     const node = this.addNode({
       kind: 'forEach',
       title: counting ? 'For Loop' : 'For Each',

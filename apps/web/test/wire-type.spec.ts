@@ -34,6 +34,14 @@ const edge = (kind: GraphEdge['kind']): GraphEdge => ({
   to: { node: 'b', pin: 'in' },
 });
 
+/** The name of a wire carrying `type`. */
+function typeNameOf(type: string): string | undefined {
+  return wireType(
+    indexDocument(docWith(pin('out', 'out', { type }), pin('in', 'in', {}))),
+    edge('data')
+  )?.name;
+}
+
 describe('wireType', () => {
   it('names exec wires Exec', () => {
     const index = indexDocument(null);
@@ -51,6 +59,14 @@ describe('wireType', () => {
       name: 'Array of Item',
       detail: '{ name: string }[]',
     });
+  });
+
+  it('names maps and sets', () => {
+    expect(typeNameOf('Map<string, Item[]>')).toBe(
+      'Map of String to Array of Item'
+    );
+    expect(typeNameOf('Set<number>')).toBe('Set of Number');
+    expect(typeNameOf('map')).toBe('Map');
   });
 
   it("takes the input's type when the output has none", () => {

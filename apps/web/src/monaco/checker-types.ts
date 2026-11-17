@@ -5,7 +5,12 @@ import type {
   TypeInfo,
   TypeMember,
 } from '@vizscript/core';
+import { mapOf, setOf } from '@vizscript/core';
 import type * as TS from 'typescript';
+
+/** Map and set types, drawn as Blueprint map and set pins. */
+const MAPS = new Set(['Map', 'ReadonlyMap', 'WeakMap']);
+const SETS = new Set(['Set', 'ReadonlySet', 'WeakSet']);
 
 const NOWHERE: SourceRange = { start: 0, end: 0 };
 
@@ -131,9 +136,25 @@ class TypeMapper {
       return inner === 'any' ? 'array' : `${inner}[]`;
     }
 
+    // `Record<K, V>` is an alias of a mapped type: its arguments name it.
+    if (type.aliasSymbol?.getName() === 'Record') {
+      const [key, value] = type.aliasTypeArguments ?? [];
+      return mapOf(this.argType(key), this.argType(value));
+    }
+
     const name = type.getSymbol()?.getName();
     if (name === 'RegExp') {
       return 'regexp';
+    }
+
+    if (name && MAPS.has(name)) {
+      const [key, value] = checker.getTypeArguments(type as TS.TypeReference);
+      return mapOf(this.argType(key), this.argType(value));
+    }
+
+    if (name && SETS.has(name)) {
+      const [element] = checker.getTypeArguments(type as TS.TypeReference);
+      return setOf(this.argType(element));
     }
 
     if (
@@ -149,6 +170,11 @@ class TypeMapper {
     }
 
     return this.text(type);
+  }
+
+  /** Pin type of a type argument (`any` when missing). */
+  private argType(type: TS.Type | undefined): DataType {
+    return type ? this.dataType(this.widen(type)) : 'any';
   }
 
   /** Fields and methods of an object type, for the action menu. */

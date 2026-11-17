@@ -93,7 +93,7 @@ describe('the Python type lookup', () => {
     expect(type('first')).toBe('Item');
     expect(type('index')).toBe('number');
     expect(type('word')).toBe('string');
-    expect(type('prices')).toBe('object');
+    expect(type('prices')).toBe('Map<string, number>');
   });
 
   it('drops results of functions that return None', () => {

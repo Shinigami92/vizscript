@@ -101,6 +101,29 @@ describe('checkerTypesAt', () => {
     expect(json).toEqual({ text: 'any', dataType: 'any' });
     expect(nothing).toBeUndefined();
   });
+
+  it('maps Map, Set and Record to map and set pin types', () => {
+    const text = `const prices = new Map<string, number>();
+const tags = new Set(['a']);
+const totals: Record<string, number[]> = {};
+const loose = new Map();
+`;
+    const [prices, tags, totals, loose] = checkerTypesAt(
+      ts,
+      program(text),
+      '/main.ts',
+      [
+        at(text, 'prices'),
+        at(text, 'tags'),
+        at(text, 'totals'),
+        at(text, 'loose'),
+      ]
+    );
+    expect(prices?.dataType).toBe('Map<string, number>');
+    expect(tags?.dataType).toBe('Set<string>');
+    expect(totals?.dataType).toBe('Map<string, number[]>');
+    expect(loose?.dataType).toBe('map');
+  });
 });
 
 describe('type texts', () => {

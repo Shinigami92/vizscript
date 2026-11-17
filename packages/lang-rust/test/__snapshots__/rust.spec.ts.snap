@@ -20,7 +20,7 @@ exports[`parseRustDocument > collects symbols 1`] = `
   "function label: function",
   "function main: function",
   "local main.cart: Item[]",
-  "local main.by_name: object",
+  "local main.by_name: Map<string, number>",
 ]
 `;
 
@@ -145,7 +145,7 @@ function main
   #3 makeArray "Make Vec" [<e0:Item <e1:Item >value:Item[]]
   #4 setVar "Set cart" (let) [<exec:▶ >then:▶ <value:Item[] >out:Item[]]
   #5 call "HashMap::new" [<exec:▶ >then:▶ >return:HashMap]
-  #6 setVar "Set by_name" (let : HashMap<String, f64>) [<exec:▶ >then:▶ <value:object >out:object]
+  #6 setVar "Set by_name" (let : HashMap<String, f64>) [<exec:▶ >then:▶ <value:Map<string, number> >out:Map<string, number>]
   #7 getVar "cart" [>value:Item[]]
   #8 operator "&" [<a:Item[] >value:Item[]]
   #9 call "total_price" [<exec:▶ >then:▶ <target:object <arg0:Item[] <arg1:number=0.1 >return:number]

@@ -1,5 +1,5 @@
 import type { DataType } from '@vizscript/core';
-import { arrayOf } from '@vizscript/core';
+import { arrayOf, mapOf, setOf } from '@vizscript/core';
 
 const NUMBER = /^(?:[iu](?:8|16|32|64|128|size)|f32|f64)$/;
 
@@ -80,15 +80,16 @@ export function dataTypeOf(
     return dataTypeOf(args[0], self);
   }
 
-  if (
-    name &&
-    /^(?:Vec|VecDeque|HashSet|BTreeSet|LinkedList|BinaryHeap)$/.test(name)
-  ) {
+  if (name && /^(?:Vec|VecDeque|LinkedList|BinaryHeap)$/.test(name)) {
     return arrayOf(dataTypeOf(args[0], self));
   }
 
+  if (name && /^(?:HashSet|BTreeSet|IndexSet)$/.test(name)) {
+    return setOf(dataTypeOf(args[0], self));
+  }
+
   if (name && /^(?:HashMap|BTreeMap|IndexMap)$/.test(name)) {
-    return 'object';
+    return mapOf(dataTypeOf(args[0], self), dataTypeOf(args[1], self));
   }
 
   const slice = type.match(/^\[(.+?)(?:;.+)?\]$/);

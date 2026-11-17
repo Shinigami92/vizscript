@@ -1,5 +1,5 @@
 import type { DataType, FunctionGraph, SourceRange } from '@vizscript/core';
-import { arrayOf } from '@vizscript/core';
+import { arrayOf, mapOf, setOf } from '@vizscript/core';
 import type { ClassDef, Expr, FunctionDef, Param, Span, Stmt } from './ast';
 
 export const COMPARISONS = new Set([
@@ -14,6 +14,27 @@ export const COMPARISONS = new Set([
   'is',
   'is not',
 ]);
+
+/** Splits `A, B[C, D]` at top-level commas. */
+function splitTypes(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '[' || char === '(') {
+      depth++;
+    } else if (char === ']' || char === ')') {
+      depth--;
+    } else if (char === ',' && depth === 0) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+
+  parts.push(text.slice(start));
+  return parts.filter((part) => part !== '');
+}
 
 /** Maps a type annotation (as written) to a pin type. */
 export function dataTypeOf(annotation: string | undefined): DataType {
@@ -47,9 +68,30 @@ export function dataTypeOf(annotation: string | undefined): DataType {
     return 'any';
   }
 
+  // `set[int]` → typed sets, `dict[str, int]` → typed maps.
+  const set = type.match(
+    /^(?:typing\.)?(?:set|Set|frozenset|FrozenSet|AbstractSet|MutableSet)(?:\[(.+)\])?$/
+  );
+  if (set) {
+    return setOf(dataTypeOf(set[1]));
+  }
+
+  const map = type.match(
+    /^(?:typing\.|collections\.)?(?:dict|Dict|Mapping|MutableMapping|defaultdict|DefaultDict|OrderedDict|Counter)(?:\[(.+)\])?$/
+  );
+  if (map) {
+    const [key, value] = splitTypes(map[1] ?? '');
+    return mapOf(
+      dataTypeOf(key),
+      (type.split('[')[0] ?? '').endsWith('Counter')
+        ? 'number'
+        : dataTypeOf(value)
+    );
+  }
+
   // `list[int]`, `Sequence[Item]`, `tuple[str, ...]` → typed arrays.
   const generic = type.match(
-    /^(?:list|List|Sequence|Iterable|Iterator|set|Set|frozenset|(?:collections\.abc\.)?\w*Sequence)\[(.+)\]$/
+    /^(?:list|List|Sequence|Iterable|Iterator|(?:collections\.abc\.)?\w*Sequence)\[(.+)\]$/
   );
   if (generic) {
     return arrayOf(dataTypeOf(generic[1]));
@@ -60,15 +102,11 @@ export function dataTypeOf(annotation: string | undefined): DataType {
     return arrayOf(dataTypeOf(homogeneous[1]));
   }
 
-  if (
-    /^(list|List|tuple|Tuple|Sequence|Iterable|Iterator|set|Set|frozenset)\b/.test(
-      type
-    )
-  ) {
+  if (/^(list|List|tuple|Tuple|Sequence|Iterable|Iterator)\b/.test(type)) {
     return 'array';
   }
 
-  if (/^(dict|Dict|Mapping|MutableMapping|TypedDict)\b/.test(type)) {
+  if (/^TypedDict\b/.test(type)) {
     return 'object';
   }
 

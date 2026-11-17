@@ -74,7 +74,8 @@ describe('dataTypeOf', () => {
     expect(dataTypeOf('Vec<Item>')).toBe('Item[]');
     expect(dataTypeOf('&[Item]')).toBe('Item[]');
     expect(dataTypeOf('Option<f64>')).toBe('number');
-    expect(dataTypeOf('HashMap<String, f64>')).toBe('object');
+    expect(dataTypeOf('HashMap<String, f64>')).toBe('Map<string, number>');
+    expect(dataTypeOf('HashSet<String>')).toBe('Set<string>');
     expect(dataTypeOf('()')).toBe('void');
     expect(dataTypeOf('Self', 'Item')).toBe('Item');
     expect(dataTypeOf('crate::Item')).toBe('Item');

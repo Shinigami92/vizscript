@@ -5,7 +5,14 @@ import type {
   GraphNode,
   Pin,
 } from '@vizscript/core';
-import { pinKey } from '@vizscript/core';
+import {
+  isMapType,
+  isSetType,
+  mapKeyType,
+  mapValueType,
+  pinKey,
+  setElementType,
+} from '@vizscript/core';
 
 export interface IndexedNode {
   node: GraphNode;
@@ -84,17 +91,32 @@ const TYPE_NAMES: Record<string, string> = {
   string: 'String',
   object: 'Object',
   array: 'Array',
+  map: 'Map',
+  set: 'Set',
   function: 'Function',
   null: 'Null',
   void: 'Void',
   regexp: 'RegExp',
 };
 
-/** A type's name for people (`number` → Number, `Item[]` → Array of Item). */
+/**
+ * A type's name for people (`number` → Number, `Item[]` → Array of Item,
+ * `Map<string, number>` → Map of String to Number).
+ */
 function typeName(type: string): string {
-  return type.endsWith('[]')
-    ? `Array of ${typeName(type.slice(0, -2))}`
-    : (TYPE_NAMES[type] ?? type);
+  if (type.endsWith('[]')) {
+    return `Array of ${typeName(type.slice(0, -2))}`;
+  }
+
+  if (type !== 'map' && isMapType(type)) {
+    return `Map of ${typeName(mapKeyType(type))} to ${typeName(mapValueType(type))}`;
+  }
+
+  if (type !== 'set' && isSetType(type)) {
+    return `Set of ${typeName(setElementType(type))}`;
+  }
+
+  return TYPE_NAMES[type] ?? type;
 }
 
 /**

@@ -9,6 +9,7 @@ import type {
   SourceRange,
 } from './ir';
 import type { ScriptSymbol, SymbolParam } from './symbols';
+import { refinesType } from './types';
 import { typeWildcardPins } from './wildcard-pins';
 
 /** A field or method of a type, for the action menu (`response.ok`). */
@@ -174,11 +175,15 @@ function typedNode(
     return [next];
   });
   // A SET takes the type of its variable: its value input too, unless the
-  // parser knew better (`const response = await fetch(url)`).
+  // parser knew better (`const response = await fetch(url)`); an untyped
+  // container (`new Map()` is a `map`) takes its typed one.
   const out =
     node.kind === 'setVar' ? pins.find((p) => p.id === 'out') : undefined;
   const value = pins.find(
-    (p) => p.id === 'value' && p.direction === 'in' && p.type === 'any'
+    (p) =>
+      p.id === 'value' &&
+      p.direction === 'in' &&
+      (p.type === 'any' || (out !== undefined && refinesType(p.type, out.type)))
   );
   if (out?.typeText !== undefined && value) {
     pins[pins.indexOf(value)] = { ...value, type: out.type };
