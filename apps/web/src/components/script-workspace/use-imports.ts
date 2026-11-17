@@ -180,7 +180,12 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
       exports = read
         ? read(path)
             .then(async (source) =>
-              exportedSymbols(await client.parse(source, path), source)
+              exportedSymbols(
+                await client.parse(source, path, undefined, {
+                  background: true,
+                }),
+                source
+              )
             )
             .catch(() => [])
         : Promise.resolve([]);
@@ -304,8 +309,9 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
 
   // --------------------------------------------------------- libraries
 
+  // Declarations of libraries wait for the parses the user waits for.
   const npm = new NpmTypes((source, fileName) =>
-    client.parse(source, fileName)
+    client.parse(source, fileName, undefined, { background: true })
   );
   const libraryCache = new Map<string, Promise<ScriptSymbol[]>>();
 
@@ -326,7 +332,9 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
           const { stub } = await client.library(props.path, module);
           return stub
             ? exportedSymbols(
-                await client.parse(stub.text, stub.fileName),
+                await client.parse(stub.text, stub.fileName, undefined, {
+                  background: true,
+                }),
                 stub.text
               )
             : [];

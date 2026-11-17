@@ -1,7 +1,52 @@
 import { floatingNodes, resolveOverlay } from '@vizscript/core';
-import type { WorkerRequest, WorkerResponse } from './protocol';
+import type {
+  WorkerCall,
+  WorkerCalls,
+  WorkerRequest,
+  WorkerResponse,
+} from './protocol';
 /// <reference lib="webworker" />
 import { registry } from './registry';
+
+type Backend = NonNullable<ReturnType<typeof registry.forFile>>;
+
+/** The answer of each call, from the file's language backend. */
+const HANDLERS: {
+  [K in WorkerCall]: (
+    request: WorkerCalls[K]['request'],
+    backend: Backend
+  ) => WorkerCalls[K]['response'];
+} = {
+  parse: (r, backend) =>
+    backend.parse(r.text, r.fileName, { imports: r.imports }),
+  references: (r, backend) => backend.references?.(r.text, r.fileName) ?? [],
+  typeSystem: (_r, backend) => backend.typeSystem ?? null,
+  library: (r, backend) => ({
+    modules: backend.libraries ?? [],
+    stub: r.module ? (backend.library?.(r.module) ?? null) : null,
+  }),
+  versionFiles: (_r, backend) => backend.versionFiles ?? [],
+  version: (r, backend) => backend.version?.(r.files) ?? null,
+  applyOp: (r, backend) =>
+    backend.applyOp(r.text, r.op, r.fileName, {
+      imports: r.imports,
+      checked: r.checked,
+    }),
+  resolveOverlay: (r, backend) => {
+    const options = { imports: r.imports };
+    return resolveOverlay(r.text, r.overlay, {
+      parse: (text) => backend.parse(text, r.fileName, options),
+      applyOp: (text, op) => backend.applyOp(text, op, r.fileName, options),
+    });
+  },
+  floatingNodes: (r, backend) => {
+    const options = { imports: r.imports };
+    return floatingNodes(r.text, r.template, r.fnId, r.group, {
+      parse: (text) => backend.parse(text, r.fileName, options),
+      applyOp: (text, op) => backend.applyOp(text, op, r.fileName, options),
+    });
+  },
+};
 
 function handle(request: WorkerRequest): WorkerResponse {
   const backend = registry.forFile(request.fileName);
@@ -9,105 +54,11 @@ function handle(request: WorkerRequest): WorkerResponse {
     return { id: request.id, ok: false, error: 'Unsupported language' };
   }
 
-  switch (request.type) {
-    case 'parse': {
-      return {
-        id: request.id,
-        ok: true,
-        doc: backend.parse(request.text, request.fileName, {
-          imports: request.imports,
-        }),
-      };
-    }
-
-    case 'references': {
-      return {
-        id: request.id,
-        ok: true,
-        references: backend.references?.(request.text, request.fileName) ?? [],
-      };
-    }
-
-    case 'typeSystem': {
-      return {
-        id: request.id,
-        ok: true,
-        typeSystem: backend.typeSystem ?? null,
-      };
-    }
-
-    case 'library': {
-      return {
-        id: request.id,
-        ok: true,
-        library: {
-          modules: backend.libraries ?? [],
-          stub: request.module
-            ? (backend.library?.(request.module) ?? null)
-            : null,
-        },
-      };
-    }
-
-    case 'versionFiles': {
-      return {
-        id: request.id,
-        ok: true,
-        versionFiles: backend.versionFiles ?? [],
-      };
-    }
-
-    case 'version': {
-      return {
-        id: request.id,
-        ok: true,
-        version: backend.version?.(request.files) ?? null,
-      };
-    }
-
-    case 'applyOp': {
-      return {
-        id: request.id,
-        ok: true,
-        result: backend.applyOp(request.text, request.op, request.fileName, {
-          imports: request.imports,
-          checked: request.checked,
-        }),
-      };
-    }
-
-    case 'resolveOverlay': {
-      const options = { imports: request.imports };
-      return {
-        id: request.id,
-        ok: true,
-        resolution: resolveOverlay(request.text, request.overlay, {
-          parse: (text) => backend.parse(text, request.fileName, options),
-          applyOp: (text, op) =>
-            backend.applyOp(text, op, request.fileName, options),
-        }),
-      };
-    }
-
-    case 'floatingNodes': {
-      const options = { imports: request.imports };
-      return {
-        id: request.id,
-        ok: true,
-        floating: floatingNodes(
-          request.text,
-          request.template,
-          request.fnId,
-          request.group,
-          {
-            parse: (text) => backend.parse(text, request.fileName, options),
-            applyOp: (text, op) =>
-              backend.applyOp(text, op, request.fileName, options),
-          }
-        ),
-      };
-    }
-  }
+  const handler = HANDLERS[request.type] as (
+    request: WorkerRequest,
+    backend: Backend
+  ) => unknown;
+  return { id: request.id, ok: true, value: handler(request, backend) };
 }
 
 self.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {

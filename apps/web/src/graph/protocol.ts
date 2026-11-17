@@ -14,46 +14,66 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 
-export type WorkerRequest =
-  | {
-      id: number;
-      type: 'parse';
+/** Every call of the parsing worker: what it is sent and what it answers. */
+export interface WorkerCalls {
+  parse: {
+    request: {
       text: string;
       fileName: string;
       /** Declarations of imported names (call pins, types). */
       imports?: ImportedDeclaration[];
-    }
-  | { id: number; type: 'references'; text: string; fileName: string }
-  | { id: number; type: 'typeSystem'; fileName: string }
-  | { id: number; type: 'library'; fileName: string; module?: string }
-  | { id: number; type: 'versionFiles'; fileName: string }
-  | {
-      id: number;
-      type: 'version';
+    };
+    response: GraphDocument;
+  };
+  references: {
+    request: { text: string; fileName: string };
+    response: ModuleReference[];
+  };
+  typeSystem: {
+    request: { fileName: string };
+    response: TypeSystemInfo | null;
+  };
+  library: {
+    request: { fileName: string; module?: string };
+    /** Known library modules, and the stub of `module` if asked for. */
+    response: {
+      modules: ReadonlyArray<string>;
+      stub: { text: string; fileName: string } | null;
+    };
+  };
+  versionFiles: {
+    request: { fileName: string };
+    response: ReadonlyArray<string>;
+  };
+  version: {
+    request: {
       fileName: string;
       /** The language's version files, nearest folder first. */
       files: ProjectFile[];
-    }
-  | {
-      id: number;
-      type: 'applyOp';
+    };
+    response: LanguageVersion | null;
+  };
+  applyOp: {
+    request: {
       text: string;
       fileName: string;
       op: GraphOp;
       imports?: ImportedDeclaration[];
       checked?: ParseOptions['checked'];
-    }
-  | {
-      id: number;
-      type: 'resolveOverlay';
+    };
+    response: OpResult;
+  };
+  resolveOverlay: {
+    request: {
       text: string;
       fileName: string;
       overlay: GraphOverlay;
       imports?: ImportedDeclaration[];
-    }
-  | {
-      id: number;
-      type: 'floatingNodes';
+    };
+    response: OverlayResolution;
+  };
+  floatingNodes: {
+    request: {
       text: string;
       fileName: string;
       template: NodeTemplate;
@@ -63,23 +83,17 @@ export type WorkerRequest =
       group: string;
       imports?: ImportedDeclaration[];
     };
+    response: FloatingResult;
+  };
+}
 
+export type WorkerCall = keyof WorkerCalls;
+
+export type WorkerRequest = {
+  [K in WorkerCall]: { id: number; type: K } & WorkerCalls[K]['request'];
+}[WorkerCall];
+
+/** The answer to request `id`: its value, or why it failed. */
 export type WorkerResponse =
-  | { id: number; ok: true; doc: GraphDocument }
-  | { id: number; ok: true; result: OpResult }
-  | { id: number; ok: true; resolution: OverlayResolution }
-  | { id: number; ok: true; floating: FloatingResult }
-  | { id: number; ok: true; references: ModuleReference[] }
-  | { id: number; ok: true; typeSystem: TypeSystemInfo | null }
-  | { id: number; ok: true; versionFiles: ReadonlyArray<string> }
-  | { id: number; ok: true; version: LanguageVersion | null }
-  | {
-      id: number;
-      ok: true;
-      /** Known library modules, and the stub of `module` if asked for. */
-      library: {
-        modules: ReadonlyArray<string>;
-        stub: { text: string; fileName: string } | null;
-      };
-    }
+  | { id: number; ok: true; value: unknown }
   | { id: number; ok: false; error: string };

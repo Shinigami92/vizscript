@@ -13,194 +13,147 @@ import type {
   ProjectFile,
   TypeSystemInfo,
 } from '@vizscript/core';
-import type { WorkerRequest, WorkerResponse } from './protocol';
+import type { WorkerCall, WorkerCalls } from './protocol';
+import type { CallOptions } from './worker-connection';
+import { WorkerConnection } from './worker-connection';
 
-type Pending = {
-  resolve: (response: WorkerResponse) => void;
-  reject: (error: Error) => void;
-};
+let shared: WorkerConnection | undefined;
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
+/** The parsing worker of the page, started on first use. */
+function connection(): WorkerConnection {
+  shared ??= new WorkerConnection(
+    () =>
+      new Worker(new URL('./graph.worker.ts', import.meta.url), {
+        type: 'module',
+      })
+  );
+  return shared;
+}
+
+/** How a parse is scheduled: library parses wait, editor parses replace. */
+export interface ParseSchedule {
+  /** Library and npm declarations, the saved version: after the rest. */
+  background?: boolean;
+  /** A queued parse with the same key is replaced by this one. */
+  key?: string;
+}
 
 /**
  * Talks to the parsing worker so large files never block the UI thread.
+ * Every workspace has its own client; they share one worker, and a closed
+ * workspace's client drops what it still waits for (`dispose`).
  */
 export class GraphClient {
-  private readonly worker: Worker;
-  private readonly pending = new Map<number, Pending>();
-  private nextId = 1;
+  private readonly connection: WorkerConnection;
 
-  public constructor() {
-    this.worker = new Worker(new URL('./graph.worker.ts', import.meta.url), {
-      type: 'module',
-    });
-    this.worker.addEventListener(
-      'message',
-      (event: MessageEvent<WorkerResponse>) => {
-        const pending = this.pending.get(event.data.id);
-        this.pending.delete(event.data.id);
-        pending?.resolve(event.data);
-      }
-    );
-    this.worker.addEventListener('error', (event) => {
-      for (const pending of this.pending.values()) {
-        pending.reject(new Error(event.message));
-      }
-
-      this.pending.clear();
-    });
+  public constructor(worker?: WorkerConnection) {
+    this.connection = worker ?? connection();
   }
 
-  private send(
-    request: DistributiveOmit<WorkerRequest, 'id'>
-  ): Promise<WorkerResponse> {
-    const id = this.nextId++;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-      this.worker.postMessage({ ...request, id });
-    });
+  private send<K extends WorkerCall>(
+    type: K,
+    request: WorkerCalls[K]['request'],
+    options: Omit<CallOptions, 'owner'> = {}
+  ): Promise<WorkerCalls[K]['response']> {
+    return this.connection.call(type, request, { ...options, owner: this });
   }
 
-  public async parse(
+  public parse(
     text: string,
     fileName: string,
-    imports?: ImportedDeclaration[]
+    imports?: ImportedDeclaration[],
+    schedule: ParseSchedule = {}
   ): Promise<GraphDocument> {
-    const response = await this.send({
-      type: 'parse',
-      text,
-      fileName,
-      imports,
-    });
-    if (!response.ok) {
-      throw new Error(response.error);
-    }
-
-    if (!('doc' in response)) {
-      throw new Error('Unexpected worker response');
-    }
-
-    return response.doc;
+    return this.send(
+      'parse',
+      { text, fileName, imports },
+      {
+        ...(schedule.background ? { priority: 'low' as const } : {}),
+        ...(schedule.key === undefined ? {} : { key: schedule.key }),
+      }
+    );
   }
 
   /** Files referenced by the source (imports, resource paths). */
-  public async references(
+  public references(
     text: string,
     fileName: string
   ): Promise<ModuleReference[]> {
-    const response = await this.send({ type: 'references', text, fileName });
-    if (!response.ok || !('references' in response)) {
-      return [];
-    }
-
-    return response.references;
+    return this.send('references', { text, fileName }).catch(() => []);
   }
 
   /** Types and modifiers of the file's language (for the Details panel). */
-  public async typeSystem(fileName: string): Promise<TypeSystemInfo | null> {
-    const response = await this.send({ type: 'typeSystem', fileName });
-    return response.ok && 'typeSystem' in response ? response.typeSystem : null;
+  public typeSystem(fileName: string): Promise<TypeSystemInfo | null> {
+    return this.send('typeSystem', { fileName }).catch(() => null);
   }
 
   /** Names of the project files that state the language's version. */
-  public async versionFiles(fileName: string): Promise<ReadonlyArray<string>> {
-    const response = await this.send({ type: 'versionFiles', fileName });
-    return response.ok && 'versionFiles' in response
-      ? response.versionFiles
-      : [];
+  public versionFiles(fileName: string): Promise<ReadonlyArray<string>> {
+    return this.send('versionFiles', { fileName }).catch(() => []);
   }
 
   /** The language version stated by `files` (nearest folder first). */
-  public async version(
+  public version(
     fileName: string,
     files: ProjectFile[]
   ): Promise<LanguageVersion | null> {
-    const response = await this.send({ type: 'version', fileName, files });
-    return response.ok && 'version' in response ? response.version : null;
+    return this.send('version', { fileName, files }).catch(() => null);
   }
 
   /**
    * Library modules the language knows (Python's standard library), with
    * the stub of `module` (declarations in the language itself).
    */
-  public async library(
+  public library(
     fileName: string,
     module?: string
-  ): Promise<{
-    modules: ReadonlyArray<string>;
-    stub: { text: string; fileName: string } | null;
-  }> {
-    const response = await this.send({ type: 'library', fileName, module });
-    return response.ok && 'library' in response
-      ? response.library
-      : { modules: [], stub: null };
+  ): Promise<WorkerCalls['library']['response']> {
+    return this.send(
+      'library',
+      { fileName, module },
+      { priority: 'low' }
+    ).catch(() => ({ modules: [], stub: null }));
   }
 
-  public async applyOp(
+  public applyOp(
     text: string,
     fileName: string,
     op: GraphOp,
     imports?: ImportedDeclaration[],
     checked?: ParseOptions['checked']
   ): Promise<OpResult> {
-    const response = await this.send({
-      type: 'applyOp',
-      text,
-      fileName,
-      op,
-      imports,
-      checked,
-    });
-    if (!response.ok) {
-      return { ok: false, error: response.error };
-    }
-
-    if (!('result' in response)) {
-      throw new Error('Unexpected worker response');
-    }
-
-    return response.result;
+    return this.send('applyOp', { text, fileName, op, imports, checked }).catch(
+      (error: Error): OpResult => ({ ok: false, error: error.message })
+    );
   }
 
   /**
    * Writes graph-only edits as code once the graph is valid again
    * (`resolveOverlay` in core, with the file's backend).
    */
-  public async resolveOverlay(
+  public resolveOverlay(
     text: string,
     fileName: string,
     overlay: GraphOverlay,
     imports?: ImportedDeclaration[]
   ): Promise<OverlayResolution> {
-    const response = await this.send({
-      type: 'resolveOverlay',
+    return this.send('resolveOverlay', {
       text,
       fileName,
       // Plain data for the worker (the overlay may come from reactive state).
       overlay: JSON.parse(JSON.stringify(overlay)) as GraphOverlay,
       imports,
-    });
-    if (!response.ok) {
-      return {
-        status: 'pending',
-        issues: [{ node: '', message: response.error }],
-      };
-    }
-
-    if (!('resolution' in response)) {
-      throw new Error('Unexpected worker response');
-    }
-
-    return response.resolution;
+    }).catch((error: Error): OverlayResolution => ({
+      status: 'pending',
+      issues: [{ node: '', message: error.message }],
+    }));
   }
 
   /**
    * Nodes for a template that has no place in the code yet: they float in
    * the graph until they are wired in (`floatingNodes` in core).
    */
-  public async floatingNodes(
+  public floatingNodes(
     text: string,
     fileName: string,
     template: NodeTemplate,
@@ -208,27 +161,21 @@ export class GraphClient {
     group: string,
     imports?: ImportedDeclaration[]
   ): Promise<FloatingResult> {
-    const response = await this.send({
-      type: 'floatingNodes',
+    return this.send('floatingNodes', {
       text,
       fileName,
       template: JSON.parse(JSON.stringify(template)) as NodeTemplate,
       fnId,
       group,
       imports,
-    });
-    if (!response.ok) {
-      return { ok: false, error: response.error };
-    }
-
-    if (!('floating' in response)) {
-      throw new Error('Unexpected worker response');
-    }
-
-    return response.floating;
+    }).catch((error: Error): FloatingResult => ({
+      ok: false,
+      error: error.message,
+    }));
   }
 
+  /** The workspace is closed: what it still waits for is dropped. */
   public dispose(): void {
-    this.worker.terminate();
+    this.connection.cancel(this);
   }
 }

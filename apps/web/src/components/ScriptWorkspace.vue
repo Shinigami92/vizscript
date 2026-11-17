@@ -36,6 +36,7 @@ import { useToasts } from '../composables/use-toasts';
 import { GraphClient } from '../graph/graph-client';
 import { isPreviewable, isVisualizable } from '../graph/languages';
 import { countedUses, symbolNodes } from '../graph/symbols';
+import { isCancelled } from '../graph/worker-connection';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
 import WorkbenchView from '../workbench/WorkbenchView.vue';
@@ -613,9 +614,15 @@ async function reparse(): Promise<void> {
   const source = text.value;
   let next: GraphDocument;
   try {
-    next = await client.parse(source, props.path, importDeclarations());
+    // A newer text replaces this parse while it still waits.
+    next = await client.parse(source, props.path, importDeclarations(), {
+      key: 'editor',
+    });
   } catch (error) {
-    show(`Parsing failed: ${(error as Error).message}`, 'error');
+    if (!isCancelled(error)) {
+      show(`Parsing failed: ${(error as Error).message}`, 'error');
+    }
+
     return;
   }
 
@@ -757,7 +764,9 @@ watch(
     baseDoc.value =
       base === undefined || !visualizable.value
         ? null
-        : await client.parse(base, props.path).catch(() => null);
+        : await client
+            .parse(base, props.path, undefined, { background: true })
+            .catch(() => null);
   },
   { immediate: true }
 );
