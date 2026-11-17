@@ -1,5 +1,6 @@
 import type { Ref } from 'vue';
 import { ref, watch } from 'vue';
+import { readStored, writeStored } from '../storage/browser-storage';
 
 /** An open file, like a VS Code editor tab. */
 export interface FileTab {
@@ -25,20 +26,19 @@ export interface FileTabs {
   move: (path: string, index: number) => void;
 }
 
+function isTabs(data: unknown): FileTab[] | null {
+  return Array.isArray(data)
+    ? data.filter(
+        (t): t is FileTab =>
+          typeof t === 'object' &&
+          t !== null &&
+          typeof (t as FileTab).path === 'string'
+      )
+    : null;
+}
+
 function read(key: string): FileTab[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown;
-    return Array.isArray(value)
-      ? value.filter(
-          (t): t is FileTab =>
-            typeof t === 'object' &&
-            t !== null &&
-            typeof (t as FileTab).path === 'string'
-        )
-      : [];
-  } catch {
-    return [];
-  }
+  return readStored(key, isTabs) ?? [];
 }
 
 /**
@@ -55,11 +55,8 @@ export function useFileTabs(key: Ref<string>): FileTabs {
   watch(
     tabs,
     (value) => {
-      try {
-        localStorage.setItem(key.value, JSON.stringify(value));
-      } catch {
-        // storage full or unavailable: tabs stay for this visit
-      }
+      // A full storage is reported; the tabs stay for this visit.
+      writeStored(key.value, value);
     },
     { deep: true }
   );

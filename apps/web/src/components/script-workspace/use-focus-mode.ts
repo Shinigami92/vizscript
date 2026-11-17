@@ -6,6 +6,7 @@ import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { VIEW_PARAM } from '../../graph/share';
+import { readStored, writeStored } from '../../storage/browser-storage';
 import type { GraphCanvasInstance } from './types';
 
 const FOCUS_PARAM = 'fn';
@@ -52,15 +53,13 @@ export function useFocusMode(deps: FocusModeDeps): FocusMode {
   // same view; otherwise the view last used for this file in this browser.
   const initialCamera: Camera | null =
     parseCameraParam(route.query[VIEW_PARAM]) ??
-    (() => {
-      try {
-        return JSON.parse(
-          localStorage.getItem(cameraKey.value) ?? 'null'
-        ) as Camera | null;
-      } catch {
-        return null;
-      }
-    })();
+    readStored(cameraKey.value, (data) =>
+      typeof data === 'object' &&
+      data !== null &&
+      typeof (data as Camera).zoom === 'number'
+        ? (data as Camera)
+        : null
+    );
 
   let lastCamera: Camera | null = null;
   let unmounted = false;
@@ -69,11 +68,7 @@ export function useFocusMode(deps: FocusModeDeps): FocusMode {
   });
 
   const saveCamera = useDebounceFn((camera: Camera, path: string) => {
-    try {
-      localStorage.setItem(cameraKey.value, JSON.stringify(camera));
-    } catch {
-      // ignore
-    }
+    writeStored(cameraKey.value, camera);
 
     // Only while this file is still open (a pending update must not leak
     // into the URL of the next file).

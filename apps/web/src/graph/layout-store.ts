@@ -1,6 +1,7 @@
 import type { ProviderId } from '@vizscript/api-contract';
 import type { Point, Positions } from '@vizscript/core';
 import { api } from '../api/client';
+import { readStored, writeStored } from '../storage/browser-storage';
 
 /**
  * Where node positions of a file are persisted. The workspace only talks to
@@ -53,15 +54,15 @@ export function repoLayoutStore(
   };
 }
 
+function isPositions(data: unknown): Positions | null {
+  return typeof data === 'object' && data !== null && !Array.isArray(data)
+    ? (data as Positions)
+    : null;
+}
+
 export function localLayoutStore(key: string): LayoutStore {
   const storageKey = `vizscript:layout:${key}`;
-  const read = (): Positions => {
-    try {
-      return JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Positions;
-    } catch {
-      return {};
-    }
-  };
+  const read = (): Positions => readStored(storageKey, isPositions) ?? {};
 
   return {
     load: async () => read(),
@@ -75,11 +76,8 @@ export function localLayoutStore(key: string): LayoutStore {
         }
       }
 
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(current));
-      } catch {
-        // storage full or unavailable; layout stays in memory
-      }
+      // A full storage is reported; the layout stays in memory.
+      writeStored(storageKey, current);
     },
   };
 }

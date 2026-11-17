@@ -204,15 +204,43 @@ export interface RememberedFolder {
 
 const tabProjects = new Map<string, LocalProject>();
 
+let opened: Promise<IDBDatabase> | undefined;
+
+/**
+ * The page's one connection to the folders database. It closes itself when
+ * another tab upgrades the database, and the next use opens it again.
+ */
 function database(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  opened ??= new Promise((resolve, reject) => {
     const request = indexedDB.open('vizscript', 1);
     request.addEventListener('upgradeneeded', () => {
       request.result.createObjectStore('folders', { keyPath: 'id' });
     });
-    request.addEventListener('success', () => resolve(request.result));
+    request.addEventListener('success', () => {
+      const db = request.result;
+      db.addEventListener('versionchange', () => {
+        db.close();
+        opened = undefined;
+      });
+      db.addEventListener('close', () => {
+        opened = undefined;
+      });
+      resolve(db);
+    });
+    request.addEventListener('blocked', () => {
+      reject(
+        new Error(
+          'Another vizscript tab keeps the folder list open. Close or reload it.'
+        )
+      );
+    });
     request.addEventListener('error', () => reject(request.error));
   });
+  // A failed open is tried again next time.
+  opened.catch(() => {
+    opened = undefined;
+  });
+  return opened;
 }
 
 async function folders<T>(
