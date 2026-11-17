@@ -43,6 +43,53 @@ export function symbolLabel(symbol: ScriptSymbol): string {
     : SYMBOL_LABELS[symbol.kind];
 }
 
+/** The Details header's bar, in the color of the symbol's icon. */
+export const SYMBOL_BARS: Record<SymbolKind, string> = {
+  function: 'bg-sky-400',
+  method: 'bg-sky-400',
+  class: 'bg-amber-400',
+  variable: 'bg-emerald-400',
+  constant: 'bg-emerald-400',
+  local: 'bg-zinc-400',
+  type: 'bg-purple-400',
+  enum: 'bg-purple-400',
+  signal: 'bg-red-400',
+  import: 'bg-zinc-400',
+};
+
+const KIND_WORDS = ['export', 'static', 'async'];
+
+/**
+ * The Details header's line under the name: the exact kind and where it
+ * lives, e.g. "Exported function · Module", "Local variable in total",
+ * "Interface".
+ */
+export function symbolSubtitle(
+  symbol: ScriptSymbol,
+  topLevel?: string
+): string {
+  const label =
+    symbol.kind === 'type' && symbol.modifiers.includes('interface')
+      ? 'Interface'
+      : symbol.kind === 'type' && symbol.modifiers.includes('type')
+        ? 'Type alias'
+        : symbolLabel(symbol);
+  const words = KIND_WORDS.filter((w) => symbol.modifiers.includes(w)).map(
+    (w) => (w === 'export' ? 'exported' : w)
+  );
+  const kind =
+    words.length > 0
+      ? `${words.join(' ')} ${label.toLowerCase()}`.replace(/^./, (c) =>
+          c.toUpperCase()
+        )
+      : label;
+  if (symbol.scope) {
+    return `${kind} in ${symbol.scope}`;
+  }
+
+  return topLevel && symbol.kind !== 'import' ? `${kind} · ${topLevel}` : kind;
+}
+
 /**
  * Type shown next to a symbol: the declared one, else the inferred pin type
  * (marked as inferred), else `any`.

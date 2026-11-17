@@ -18,7 +18,9 @@ import {
 } from '@vizscript/core';
 import { computed, provide, ref } from 'vue';
 import { indexDocument, pinPeers } from '../graph/doc-index';
+import { NODE_CATEGORY_ICONS, nodeSubtitle } from '../graph/node-kinds';
 import { lineColumn, snippet } from '../graph/source';
+import DetailsHeader from './DetailsHeader.vue';
 import DetailsSection, { DETAILS_QUERY } from './DetailsSection.vue';
 import NumberField from './NumberField.vue';
 import PinType from './PinType.vue';
@@ -417,10 +419,19 @@ function deleteSelection(): void {
 
     <div class="min-h-0 flex-1 overflow-y-auto">
       <!-- UE's comment box details: its title and color. -->
+      <DetailsHeader
+        v-if="selectedBox && !shownSymbol"
+        :title="selectedBox.title || 'Comment'"
+        subtitle="Comment box"
+        icon="i-mdi-comment-text-outline text-zinc-300"
+        :bar-color="
+          COMMENT_BOX_COLORS[boxColor]?.color || 'var(--colors-zinc-500)'
+        "
+      />
       <DetailsSection
         v-if="selectedBox && !shownSymbol"
         id="comment-box"
-        title="Comment box"
+        title="General"
       >
         <dl
           class="grid grid-cols-[6.5rem_1fr] items-center gap-x-2 gap-y-1.5 px-3 text-xs"
@@ -528,18 +539,13 @@ function deleteSelection(): void {
           </SymbolDetails>
         </template>
         <!-- Nodes of a variable or function are named by it above. -->
-        <div
+        <DetailsHeader
           v-else
-          class="border-b border-zinc-800 px-3 py-2.5"
-          :style="{
-            boxShadow: `inset 3px 0 0 ${CATEGORY_COLORS[single.node.category]}`,
-          }"
-        >
-          <div class="font-semibold text-zinc-50">{{ single.node.title }}</div>
-          <div v-if="single.node.subtitle" class="text-xs italic text-zinc-400">
-            {{ single.node.subtitle }}
-          </div>
-        </div>
+          :title="single.node.title"
+          :subtitle="nodeSubtitle(single.node)"
+          :icon="`${NODE_CATEGORY_ICONS[single.node.category]} text-zinc-300`"
+          :bar-color="CATEGORY_COLORS[single.node.category]"
+        />
 
         <!-- The comment of a declaration's SET node is the variable's
              Description above: shown once. -->

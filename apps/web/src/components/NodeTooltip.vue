@@ -3,6 +3,7 @@ import { useElementBounding, useWindowSize } from '@vueuse/core';
 import { computed, useTemplateRef } from 'vue';
 import type { DocIndex } from '../graph/doc-index';
 import { describeType, pinPeers } from '../graph/doc-index';
+import { NODE_KIND_LABELS } from '../graph/node-kinds';
 import type { Problem } from '../graph/problems';
 import { lineColumn, snippet } from '../graph/source';
 import PinIcon from './PinIcon.vue';
@@ -60,33 +61,6 @@ const position = computed(() => {
       : props.y + gap;
   return { left: `${Math.max(4, left)}px`, top: `${Math.max(4, top)}px` };
 });
-
-const KIND_LABELS: Record<string, string> = {
-  entry: 'Event / function entry',
-  return: 'Return',
-  call: 'Function call',
-  operator: 'Operator (pure)',
-  template: 'Text template (pure)',
-  literal: 'Literal (pure)',
-  makeObject: 'Make object (pure)',
-  makeArray: 'Make array (pure)',
-  getProperty: 'Get property (pure)',
-  getVar: 'Get variable (pure)',
-  setVar: 'Set variable',
-  functionRef: 'Function reference',
-  branch: 'Flow control: branch',
-  switch: 'Flow control: switch',
-  forEach: 'Flow control: for each',
-  loop: 'Flow control: loop',
-  break: 'Break',
-  continue: 'Continue',
-  try: 'Flow control: try / catch',
-  throw: 'Throw',
-  await: 'Latent: await',
-  select: 'Select (pure)',
-  export: 'Module export',
-  unknown: 'Unrecognized code',
-};
 </script>
 
 <template>
@@ -163,7 +137,7 @@ const KIND_LABELS: Record<string, string> = {
         {{ entry.node.subtitle }}
       </div>
       <div class="mt-1 text-zinc-500">
-        {{ KIND_LABELS[entry.node.kind] ?? entry.node.kind }}
+        {{ NODE_KIND_LABELS[entry.node.kind] ?? entry.node.kind }}
         · {{ entry.fn.name }}
         <template v-if="location"> · line {{ location.line }}</template>
       </div>

@@ -16,7 +16,14 @@ import {
 import { computed, ref, watch } from 'vue';
 import { useTheme } from '../composables/use-theme';
 import { lineColumn, snippet } from '../graph/source';
-import { SYMBOL_ICONS, symbolLabel, symbolType } from '../graph/symbols';
+import {
+  SYMBOL_BARS,
+  SYMBOL_ICONS,
+  symbolSubtitle,
+  symbolType,
+  topLevelGraph,
+} from '../graph/symbols';
+import DetailsHeader from './DetailsHeader.vue';
 import DetailsSection from './DetailsSection.vue';
 import SymbolExportHint from './symbol-details/SymbolExportHint.vue';
 import SymbolFields from './symbol-details/SymbolFields.vue';
@@ -99,6 +106,10 @@ const source = computed(() =>
   )
 );
 const isImport = computed(() => props.symbol.kind === 'import');
+/** The file's top-level graph (Module, a GDScript class), for the header. */
+const topLevel = computed(
+  () => topLevelGraph(props.doc ?? null, props.text)?.name
+);
 
 // ----------------------------------------------------------------- rename
 
@@ -385,47 +396,25 @@ function setModifier(modifier: string, enabled: boolean): void {
 
 <template>
   <div data-ui="symbol-details">
-    <!-- Variables name themselves in their section, like UE's. -->
-    <div v-if="!isVariable" class="border-b border-zinc-800 px-3 py-2.5">
-      <div class="flex items-center gap-2">
-        <span
-          class="shrink-0"
-          :class="SYMBOL_ICONS[symbol.importedKind ?? symbol.kind]"
-        />
-        <!-- Like UE's name field: rename here (uses are renamed too). -->
-        <input
-          v-if="renamable"
-          v-model="nameDraft"
-          data-ui="symbol-name"
-          class="-mx-1 min-w-0 flex-1 truncate rounded bg-transparent px-1 font-semibold text-zinc-50 hover:bg-zinc-800 focus:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
-          :aria-label="`Name of ${symbol.name}`"
-          spellcheck="false"
-          @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
-          @keydown.escape.prevent="cancelRename($event)"
-          @change="commitRename"
-        />
-        <span v-else class="truncate font-semibold text-zinc-50">{{
-          symbol.name
-        }}</span>
-      </div>
-      <div class="mt-0.5 text-xs text-zinc-400">
-        {{ symbolLabel(symbol)
-        }}<template v-if="symbol.scope"> in {{ symbol.scope }}</template>
-      </div>
+    <!-- What is selected, at a glance; the name is edited below. -->
+    <DetailsHeader
+      :title="symbol.name"
+      :subtitle="symbolSubtitle(symbol, topLevel)"
+      :icon="SYMBOL_ICONS[symbol.importedKind ?? symbol.kind]"
+      :bar-class="SYMBOL_BARS[symbol.importedKind ?? symbol.kind]"
+    >
       <!-- A selected call: where its function is edited. -->
       <slot name="header" />
-    </div>
+    </DetailsHeader>
 
-    <DetailsSection
-      id="symbol-general"
-      :title="isVariable ? 'Variable' : symbolLabel(symbol)"
-    >
+    <!-- "General": the header above already says what it is. -->
+    <DetailsSection id="symbol-general" title="General">
       <dl class="grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1.5 px-3 text-xs">
-        <template v-if="isVariable">
+        <!-- Like UE's name field: rename here (uses are renamed too). -->
+        <template v-if="renamable">
           <dt class="pt-1 text-zinc-500">Name</dt>
           <dd class="flex min-w-0 items-center gap-2">
             <input
-              v-if="renamable"
               v-model="nameDraft"
               data-ui="symbol-name"
               class="input py-0.5 font-mono text-xs"
@@ -437,9 +426,6 @@ function setModifier(modifier: string, enabled: boolean): void {
               @keydown.escape.prevent="cancelRename($event)"
               @change="commitRename"
             />
-            <span v-else class="truncate font-mono text-zinc-200">{{
-              symbol.name
-            }}</span>
           </dd>
         </template>
         <template v-if="isImport">
