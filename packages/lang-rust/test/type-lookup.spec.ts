@@ -120,7 +120,8 @@ describe('the Rust type lookup', () => {
         .filter((p) => p.direction === 'in' && p.kind === 'data')
         .map((p) => [p.id, p.name, p.type])
     ).toEqual([
-      ['target', 'self', 'object'],
+      // A map's `get` is UE's FIND: the map pin comes typed.
+      ['target', 'self', 'Map<string, number>'],
       ['arg0', 'key', 'string'],
     ]);
   });

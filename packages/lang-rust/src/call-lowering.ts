@@ -10,10 +10,13 @@ import type {
 import {
   arrayOf,
   arrayOfAll,
+  findContainerOp,
   GraphBuilderBase,
+  styleContainerValue,
   truncate,
 } from '@vizscript/core';
 import type { Expr, Span } from './ast';
+import { RUST_CONTAINER_OPS } from './container-ops';
 import { dataTypeOf } from './data-type';
 import type { GraphSource, LoweringContext, Signature } from './lower-utils';
 import { rangeOf, simpleChain, unwrap } from './lower-utils';
@@ -214,7 +217,26 @@ export abstract class CallLowering extends GraphBuilderBase {
                   this.owner
                 )
               : 'any'));
-    const impure = mode !== 'pure';
+    // UE's container nodes (LENGTH, ADD …): a known operation on a typed
+    // `Vec`, map or set (`items.push(x)`); reads are pure.
+    const container =
+      expr.type === 'Call' &&
+      unwrap(expr.callee).type === 'Field' &&
+      !statement?.suffix
+        ? inputs[0]
+        : undefined;
+    const op = container
+      ? findContainerOp(
+          RUST_CONTAINER_OPS,
+          'method',
+          title,
+          container.value?.type,
+          args.length
+        )
+      : undefined;
+    const impure =
+      mode !== 'pure' &&
+      (op === undefined || op.mutates === true || mode === 'statement');
     const pins: Pin[] = impure
       ? [this.execIn(), this.execOut('then', '', statement?.insert)]
       : [];
@@ -252,7 +274,19 @@ export abstract class CallLowering extends GraphBuilderBase {
       this.chain(node);
     }
 
-    return { pin: { node: node.id, pin: 'return' }, type: returnType };
+    const value: ValueSource = {
+      pin: { node: node.id, pin: 'return' },
+      type: returnType,
+    };
+    return op && container?.value
+      ? styleContainerValue(
+          this.nodes,
+          value,
+          op,
+          container.value.type,
+          container.pin.id
+        )
+      : value;
   }
 
   protected macroType(expr: Extract<Expr, { type: 'Macro' }>): DataType {

@@ -1,0 +1,105 @@
+import type { ContainerOp } from '@vizscript/core';
+
+/**
+ * Rust's operations on `Vec`s, maps and sets that UE draws as container
+ * nodes (LENGTH, CONTAINS, ADD …).
+ */
+export const RUST_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
+  {
+    word: 'LENGTH',
+    on: ['array', 'map', 'set'],
+    form: 'method',
+    name: 'len',
+    result: 'number',
+  },
+  {
+    word: 'CONTAINS',
+    on: ['array', 'set'],
+    form: 'method',
+    name: 'contains',
+    args: ['element'],
+    result: 'bool',
+  },
+  {
+    word: 'CONTAINS',
+    on: ['map'],
+    form: 'method',
+    name: 'contains_key',
+    args: ['key'],
+    result: 'bool',
+  },
+  {
+    word: 'FIND',
+    on: ['map'],
+    form: 'method',
+    name: 'get',
+    args: ['key'],
+    result: 'value',
+  },
+  { word: 'KEYS', on: ['map'], form: 'method', name: 'keys', result: 'keys' },
+  {
+    word: 'VALUES',
+    on: ['map'],
+    form: 'method',
+    name: 'values',
+    result: 'values',
+  },
+  {
+    word: 'ADD',
+    on: ['array'],
+    form: 'method',
+    name: 'push',
+    args: ['element'],
+    mutates: true,
+  },
+  {
+    word: 'ADD',
+    on: ['set'],
+    form: 'method',
+    name: 'insert',
+    args: ['element'],
+    result: 'bool',
+    mutates: true,
+  },
+  {
+    word: 'ADD',
+    on: ['map'],
+    form: 'method',
+    name: 'insert',
+    args: ['key', 'value'],
+    mutates: true,
+  },
+  {
+    word: 'INSERT',
+    on: ['array'],
+    form: 'method',
+    name: 'insert',
+    args: ['number', 'element'],
+    mutates: true,
+  },
+  {
+    word: 'REMOVE',
+    on: ['set'],
+    form: 'method',
+    name: 'remove',
+    args: ['element'],
+    result: 'bool',
+    mutates: true,
+  },
+  {
+    word: 'REMOVE',
+    on: ['map'],
+    form: 'method',
+    name: 'remove',
+    args: ['key'],
+    result: 'value',
+    mutates: true,
+  },
+  {
+    word: 'CLEAR',
+    on: ['array', 'map', 'set'],
+    form: 'method',
+    name: 'clear',
+    mutates: true,
+  },
+];
