@@ -94,7 +94,7 @@ describe('declarations of imported files', () => {
       "function Module
         #0 entry "Module" (main.py) [>then:▶]
         #1 call "greet" [<exec:▶ >then:▶ <target:object <arg0:string="a" <param:punctuation:string= >return:string]
-        #2 getVar "util" [>value:any]
+        #2 getVar "util" [>value:module]
         #3 call "greet" [<exec:▶ >then:▶ <target:object <arg0:string="b" <param:punctuation:string= >return:string]
         ==> #0.then -> #1.exec
         --> #2.value -> #3.target

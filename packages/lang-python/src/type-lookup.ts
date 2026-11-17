@@ -866,7 +866,12 @@ class TypeLookup {
       }
 
       case 'sum': {
-        return item && NUMBERS.has(item) ? item : undefined;
+        // Without a start value it adds numbers, also of unknown items.
+        if (item && NUMBERS.has(item)) {
+          return item;
+        }
+
+        return positional.length === 1 ? 'float' : undefined;
       }
 
       case 'min':
@@ -941,7 +946,13 @@ export function pythonTypes(
   }
 
   for (const [key, type] of lookup.types) {
-    if (type.startsWith(CLASS) || type.startsWith(MODULE) || VAGUE.has(type)) {
+    // An imported module (`json`) is an object, like UE's object Gets.
+    if (type.startsWith(MODULE)) {
+      types.set(key, { text: 'module', dataType: 'module' });
+      continue;
+    }
+
+    if (type.startsWith(CLASS) || VAGUE.has(type)) {
       continue;
     }
 

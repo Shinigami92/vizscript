@@ -13,7 +13,7 @@ function load(path: str): list[Item] → load
 local load::fh
 local load::data = …
 function checkout(items: list[Item], coupon: str | None = …): float [async] → checkout
-local checkout::subtotal = …
+local checkout::subtotal ~number = …
 local checkout::item ~Item
-local checkout::log ~map = …"
+local checkout::log ~Map<string, number> = …"
 `;

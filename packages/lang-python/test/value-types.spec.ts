@@ -49,4 +49,16 @@ describe('types of values read from flow nodes', () => {
     });
     expect(formatValues(typed.nodes)).toEqual(['Item']);
   });
+
+  it('types the sum of unknown items', () => {
+    const fn = parsePythonDocument(
+      'def f(data):\n    total = sum(data)\n    return total\n',
+      't.py'
+    ).functions.find((f) => f.name === 'f');
+    const outOf = (title: string): string | undefined =>
+      fn?.nodes
+        .find((n) => n.title === title)
+        ?.pins.find((p) => p.direction === 'out' && p.kind === 'data')?.type;
+    expect(outOf('sum')).toBe('number');
+  });
 });
