@@ -162,11 +162,17 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       // `*args` values are named by their parameter (`args[0]`) later.
       const param = arg.keyword || arg.star ? undefined : positional++;
       const named = param === undefined ? '' : (signature?.params[param] ?? '');
-      const label = arg.keyword
-        ? `${arg.keyword}=`
-        : (arg.star ?? (named.startsWith('*') ? '' : named));
+      // An argument passed by name is named after its parameter.
+      const label =
+        arg.keyword ?? arg.star ?? (named.startsWith('*') ? '' : named);
       inputs.push({
-        pin: this.dataIn(`arg${i}`, label, rangeOf(arg.value)),
+        pin: this.dataIn(
+          `arg${i}`,
+          label,
+          rangeOf(arg.value),
+          'any',
+          arg.keyword === undefined ? undefined : { keyword: arg.keyword }
+        ),
         value: this.lowerExpr(
           arg.value,
           `${path}.arg${i}`,

@@ -1,4 +1,5 @@
 import type { InputPinMeta } from './edit-meta';
+import { getMeta } from './edit-meta';
 import type { EngineClass } from './engine-classes';
 import { classMethod } from './engine-classes';
 import type { ImportedDeclaration } from './imports';
@@ -255,6 +256,11 @@ function restPin(
   };
 }
 
+/** The parameter an argument is passed to by name (`timeout=5`). */
+function keywordOf(pin: Pin): string | undefined {
+  return getMeta<InputPinMeta>(pin).keyword;
+}
+
 /**
  * The pins of a call node completed from the parameters it calls, like
  * UE's call nodes: given arguments get their parameter's name, type and
@@ -272,14 +278,10 @@ export function withParamPins(
   const args = pins.filter(
     (p) => p.direction === 'in' && p.kind === 'data' && ARG_PIN.test(p.id)
   );
-  const keywords = new Set(
-    args
-      .map((p) => p.name)
-      .filter((n) => n.endsWith('='))
-      .map((n) => n.slice(0, -1))
-  );
+  const keywords = new Set(args.flatMap((p) => keywordOf(p) ?? []));
   const positional = args.filter(
-    (p) => !p.name.endsWith('=') && p.name !== '...' && !p.name.startsWith('*')
+    (p) =>
+      keywordOf(p) === undefined && p.name !== '...' && !p.name.startsWith('*')
   );
 
   // Positional arguments from a `*rest` parameter on all belong to it.
@@ -289,12 +291,19 @@ export function withParamPins(
 
   // Given arguments know their parameter's default ("Reset to default").
   for (const pin of args) {
-    const param = pin.name.endsWith('=')
-      ? params.find((p) => `${p.name}=` === pin.name)
-      : paramAt(positional.indexOf(pin));
+    const keyword = keywordOf(pin);
+    const param =
+      keyword === undefined
+        ? paramAt(positional.indexOf(pin))
+        : params.find((p) => p.name === keyword);
     const value = param && !param.rest ? defaultOf(text, param) : '';
     if (value !== '') {
       pin.meta = { ...pin.meta, defaultValue: value };
+    }
+
+    // Positional ones get their type below; one passed by name here.
+    if (keyword !== undefined && param && pin.type === 'any') {
+      pin.type = param.dataType;
     }
   }
 
@@ -382,6 +391,56 @@ export function withParamPins(
   // After the last input, before the outputs.
   const at = pins.findLastIndex((p) => p.direction === 'in') + 1;
   pins.splice(at, 0, ...added);
+  return inSignatureOrder(pins, params, (pin) => {
+    const keyword = keywordOf(pin);
+    if (keyword !== undefined) {
+      return params.findIndex((p) => p.name === keyword);
+    }
+
+    const index = positional.indexOf(pin);
+    return index === -1
+      ? undefined
+      : Math.min(index, restAt === -1 ? index : restAt);
+  });
+}
+
+/**
+ * The argument and parameter pins of a call in the order of the signature,
+ * like UE's call nodes: `urlopen(url, timeout=5)` shows `url`, `data`,
+ * `timeout`. Pins without a parameter (`**kwargs` values) stay after the
+ * pin before them; other pins keep their place.
+ */
+function inSignatureOrder(
+  pins: Pin[],
+  params: ReadonlyArray<SymbolParam>,
+  positionOf: (pin: Pin) => number | undefined
+): Pin[] {
+  const slots: number[] = [];
+  for (const [i, pin] of pins.entries()) {
+    if (
+      pin.direction === 'in' &&
+      pin.kind === 'data' &&
+      (ARG_PIN.test(pin.id) || pin.id.startsWith('param:'))
+    ) {
+      slots.push(i);
+    }
+  }
+
+  let last = -1;
+  const keyed = slots.map((slot, order) => {
+    const pin = pins[slot] as Pin;
+    const named = pin.id.startsWith('param:')
+      ? params.findIndex((p) => `param:${p.name}` === pin.id)
+      : positionOf(pin);
+    // Unknown positions follow the pin before them.
+    last = named === undefined || named === -1 ? last : named;
+    return { pin, key: last, order };
+  });
+  const sorted = keyed.toSorted((a, b) => a.key - b.key || a.order - b.order);
+  for (const [i, slot] of slots.entries()) {
+    pins[slot] = (sorted[i] as (typeof sorted)[number]).pin;
+  }
+
   return pins;
 }
 

@@ -84,6 +84,11 @@ export interface InputPinMeta {
   property?: SourceRange;
   /** The property is written as a shorthand (`{ length }`). */
   shorthand?: boolean;
+  /**
+   * The argument is passed by name to this parameter (Python's
+   * `timeout=5`); the pin is named after the parameter.
+   */
+  keyword?: string;
   /** Default value of the argument's parameter, as code. */
   defaultValue?: string;
   /**

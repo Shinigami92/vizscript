@@ -383,7 +383,7 @@ export function createContextEntries(
               icon: 'i-mdi-restore',
               action: () =>
                 emitOp(
-                  pin.name.endsWith('=') ||
+                  getMeta<InputPinMeta>(pin).keyword !== undefined ||
                     !entry.node.pins.some(
                       (p) =>
                         ARG_PIN.test(p.id) &&

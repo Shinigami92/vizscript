@@ -12,6 +12,16 @@ function apply(text: string, op: GraphOp): string {
   return applyTextEdits(text, result.edits);
 }
 
+/** A call's input pins: `id name:type`. */
+function inputs(text: string): string[] {
+  return (
+    parsePythonDocument(text, 't.py')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'call')
+      ?.pins.filter((p) => p.direction === 'in' && p.kind === 'data') ?? []
+  ).map((p) => `${p.id} ${p.name}:${String(p.type)}`);
+}
+
 const TEXT = [
   'class Cart:',
   '    def add(self, item, count=1):',
@@ -167,5 +177,25 @@ describe('python argument pins', () => {
         pin: { node: node?.id ?? '', pin: 'arg1' },
       })
     ).toBe('f(a)\n');
+  });
+
+  it('names arguments passed by name after their parameter, in order', () => {
+    // `timeout` passed by name: no `timeout=`, and after the empty `data`.
+    expect(
+      inputs(
+        'def get(url: str, data: bytes = None, timeout: float = None):\n    pass\n\n\nget("x", timeout=5)\n'
+      )
+    ).toEqual([
+      'target self:object',
+      'arg0 url:string',
+      'param:data data:bytes',
+      'arg1 timeout:number',
+    ]);
+    // All by name, in another order than the signature.
+    expect(inputs('def f(a, b):\n    pass\n\n\nf(b=x, a=y)\n')).toEqual([
+      'target self:object',
+      'arg1 a:any',
+      'arg0 b:any',
+    ]);
   });
 });
