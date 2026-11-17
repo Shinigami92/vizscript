@@ -14,6 +14,11 @@ export interface AppConfig {
   githubRawUrl: string;
   /** Web pages of GitHub (`https://github.com`, or the Enterprise host). */
   githubWebUrl: string;
+  /**
+   * Optional token of the server for signed-out access checks of public
+   * repositories (a higher hourly limit than without one).
+   */
+  githubServerToken?: string;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -70,5 +75,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     githubApiUrl,
     githubRawUrl: withoutSlash(env.GITHUB_RAW_URL ?? rawUrlOf(githubApiUrl)),
     githubWebUrl: withoutSlash(env.GITHUB_WEB_URL ?? webUrlOf(githubApiUrl)),
+    ...(env.GITHUB_SERVER_TOKEN
+      ? { githubServerToken: env.GITHUB_SERVER_TOKEN }
+      : {}),
   };
 }

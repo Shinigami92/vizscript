@@ -78,8 +78,8 @@ export class LayoutService {
   ) {}
 
   /**
-   * Internal repository id. Layouts are keyed by the provider's stable
-   * repository id so they survive renames.
+   * Internal repository id, created on the first save. Layouts are keyed by
+   * the provider's stable repository id so they survive renames.
    */
   private async repositoryId(
     provider: ProviderId,
@@ -103,17 +103,66 @@ export class LayoutService {
     return row.id;
   }
 
+  /** Internal id of a repository known by its provider id (no write). */
+  private async knownRepositoryId(
+    provider: ProviderId,
+    externalId: string
+  ): Promise<string | undefined> {
+    const row = await this.db
+      .selectFrom('repositories')
+      .select('id')
+      .where('provider', '=', provider)
+      .where('external_id', '=', externalId)
+      .executeTakeFirst();
+    return row?.id;
+  }
+
+  /** Whether any layout was ever stored for `owner/repo` (by its name). */
+  private async hasStoredLayouts(key: LayoutKey): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('repositories')
+      .select('id')
+      .where('provider', '=', key.provider)
+      .where(
+        sql`lower(full_name)`,
+        '=',
+        `${key.owner}/${key.repo}`.toLowerCase()
+      )
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  /**
+   * The shared layout of a file. Reading writes nothing. A signed-out
+   * visitor of a repository without stored layouts gets an empty one
+   * without asking the provider, the same answer as for one that doesn't
+   * exist, so most visits cost none of the server's provider requests.
+   */
   public async get(
     user: SessionUser | null,
     key: LayoutKey
   ): Promise<LayoutResponse> {
+    const empty: LayoutResponse = {
+      positions: {},
+      updatedAt: null,
+      canWrite: false,
+    };
+    if (!user && !(await this.hasStoredLayouts(key))) {
+      return empty;
+    }
+
     const repo = await this.access.repo(
       user,
       key.provider,
       key.owner,
       key.repo
     );
-    const repositoryId = await this.repositoryId(key.provider, repo);
+    const canWrite = user !== null && repo.canWrite;
+    const repositoryId = await this.knownRepositoryId(key.provider, repo.id);
+    if (!repositoryId) {
+      return { ...empty, canWrite };
+    }
+
     const row = await this.db
       .selectFrom('file_layouts')
       .select(['positions', 'updated_at'])
@@ -124,7 +173,7 @@ export class LayoutService {
     return {
       positions: row?.positions ?? {},
       updatedAt: row?.updated_at.toISOString() ?? null,
-      canWrite: user !== null && repo.canWrite,
+      canWrite,
     };
   }
 

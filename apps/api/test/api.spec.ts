@@ -56,6 +56,9 @@ async function fakeRepo(
   return token ? found : { ...found, canWrite: false };
 }
 
+/** Provider repository lookups, to see what costs the server's quota. */
+const repoLookups: string[] = [];
+
 const fakeProvider: ScmProvider = {
   id: 'github',
   verifyToken: async (token) => {
@@ -73,7 +76,10 @@ const fakeProvider: ScmProvider = {
     };
   },
   listRepos: async () => [repo],
-  getRepo: async (token, _owner, name) => fakeRepo(token, name),
+  getRepo: async (token, _owner, name) => {
+    repoLookups.push(`${token ? 'user' : 'anonymous'}:${name}`);
+    return fakeRepo(token, name);
+  },
   listBranches: async () => [{ name: 'main' }],
   getTree: async (_t, _o, _r, ref) => ({
     ref,
@@ -270,6 +276,23 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
       canWrite: false,
     });
 
+    // A repository without stored layouts: answered without asking GitHub,
+    // the same for private, public and missing ones.
+    repoLookups.length = 0;
+    const unknown = await app.inject({
+      method: 'GET',
+      url: layoutUrl(privateRepo.name),
+    });
+    expect(unknown.json()).toMatchObject({ positions: {}, canWrite: false });
+    expect(repoLookups).toEqual([]);
+
+    // With a stored layout, a private repository stays hidden.
+    await app.inject({
+      method: 'PUT',
+      url: layoutUrl(privateRepo.name),
+      headers: { cookie },
+      payload: { positions: { secret: { x: 1, y: 2 } } },
+    });
     const hidden = await app.inject({
       method: 'GET',
       url: layoutUrl(privateRepo.name),
@@ -288,6 +311,16 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
     const url = `/api/layouts/github/octo/${readOnly.name}?ref=main&path=a.ts`;
     const read = await app.inject({ method: 'GET', url, headers: { cookie } });
     expect(read.json()).toMatchObject({ canWrite: false });
+
+    // Reading wrote nothing: the repository is known only once saved to.
+    const db = createDatabase(databaseUrl ?? '');
+    const rows = await db
+      .selectFrom('repositories')
+      .select('id')
+      .where('external_id', '=', readOnly.id)
+      .execute();
+    await db.destroy();
+    expect(rows).toEqual([]);
 
     const write = await app.inject({
       method: 'PUT',
