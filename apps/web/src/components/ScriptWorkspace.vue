@@ -590,6 +590,22 @@ function relayout(): void {
   };
 }
 
+/** Entries `after` has that `before` hasn't (or has elsewhere). */
+function followedEntries(
+  before: Positions,
+  after: Positions
+): Positions | undefined {
+  const changed: Positions = {};
+  for (const [id, p] of Object.entries(after)) {
+    const was = before[id];
+    if (!was || was.x !== p.x || was.y !== p.y) {
+      changed[id] = p;
+    }
+  }
+
+  return Object.keys(changed).length > 0 ? changed : undefined;
+}
+
 /**
  * Positions of nodes that disappeared (deleted, cut): undo and redo bring
  * them back to where they were.
@@ -669,9 +685,24 @@ async function reparse(): Promise<void> {
   // A renamed function keeps the focus (its id follows the name).
   followRename(previous, shown);
 
-  pinned.value = previous
-    ? reconcileLayout(previous, shown, pinned.value, change, positionMemory)
-    : pinned.value;
+  if (previous) {
+    const before = pinned.value;
+    pinned.value = reconcileLayout(
+      previous,
+      shown,
+      before,
+      change,
+      positionMemory
+    );
+    // Positions that followed their nodes to new ids are saved under them,
+    // or a reload finds the nodes without a place. Entries of nodes that
+    // are gone stay stored: undo, a discarded draft or another branch may
+    // bring the old code back.
+    const followed = followedEntries(before, pinned.value);
+    if (followed) {
+      void persist(followed);
+    }
+  }
   if (role !== 'earlier') {
     // Wired from a SET's output: the new Get is drawn as that wire (UE).
     const vias = afterParse(previous ?? undefined, shown, change);
