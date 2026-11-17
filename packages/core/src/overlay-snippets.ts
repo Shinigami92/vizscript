@@ -238,10 +238,12 @@ export function placedNodes(
   for (const node of edit.nodes.toSorted(
     (a, b) => a.range.start - b.range.start
   )) {
+    // By kind and title; by kind alone only when that leaves no choice,
+    // or a node would take the identity (and place) of another one.
+    const open = fresh.filter((n) => !used.has(n.id) && n.kind === node.kind);
     const match =
-      fresh.find(
-        (n) => !used.has(n.id) && n.kind === node.kind && n.title === node.title
-      ) ?? fresh.find((n) => !used.has(n.id) && n.kind === node.kind);
+      open.find((n) => n.title === node.title) ??
+      (open.length === 1 ? open[0] : undefined);
     if (match) {
       used.add(match.id);
       placed.set(node.id, match.id);

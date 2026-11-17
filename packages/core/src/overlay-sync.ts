@@ -253,6 +253,7 @@ function hasEdge(doc: GraphDocument, from: PinRef, to: PinRef): boolean {
 }
 
 /** The node an op is about, for its issue. */
+/** The node an op is about, so a failed step points at it. */
 function nodeOf(op: GraphOp): string {
   switch (op.type) {
     case 'deleteNodes': {
@@ -263,14 +264,59 @@ function nodeOf(op: GraphOp): string {
       return op.to.node;
     }
 
-    case 'disconnect': {
+    case 'disconnect':
+    case 'removeArgument': {
       return op.pin.node;
+    }
+
+    case 'setInput': {
+      return op.pin.node;
+    }
+
+    case 'clearArguments':
+    case 'disconnectNode': {
+      return op.node;
+    }
+
+    case 'addNode': {
+      return op.after?.node ?? op.before?.node ?? '';
+    }
+
+    case 'moveWires': {
+      return op.from.node;
     }
 
     default: {
       return '';
     }
   }
+}
+
+/** Errors of a parse (a step must not add any). */
+function errorCount(doc: GraphDocument): number {
+  return (doc.diagnostics ?? []).filter((d) => d.severity === 'error').length;
+}
+
+/**
+ * Runs `next` until it says `done`, or returns what ended it early (a
+ * pending result); stops a run that doesn't end after `maxSteps`.
+ */
+function repeatSteps(
+  maxSteps: number,
+  next: () => 'done' | OverlayResolution | undefined
+): OverlayResolution | undefined {
+  for (let i = 0; i < maxSteps; i++) {
+    const result = next();
+    if (result === 'done') {
+      return undefined;
+    }
+
+    if (result) {
+      return result;
+    }
+  }
+
+  return pending('', 'Writing the graph as code did not end.');
 }
 
 function pending(node: string, message: string): OverlayResolution {
@@ -323,8 +369,24 @@ export function resolveOverlay(
         : undefined;
     }
 
-    const nextText = applyTextEdits(source, result.edits);
-    const nextDoc = backend.parse(nextText);
+    let nextText: string;
+    let nextDoc: GraphDocument;
+    try {
+      nextText = applyTextEdits(source, result.edits);
+      nextDoc = backend.parse(nextText);
+    } catch (error) {
+      return `The code could not be written: ${(error as Error).message}`;
+    }
+
+    // A step must leave code that parses as well as before.
+    if (errorCount(nextDoc) > errorCount(doc)) {
+      const known = new Set((doc.diagnostics ?? []).map((d) => d.message));
+      const added = (nextDoc.diagnostics ?? []).find(
+        (d) => d.severity === 'error' && !known.has(d.message)
+      );
+      return `Writing this would break the code${added ? `: ${added.message}` : '.'}`;
+    }
+
     const change = { before: source, edits: result.edits };
     current = remapOverlay(doc, nextDoc, current, change).overlay;
     const renamed = renamedNodes(doc, nextDoc, change);
@@ -348,11 +410,7 @@ export function resolveOverlay(
   // Methods that got a new receiver first: their arguments go (UE: pins
   // follow the Target), and the new value replaces the old one, so a
   // deleted Get of the old receiver is gone from the code too.
-  for (let i = 0; ; i++) {
-    if (i >= maxSteps) {
-      return pending('', 'Writing the graph as code did not end.');
-    }
-
+  const receivers = repeatSteps(maxSteps, () => {
     const index = current.edits.findIndex(
       (e) =>
         (e.type === 'removeEdge' || e.type === 'addEdge') &&
@@ -360,7 +418,7 @@ export function resolveOverlay(
     );
     const edit = current.edits[index];
     if (!edit || edit.type === 'removeNode' || edit.type === 'addNodes') {
-      break;
+      return 'done';
     }
 
     current = { edits: current.edits.filter((_, j) => j !== index) };
@@ -409,19 +467,16 @@ export function resolveOverlay(
     }
 
     const error = applied ? step(op, group, applied) : undefined;
-    if (error !== undefined) {
-      return pending(edit.to.node, error);
-    }
+    return error === undefined ? undefined : pending(edit.to.node, error);
+  });
+  if (receivers) {
+    return receivers;
   }
 
-  for (let i = 0; ; i++) {
-    if (i >= maxSteps) {
-      return pending('', 'Writing the graph as code did not end.');
-    }
-
+  const structure = repeatSteps(maxSteps, () => {
     const next = nextStructureOp(doc, applyOverlay(doc, current), current);
     if (next === null) {
-      break;
+      return 'done';
     }
 
     if (next === undefined) {
@@ -450,20 +505,17 @@ export function resolveOverlay(
     }
 
     const error = step(next.op, next.group);
-    if (error !== undefined) {
-      return pending(nodeOf(next.op), error);
-    }
+    return error === undefined ? undefined : pending(nodeOf(next.op), error);
+  });
+  if (structure) {
+    return structure;
   }
 
-  for (let i = 0; ; i++) {
-    if (i >= maxSteps) {
-      return pending('', 'Writing the graph as code did not end.');
-    }
-
+  const wires = repeatSteps(maxSteps, () => {
     const index = current.edits.findIndex((e) => isDataEdit(e, doc));
     const edit = current.edits[index];
     if (!edit || edit.type === 'removeNode' || edit.type === 'addNodes') {
-      break;
+      return 'done';
     }
 
     // Done once written: the code may show it differently (a Get node).
@@ -477,9 +529,10 @@ export function resolveOverlay(
         ? hasEdge(doc, edit.from, edit.to)
         : !hasEdge(doc, edit.from, edit.to);
     const error = done ? undefined : step(op);
-    if (error !== undefined) {
-      return pending(nodeOf(op), error);
-    }
+    return error === undefined ? undefined : pending(nodeOf(op), error);
+  });
+  if (wires) {
+    return wires;
   }
 
   return placed.size > 0
