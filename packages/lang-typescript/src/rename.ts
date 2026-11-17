@@ -102,6 +102,27 @@ function isNameOnly(parent: Node, key: string): boolean {
   }
 }
 
+/**
+ * A JSX name that refers to a binding: a component (`<Button />`, starts
+ * uppercase) or the object of `<ui.Button />`; not `<div>` or attributes.
+ */
+function isJsxReference(
+  id: t.JSXIdentifier,
+  parent: Node,
+  key: string
+): boolean {
+  if (parent.type === 'JSXMemberExpression') {
+    return key === 'object';
+  }
+
+  return (
+    (parent.type === 'JSXOpeningElement' ||
+      parent.type === 'JSXClosingElement') &&
+    key === 'name' &&
+    /^[A-Z_$]/.test(id.name)
+  );
+}
+
 class Resolver {
   readonly occurrences: Occurrence[] = [];
 
@@ -226,7 +247,7 @@ class Resolver {
   }
 
   private record(
-    id: t.Identifier,
+    id: t.Identifier | t.JSXIdentifier,
     scope: Scope,
     parent: Node | undefined
   ): void {
@@ -307,7 +328,11 @@ class Resolver {
         continue;
       }
 
-      if (child.type === 'Identifier') {
+      if (child.type === 'JSXIdentifier') {
+        if (isJsxReference(child, parent, key)) {
+          this.record(child, scope, parent);
+        }
+      } else if (child.type === 'Identifier') {
         if (!isNameOnly(parent, key)) {
           this.record(child, scope, parent);
         }
@@ -417,50 +442,44 @@ export function resolveNames(program: t.Program): Occurrence[] {
   return resolver.occurrences;
 }
 
-/** `this.name` / `this.#name` uses and the member keys of a class. */
-function memberEdits(
+type ThisKind = 'instance' | 'static' | undefined;
+
+/**
+ * The member expressions that use a member of a class: `this.name` where
+ * `this` is that class's instance (or the class, for a static member),
+ * and `Class.name` for a static one. `this` follows JavaScript: plain
+ * functions and object methods have their own; arrow functions don't.
+ */
+function memberReferences(
   program: t.Program,
   cls: ScriptSymbol,
-  oldName: string,
-  newName: string
-): TextEdit[] {
-  const edits: TextEdit[] = [];
-  const inClass = (node: Node): boolean =>
-    (node.start ?? 0) >= cls.range.start && (node.end ?? 0) <= cls.range.end;
+  name: string,
+  isStatic: boolean
+): Array<t.MemberExpression | t.OptionalMemberExpression> {
+  const classNames = new Set(
+    resolveNames(program)
+      .filter((o) => o.binding === cls.nameRange.start && o.name === cls.name)
+      .map((o) => o.start)
+  );
+  const wanted: ThisKind = isStatic ? 'static' : 'instance';
+  const found: Array<t.MemberExpression | t.OptionalMemberExpression> = [];
+  const isOwnClass = (node: Node): boolean =>
+    (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') &&
+    node.start === cls.range.start;
 
-  const visit = (node: Node): void => {
-    if (!inClass(node) && node.type !== 'Program') {
-      const containsClass =
-        (node.start ?? 0) <= cls.range.start &&
-        (node.end ?? 0) >= cls.range.end;
-      if (!containsClass) {
-        return;
-      }
-    }
-
+  const visit = (node: Node, self: ThisKind, inOwn: boolean): void => {
     if (
       (node.type === 'MemberExpression' ||
         node.type === 'OptionalMemberExpression') &&
-      node.object.type === 'ThisExpression' &&
       !node.computed &&
       node.property.type === 'Identifier' &&
-      node.property.name === oldName
+      node.property.name === name &&
+      ((node.object.type === 'ThisExpression' && self === wanted) ||
+        (isStatic &&
+          node.object.type === 'Identifier' &&
+          classNames.has(node.object.start ?? -1)))
     ) {
-      const start = node.property.start ?? 0;
-      edits.push({ start, end: start + oldName.length, text: newName });
-    }
-
-    if (
-      (node.type === 'ClassMethod' ||
-        node.type === 'ClassProperty' ||
-        node.type === 'ClassAccessorProperty') &&
-      !node.computed &&
-      node.key.type === 'Identifier' &&
-      node.key.name === oldName &&
-      inClass(node)
-    ) {
-      const start = node.key.start ?? 0;
-      edits.push({ start, end: start + oldName.length, text: newName });
+      found.push(node);
     }
 
     for (const [key, value] of Object.entries(node)) {
@@ -470,13 +489,99 @@ function memberEdits(
 
       for (const child of Array.isArray(value) ? value : [value]) {
         if (isNode(child)) {
-          visit(child);
+          visit(
+            child,
+            thisIn(node, child, key, self, inOwn),
+            childInOwn(node, inOwn)
+          );
         }
       }
     }
   };
 
-  visit(program);
+  /** Whether `child` is directly in the body of the class. */
+  const childInOwn = (node: Node, inOwn: boolean): boolean =>
+    isOwnClass(node) || (inOwn && node.type === 'ClassBody');
+
+  /** What `this` is in `child` of `node`. */
+  const thisIn = (
+    node: Node,
+    child: Node,
+    key: string,
+    self: ThisKind,
+    inOwn: boolean
+  ): ThisKind => {
+    // Members of the class: `this` is its instance, or the class itself.
+    if (inOwn && node.type === 'ClassBody') {
+      const isStaticMember = 'static' in child && child.static === true;
+      return child.type === 'StaticBlock' || isStaticMember
+        ? 'static'
+        : 'instance';
+    }
+
+    // A computed key or decorator is evaluated outside the member.
+    if (
+      (node.type === 'ClassMethod' || node.type === 'ClassProperty') &&
+      key !== 'body' &&
+      key !== 'value' &&
+      key !== 'params'
+    ) {
+      return undefined;
+    }
+
+    // Plain functions, object methods and other classes have their own.
+    if (
+      child.type === 'FunctionDeclaration' ||
+      child.type === 'FunctionExpression' ||
+      child.type === 'ObjectMethod' ||
+      ((child.type === 'ClassDeclaration' ||
+        child.type === 'ClassExpression') &&
+        !isOwnClass(child))
+    ) {
+      return undefined;
+    }
+
+    return self;
+  };
+
+  visit(program, undefined, false);
+  return found;
+}
+
+/** The uses (`this.x`, `Class.x`) and the declaration key of a member. */
+function memberEdits(
+  program: t.Program,
+  cls: ScriptSymbol,
+  oldName: string,
+  newName: string,
+  isStatic: boolean
+): TextEdit[] {
+  const edits: TextEdit[] = memberReferences(
+    program,
+    cls,
+    oldName,
+    isStatic
+  ).map((node) => {
+    const start = node.property.start ?? 0;
+    return { start, end: start + oldName.length, text: newName };
+  });
+
+  walk(program, (node) => {
+    if (
+      (node.type === 'ClassMethod' ||
+        node.type === 'ClassProperty' ||
+        node.type === 'ClassAccessorProperty') &&
+      !node.computed &&
+      node.key.type === 'Identifier' &&
+      node.key.name === oldName &&
+      node.static === isStatic &&
+      (node.start ?? 0) >= cls.range.start &&
+      (node.end ?? 0) <= cls.range.end
+    ) {
+      const start = node.key.start ?? 0;
+      edits.push({ start, end: start + oldName.length, text: newName });
+    }
+  });
   return edits;
 }
 
@@ -511,7 +616,16 @@ export function renameTypeScriptSymbol(
     }
 
     const oldName = symbol.name.replace(/\.(?:get|set)$/, '');
-    return { ok: true, edits: memberEdits(program, cls, oldName, name) };
+    return {
+      ok: true,
+      edits: memberEdits(
+        program,
+        cls,
+        oldName,
+        name,
+        symbol.modifiers.includes('static')
+      ),
+    };
   }
 
   const binding = symbol.nameRange.start;
@@ -554,8 +668,8 @@ function walk(node: Node, visit: (node: Node) => void): void {
 }
 
 /**
- * Calls of a function (through its name) or a method (through
- * `this.name(…)` inside its class) in the same file.
+ * Calls of a function (through its name) or a method (through `this.name(…)`,
+ * or `Class.name(…)` for a static one) in the same file.
  */
 export function typeScriptCallSites(
   program: t.Program,
@@ -577,23 +691,21 @@ export function typeScriptCallSites(
           )
           .map((o) => o.start)
   );
-  const isCall = (callee: Node): boolean => {
-    if (callee.type === 'Identifier') {
-      return uses.has(callee.start ?? -1);
-    }
-
-    return (
-      cls !== undefined &&
-      (callee.type === 'MemberExpression' ||
-        callee.type === 'OptionalMemberExpression') &&
-      callee.object.type === 'ThisExpression' &&
-      !callee.computed &&
-      callee.property.type === 'Identifier' &&
-      callee.property.name === symbol.name &&
-      (callee.start ?? 0) >= cls.range.start &&
-      (callee.end ?? 0) <= cls.range.end
-    );
-  };
+  // `this.name(…)` and, for a static method, `Class.name(…)`.
+  const members = new Set<Node>(
+    cls
+      ? memberReferences(
+          program,
+          cls,
+          symbol.name,
+          symbol.modifiers.includes('static')
+        )
+      : []
+  );
+  const isCall = (callee: Node): boolean =>
+    callee.type === 'Identifier'
+      ? uses.has(callee.start ?? -1)
+      : members.has(callee);
 
   const sites: CallSite[] = [];
   walk(program, (node) => {
