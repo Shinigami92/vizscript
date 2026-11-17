@@ -395,7 +395,6 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     this.requestRender();
   }
 
-  /** Opens the inline value editor of an unconnected input pin. */
   /**
    * Starts editing a node comment (bubble) or a comment box title; the
    * `editComment` event carries where to show the editor.
@@ -443,20 +442,23 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
       };
     }
 
+    // Where the camera ends up: revealing the node may have started a move.
+    const camera = this.getCamera();
     const bounds = this.canvas.getBoundingClientRect();
-    const topLeft = worldToScreen(this.camera, { x: world.x, y: world.y });
+    const topLeft = worldToScreen(camera, { x: world.x, y: world.y });
     this.emitter.emit('editComment', {
       target,
       value,
       rect: {
         x: bounds.left + topLeft.x,
         y: bounds.top + topLeft.y,
-        width: world.width * this.camera.zoom,
-        height: world.height * this.camera.zoom,
+        width: world.width * camera.zoom,
+        height: world.height * camera.zoom,
       },
     });
   }
 
+  /** Opens the inline value editor of an unconnected input pin. */
   public editLiteral(nodeId: string, pinId: string): void {
     const ns = this.nodes.get(nodeId);
     const pg = ns?.geom.pins.get(pinId);
@@ -473,8 +475,10 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
       return;
     }
 
+    // Where the camera ends up: revealing the node may have started a move.
+    const camera = this.getCamera();
     const bounds = this.canvas.getBoundingClientRect();
-    const topLeft = worldToScreen(this.camera, { x: r.x, y: r.y });
+    const topLeft = worldToScreen(camera, { x: r.x, y: r.y });
     this.emitter.emit('editLiteral', {
       node: ns.node.id,
       pin: pg.pin.id,
@@ -483,8 +487,8 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
       rect: {
         x: bounds.left + topLeft.x,
         y: bounds.top + topLeft.y,
-        width: r.width * this.camera.zoom,
-        height: r.height * this.camera.zoom,
+        width: r.width * camera.zoom,
+        height: r.height * camera.zoom,
       },
     });
   }
