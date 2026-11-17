@@ -123,7 +123,19 @@ export interface ClientConfig {
   };
 }
 
+/**
+ * Why a request was not authorized (401): no session, a session that ran
+ * out, or a provider token that is missing or no longer accepted.
+ */
+export type AuthErrorCode =
+  | 'not_signed_in'
+  | 'session_expired'
+  | 'provider_token_missing'
+  | 'provider_token_invalid';
+
 export interface ApiError {
   statusCode: number;
   message: string;
+  /** Set on 401 answers. */
+  code?: AuthErrorCode;
 }

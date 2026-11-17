@@ -5,7 +5,6 @@ import {
   Inject,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { Octokit } from '@octokit/rest';
 import type {
@@ -14,6 +13,7 @@ import type {
   RepoSummary,
   TreeResponse,
 } from '@vizscript/api-contract';
+import { authError } from '../auth/auth-errors';
 import type { AppConfig } from '../config/config';
 import { APP_CONFIG } from '../config/config';
 import type { ProviderIdentity, ScmProvider } from './scm-provider';
@@ -53,7 +53,8 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
     const message =
       (error as { message?: string }).message ?? 'GitHub request failed';
     if (status === 401) {
-      throw new UnauthorizedException('GitHub rejected the token');
+      // Expired or revoked (fine-grained tokens expire).
+      throw authError('provider_token_invalid', 'GitHub rejected the token');
     }
 
     if (status === 404) {

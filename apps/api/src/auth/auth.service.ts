@@ -11,6 +11,7 @@ import { APP_CONFIG } from '../config/config';
 import { DB } from '../database/database.module';
 import type { Database } from '../database/schema';
 import { ScmRegistry } from '../scm/scm.registry';
+import { authError } from './auth-errors';
 
 export interface SessionUser {
   userId: string;
@@ -182,7 +183,7 @@ export class AuthService {
       .where('provider', '=', provider)
       .executeTakeFirst();
     if (!row) {
-      throw new UnauthorizedException(`No ${provider} token stored`);
+      throw authError('provider_token_missing', `No ${provider} token stored`);
     }
 
     return this.box.decrypt({

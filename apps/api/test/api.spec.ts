@@ -153,6 +153,7 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
   it('rejects unauthenticated requests', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/auth/me' });
     expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'not_signed_in' });
   });
 
   it('rejects invalid tokens', async () => {
@@ -451,5 +452,17 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
       headers: { cookie },
     });
     expect(me.statusCode).toBe(401);
+    // The gone session is named, and its cookie cleared.
+    expect(me.json()).toMatchObject({ code: 'session_expired' });
+    expect(String(me.headers['set-cookie'])).toContain('vz_session=;');
+
+    // Also where signed-out visitors are welcome (shared layouts).
+    const layout = await app.inject({
+      method: 'GET',
+      url: `/api/layouts/github/octo/${repo.name}?ref=main&path=a.ts`,
+      headers: { cookie },
+    });
+    expect(layout.statusCode).toBe(401);
+    expect(layout.json()).toMatchObject({ code: 'session_expired' });
   });
 });

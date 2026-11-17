@@ -5,7 +5,8 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { authError } from './auth-errors';
 import type { SessionUser } from './auth.service';
 import { AuthService, SESSION_COOKIE } from './auth.service';
 
@@ -17,16 +18,41 @@ export class SessionGuard implements CanActivate {
 
   public async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
-    const user = await this.auth.resolveSession(
-      request.cookies[SESSION_COOKIE]
-    );
+    const user = await sessionUser(this.auth, context);
     if (!user) {
-      throw new UnauthorizedException('Not logged in');
+      throw authError('not_signed_in', 'Not logged in');
     }
 
     request.user = user;
     return true;
   }
+}
+
+/**
+ * The user of the request's session cookie. A cookie whose session is gone
+ * (expired, logged out elsewhere) is cleared and answered with
+ * `session_expired`, so the client can tell the user instead of quietly
+ * acting signed out.
+ */
+async function sessionUser(
+  auth: AuthService,
+  context: ExecutionContext
+): Promise<SessionUser | null> {
+  const http = context.switchToHttp();
+  const cookie = http.getRequest<RequestWithUser>().cookies[SESSION_COOKIE];
+  if (!cookie) {
+    return null;
+  }
+
+  const user = await auth.resolveSession(cookie);
+  if (!user) {
+    void http.getResponse<FastifyReply>().clearCookie(SESSION_COOKIE, {
+      path: '/',
+    });
+    throw authError('session_expired', 'Your session has expired');
+  }
+
+  return user;
 }
 
 /**
@@ -39,9 +65,7 @@ export class OptionalSessionGuard implements CanActivate {
 
   public async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
-    const user = await this.auth.resolveSession(
-      request.cookies[SESSION_COOKIE]
-    );
+    const user = await sessionUser(this.auth, context);
     if (user) {
       request.user = user;
     }
