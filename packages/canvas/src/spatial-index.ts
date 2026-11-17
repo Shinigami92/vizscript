@@ -1,11 +1,16 @@
 import type { Rect } from './camera';
 
 /**
- * Uniform grid for fast rectangle queries (hit-testing, culling).
+ * Uniform grid for fast rectangle queries (hit-testing, culling). Queries
+ * return items in a fixed order, the order they were first inserted in
+ * (moving an item keeps its place): the canvas draws them in it, so it is
+ * also their stacking order.
  */
 export class SpatialIndex<T> {
   private readonly cells = new Map<string, Set<T>>();
   private readonly items = new Map<T, Rect>();
+  private readonly order = new Map<T, number>();
+  private nextOrder = 0;
 
   public constructor(private readonly cellSize = 256) {}
 
@@ -24,10 +29,16 @@ export class SpatialIndex<T> {
   public clear(): void {
     this.cells.clear();
     this.items.clear();
+    this.order.clear();
+    this.nextOrder = 0;
   }
 
   public insert(item: T, rect: Rect): void {
     this.remove(item);
+    if (!this.order.has(item)) {
+      this.order.set(item, this.nextOrder++);
+    }
+
     this.items.set(item, rect);
     for (const key of this.cellKeys(rect)) {
       let cell = this.cells.get(key);
@@ -53,7 +64,10 @@ export class SpatialIndex<T> {
     this.items.delete(item);
   }
 
-  /** Items whose rectangles intersect `rect`. */
+  /**
+   * Items whose rectangles intersect `rect`, bottom first (the order they
+   * were first inserted in), whatever the rectangle.
+   */
   public query(rect: Rect): T[] {
     const result = new Set<T>();
     for (const key of this.cellKeys(rect)) {
@@ -76,6 +90,8 @@ export class SpatialIndex<T> {
       }
     }
 
-    return [...result];
+    return [...result].toSorted(
+      (a, b) => (this.order.get(a) ?? 0) - (this.order.get(b) ?? 0)
+    );
   }
 }

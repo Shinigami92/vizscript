@@ -58,10 +58,12 @@ export abstract class GraphViewHitTest extends GraphViewBase {
       width: pad * 2,
       height: pad * 2,
     });
+    // Top first: the reverse of the drawing order, and selected nodes,
+    // which are drawn last, before the others.
     const states = ids
+      .toReversed()
       .map((id) => this.nodes.get(id))
       .filter((ns): ns is NodeState => ns !== undefined);
-    // Selected nodes are drawn on top, so they are hit first.
     return states.toSorted(
       (a, b) =>
         Number(this.selection.has(b.node.id)) -
@@ -98,15 +100,6 @@ export abstract class GraphViewHitTest extends GraphViewBase {
       }
     }
 
-    const knotRadius = Math.max(KNOT_RADIUS + 3, 8 / this.camera.zoom);
-    for (const [edgeId, points] of this.reroutes) {
-      for (const [index, p] of points.entries()) {
-        if (Math.hypot(p.x - world.x, p.y - world.y) <= knotRadius) {
-          return { type: 'knot', edgeId, index };
-        }
-      }
-    }
-
     for (const ns of candidates) {
       if (
         !rectsIntersect(this.nodeRect(ns), {
@@ -139,6 +132,16 @@ export abstract class GraphViewHitTest extends GraphViewBase {
       const advanced =
         ns.advanced > 0 && world.y >= ns.y + ns.geom.height - ADVANCED_ROW;
       return advanced ? { type: 'node', ns, advanced } : { type: 'node', ns };
+    }
+
+    // Reroute knots lie on wires, which are drawn under the nodes.
+    const knotRadius = Math.max(KNOT_RADIUS + 3, 8 / this.camera.zoom);
+    for (const [edgeId, points] of this.reroutes) {
+      for (const [index, p] of points.entries()) {
+        if (Math.hypot(p.x - world.x, p.y - world.y) <= knotRadius) {
+          return { type: 'knot', edgeId, index };
+        }
+      }
     }
 
     for (const ns of this.nodes.values()) {

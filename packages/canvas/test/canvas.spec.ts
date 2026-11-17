@@ -106,6 +106,30 @@ describe('SpatialIndex', () => {
     index.remove('a');
     expect(index.query({ x: 0, y: 0, width: 10, height: 10 })).toEqual([]);
   });
+  it('returns items in the order they were first inserted, for any rect', () => {
+    const index = new SpatialIndex<string>(100);
+    // `b` spans more cells, so cell order alone would put it first.
+    index.insert('a', { x: 150, y: 150, width: 40, height: 40 });
+    index.insert('b', { x: 0, y: 0, width: 200, height: 200 });
+    index.insert('c', { x: 120, y: 120, width: 60, height: 60 });
+    expect(index.query({ x: 0, y: 0, width: 300, height: 300 })).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+    expect(index.query({ x: 160, y: 160, width: 5, height: 5 })).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+    // Moving keeps the place in the stack.
+    index.insert('a', { x: 10, y: 10, width: 40, height: 40 });
+    expect(index.query({ x: 0, y: 0, width: 300, height: 300 })).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+  });
 });
 
 describe('selection', () => {
