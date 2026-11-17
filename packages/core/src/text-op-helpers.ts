@@ -194,6 +194,72 @@ export function removeStatement(
     };
   }
 
-  const [start, end] = lineAwareRange(text, meta.stmt.start, meta.stmt.end);
+  const [start, end] = lineAwareRange(
+    text,
+    meta.stmt.start,
+    trailingCommentEnd(text, meta.stmt.end, syntax.comment.line)
+  );
   return { start, end, text: '' };
+}
+
+/**
+ * The end of a comment that follows `end` on the same line (`a(); // why`,
+ * `print(1)  # why`, `a(); /* why *\/`): it belongs to that statement.
+ * `end` itself when there is none.
+ */
+export function trailingCommentEnd(
+  text: string,
+  end: number,
+  lineMarker: string
+): number {
+  const newline = text.indexOf('\n', end);
+  let stop = newline === -1 ? text.length : newline;
+  if (text[stop - 1] === '\r') {
+    stop--;
+  }
+
+  const rest = text.slice(end, stop).trim();
+  const block =
+    rest.startsWith('/*') &&
+    rest.endsWith('*/') &&
+    rest.indexOf('*/') === rest.length - 2;
+  return rest !== '' && (rest.startsWith(lineMarker) || block) ? stop : end;
+}
+
+/** A comment that turns a check off until a closing one (and its closer). */
+const RANGE_DIRECTIVES: ReadonlyArray<[RegExp, RegExp]> = [
+  [
+    /\b(eslint|oxlint|tslint|biome|deno-lint|jshint)-disable(?![-\w])/,
+    /\b(eslint|oxlint|tslint|biome|deno-lint|jshint)-enable(?![-\w])/,
+  ],
+  [/\bfmt:\s*off\b/, /\bfmt:\s*on\b/],
+  [/@formatter:off\b/, /@formatter:on\b/],
+  [/\bprettier-ignore-start\b/, /\bprettier-ignore-end\b/],
+];
+
+/**
+ * The end of the comment line right after `end` that closes a directive
+ * `opening` turned on (`// oxlint-disable …` above a statement, `// oxlint-
+ * enable …` below it): removed with the statement, or it would be left
+ * closing nothing. `end` itself when there is none.
+ */
+export function closingDirectiveEnd(
+  text: string,
+  opening: string,
+  end: number,
+  lineMarker: string
+): number {
+  const pair = RANGE_DIRECTIVES.find(([open]) => open.test(opening));
+  if (!pair) {
+    return end;
+  }
+
+  const newline = text.indexOf('\n', end);
+  const line = text.slice(end, newline === -1 ? text.length : newline);
+  const comment = line.trim();
+  if (!comment.startsWith(lineMarker) || !pair[1].test(comment)) {
+    return end;
+  }
+
+  return newline === -1 ? text.length : newline + 1;
 }

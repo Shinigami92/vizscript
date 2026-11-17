@@ -9,6 +9,7 @@ import { applyTextEdits } from './ops';
 import { findNode } from './reconcile';
 import {
   asStatement,
+  closingDirectiveEnd,
   contains,
   findPin,
   functionEdgesOf,
@@ -346,15 +347,23 @@ export function deleteNodes(
       }
 
       const edit = removeStatement(text, { ...meta, stmt: meta.stmt }, syntax);
-      // The comment above a removed statement goes with it.
+      // The comment above a removed statement goes with it, and the line
+      // closing a directive it opened (`// oxlint-enable …`).
       const comment = node.comment?.range;
-      targets.push({
-        range: meta.stmt,
-        edit:
-          comment && edit.text === '' && comment.end === edit.start
-            ? { ...edit, start: comment.start }
-            : edit,
-      });
+      const withComment =
+        comment && edit.text === '' && comment.end === edit.start
+          ? {
+              ...edit,
+              start: comment.start,
+              end: closingDirectiveEnd(
+                text,
+                text.slice(comment.start, comment.end),
+                edit.end,
+                syntax.comment.line
+              ),
+            }
+          : edit;
+      targets.push({ range: meta.stmt, edit: withComment });
       continue;
     }
 

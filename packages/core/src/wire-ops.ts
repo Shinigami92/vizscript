@@ -30,6 +30,7 @@ import {
   inputEdit,
   insertText,
   removeStatement,
+  trailingCommentEnd,
 } from './text-op-helpers';
 import type { StatementSyntax } from './text-ops';
 import { lineAwareRange, lineIndent, reindent } from './text-utils';
@@ -536,8 +537,10 @@ export function connectExec(
   const codeStart = leading
     ? leading.start + lineIndent(text, leading.start).length
     : stmt.start;
+  // Its comment on the same line moves with it (the removal takes it).
+  const codeEnd = trailingCommentEnd(text, stmt.end, syntax.comment.line);
   const snippet = reindent(
-    text.slice(codeStart, stmt.end),
+    text.slice(codeStart, codeEnd),
     lineIndent(text, stmt.start),
     insert.indent
   );
