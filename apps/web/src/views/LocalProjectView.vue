@@ -1,21 +1,12 @@
 <script setup lang="ts">
 import type { TreeEntry } from '@vizscript/api-contract';
-import type { GraphOverlay } from '@vizscript/core';
-import { EMPTY_OVERLAY } from '@vizscript/core';
-import { useDebounceFn, useEventListener } from '@vueuse/core';
-import {
-  computed,
-  onBeforeUnmount,
-  ref,
-  shallowReactive,
-  shallowRef,
-  watch,
-} from 'vue';
+import { useEventListener } from '@vueuse/core';
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
 import ScriptWorkspace from '../components/ScriptWorkspace.vue';
-import { useFileTabs } from '../composables/use-file-tabs';
+import { useFileSession } from '../composables/use-file-session';
 import { useToasts } from '../composables/use-toasts';
 import { localLayoutStore } from '../graph/layout-store';
 import { shortcut } from '../graph/source';
@@ -42,15 +33,8 @@ const opening = shallowRef<OpenResult | null>(null);
 const project = shallowRef<LocalProject | null>(null);
 const entries = shallowRef<TreeEntry[] | null>(null);
 const loadingTree = ref(false);
-/** Content of the open file on disk (`null` while loading). */
-const saved = ref<string | null>(null);
-const text = ref('');
-/** Graph-only edits of the open file (the graph not in sync with the code). */
-const overlay = shallowRef<GraphOverlay>(EMPTY_OVERLAY);
 /** The graph has edits the code doesn't have yet: saving is blocked. */
 const outOfSync = ref(false);
-const loadingFile = ref(false);
-const fileError = ref<string | null>(null);
 const saving = ref(false);
 /** Bumped to remount the workspace when the file changed on disk. */
 const version = ref(0);
@@ -65,51 +49,98 @@ const files = computed(
   () =>
     new Set(entries.value?.filter((e) => e.type === 'file').map((e) => e.path))
 );
-const dirty = computed(
-  () =>
-    saved.value !== null &&
-    (text.value !== saved.value || overlay.value.edits.length > 0)
-);
-/**
- * Path of the file on screen. It changes only when the next file has been
- * read, so the workbench keeps its layout while a file loads.
- */
-const shown = ref<string | null>(null);
 
-function draftKeyOf(filePath: string): string {
-  return `vizscript:draft:local/${id.value}:${filePath}`;
-}
+/** Open files of this folder: the one on screen, tabs and drafts. */
+const {
+  file,
+  text,
+  overlay,
+  dirty,
+  loadingFile,
+  fileError,
+  tabs: fileTabs,
+  dirtyTabs,
+  openText,
+  loadFile,
+  closeTab: closeSessionTab,
+  closeOtherTabs: closeSessionOthers,
+  closeAllTabs: closeSessionAll,
+  discard: discardChanges,
+  markSaved,
+  replaceShown,
+} = useFileSession({
+  scope: computed(() => `local/${id.value}`),
+  path,
+  isFile,
+  read: async (filePath) => {
+    if (!project.value) {
+      throw new Error('No folder open');
+    }
 
-const draftKey = computed(() => draftKeyOf(shown.value ?? ''));
+    const content = await project.value.read(filePath);
+    // A file on disk has no version of its own: its text is it.
+    return { path: filePath, content, version: content };
+  },
+  // Read-only folders are gone after a reload, so their drafts would be too.
+  persistDrafts: () => project.value?.canWrite === true,
+  dispose: disposeModel,
+  onRestored: () => show('Restored your unsaved changes for this file.'),
+});
+
+/** Path of the file on screen (the next one shows once it was read). */
+const shown = computed(() => file.value?.path ?? null);
+/** Content of the open file on disk (`null` while none is open). */
+const saved = computed(() => file.value?.content ?? null);
+
 const layoutStore = computed(() =>
   shown.value ? localLayoutStore(`local/${id.value}:${shown.value}`) : null
 );
+
+let treeRequest = 0;
 
 async function loadTree(): Promise<void> {
   if (!project.value) {
     return;
   }
 
+  // A newer folder or refresh wins over a slow earlier one.
+  const request = ++treeRequest;
   loadingTree.value = true;
   try {
     const listing = await project.value.list();
+    if (request !== treeRequest) {
+      return;
+    }
+
     entries.value = listing.entries;
     if (listing.truncated) {
       show('This folder is large; the file list is truncated.');
     }
   } catch (error) {
-    show(`Reading the folder failed: ${(error as Error).message}`, 'error');
+    if (request === treeRequest) {
+      show(`Reading the folder failed: ${(error as Error).message}`, 'error');
+    }
   } finally {
-    loadingTree.value = false;
+    if (request === treeRequest) {
+      loadingTree.value = false;
+    }
   }
 }
 
+let openRequest = 0;
+
 async function open(): Promise<void> {
+  const request = ++openRequest;
   project.value = null;
   entries.value = null;
-  opening.value = await openProject(id.value);
-  if (opening.value.status === 'ready') {
-    project.value = opening.value.project;
+  const result = await openProject(id.value);
+  if (request !== openRequest) {
+    return;
+  }
+
+  opening.value = result;
+  if (result.status === 'ready') {
+    project.value = result.project;
     await loadTree();
   }
 }
@@ -128,24 +159,13 @@ async function grant(): Promise<void> {
   }
 }
 
-let fileRequest = 0;
-
 // ---------------------------------------------------------------- tabs
-
-const fileTabs = useFileTabs(
-  computed(() => `vizscript:tabs:local/${id.value}`)
-);
-
-/** Read files of the open tabs with their current text. */
-const buffers = shallowReactive(
-  new Map<string, { saved: string; text: string; overlay: GraphOverlay }>()
-);
 
 /** Text of another file: an open tab's current text, else the file's. */
 async function readFile(filePath: string): Promise<string> {
-  const buffer = buffers.get(filePath);
-  if (buffer) {
-    return buffer.text;
+  const openTab = openText(filePath);
+  if (openTab !== undefined) {
+    return openTab;
   }
 
   if (!project.value) {
@@ -155,39 +175,19 @@ async function readFile(filePath: string): Promise<string> {
   return project.value.read(filePath);
 }
 
-const dirtyTabs = computed(() => {
-  const result = new Set<string>();
+onBeforeUnmount(() => {
   for (const tab of fileTabs.tabs.value) {
-    const buffer = buffers.get(tab.path);
-    if (
-      buffer &&
-      (buffer.text !== buffer.saved || buffer.overlay.edits.length > 0)
-    ) {
-      result.add(tab.path);
-    }
+    disposeModel(tab.path);
   }
-
-  return result;
 });
-
-function forget(paths: ReadonlyArray<string>): void {
-  for (const p of paths) {
-    buffers.delete(p);
-    disposeModel(p);
-  }
-}
-
-watch(id, () => forget([...buffers.keys()]));
-onBeforeUnmount(() => forget(fileTabs.tabs.value.map((t) => t.path)));
 
 function showNoFile(): void {
   void router.push({ name: 'local', params: { id: id.value, path: [] } });
 }
 
 function closeTab(tabPath: string): void {
-  const next = fileTabs.close(tabPath, shown.value);
-  forget([tabPath]);
-  if (tabPath === shown.value) {
+  const next = closeSessionTab(tabPath);
+  if (next !== undefined) {
     if (next) {
       selectFile(next);
     } else {
@@ -197,16 +197,14 @@ function closeTab(tabPath: string): void {
 }
 
 function closeOtherTabs(tabPath: string): void {
-  forget(fileTabs.tabs.value.map((t) => t.path).filter((p) => p !== tabPath));
-  fileTabs.closeOthers(tabPath);
+  closeSessionOthers(tabPath);
   if (tabPath !== shown.value) {
     selectFile(tabPath);
   }
 }
 
 function closeAllTabs(): void {
-  forget(fileTabs.tabs.value.map((t) => t.path));
-  fileTabs.closeAll();
+  closeSessionAll();
   showNoFile();
 }
 
@@ -217,122 +215,8 @@ function pinFile(next: string): void {
   }
 }
 
-watch(
-  () => dirtyTabs.value.has(shown.value ?? ''),
-  (isDirty) => {
-    if (isDirty && shown.value) {
-      fileTabs.pin(shown.value);
-    }
-  }
-);
-
-async function loadFile(): Promise<void> {
-  const request = ++fileRequest;
-  const previous = shown.value ?? undefined;
-  fileError.value = null;
-  if (!project.value || !isFile.value) {
-    shown.value = null;
-    saved.value = null;
-    loadingFile.value = false;
-    return;
-  }
-
-  const next = path.value;
-  const cached = buffers.get(next);
-  if (cached) {
-    // An open tab: instant, with its unsaved changes.
-    text.value = cached.text;
-    saved.value = cached.saved;
-    overlay.value = cached.overlay;
-    shown.value = next;
-    fileTabs.open(next, { after: previous });
-    loadingFile.value = false;
-    return;
-  }
-
-  loadingFile.value = true;
-  try {
-    const content = await project.value.read(next);
-    if (request !== fileRequest) {
-      return;
-    }
-
-    let initial = content;
-    let initialOverlay = EMPTY_OVERLAY;
-    try {
-      const draft = JSON.parse(
-        localStorage.getItem(draftKeyOf(next)) ?? 'null'
-      ) as { base: string; text: string; overlay?: GraphOverlay } | null;
-      if (
-        draft?.base === content &&
-        (draft.text !== content || (draft.overlay?.edits.length ?? 0) > 0)
-      ) {
-        initial = draft.text;
-        initialOverlay = draft.overlay ?? EMPTY_OVERLAY;
-        show('Restored your unsaved changes for this file.');
-      }
-    } catch {
-      // ignore broken drafts
-    }
-
-    // All at once: the workspace of the new file gets the new text.
-    text.value = initial;
-    overlay.value = initialOverlay;
-    saved.value = content;
-    shown.value = next;
-    buffers.set(next, {
-      saved: content,
-      text: initial,
-      overlay: initialOverlay,
-    });
-    fileTabs.open(next, { after: previous });
-  } catch (error) {
-    if (request === fileRequest) {
-      shown.value = null;
-      saved.value = null;
-      fileError.value = (error as Error).message;
-    }
-  } finally {
-    if (request === fileRequest) {
-      loadingFile.value = false;
-    }
-  }
-}
-
 watch(id, open, { immediate: true });
 watch([entries, path], loadFile, { immediate: true });
-
-const saveDraft = useDebounceFn(() => {
-  // Read-only folders are gone after a reload, so their drafts would be too.
-  if (saved.value === null || !project.value?.canWrite) {
-    return;
-  }
-
-  try {
-    if (dirty.value) {
-      localStorage.setItem(
-        draftKey.value,
-        JSON.stringify({
-          base: saved.value,
-          text: text.value,
-          overlay: overlay.value,
-        })
-      );
-    } else {
-      localStorage.removeItem(draftKey.value);
-    }
-  } catch {
-    // storage unavailable
-  }
-}, 500);
-
-// The open tab keeps the text and what is on disk.
-watch([text, saved, overlay], ([value, onDisk, edits]) => {
-  if (shown.value && onDisk !== null) {
-    buffers.set(shown.value, { saved: onDisk, text: value, overlay: edits });
-  }
-});
-watch([text, overlay], saveDraft);
 
 async function save(): Promise<void> {
   if (!project.value || !dirty.value || saving.value) {
@@ -375,44 +259,11 @@ async function save(): Promise<void> {
     }
 
     await project.value.write(target, content);
-    savedAs(target, content);
+    markSaved(target, content);
   } catch (error) {
     show(`Saving failed: ${(error as Error).message}`, 'error');
   } finally {
     saving.value = false;
-  }
-}
-
-/**
- * A file was written with `content`: its tab's saved text, and its draft,
- * which stays only for changes made while it was written.
- */
-function savedAs(target: string, content: string): void {
-  const buffer = buffers.get(target);
-  if (buffer) {
-    buffers.set(target, { ...buffer, saved: content });
-  }
-
-  if (shown.value === target) {
-    saved.value = content;
-  }
-
-  const left = buffers.get(target);
-  try {
-    if (left && (left.text !== content || left.overlay.edits.length > 0)) {
-      localStorage.setItem(
-        draftKeyOf(target),
-        JSON.stringify({
-          base: content,
-          text: left.text,
-          overlay: left.overlay,
-        })
-      );
-    } else {
-      localStorage.removeItem(draftKeyOf(target));
-    }
-  } catch {
-    // storage unavailable
   }
 }
 
@@ -424,9 +275,7 @@ function discard(): void {
       `Discard all changes to ${shown.value ?? 'this file'}? This can't be undone.`
     )
   ) {
-    text.value = saved.value;
-    overlay.value = EMPTY_OVERLAY;
-    localStorage.removeItem(draftKey.value);
+    discardChanges();
   }
 }
 
@@ -476,8 +325,7 @@ useEventListener(window, 'focus', async () => {
     }
 
     if (content !== saved.value) {
-      text.value = content;
-      saved.value = content;
+      replaceShown({ path: target, content, version: content });
       version.value++;
     }
   } catch {

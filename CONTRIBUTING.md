@@ -189,6 +189,8 @@ Like UE, a graph may be in states the code can't hold yet: an exec wire broken w
 
 Repositories are keyed by the provider's numeric id, so layouts survive renames. The playground uses browser storage only.
 
+Open files, tabs and drafts of a repository branch or local folder are one shared session (`composables/use-file-session.ts`, used by `RepoView` and `LocalProjectView`), keyed by its scope (`github/<owner>/<repo>@<ref>`, `local/<id>`): `vizscript:tabs:<scope>` and `vizscript:draft:<scope>:<path>`. A draft holds `{ version, text, overlay }`, where `version` is the blob sha (repositories) or the file's text (local folders); it is restored only for the same version.
+
 ### Signed in or not
 
 Signing in is optional. Without a session:
