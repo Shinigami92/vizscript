@@ -9,7 +9,8 @@ import { qualifiedName } from '@vizscript/core';
 import type { Expr, FuncDecl, Param, Stmt, TypeRef } from './ast';
 
 interface Scope {
-  kind: 'script' | 'class' | 'function';
+  /** A lambda and a match branch (its `var x` patterns) are scopes too. */
+  kind: 'script' | 'class' | 'function' | 'lambda' | 'branch';
   /** Qualified name of a class or function (`Bullet.hit`). */
   name: string;
   parent?: Scope;
@@ -56,7 +57,12 @@ function resolve(name: string, scope: Scope): Scope | undefined {
 
 function classScope(scope: Scope): Scope {
   let current = scope;
-  while (current.kind === 'function' && current.parent) {
+  while (
+    (current.kind === 'function' ||
+      current.kind === 'lambda' ||
+      current.kind === 'branch') &&
+    current.parent
+  ) {
     current = current.parent;
   }
 
@@ -132,15 +138,16 @@ class Resolver {
     }
   }
 
-  fn(decl: FuncDecl, scope: Scope): void {
+  fn(decl: FuncDecl, scope: Scope, lambda = false): void {
     const name =
-      decl.name && scope.kind !== 'function'
+      decl.name && !lambda
         ? scope.name
           ? `${scope.name}.${decl.name}`
           : decl.name
         : scope.name;
+    // A lambda's parameters and variables are its own, not the function's.
     const inner: Scope = {
-      kind: 'function',
+      kind: lambda ? 'lambda' : 'function',
       name,
       parent: scope,
       locals: new Set(),
@@ -160,6 +167,7 @@ class Resolver {
         }
 
         case 'Class': {
+          this.type(stmt.extendsRef);
           const inner: Scope = {
             kind: 'class',
             name: scope.name ? `${scope.name}.${stmt.name}` : stmt.name,
@@ -194,6 +202,42 @@ class Resolver {
         case 'Signal': {
           for (const param of stmt.params) {
             this.type(param.type);
+          }
+
+          break;
+        }
+
+        case 'Extends': {
+          this.type(stmt.ref);
+          break;
+        }
+
+        case 'ClassName': {
+          this.type(stmt.extendsRef);
+          break;
+        }
+
+        case 'Match': {
+          this.walk(stmt.subject, scope);
+          for (const branch of stmt.branches) {
+            // `var x` patterns bind for the branch only.
+            const inner: Scope = {
+              kind: 'branch',
+              name: scope.name,
+              parent: scope,
+              locals: new Set(
+                branch.names.filter((n) => n.bound).map((n) => n.name)
+              ),
+            };
+            for (const used of branch.names) {
+              this.occurrences.push({
+                range: { start: used.start, end: used.end },
+                name: used.name,
+                scope: resolve(used.name, inner),
+              });
+            }
+
+            this.statements(branch.body.body, inner);
           }
 
           break;
@@ -246,7 +290,7 @@ class Resolver {
       }
 
       case 'Lambda': {
-        this.fn(expr.fn, scope);
+        this.fn(expr.fn, scope, true);
         return;
       }
 
@@ -339,8 +383,7 @@ export function renameGDScriptSymbol(
     const matches =
       symbol.kind === 'local' && isFunctionScope
         ? o.scope?.kind === 'function' && o.scope.name === symbol.scope
-        : target !== undefined &&
-          target.kind !== 'function' &&
+        : (target?.kind === 'script' || target?.kind === 'class') &&
           target.name === symbol.scope;
     if (matches) {
       replace(o.range);
@@ -389,7 +432,8 @@ export function gdscriptCallSites(
       .filter(
         (o) =>
           o.name === symbol.name &&
-          (o.scope ?? o.member)?.kind !== 'function' &&
+          ((o.scope ?? o.member)?.kind === 'script' ||
+            (o.scope ?? o.member)?.kind === 'class') &&
           (o.scope ?? o.member)?.name === symbol.scope
       )
       .map((o) => o.range.start)

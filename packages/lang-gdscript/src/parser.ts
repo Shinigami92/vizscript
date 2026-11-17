@@ -9,10 +9,31 @@ import type {
   TypeRef,
 } from './ast';
 import { DeclarationParser } from './declaration-parser';
+import type { Token } from './lexer';
 import { tokenize } from './lexer';
 import type { ParseDiagnostic } from './parser-base';
 import { ParseError } from './parser-base';
 import { stringLiteral } from './string-literal';
+
+/** Words in match patterns that name nothing (`var x`, `when`, `null`). */
+const PATTERN_WORDS = new Set([
+  'var',
+  'when',
+  'and',
+  'or',
+  'not',
+  'in',
+  'is',
+  'as',
+  'true',
+  'false',
+  'null',
+  'self',
+  'PI',
+  'TAU',
+  'INF',
+  'NAN',
+]);
 
 const ASSIGNMENT_OPS = new Set([
   '=',
@@ -370,11 +391,12 @@ class Parser extends DeclarationParser {
 
         case 'extends': {
           this.next();
-          const target = this.parseExtendsTarget();
+          const { target, ref } = this.parseExtendsTarget();
           this.endStatement();
           return {
             type: 'Extends',
             target,
+            ...(ref ? { ref } : {}),
             start: token.start,
             end: this.lastEnd,
           };
@@ -383,16 +405,18 @@ class Parser extends DeclarationParser {
         case 'class_name': {
           this.next();
           const name = this.expectName();
+          let extendsRef: TypeRef | undefined;
           if (this.isName('extends') && !this.peek().lineStart) {
             // `class_name A extends B` on one line.
             this.next();
-            this.parseExtendsTarget();
+            extendsRef = this.parseExtendsTarget().ref;
           }
 
           this.endStatement();
           return {
             type: 'ClassName',
             name: name.value,
+            ...(extendsRef ? { extendsRef } : {}),
             start: token.start,
             end: this.lastEnd,
           };
@@ -402,9 +426,12 @@ class Parser extends DeclarationParser {
           this.next();
           const name = this.expectName();
           let extendsName: string | undefined;
+          let extendsRef: TypeRef | undefined;
           if (this.isName('extends')) {
             this.next();
-            extendsName = this.parseExtendsTarget();
+            const target = this.parseExtendsTarget();
+            extendsName = target.target;
+            extendsRef = target.ref;
           }
 
           const body = this.parseBlock(indent);
@@ -412,6 +439,7 @@ class Parser extends DeclarationParser {
             type: 'Class',
             name: name.value,
             extends: extendsName,
+            ...(extendsRef ? { extendsRef } : {}),
             body,
             start: token.start,
             end: body.end,
@@ -445,11 +473,12 @@ class Parser extends DeclarationParser {
     return { type: 'Expr', expr, start: token.start, end: this.lastEnd };
   }
 
-  private parseExtendsTarget(): string {
+  /** `extends Node`, `extends Outer.Inner`, `extends "res://a.gd"`. */
+  private parseExtendsTarget(): { target: string; ref?: TypeRef } {
     const token = this.peek();
     if (token.type === 'string') {
       this.next();
-      return stringLiteral(token.value).value;
+      return { target: stringLiteral(token.value).value };
     }
 
     const parts = [this.expectName().value];
@@ -458,7 +487,11 @@ class Parser extends DeclarationParser {
       parts.push(this.expectName().value);
     }
 
-    return parts.join('.');
+    const target = parts.join('.');
+    return {
+      target,
+      ref: { name: target, start: token.start, end: this.lastEnd },
+    };
   }
 
   private parseIf(indent: number): IfStmt {
@@ -521,8 +554,11 @@ class Parser extends DeclarationParser {
       ) {
         const start = this.peek().start;
         try {
-          // Patterns (and an optional `when` guard) up to the `:`.
+          // Patterns (and an optional `when` guard) up to the `:`, with
+          // the names they use and bind.
           let depth = 0;
+          let before: Token | undefined;
+          const names: MatchBranch['names'] = [];
           while (this.peek().type !== 'eof') {
             const t = this.peek();
             if (t.type === 'op' && depth === 0 && t.value === ':') {
@@ -533,14 +569,25 @@ class Parser extends DeclarationParser {
               depth++;
             } else if (t.type === 'op' && ')]}'.includes(t.value)) {
               depth--;
+            } else if (
+              t.type === 'name' &&
+              !PATTERN_WORDS.has(t.value) &&
+              !(before?.type === 'op' && before.value === '.')
+            ) {
+              names.push({
+                name: t.value,
+                bound: before?.type === 'name' && before.value === 'var',
+                start: t.start,
+                end: t.end,
+              });
             }
 
-            this.next();
+            before = this.next();
           }
 
           const patterns: Span = { start, end: this.lastEnd };
           const body = this.parseBlock(branchIndent);
-          branches.push({ patterns, body, start, end: body.end });
+          branches.push({ patterns, names, body, start, end: body.end });
         } catch (error) {
           if (!(error instanceof ParseError)) {
             throw error;

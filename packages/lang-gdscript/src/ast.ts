@@ -110,6 +110,11 @@ export interface IfStmt extends Span {
 export interface MatchBranch extends Span {
   /** Pattern(s) and guard as written, up to the `:`. */
   patterns: Span;
+  /**
+   * Names the patterns and guard use (`IDLE`, `State` of `State.IDLE`) and
+   * the ones they bind (`var x`), with their spans.
+   */
+  names: Array<{ name: string; bound: boolean } & Span>;
   body: Block;
 }
 
@@ -136,9 +141,20 @@ export type Stmt =
   | ({ type: 'Breakpoint' } & Span)
   | ({ type: 'Signal'; name: string; params: Param[] } & Span)
   | ({ type: 'Enum'; name: string | null } & Span)
-  | ({ type: 'Extends'; target: string } & Span)
-  | ({ type: 'ClassName'; name: string } & Span)
-  | ({ type: 'Class'; name: string; extends?: string; body: Block } & Span)
+  | ({
+      type: 'Extends';
+      target: string;
+      /** The class named (not a quoted path), where it is written. */
+      ref?: TypeRef;
+    } & Span)
+  | ({ type: 'ClassName'; name: string; extendsRef?: TypeRef } & Span)
+  | ({
+      type: 'Class';
+      name: string;
+      extends?: string;
+      extendsRef?: TypeRef;
+      body: Block;
+    } & Span)
   | ({ type: 'Annotation'; annotation: Annotation } & Span)
   | ({ type: 'Error'; message: string } & Span);
 
