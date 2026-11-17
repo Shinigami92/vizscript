@@ -151,9 +151,9 @@ function calledSymbol(
     targetText ?? (title.includes('.') ? title.split('.')[0] : undefined);
   if (module) {
     return (
-      imports
-        .get(module)
-        ?.members?.find((s) => s.name === name && s.kind === 'function') ??
+      moduleImport(symbols, imports, module)?.members?.find(
+        (s) => s.name === name && s.kind === 'function'
+      ) ??
       engine(targetType(fn, node)) ??
       engine(variableType(symbols, owner, module)) ??
       engine(
@@ -383,6 +383,27 @@ export function withParamPins(
   const at = pins.findLastIndex((p) => p.direction === 'in') + 1;
   pins.splice(at, 0, ...added);
   return pins;
+}
+
+/**
+ * The import a call's module is: by its local name (`math`, `np`), or by
+ * its dotted path (`urllib.request`, while `import urllib.request` binds
+ * the name `urllib`).
+ */
+function moduleImport(
+  symbols: ReadonlyArray<ScriptSymbol>,
+  imports: ReadonlyMap<string, ImportedDeclaration>,
+  module: string
+): ImportedDeclaration | undefined {
+  const named = imports.get(module);
+  if (named || !module.includes('.')) {
+    return named;
+  }
+
+  const whole = symbols.find(
+    (s) => s.kind === 'import' && s.imported === '*' && s.module === module
+  );
+  return whole ? imports.get(whole.name) : undefined;
 }
 
 /**

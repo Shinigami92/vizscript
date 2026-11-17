@@ -208,6 +208,29 @@ describe('standard library', () => {
   });
 });
 
+describe('library calls through a dotted module', () => {
+  it('get the pins of the stub (import a.b binds a)', () => {
+    const stub = pythonLibrary('urllib.request');
+    const exports = exportedSymbols(
+      parsePythonDocument(stub?.text ?? '', stub?.fileName),
+      stub?.text ?? ''
+    );
+    const doc = parsePythonDocument(
+      'import urllib.request\n\nurllib.request.urlopen("https://x")\n',
+      'a.py',
+      { imports: [{ name: 'urllib', members: exports }] }
+    );
+    const call = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'call');
+    expect(
+      call?.pins
+        .filter((p) => p.direction === 'in' && p.kind === 'data')
+        .map((p) => `${p.name}:${String(p.type)}`)
+    ).toEqual(['self:object', 'url:string', 'data:bytes', 'timeout:number']);
+  });
+});
+
 describe('pasting code', () => {
   it('re-indents pasted blocks with the file’s indentation', () => {
     const text = 'def f():\n    start()\n';
