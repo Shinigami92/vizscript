@@ -281,6 +281,23 @@ onBeforeUnmount(() => {
   }
 });
 
+/**
+ * Runs an editor command without taking the keyboard: undo from the graph
+ * must leave the focus there, or the next ⇧⌘Z goes to the editor's own
+ * redo and skips the graph's history.
+ */
+function keepFocus(run: () => void): void {
+  const before = document.activeElement;
+  run();
+  if (
+    before instanceof HTMLElement &&
+    before !== document.activeElement &&
+    !editor.value?.getDomNode()?.contains(before)
+  ) {
+    before.focus({ preventScroll: true });
+  }
+}
+
 defineExpose({
   /** Applies graph edits as one undoable step. */
   applyEdits(edits: ReadonlyArray<TextEdit>): void {
@@ -373,10 +390,10 @@ defineExpose({
     editor.value.focus();
   },
   undo(): void {
-    editor.value?.trigger('vizscript', 'undo', null);
+    keepFocus(() => editor.value?.trigger('vizscript', 'undo', null));
   },
   redo(): void {
-    editor.value?.trigger('vizscript', 'redo', null);
+    keepFocus(() => editor.value?.trigger('vizscript', 'redo', null));
   },
   layout(): void {
     editor.value?.layout();
