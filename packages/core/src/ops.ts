@@ -323,7 +323,13 @@ export type GraphOp =
   | { type: 'addImport'; import: ImportRequest };
 
 /** How a value typed in the Details panel is written. */
-export type ValueKind = 'string' | 'number' | 'bool' | 'expression';
+/**
+ * How a typed value is written: as text, a number, a boolean, code as it
+ * is (`expression`), or `auto`: code when it looks like code (a number,
+ * quotes, brackets, a known name), else text, like a value typed into a
+ * pin (for a field that held no value yet).
+ */
+export type ValueKind = 'string' | 'number' | 'bool' | 'expression' | 'auto';
 
 /** A basic type of a language, for the type picker. */
 export interface TypeOption {

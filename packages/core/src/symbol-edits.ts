@@ -1,6 +1,7 @@
 import type { CommentSyntax } from './comment-ops';
 import type { DeclarationSyntax } from './declaration-syntax';
 import type { GraphDocument, SourceRange } from './ir';
+import { looksLikeCode } from './literal-ops';
 import { failed, succeeded } from './op-result';
 import type { OpResult, TextEdit, TypeSystemInfo, ValueKind } from './ops';
 import { findSymbol, isBlank, lineEndOf } from './symbol-helpers';
@@ -400,6 +401,7 @@ function typeEdits(
 function valueSource(
   value: string,
   kind: ValueKind,
+  doc: GraphDocument,
   syntax: DeclarationSyntax
 ): string | { error: string } {
   switch (kind) {
@@ -422,6 +424,15 @@ function valueSource(
       return value.trim() === ''
         ? { error: 'The value must not be empty.' }
         : value.trim();
+    }
+
+    case 'auto': {
+      const trimmed = value.trim();
+      if (trimmed === '') {
+        return { error: 'The value must not be empty.' };
+      }
+
+      return looksLikeCode(trimmed, doc) ? trimmed : syntax.string(value);
     }
   }
 }
@@ -459,7 +470,7 @@ export function setSymbolValue(
     return succeeded([{ start: from, end: symbol.defaultRange.end, text: '' }]);
   }
 
-  const source = valueSource(value, kind, syntax);
+  const source = valueSource(value, kind, doc, syntax);
   if (typeof source !== 'string') {
     return failed(source.error);
   }
