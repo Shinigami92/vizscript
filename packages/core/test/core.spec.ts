@@ -10,18 +10,26 @@ import {
   extractReroutes,
   hashString,
   isArrayType,
+  isMapType,
+  isSetType,
   isTypeCompatible,
   layoutDocument,
+  mapKeyType,
+  mapOf,
+  mapValueType,
   NODE_METRICS,
   NodeIdFactory,
   noReroutesKey,
   pinColor,
   reconcilePositions,
   reconcileReroutes,
+  refinesType,
   rerouteEntries,
   rerouteKey,
   reroutePatch,
   searchNodes,
+  setElementType,
+  setOf,
   snapToGrid,
   wiredNodes,
 } from '../src';
@@ -417,6 +425,45 @@ describe('array types', () => {
     expect(isTypeCompatible('string[]', 'number[]')).toBe(false);
     expect(isTypeCompatible('string[]', 'string')).toBe(false);
     expect(isTypeCompatible('Node[]', 'object[]')).toBe(true);
+  });
+});
+
+describe('map and set types', () => {
+  it('builds and reads key, value and element types', () => {
+    expect(mapOf('string', 'number')).toBe('Map<string, number>');
+    expect(mapOf('any', 'any')).toBe('map');
+    expect(mapOf('string', 'any')).toBe('Map<string, any>');
+    expect(setOf('Item')).toBe('Set<Item>');
+    expect(setOf('any')).toBe('set');
+    const nested = 'Map<string, Map<number, string[]>>';
+    expect(isMapType(nested)).toBe(true);
+    expect(mapKeyType(nested)).toBe('string');
+    expect(mapValueType(nested)).toBe('Map<number, string[]>');
+    expect(mapKeyType('map')).toBe('any');
+    expect(setElementType('Set<Item>')).toBe('Item');
+    expect(isMapType('Set<string>')).toBe(false);
+    expect(isSetType('set')).toBe(true);
+    expect(isMapType('MapLike')).toBe(false);
+  });
+
+  it('colors maps by their keys and sets by their elements', () => {
+    expect(pinColor('Map<string, number>')).toBe(pinColor('string'));
+    expect(pinColor('Set<number>', 'light')).toBe(pinColor('number', 'light'));
+    expect(pinColor('map')).toBe(pinColor('object'));
+  });
+
+  it('checks compatibility by their parts', () => {
+    expect(isTypeCompatible('Map<string, number>', 'map')).toBe(true);
+    expect(isTypeCompatible('Map<string, number>', 'Map<string, string>')).toBe(
+      false
+    );
+    expect(isTypeCompatible('Set<string>', 'Set<string>')).toBe(true);
+    expect(isTypeCompatible('Set<string>', 'map')).toBe(false);
+    expect(isTypeCompatible('Set<string>', 'string[]')).toBe(false);
+    expect(isTypeCompatible('Map<string, number>', 'object')).toBe(true);
+    expect(isTypeCompatible('Map<string, number>', 'number')).toBe(false);
+    expect(refinesType('map', 'Map<string, number>')).toBe(true);
+    expect(refinesType('set', 'Map<string, number>')).toBe(false);
   });
 });
 
