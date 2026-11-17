@@ -558,9 +558,8 @@ describe('a method without its receiver', () => {
       type: 'disconnect',
       pin: { node: indexOf.id, pin: 'target' },
     });
+    // `indexOf` of an array is UE's pure FIND node.
     expect(shownNode(overlay, 'indexOf')?.pins.map((p) => p.id)).toEqual([
-      'exec',
-      'then',
       'target',
     ]);
     overlay = edit(source, overlay, {

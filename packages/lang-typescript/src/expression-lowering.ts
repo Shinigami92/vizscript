@@ -3,8 +3,10 @@ import {
   CHAIN_OPERATORS,
   chainPinId,
   conversionCall,
+  findContainerOp,
   flattenChain,
   isTypeConstant,
+  styleContainerValue,
 } from '@vizscript/core';
 import type { DataType, Pin } from '@vizscript/core';
 import type { InsertPoint, OutputPinMeta } from '@vizscript/core';
@@ -15,6 +17,7 @@ import {
   formatLiteral,
   truncate,
 } from '@vizscript/core';
+import { TYPESCRIPT_CONTAINER_OPS } from './container-ops';
 import { CONVERSIONS } from './conversions';
 import { GraphBuilder } from './graph-builder';
 import type { EvalMode, InputSpec, ValueSource } from './lower-utils';
@@ -56,7 +59,7 @@ function binaryType(
  * The type `new Name()` makes: built-in containers are untyped arrays,
  * maps and sets until the checker knows their elements.
  */
-function constructedType(name: string | undefined): DataType {
+export function constructedType(name: string | undefined): DataType {
   switch (name) {
     case undefined: {
       return 'object';
@@ -186,6 +189,24 @@ export abstract class ExpressionLowering extends GraphBuilder {
       isNew || mode === 'statement'
         ? undefined
         : conversionCall(CONVERSIONS, title, inputs.length);
+    // UE's container nodes (LENGTH, ADD …): a known operation on a typed
+    // array, `Map` or `Set` (`items.push(x)`); reads are pure.
+    const container =
+      callee.type === 'MemberExpression' &&
+      !callee.computed &&
+      expr.type === 'CallExpression' &&
+      expr.arguments.every((a) => a.type !== 'SpreadElement')
+        ? inputs[0]
+        : undefined;
+    const op = container
+      ? findContainerOp(
+          TYPESCRIPT_CONTAINER_OPS,
+          'method',
+          title,
+          container.value?.type,
+          expr.arguments.length
+        )
+      : undefined;
     const returnType: DataType =
       converts ??
       (knownName ? this.doc.functionReturnTypes.get(knownName) : undefined) ??
@@ -195,7 +216,10 @@ export abstract class ExpressionLowering extends GraphBuilder {
       inputs.unshift({ pin: freeTarget, value: undefined });
     }
 
-    const impure = mode !== 'pure' && converts === undefined;
+    const impure =
+      mode !== 'pure' &&
+      converts === undefined &&
+      (op === undefined || op.mutates === true || mode === 'statement');
     const pins: Pin[] = impure
       ? [this.execIn(), this.execOut('then', '', statement?.insert)]
       : [];
@@ -235,7 +259,19 @@ export abstract class ExpressionLowering extends GraphBuilder {
       this.chain(node);
     }
 
-    return { pin: { node: node.id, pin: 'return' }, type: returnType };
+    const value: ValueSource = {
+      pin: { node: node.id, pin: 'return' },
+      type: returnType,
+    };
+    return op && container?.value
+      ? styleContainerValue(
+          this.nodes,
+          value,
+          op,
+          container.value.type,
+          container.pin.id
+        )
+      : value;
   }
 
   protected lowerExpr(
@@ -401,7 +437,13 @@ export abstract class ExpressionLowering extends GraphBuilder {
           return { pin: entry.source, type: entry.type };
         }
 
-        return this.getVar(expr.name, expr, path, entry?.type ?? 'any');
+        // A module variable in a function: the type it was declared with.
+        return this.getVar(
+          expr.name,
+          expr,
+          path,
+          entry?.type ?? this.doc.variableTypes.get(expr.name) ?? 'any'
+        );
       }
 
       case 'ThisExpression': {
@@ -457,9 +499,10 @@ export abstract class ExpressionLowering extends GraphBuilder {
           });
         }
 
-        return this.pureNode({
+        const name = this.source(rangeOf(expr.property));
+        const read = this.pureNode({
           kind: 'getProperty',
-          title: `${optional ? '?.' : '.'}${this.source(rangeOf(expr.property))}`,
+          title: `${optional ? '?.' : '.'}${name}`,
           expr,
           path,
           inputs: [
@@ -471,6 +514,18 @@ export abstract class ExpressionLowering extends GraphBuilder {
           outType: 'any',
           compact: true,
         });
+        // UE's LENGTH: `items.length`, `map.size`.
+        const op = optional
+          ? undefined
+          : findContainerOp(
+              TYPESCRIPT_CONTAINER_OPS,
+              'property',
+              name,
+              target.type
+            );
+        return op
+          ? styleContainerValue(this.nodes, read, op, target.type, 'target')
+          : read;
       }
 
       case 'CallExpression':

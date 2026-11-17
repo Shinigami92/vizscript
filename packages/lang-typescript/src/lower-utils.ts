@@ -153,6 +153,11 @@ export interface DocumentContext {
   readonly queue: PendingFunction[];
   readonly functionParams: Map<string, string[]>;
   readonly functionReturnTypes: Map<string, DataType>;
+  /**
+   * Types of the module's variables, for their Gets in functions: the
+   * annotation, else what a container value says (`[]`, `new Map()`).
+   */
+  readonly variableTypes: Map<string, DataType>;
   uniqueFunctionId(name: string): string;
 }
 

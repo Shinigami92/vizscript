@@ -21,6 +21,7 @@ import {
   linkSymbolGraphs,
 } from '@vizscript/core';
 import { patternAnnotation, typeFromAnnotation } from './annotations';
+import { constructedType } from './expression-lowering';
 import type { DocumentContext, PendingFunction } from './lower-utils';
 import { DECLARATION_ONLY, patternName, rangeOf, unwrap } from './lower-utils';
 import { StatementLowering } from './statement-lowering';
@@ -28,11 +29,34 @@ import { typeScriptReexports, typeScriptSymbols } from './symbols';
 
 export const LANGUAGE_ID = 'typescript';
 
+/**
+ * The type of a module variable for its Gets: its annotation, else the
+ * container its value makes (`[]`, `new Map()`); the checker knows more.
+ */
+function declaredType(
+  id: t.Identifier,
+  init: t.Expression | undefined
+): DataType {
+  const annotated = typeFromAnnotation(id.typeAnnotation);
+  if (annotated !== 'any') {
+    return annotated;
+  }
+
+  if (init?.type === 'ArrayExpression') {
+    return 'array';
+  }
+
+  return init?.type === 'NewExpression' && init.callee.type === 'Identifier'
+    ? constructedType(init.callee.name)
+    : 'any';
+}
+
 class DocumentLowering implements DocumentContext {
   public readonly functions: FunctionGraph[] = [];
   public readonly queue: PendingFunction[] = [];
   public readonly functionParams = new Map<string, string[]>();
   public readonly functionReturnTypes = new Map<string, DataType>();
+  public readonly variableTypes = new Map<string, DataType>();
   private readonly fnIds = new Map<string, number>();
 
   public constructor(
@@ -75,6 +99,13 @@ class DocumentLowering implements DocumentContext {
       if (stmt.type === 'VariableDeclaration') {
         for (const decl of stmt.declarations) {
           const init = decl.init ? unwrap(decl.init) : undefined;
+          if (decl.id.type === 'Identifier') {
+            const type = declaredType(decl.id, init);
+            if (type !== 'any') {
+              this.variableTypes.set(decl.id.name, type);
+            }
+          }
+
           if (
             decl.id.type === 'Identifier' &&
             init &&
