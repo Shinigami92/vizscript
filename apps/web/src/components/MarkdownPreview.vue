@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { refDebounced } from '@vueuse/core';
-import { computed, nextTick, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, shallowRef, useTemplateRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { githubConfig } from '../api/github-public';
 import { useTheme } from '../composables/use-theme';
 import { monacoLanguage } from '../graph/languages';
 import type { RepoLocation } from '../markdown/links';
@@ -36,6 +37,12 @@ const repo = computed<RepoLocation | undefined>(() => {
     : undefined;
 });
 
+/** The deployment's raw host for repository images (from the server). */
+const rawUrl = shallowRef<string | null>(null);
+void githubConfig()
+  .then((c) => (rawUrl.value = c.rawUrl))
+  .catch(() => undefined);
+
 // Typing in the editor re-renders at most a few times per second.
 const source = refDebounced(
   computed(() => props.text),
@@ -44,7 +51,8 @@ const source = refDebounced(
 const html = computed(() =>
   renderMarkdown(source.value, {
     resolveLink: (href) => resolveLink(props.path, href, repo.value),
-    resolveImage: (src) => resolveImage(props.path, src, repo.value),
+    resolveImage: (src) =>
+      resolveImage(props.path, src, repo.value, rawUrl.value),
   })
 );
 

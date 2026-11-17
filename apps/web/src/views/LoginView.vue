@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { githubConfig } from '../api/github-public';
 import { useSessionStore } from '../stores/session';
 
 const session = useSessionStore();
@@ -9,6 +10,11 @@ const route = useRoute();
 const token = ref('');
 const busy = ref(false);
 const error = ref<string | null>(null);
+/** GitHub's web pages for this deployment (Enterprise: its own host). */
+const githubWebUrl = ref<string | null>(null);
+void githubConfig()
+  .then((c) => (githubWebUrl.value = c.webUrl))
+  .catch(() => undefined);
 
 async function submit(): Promise<void> {
   busy.value = true;
@@ -57,12 +63,14 @@ async function submit(): Promise<void> {
       <p class="text-xs leading-relaxed text-zinc-500">
         Create a
         <a
+          v-if="githubWebUrl"
           class="text-amber-400 hover:underline"
-          href="https://github.com/settings/personal-access-tokens/new"
+          :href="`${githubWebUrl}/settings/personal-access-tokens/new`"
           target="_blank"
           rel="noopener noreferrer"
           >fine-grained token</a
         >
+        <span v-else>fine-grained token</span>
         with read access to <em>Contents</em> and <em>Metadata</em>. The token
         is stored encrypted on the server and only used to talk to GitHub on
         your behalf.

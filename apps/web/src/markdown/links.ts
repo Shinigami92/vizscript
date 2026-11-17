@@ -50,18 +50,27 @@ export function resolveLink(
   };
 }
 
-/** URL of an image in a Markdown file (raw file from the repository). */
+/**
+ * URL of an image in a Markdown file: the raw file from the repository, on
+ * the deployment's raw host (`rawUrl`; none yet: no image rather than one
+ * from public GitHub).
+ */
 export function resolveImage(
   path: string,
   src: string,
-  repo: RepoLocation | undefined
+  repo: RepoLocation | undefined,
+  rawUrl: string | null
 ): string {
   if (!src || isAbsolute(src) || !repo || repo.provider !== 'github') {
     return src;
   }
 
+  if (!rawUrl) {
+    return '';
+  }
+
   const file = resolveRepoPath(path, src);
-  return `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.ref}/${file
+  return `${rawUrl}/${repo.owner}/${repo.repo}/${repo.ref}/${file
     .split('/')
     .map(encodeURIComponent)
     .join('/')}`;

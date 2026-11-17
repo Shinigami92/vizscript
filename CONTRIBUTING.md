@@ -19,14 +19,15 @@ pnpm dev                    # API on :3333 (migrates on start), web on :5173
 
 ### Environment
 
-| Variable         | Purpose                                                                                                 |
-| ---------------- | ------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`   | Postgres for the API, migrations and the API e2e tests                                                  |
-| `APP_SECRET`     | Signs sessions and encrypts stored tokens; at least 32 characters                                       |
-| `SECURE_COOKIES` | `true` when served over HTTPS                                                                           |
-| `PORT`           | API port (default `3333`); the web dev server reads `API_PORT` for its proxy                            |
-| `GITHUB_API_URL` | GitHub REST API (default `https://api.github.com`); GitHub Enterprise: `https://<host>/api/v3`          |
-| `GITHUB_RAW_URL` | Raw file contents (default `https://raw.githubusercontent.com`, or `https://<host>/raw` for Enterprise) |
+| Variable         | Purpose                                                                                                                      |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`   | Postgres for the API, migrations and the API e2e tests                                                                       |
+| `APP_SECRET`     | Signs sessions and encrypts stored tokens; at least 32 characters                                                            |
+| `SECURE_COOKIES` | `true` when served over HTTPS                                                                                                |
+| `PORT`           | API port (default `3333`); the web dev server reads `API_PORT` for its proxy                                                 |
+| `GITHUB_API_URL` | GitHub REST API (default `https://api.github.com`); GitHub Enterprise: `https://<host>/api/v3`                               |
+| `GITHUB_RAW_URL` | Raw file contents (default `https://raw.githubusercontent.com`, or `https://<host>/raw` for Enterprise)                      |
+| `GITHUB_WEB_URL` | GitHub's web pages, e.g. the token page linked on sign-in (default `https://github.com`, or `https://<host>` for Enterprise) |
 
 ### Docker
 
@@ -197,7 +198,7 @@ Per-file browser data (drafts, local layouts, cameras, tabs) goes through `stora
 
 Signing in is optional. Without a session:
 
-- **Reading repositories:** the web app reads public repositories straight from GitHub without a token (`apps/web/src/api/github-public.ts`, chosen by `repoSource`), so every visitor has GitHub's 60 requests per hour of their own IP instead of sharing the server's. Files come from the raw host (`ClientConfig.github.rawUrl`, no API request; their git blob sha is computed in the browser), so only the repository, its tree and its branches count. The status bar shows the requests left (`GithubLimitStatus`, in `#workbench-status-end`): it updates from the headers of each request and polls GitHub's free `/rate_limit` every minute while the page is visible, which also counts requests of other tabs and notices the hourly reset. `GET /api/config` tells the web app where GitHub is (`GITHUB_API_URL`, `GITHUB_RAW_URL`, e.g. GitHub Enterprise in an internal network).
+- **Reading repositories:** the web app reads public repositories straight from GitHub without a token (`apps/web/src/api/github-public.ts`, chosen by `repoSource`), so every visitor has GitHub's 60 requests per hour of their own IP instead of sharing the server's. Files come from the raw host (`ClientConfig.github.rawUrl`, no API request; their git blob sha is computed in the browser), so only the repository, its tree and its branches count. The status bar shows the requests left (`GithubLimitStatus`, in `#workbench-status-end`): it updates from the headers of each request and polls GitHub's free `/rate_limit` every minute while the page is visible, which also counts requests of other tabs and notices the hourly reset. `GET /api/config` tells the web app where GitHub is (`GITHUB_API_URL`, `GITHUB_RAW_URL`, `GITHUB_WEB_URL`, e.g. GitHub Enterprise in an internal network). The web app never guesses public GitHub: until the config is loaded (`githubConfig`, tried again after a failure) it sends no GitHub request, shows no repository images (`resolveImage` takes the raw host) and links to no token page.
 - **Layouts:** `GET /api/layouts/…` works without a session for public repositories (`OptionalSessionGuard`). Changing a shared layout needs a session and push access (`RepoAccessService` asks the provider with the user's token, cached for 5 minutes; `LayoutResponse.canWrite`). Without it, `repoLayoutStore` keeps the user's moves in browser storage on top of the shared layout.
 - **Recent projects** stay in browser storage (`vizscript:recent`), the **workbench layout** in its browser cache; drafts are local either way.
 

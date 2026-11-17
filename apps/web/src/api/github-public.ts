@@ -15,18 +15,25 @@ import { api, ApiError } from './client';
  * repository, its tree and its branches use the API.
  */
 
-const DEFAULT_CONFIG: ClientConfig['github'] = {
-  apiUrl: 'https://api.github.com',
-  rawUrl: 'https://raw.githubusercontent.com',
-};
-
 let config: Promise<ClientConfig['github']> | null = null;
 
-function githubConfig(): Promise<ClientConfig['github']> {
-  config ??= api
-    .config()
-    .then((c) => c.github)
-    .catch(() => DEFAULT_CONFIG);
+/**
+ * Where GitHub is, from the server (`GET /api/config`). Never guessed: a
+ * deployment for GitHub Enterprise must not send its repository names to
+ * public GitHub because the server didn't answer once. A failed load is
+ * tried again by the next request.
+ */
+export function githubConfig(): Promise<ClientConfig['github']> {
+  if (!config) {
+    const loading = api.config().then((c) => c.github);
+    config = loading;
+    loading.catch(() => {
+      if (config === loading) {
+        config = null;
+      }
+    });
+  }
+
   return config;
 }
 
