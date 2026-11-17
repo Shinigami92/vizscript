@@ -113,6 +113,43 @@ function sequenceEdits(
  * that moved shows as a removal and an insertion of the same text, so
  * nodes can be followed through undo and redo ({@link movedNodes}).
  */
+/**
+ * A pure insertion or removal moved to whole lines when it can be: the
+ * common prefix puts `if True: pass` inserted before `if x:` after the
+ * shared `if `, which would make the old statement look like the new one.
+ * Sliding it left over text it repeats keeps the same result.
+ */
+function wholeLines(before: string, edit: TextEdit): TextEdit {
+  const removing = edit.text === '';
+  let text = removing ? before.slice(edit.start, edit.end) : edit.text;
+  let at = edit.start;
+  const length = text.length;
+  if (length === 0) {
+    return edit;
+  }
+
+  const atLineStart = (offset: number, chunk: string): boolean =>
+    (offset === 0 || before[offset - 1] === '\n') && chunk.endsWith('\n');
+  while (!atLineStart(at, text) && at > 0) {
+    // Same text when the char before equals the chunk's last char.
+    const previous = before[at - 1];
+    if (previous !== text.at(-1)) {
+      return edit;
+    }
+
+    text = previous + text.slice(0, -1);
+    at--;
+  }
+
+  if (!atLineStart(at, text)) {
+    return edit;
+  }
+
+  return removing
+    ? { start: at, end: at + length, text: '' }
+    : { start: at, end: at, text };
+}
+
 export function diffEdits(before: string, after: string): TextEdit[] {
   if (before === after) {
     return [];
@@ -140,7 +177,7 @@ export function diffEdits(before: string, after: string): TextEdit[] {
     text: inserted,
   };
   if (removed === '' || inserted === '') {
-    return [whole];
+    return [wholeLines(before, whole)];
   }
 
   const byTokens = (from: string, to: string, at: number): TextEdit[] =>

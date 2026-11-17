@@ -22,4 +22,21 @@ describe('diffEdits', () => {
       { start: 29, end: 38, text: 'total' },
     ]);
   });
+
+  it('puts inserted and removed statements on whole lines', () => {
+    // The shared `    if ` must not make the old `if` look like the new one.
+    const before = '    x = 1\n    if a > 25:\n        pass\n';
+    const added =
+      '    x = 1\n    if True:\n        pass\n    if a > 25:\n        pass\n';
+    expect(diffEdits(before, added)).toEqual([
+      { start: 10, end: 10, text: '    if True:\n        pass\n' },
+    ]);
+    expect(diffEdits(added, before)).toEqual([
+      { start: 10, end: 36, text: '' },
+    ]);
+    // Text within a line stays where it is.
+    expect(diffEdits('ab\n', 'abb\n')).toEqual([
+      { start: 2, end: 2, text: 'b' },
+    ]);
+  });
 });
