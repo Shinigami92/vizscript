@@ -203,6 +203,8 @@ Signing in is optional. Without a session:
 
 Signed in, the API reads through the user's stored token (private repositories, 5,000 requests per hour) and keeps recent projects and preferences per user.
 
+**When sign-in stops working:** every 401 carries a reason (`ApiError.code`, `AuthErrorCode` in `@vizscript/api-contract`, made by `authError` in the API): `not_signed_in`, `session_expired` (a session cookie whose session is gone; also on `OptionalSessionGuard` routes, and the cookie is cleared), `provider_token_missing` and `provider_token_invalid` (GitHub rejected the stored token, e.g. an expired fine-grained token). The web client hands them to one handler (`setAuthErrorHandler`, registered by the session store): a signed-in user is signed out with one message saying why, and the repository view reloads through the public source. Shared layouts tell an unreachable server (no answer, 5xx) from lost access: while unreachable, moves are kept as pending (`vizscript:layout:pending/…`) and sent with the next load that works; without write access they stay in this browser.
+
 ### Extension points
 
 - **Languages:** implement `LanguageBackend` (`parse` + `applyOp`, optionally `references`) and register it in `apps/web/src/graph/registry.ts`, plus the extension in `languages.ts` and a Monaco grammar if Monaco lacks one.

@@ -1,4 +1,5 @@
 import type {
+  AuthErrorCode,
   BranchSummary,
   ClientConfig,
   FileResponse,
@@ -16,11 +17,25 @@ import type {
 export class ApiError extends Error {
   public constructor(
     public readonly status: number,
-    message: string
+    message: string,
+    /** Why a 401 happened (no session, expired, token rejected). */
+    public readonly code?: AuthErrorCode
   ) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+let onAuthError: ((code: AuthErrorCode) => void) | undefined;
+
+/**
+ * Called for every 401 with its reason, once for the whole app (the
+ * session store signs out and tells the user).
+ */
+export function setAuthErrorHandler(
+  handler: (code: AuthErrorCode) => void
+): void {
+  onAuthError = handler;
 }
 
 async function request<T>(
@@ -36,18 +51,28 @@ async function request<T>(
   });
   if (!response.ok) {
     let message = response.statusText;
+    let code: AuthErrorCode | undefined;
     try {
-      const data = (await response.json()) as { message?: string | string[] };
+      const data = (await response.json()) as {
+        message?: string | string[];
+        code?: AuthErrorCode;
+      };
       if (data.message) {
         message = Array.isArray(data.message)
           ? data.message.join(', ')
           : data.message;
       }
+
+      code = data.code;
     } catch {
       // keep status text
     }
 
-    throw new ApiError(response.status, message);
+    if (response.status === 401 && code) {
+      onAuthError?.(code);
+    }
+
+    throw new ApiError(response.status, message, code);
   }
 
   if (response.status === 204) {

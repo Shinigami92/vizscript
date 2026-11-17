@@ -7,6 +7,7 @@ import type {
 import { useDebounceFn } from '@vueuse/core';
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { ApiError } from '../api/client';
 import { repoSource } from '../api/repo-source';
 import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
@@ -142,7 +143,9 @@ async function loadTree(): Promise<void> {
       show('This repository is large; the file list is truncated.');
     }
   } catch (error) {
-    if (request === treeRequest) {
+    // A 401 was told by the session already; the public source retries.
+    const told = error instanceof ApiError && error.status === 401;
+    if (request === treeRequest && !told) {
       show(
         `Loading the repository failed: ${(error as Error).message}`,
         'error'
@@ -221,7 +224,8 @@ function pinFile(next: string): void {
   }
 }
 
-watch([provider, owner, repo, ref_], loadTree, { immediate: true });
+// Also when signing in or out (an expired session): another source.
+watch([provider, owner, repo, ref_, source], loadTree, { immediate: true });
 watch([() => tree.value, path], loadFile, { immediate: true });
 
 // Remember the repository (and the open file) in "recently opened".
