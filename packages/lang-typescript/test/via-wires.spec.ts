@@ -81,19 +81,20 @@ describe('wires from a SET (UE)', () => {
     expect(adjacentVias(doc)).toEqual(new Set([node(doc, 'response').id]));
   });
 
-  it('draws reads after a loop from the loop, not from before it', () => {
+  it('keeps a read after a loop a Get node: the loop may not run', () => {
     const doc = parse(
       'let total = 0;\nfor (const item of items) {\n  total += item;\n}\nlog(total);\n'
     );
     const fn = doc.functions[0];
     const read = node(doc, 'total');
-    expect(adjacentVias(doc)).toEqual(new Set([read.id]));
+    expect(adjacentVias(doc).has(read.id)).toBe(false);
+    // Wired by hand, it comes from the nearest SET before it in the code:
     // `total += item`, a SET without a declaration keyword.
     const setter = fn && viaSetter(fn, read);
     expect(setter && codeOf(doc, setter)).toBe('total += item;');
   });
 
-  it('draws reads after a loop from the SET that ends its body', () => {
+  it('keeps reads after a loop Get nodes, also from the SET ending its body', () => {
     const doc = parseTypeScript(
       'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    total += item;\n  }\n  const half = total - total / 2;\n  return half;\n}\n',
       'a.ts'
@@ -103,12 +104,12 @@ describe('wires from a SET (UE)', () => {
       .filter((n) => n.kind === 'getVar' && n.title === 'total');
     expect(reads).toHaveLength(2);
     const vias = adjacentVias(doc);
-    expect(reads.every((n) => vias.has(n.id))).toBe(true);
+    expect(reads.some((n) => vias.has(n.id))).toBe(false);
   });
 
   it('draws reads on a wrapped row as one Get node, not wires back', () => {
     const doc = parseTypeScript(
-      'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    total += item;\n  }\n  const half = total - total / 2;\n  return half;\n}\n',
+      'function f(n: number): number {\n  let total = n * 2;\n  const half = total - total / 2;\n  return half;\n}\n',
       'a.ts'
     );
     const fn = doc.functions.find((f) => f.name === 'f');
@@ -164,7 +165,7 @@ describe('wires from a SET (UE)', () => {
 
   it('keeps the shared Get of wrapped reads after an edit', () => {
     const doc = parseTypeScript(
-      'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    total += item;\n  }\n  const half = total - total / 2;\n  return half;\n}\n',
+      'function f(n: number): number {\n  let total = n * 2;\n  const half = total - total / 2;\n  return half;\n}\n',
       'a.ts'
     );
     const reads = doc.functions
@@ -215,11 +216,11 @@ describe('wires from a SET (UE)', () => {
     ).toEqual([second]);
   });
 
-  it('draws reads after a loop that skips items before its SET', () => {
+  it('keeps reads after a loop that skips items Get nodes', () => {
     const doc = parse(
       'function f(items: number[]): number {\n  let total = 0;\n  for (const item of items) {\n    if (item <= 0) {\n      continue;\n    }\n    total += item;\n  }\n  return total;\n}\n'
     );
-    expect(adjacentVias(doc)).toEqual(new Set([node(doc, 'total').id]));
+    expect(adjacentVias(doc).size).toBe(0);
   });
 
   it('keeps a Get the user wired as its node', () => {

@@ -165,66 +165,17 @@ function withPureInputs(
   return result;
 }
 
-function isLoop(n: GraphNode | undefined): boolean {
-  return n?.kind === 'forEach' || n?.kind === 'loop';
-}
-
 /**
  * The exec nodes that run right after a node: those its exec outputs lead
- * to, or, for a SET that ends a loop body (nothing runs after it in the
- * body, and it is the body's only SET of its variable), those after the
- * loop (UE: that SET wired to the node after Completed).
+ * to. A SET that ends a loop body is not followed by what comes after the
+ * loop: the loop may not run at all, so a read there is a Get node.
  */
 function nextAfter(fn: FunctionGraph, id: string): Set<string> {
-  const execs = fn.edges.filter((e) => e.kind === 'exec');
-  const out = (node: string, pin?: string): string[] =>
-    execs
-      .filter((e) => e.from.node === node && (!pin || e.from.pin === pin))
-      .map((e) => e.to.node);
-  const own = out(id);
-  const node = fn.nodes.find((n) => n.id === id);
-  if (own.length > 0 || !node) {
-    return new Set(own);
-  }
-
-  const nodes = new Map(fn.nodes.map((n) => [n.id, n]));
-  for (const loop of fn.nodes) {
-    if (!isLoop(loop)) {
-      continue;
-    }
-
-    // The loop's own body: nested loops' bodies are theirs.
-    const body = new Set<string>();
-    const queue = out(loop.id, 'body');
-    for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
-      if (body.has(next)) {
-        continue;
-      }
-
-      body.add(next);
-      queue.push(
-        ...execs
-          .filter(
-            (e) =>
-              e.from.node === next &&
-              !(isLoop(nodes.get(next)) && e.from.pin === 'body')
-          )
-          .map((e) => e.to.node)
-      );
-    }
-
-    const setters = [...body].filter((b) => {
-      const n = nodes.get(b);
-      return n?.kind === 'setVar' && n.title === node.title;
-    });
-    if (body.has(id)) {
-      return setters.length === 1
-        ? new Set(out(loop.id, 'completed'))
-        : new Set();
-    }
-  }
-
-  return new Set();
+  return new Set(
+    fn.edges
+      .filter((e) => e.kind === 'exec' && e.from.node === id)
+      .map((e) => e.to.node)
+  );
 }
 
 /** A Get right after its variable's SET (see `adjacentVias`). */
@@ -300,8 +251,8 @@ export function adjacentVias(
 
 /**
  * Reads right after their SET that the generated layout wrapped to a new
- * row (`total += …` ending a loop body, then `total - total * discount`
- * after it): like one would wire it in UE, one Get node left of them
+ * row (`let total = …` at the end of a row, then `total - total / 2` on
+ * the next): like one would wire it in UE, one Get node left of them
  * feeds them all, instead of wires running back from the SET. Each read
  * maps to that Get (the leftmost one, which maps to itself), like
  * `viaJoins`.
