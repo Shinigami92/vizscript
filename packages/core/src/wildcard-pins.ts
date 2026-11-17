@@ -1,8 +1,11 @@
 import { isElementGet } from './element-access';
 import type { FunctionGraph, GraphNode, Pin } from './ir';
 
-/** Nodes whose untyped inputs take any value, like UE's wildcard pins. */
-const WILDCARD_NODES = new Set(['operator', 'select', 'ternary']);
+/**
+ * Nodes whose untyped inputs take any value, like UE's wildcard pins:
+ * operators, selects and the values of a Format Text (`{0}`, `{1}`).
+ */
+const WILDCARD_NODES = new Set(['operator', 'select', 'ternary', 'template']);
 
 function isWildcard(node: GraphNode, pin: Pin): boolean {
   return (
@@ -15,7 +18,8 @@ function isWildcard(node: GraphNode, pin: Pin): boolean {
 
 /**
  * The function with the untyped inputs of operators (`a * b`, `x as f64`,
- * `c ? a : b`) and element reads (`items[0]`) typed like the outputs wired into them, as UE's wildcard
+ * `c ? a : b`), Format Texts (`f"{error}"`) and element reads (`items[0]`)
+ * typed like the outputs wired into them, as UE's wildcard
  * pins take the type of their connection. Unchanged parts are shared.
  */
 export function typeWildcardPins(fn: FunctionGraph): FunctionGraph {

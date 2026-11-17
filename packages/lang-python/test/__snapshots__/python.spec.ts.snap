@@ -69,7 +69,7 @@ function checkout
   #15 continue "Continue" [<exec:▶]
   #16 getProperty ".name" [<target:object >value:string]
   #17 call "total" [<exec:▶ >then:▶ <target:object >return:number]
-  #18 template "Format Text" [<format:string={0}: {1:.2f} <part0:any <part1:any >value:string]
+  #18 template "Format Text" [<format:string={0}: {1:.2f} <part0:string <part1:number >value:string]
   #19 call "print" [<exec:▶ >then:▶ <target:object <arg0:string <param:sep:string= <param:end:string=]
   #20 try "Try" [<exec:▶ >try:▶ >except0:▶ >error0:any >finally:▶ >completed:▶]
   #21 getVar "subtotal" [>value:any]
