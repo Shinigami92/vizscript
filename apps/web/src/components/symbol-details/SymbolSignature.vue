@@ -8,13 +8,13 @@ import type {
   TypeSystemInfo,
   ValueKind,
 } from '@vizscript/core';
-import { fieldValue, isArrayType, pinColor } from '@vizscript/core';
+import { fieldValue, isArrayType } from '@vizscript/core';
 import { computed, nextTick, ref, watch } from 'vue';
-import { useTheme } from '../../composables/use-theme';
 import { usesSnakeCase } from '../../graph/languages';
 import { parameterUses } from '../../graph/symbols';
 import DetailsSection from '../DetailsSection.vue';
 import NumberField from '../NumberField.vue';
+import PinIcon from '../PinIcon.vue';
 import TypePicker from '../TypePicker.vue';
 import ValueFields from '../ValueFields.vue';
 import ArrayDefaultField from './ArrayDefaultField.vue';
@@ -38,14 +38,8 @@ const emit = defineEmits<{
   op: [op: GraphOp];
 }>();
 
-const { scheme } = useTheme();
-
 function code(range: SourceRange | undefined): string {
   return range ? props.text.slice(range.start, range.end) : '';
-}
-
-function color(dataType: string): string {
-  return pinColor(dataType, scheme.value);
 }
 
 /** The type system (empty while it loads). */
@@ -464,10 +458,7 @@ function setReturnType(typeText: string | null): void {
         :key="param.name"
         class="flex items-center gap-2 px-3 py-1 text-xs"
       >
-        <span
-          class="size-2.5 shrink-0 rounded-full border-2"
-          :style="{ borderColor: color(String(param.dataType)) }"
-        />
+        <PinIcon :pin="{ kind: 'data', type: param.dataType }" />
         <span class="min-w-0 truncate font-mono text-zinc-200"
           >{{ param.rest ? '…' : '' }}{{ param.name }}</span
         >
@@ -506,10 +497,7 @@ function setReturnType(typeText: string | null): void {
         @change="setReturnType"
       />
       <div v-else class="flex items-center gap-2 px-1 py-1">
-        <span
-          class="size-2.5 shrink-0 rounded-full border-2"
-          :style="{ borderColor: color(String(symbol.returnType ?? 'any')) }"
-        />
+        <PinIcon :pin="{ kind: 'data', type: symbol.returnType ?? 'any' }" />
         <span
           class="font-mono"
           :class="symbol.returns ? 'text-zinc-200' : 'text-zinc-600 italic'"

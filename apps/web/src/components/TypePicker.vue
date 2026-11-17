@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type { DataType, TypeOption, TypeSystemInfo } from '@vizscript/core';
-import { pinColor } from '@vizscript/core';
+import { arrayOf, mapOf, setOf } from '@vizscript/core';
 import {
   onClickOutside,
   useElementBounding,
   useWindowSize,
 } from '@vueuse/core';
 import { computed, nextTick, ref, useTemplateRef } from 'vue';
-import { useTheme } from '../composables/use-theme';
+import PinIcon from './PinIcon.vue';
 
 /**
  * UE's pin type picker for language types: basic types and the file's own
@@ -38,7 +38,6 @@ const emit = defineEmits<{
 
 type Container = 'single' | 'array' | 'map' | 'set';
 
-const { scheme } = useTheme();
 const open = ref(false);
 const query = ref('');
 const container = ref<Container>('single');
@@ -252,8 +251,28 @@ async function toggle(): Promise<void> {
   }
 }
 
-function color(dataType: DataType): string {
-  return pinColor(dataType, scheme.value);
+/**
+ * The pin type an option stands for with the chosen container, for its
+ * icon (UE's type list shows the container's symbol).
+ */
+function shown(dataType: DataType): DataType {
+  switch (container.value) {
+    case 'array': {
+      return arrayOf(dataType);
+    }
+
+    case 'set': {
+      return setOf(dataType);
+    }
+
+    case 'map': {
+      return mapOf('string', dataType);
+    }
+
+    default: {
+      return dataType;
+    }
+  }
 }
 </script>
 
@@ -272,10 +291,7 @@ function color(dataType: DataType): string {
       :title="editable ? 'Change the type' : undefined"
       @click="toggle"
     >
-      <span
-        class="size-2 shrink-0 rounded-full"
-        :style="{ background: color(dataType) }"
-      />
+      <PinIcon :pin="{ kind: 'data', type: dataType }" :size="8" />
       <span
         class="min-w-0 truncate"
         :class="value ? 'text-zinc-200' : 'text-zinc-500 italic'"
@@ -371,10 +387,7 @@ function color(dataType: DataType): string {
             class="option"
             @click="pickInferred"
           >
-            <span
-              class="size-2 shrink-0 rounded-full"
-              :style="{ background: color(dataType) }"
-            />
+            <PinIcon :pin="{ kind: 'data', type: dataType }" :size="8" />
             <span class="text-zinc-400 italic"
               >Type of the value ({{ inferOperator }})</span
             >
@@ -388,9 +401,9 @@ function color(dataType: DataType): string {
             :class="{ 'bg-zinc-800': firstMatch?.name === option.name }"
             @click="pick(option.name, option)"
           >
-            <span
-              class="size-2 shrink-0 rounded-full"
-              :style="{ background: color(option.dataType) }"
+            <PinIcon
+              :pin="{ kind: 'data', type: shown(option.dataType) }"
+              :size="8"
             />
             <span class="font-mono">{{ compose(option.name) }}</span>
           </button>
@@ -406,10 +419,7 @@ function color(dataType: DataType): string {
               }"
               @click="pick(name)"
             >
-              <span
-                class="size-2 shrink-0 rounded-full"
-                :style="{ background: color(name) }"
-              />
+              <PinIcon :pin="{ kind: 'data', type: shown(name) }" :size="8" />
               <span class="font-mono">{{ compose(name) }}</span>
             </button>
           </template>
@@ -425,10 +435,7 @@ function color(dataType: DataType): string {
               }"
               @click="pick(name)"
             >
-              <span
-                class="size-2 shrink-0 rounded-full"
-                :style="{ background: color(name) }"
-              />
+              <PinIcon :pin="{ kind: 'data', type: shown(name) }" :size="8" />
               <span class="font-mono">{{ compose(name) }}</span>
             </button>
           </template>

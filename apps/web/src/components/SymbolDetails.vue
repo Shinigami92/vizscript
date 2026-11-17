@@ -10,11 +10,9 @@ import {
   ASSIGN_OPERATORS,
   declaringNode,
   holdsFields,
-  pinColor,
   qualifiedName,
 } from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
-import { useTheme } from '../composables/use-theme';
 import { lineColumn, snippet } from '../graph/source';
 import {
   SYMBOL_BARS,
@@ -25,6 +23,7 @@ import {
 } from '../graph/symbols';
 import DetailsHeader from './DetailsHeader.vue';
 import DetailsSection from './DetailsSection.vue';
+import PinIcon from './PinIcon.vue';
 import SymbolExportHint from './symbol-details/SymbolExportHint.vue';
 import SymbolFields from './symbol-details/SymbolFields.vue';
 import SymbolSignature from './symbol-details/SymbolSignature.vue';
@@ -92,7 +91,6 @@ function showValueNode(): void {
   }
 }
 
-const { scheme } = useTheme();
 const type = computed(() => symbolType(props.symbol));
 const location = computed(() =>
   lineColumn(props.text, props.symbol.nameRange.start)
@@ -206,10 +204,6 @@ const inferredDeclaration = computed(() => {
       .startsWith(operator)
   );
 });
-
-function color(dataType: string): string {
-  return pinColor(dataType, scheme.value);
-}
 
 function setType(typeText: string | null, defaultValue?: string): void {
   emit('op', {
@@ -480,9 +474,9 @@ function setModifier(modifier: string, enabled: boolean): void {
               v-else
               class="flex min-w-0 items-center gap-1.5 px-1.5 font-mono"
             >
-              <span
-                class="size-2 shrink-0 rounded-full"
-                :style="{ background: color(String(symbol.dataType)) }"
+              <PinIcon
+                :pin="{ kind: 'data', type: symbol.dataType }"
+                :size="8"
               />
               <span
                 class="truncate"

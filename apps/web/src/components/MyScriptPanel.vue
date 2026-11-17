@@ -5,12 +5,7 @@ import type {
   ScriptSymbol,
   TypeSystemInfo,
 } from '@vizscript/core';
-import {
-  holdsFields,
-  pinColor,
-  qualifiedName,
-  uniqueName,
-} from '@vizscript/core';
+import { holdsFields, qualifiedName, uniqueName } from '@vizscript/core';
 import { useStorage } from '@vueuse/core';
 import {
   computed,
@@ -20,7 +15,6 @@ import {
   useTemplateRef,
   watch,
 } from 'vue';
-import { useTheme } from '../composables/use-theme';
 import { usesSnakeCase } from '../graph/languages';
 import {
   countedUses,
@@ -35,6 +29,7 @@ import {
 import CollapseTransition from './CollapseTransition.vue';
 import type { MenuEntry } from './ContextMenu.vue';
 import ContextMenu from './ContextMenu.vue';
+import PinIcon from './PinIcon.vue';
 
 /**
  * "My Script": what the file declares, like UE's "My Blueprint" panel.
@@ -65,7 +60,6 @@ const emit = defineEmits<{
   op: [op: GraphOp];
 }>();
 
-const { scheme } = useTheme();
 const query = ref('');
 const collapsed = useStorage<Record<string, boolean>>(
   'vizscript:my-script-collapsed',
@@ -279,10 +273,6 @@ const commentBoxes = computed(() =>
 
 function toggle(id: string): void {
   collapsed.value = { ...collapsed.value, [id]: !collapsed.value[id] };
-}
-
-function typeColor(symbol: ScriptSymbol): string {
-  return pinColor(symbol.returnType ?? symbol.dataType, scheme.value);
 }
 
 /**
@@ -826,9 +816,12 @@ function addLabel(kind: AddKind, owner: string): string {
                         : symbolType(symbol).text
                     "
                   >
-                    <span
-                      class="size-2 shrink-0 rounded-full"
-                      :style="{ background: typeColor(symbol) }"
+                    <PinIcon
+                      :pin="{
+                        kind: 'data',
+                        type: symbol.returnType ?? symbol.dataType,
+                      }"
+                      :size="8"
                     />
                     <span class="truncate">{{ symbolType(symbol).text }}</span>
                   </span>
