@@ -352,16 +352,67 @@ async function save(): Promise<void> {
     return;
   }
 
+  // Everything about the file is taken now: the user may switch tabs while
+  // it is written.
+  const target = shown.value;
+  const base = saved.value;
+  if (target === null || base === null) {
+    return;
+  }
+
   saving.value = true;
   const content = text.value;
   try {
-    await project.value.write(shown.value ?? path.value, content);
-    saved.value = content;
-    localStorage.removeItem(draftKey.value);
+    // Changed on disk by another program since it was read: ask first.
+    const onDisk = await project.value.read(target).catch(() => base);
+    if (
+      onDisk !== base &&
+      !globalThis.confirm(
+        `${target} was changed outside vizscript since it was opened. Overwrite those changes?`
+      )
+    ) {
+      return;
+    }
+
+    await project.value.write(target, content);
+    savedAs(target, content);
   } catch (error) {
     show(`Saving failed: ${(error as Error).message}`, 'error');
   } finally {
     saving.value = false;
+  }
+}
+
+/**
+ * A file was written with `content`: its tab's saved text, and its draft,
+ * which stays only for changes made while it was written.
+ */
+function savedAs(target: string, content: string): void {
+  const buffer = buffers.get(target);
+  if (buffer) {
+    buffers.set(target, { ...buffer, saved: content });
+  }
+
+  if (shown.value === target) {
+    saved.value = content;
+  }
+
+  const left = buffers.get(target);
+  try {
+    if (left && (left.text !== content || left.overlay.edits.length > 0)) {
+      localStorage.setItem(
+        draftKeyOf(target),
+        JSON.stringify({
+          base: content,
+          text: left.text,
+          overlay: left.overlay,
+        })
+      );
+    } else {
+      localStorage.removeItem(draftKeyOf(target));
+    }
+  } catch {
+    // storage unavailable
   }
 }
 
@@ -410,8 +461,20 @@ useEventListener(window, 'focus', async () => {
     return;
   }
 
+  const target = shown.value;
+  const base = saved.value;
   try {
-    const content = await project.value.read(shown.value ?? path.value);
+    const content = await project.value.read(target);
+    // Only for the same file, still unchanged here.
+    if (
+      shown.value !== target ||
+      saved.value !== base ||
+      dirty.value ||
+      saving.value
+    ) {
+      return;
+    }
+
     if (content !== saved.value) {
       text.value = content;
       saved.value = content;

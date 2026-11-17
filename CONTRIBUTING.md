@@ -226,6 +226,7 @@ set -a && . ./.env && set +a && pnpm exec vitest run   # includes API e2e tests
 - **Parser changes:** run the corpus checks against a real project, e.g. `GD_CORPUS=/path/to/godot/project pnpm exec vitest run packages/lang-gdscript` (and `PY_CORPUS=… packages/lang-python`, `RS_CORPUS=… packages/lang-rust`). They fail on any diagnostic.
 - **Naming UI parts:** important containers have a `data-ui` name (`workspace-toolbar`, `view-graph`, `details-panel`, …); search the inspector for `data-ui` to find them. New panels, toolbars, menus and dialogs get one too.
 - **UI changes:** check them in the running app, especially the playground, in light and dark mode. The repository's `.mcp.json` sets up the Playwright MCP for AI agents. The Claude Code skill `/viz-user-test <playground URL or sample>` (`.claude/skills/viz-user-test`) acts like a user: it rebuilds a sample by hand in the graph, then edits it at random, and writes its findings to `local/`.
+- **Local folders without the folder picker:** in an automated browser, create a folder in the origin private file system (`navigator.storage.getDirectory()`), put `{ id, name, openedAt, handle }` into the `folders` store of the `vizscript` IndexedDB and open `/local/<id>/<file>`. Write to the folder from the page to imitate changes made outside the app, and remove the record, the folder and the `…local/<id>…` storage keys afterwards.
 
 ## Commits and pull requests
 
