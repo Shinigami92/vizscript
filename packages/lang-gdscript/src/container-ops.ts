@@ -1,0 +1,113 @@
+import type { ContainerOp } from '@vizscript/core';
+
+/**
+ * GDScript's operations on Arrays and Dictionaries that UE draws as
+ * container nodes (LENGTH, CONTAINS, ADD …).
+ */
+export const GDSCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
+  {
+    word: 'LENGTH',
+    on: ['array', 'map'],
+    form: 'method',
+    name: 'size',
+    result: 'number',
+  },
+  {
+    word: 'CONTAINS',
+    on: ['array'],
+    form: 'method',
+    name: 'has',
+    args: ['element'],
+    result: 'bool',
+  },
+  {
+    word: 'CONTAINS',
+    on: ['map'],
+    form: 'method',
+    name: 'has',
+    args: ['key'],
+    result: 'bool',
+  },
+  {
+    word: 'CONTAINS',
+    on: ['array'],
+    form: 'operator',
+    name: 'in',
+    containerLast: true,
+    args: ['element'],
+    result: 'bool',
+  },
+  {
+    word: 'CONTAINS',
+    on: ['map'],
+    form: 'operator',
+    name: 'in',
+    containerLast: true,
+    args: ['key'],
+    result: 'bool',
+  },
+  {
+    word: 'FIND',
+    on: ['array'],
+    form: 'method',
+    name: 'find',
+    args: ['element'],
+    result: 'number',
+  },
+  {
+    word: 'FIND',
+    on: ['map'],
+    form: 'method',
+    name: 'get',
+    args: ['key'],
+    result: 'value',
+  },
+  { word: 'KEYS', on: ['map'], form: 'method', name: 'keys', result: 'keys' },
+  {
+    word: 'VALUES',
+    on: ['map'],
+    form: 'method',
+    name: 'values',
+    result: 'values',
+  },
+  ...['append', 'push_back'].map((name): ContainerOp => ({
+    word: 'ADD',
+    on: ['array'],
+    form: 'method',
+    name,
+    args: ['element'],
+    mutates: true,
+  })),
+  {
+    word: 'INSERT',
+    on: ['array'],
+    form: 'method',
+    name: 'insert',
+    args: ['number', 'element'],
+    mutates: true,
+  },
+  {
+    word: 'REMOVE',
+    on: ['array'],
+    form: 'method',
+    name: 'erase',
+    args: ['element'],
+    mutates: true,
+  },
+  {
+    word: 'REMOVE',
+    on: ['map'],
+    form: 'method',
+    name: 'erase',
+    args: ['key'],
+    result: 'bool',
+    mutates: true,
+  },
+  {
+    word: 'CLEAR',
+    on: ['array', 'map'],
+    form: 'method',
+    name: 'clear',
+    mutates: true,
+  },
+];

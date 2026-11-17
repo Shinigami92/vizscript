@@ -1,4 +1,11 @@
-import { conversionCall, elementAccess, isTypeConstant } from '@vizscript/core';
+import {
+  conversionCall,
+  elementAccess,
+  findContainerOp,
+  findContainerOperator,
+  isTypeConstant,
+  styleContainerValue,
+} from '@vizscript/core';
 import type {
   DataType,
   InputSpec,
@@ -17,6 +24,7 @@ import {
   truncate,
 } from '@vizscript/core';
 import type { Expr, FuncDecl, Span } from './ast';
+import { GDSCRIPT_CONTAINER_OPS } from './container-ops';
 import { CONVERSIONS } from './conversions';
 import { dataTypeOf } from './data-type';
 import { isGlobalFunction } from './godot';
@@ -197,11 +205,26 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       converts ??
       signature?.returnType ??
       (constructed ? dataTypeOf(constructed) : 'any');
+    // UE's container nodes (LENGTH, ADD …): a known operation on a typed
+    // Array or Dictionary (`items.append(x)`); reads are pure.
+    const container = callee.type === 'Attribute' ? inputs[0] : undefined;
+    const op = container
+      ? findContainerOp(
+          GDSCRIPT_CONTAINER_OPS,
+          'method',
+          title,
+          container.value?.type,
+          expr.args.length
+        )
+      : undefined;
     if (freeTarget && converts === undefined) {
       inputs.unshift({ pin: freeTarget, value: undefined });
     }
 
-    const impure = mode !== 'pure' && converts === undefined;
+    const impure =
+      mode !== 'pure' &&
+      converts === undefined &&
+      (op === undefined || op.mutates === true || mode === 'statement');
     const pins: Pin[] = impure
       ? [this.execIn(), this.execOut('then', '', statement?.insert)]
       : [];
@@ -242,7 +265,19 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       this.chain(node);
     }
 
-    return { pin: { node: node.id, pin: 'return' }, type: returnType };
+    const value: ValueSource = {
+      pin: { node: node.id, pin: 'return' },
+      type: returnType,
+    };
+    return op && container?.value
+      ? styleContainerValue(
+          this.nodes,
+          value,
+          op,
+          container.value.type,
+          container.pin.id
+        )
+      : value;
   }
 
   protected lowerExpr(
@@ -364,7 +399,7 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
             values[0]?.type ?? 'any'
           );
 
-        return this.pureNode({
+        const value = this.pureNode({
           kind: 'operator',
           title: expr.op,
           range: rangeOf(expr),
@@ -376,6 +411,21 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
           outType: type,
           compact: true,
         });
+        // UE's CONTAINS: `x in items`.
+        const found = findContainerOperator(
+          GDSCRIPT_CONTAINER_OPS,
+          expr.op,
+          values.map((v) => v.type)
+        );
+        return found
+          ? styleContainerValue(
+              this.nodes,
+              value,
+              found.op,
+              values[found.index]?.type ?? 'any',
+              chainPinId(found.index)
+            )
+          : value;
       }
 
       case 'Ternary': {
