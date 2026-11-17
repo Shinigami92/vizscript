@@ -54,7 +54,11 @@ export function findPin(
   return node?.pins.find((p) => p.id === pinId);
 }
 
-export function edgesOf(doc: GraphDocument, nodeId: string): GraphEdge[] {
+/** All wires of the function `nodeId` is in (not only the node's own). */
+export function functionEdgesOf(
+  doc: GraphDocument,
+  nodeId: string
+): GraphEdge[] {
   for (const fn of doc.functions) {
     if (fn.nodes.some((n) => n.id === nodeId)) {
       return fn.edges;

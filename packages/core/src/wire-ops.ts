@@ -24,8 +24,8 @@ import { findNode } from './reconcile';
 import {
   asStatement,
   contains,
-  edgesOf,
   findPin,
+  functionEdgesOf,
   functionOf,
   inputEdit,
   insertText,
@@ -204,7 +204,7 @@ export function connectReplacing(
   const result = connectData(text, doc, from, to, syntax, convert);
   const target = findNode(doc, to.node);
   const pin = findPin(target, to.pin);
-  const wired = edgesOf(doc, to.node).find(
+  const wired = functionEdgesOf(doc, to.node).find(
     (e) => e.to.node === to.node && e.to.pin === to.pin
   );
   if (
@@ -690,7 +690,7 @@ export function disconnect(
   const cut =
     pin.direction === 'in'
       ? isReceiver(doc, ref)
-      : edgesOf(doc, node.id).some(
+      : functionEdgesOf(doc, node.id).some(
           (e) =>
             e.from.node === ref.node &&
             e.from.pin === ref.pin &&
@@ -710,7 +710,7 @@ export function disconnect(
   }
 
   const edits: TextEdit[] = [];
-  for (const edge of edgesOf(doc, node.id)) {
+  for (const edge of functionEdgesOf(doc, node.id)) {
     if (edge.from.node === ref.node && edge.from.pin === ref.pin) {
       const target = findNode(doc, edge.to.node);
       const targetPin = findPin(target, edge.to.pin);
@@ -739,7 +739,10 @@ export function disconnectNode(
     return failed('Unknown node.');
   }
 
-  const wires = edgesOf(doc, nodeId).filter((e) => e.kind === 'data');
+  // Its own data wires (in and out), not the rest of its function's.
+  const wires = functionEdgesOf(doc, nodeId).filter(
+    (e) => e.kind === 'data' && (e.from.node === nodeId || e.to.node === nodeId)
+  );
   if (wires.some((e) => isReceiver(doc, e.to))) {
     return failed(RECEIVER_NEEDED);
   }

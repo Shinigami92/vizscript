@@ -10,8 +10,8 @@ import { findNode } from './reconcile';
 import {
   asStatement,
   contains,
-  edgesOf,
   findPin,
+  functionEdgesOf,
   inputEdit,
   removeStatement,
 } from './text-op-helpers';
@@ -147,7 +147,7 @@ function keepPoint(
 
 /** The input whose whole expression is this node, if any. */
 function consumerInput(doc: GraphDocument, node: GraphNode): Pin | undefined {
-  for (const edge of edgesOf(doc, node.id)) {
+  for (const edge of functionEdgesOf(doc, node.id)) {
     if (edge.from.node !== node.id) {
       continue;
     }
@@ -360,7 +360,7 @@ export function deleteNodes(
 
     // A method's receiver can't be left empty (graph-only instead).
     if (
-      edgesOf(doc, node.id).some(
+      functionEdgesOf(doc, node.id).some(
         (e) =>
           e.from.node === node.id &&
           !deleted.has(e.to.node) &&

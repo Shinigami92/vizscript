@@ -18,8 +18,8 @@ import { findNode } from './reconcile';
 import { removeListItem, setModifier } from './symbol-edits';
 import {
   detectIndentUnit,
-  edgesOf,
   findPin,
+  functionEdgesOf,
   inputEdit,
   insertText,
   templateSnippet,
@@ -143,7 +143,7 @@ function elseBranch(
   syntax: StatementSyntax
 ): OpResult | undefined {
   const stmt = getMeta<StatementMeta>(node).stmt;
-  const wired = edgesOf(doc, node.id).some(
+  const wired = functionEdgesOf(doc, node.id).some(
     (e) =>
       e.kind === 'exec' && e.from.node === node.id && e.from.pin === 'false'
   );
