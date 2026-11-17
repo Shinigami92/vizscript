@@ -11,7 +11,6 @@ import type { InsertPoint, OutputPinMeta } from '@vizscript/core';
 import {
   arrayElementType,
   arrayOfAll,
-  ELEMENT_GET,
   elementAccess,
   formatLiteral,
   truncate,
@@ -430,7 +429,7 @@ export abstract class ExpressionLowering extends GraphBuilder {
           const access = elementAccess(target.type);
           return this.pureNode({
             kind: 'getProperty',
-            title: optional ? '?.[ ]' : ELEMENT_GET,
+            title: optional ? '?.[ ]' : access.title,
             expr,
             path,
             inputs: [

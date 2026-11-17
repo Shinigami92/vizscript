@@ -1,9 +1,4 @@
-import {
-  conversionCall,
-  ELEMENT_GET,
-  elementAccess,
-  isTypeConstant,
-} from '@vizscript/core';
+import { conversionCall, elementAccess, isTypeConstant } from '@vizscript/core';
 import type {
   DataType,
   InputSpec,
@@ -468,7 +463,7 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
         const access = elementAccess(target.type);
         return this.pureNode({
           kind: 'getProperty',
-          title: ELEMENT_GET,
+          title: access.title,
           range: rangeOf(expr),
           path,
           inputs: [

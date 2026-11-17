@@ -20,6 +20,14 @@ function describeRead(node: GraphNode): string {
 }
 
 describe('element reads (UE GET)', () => {
+  it('is a FIND node for a map', () => {
+    expect(
+      reads(
+        'fn f(prices: HashMap<String, f64>) {\n    let a = prices["tea"];\n}\n'
+      )
+    ).toEqual(['FIND(Map<string, number>, string) -> number']);
+  });
+
   it('is a GET node typed by the container', () => {
     expect(
       reads('fn f(items: Vec<String>) {\n    let a = &items[0];\n}\n')

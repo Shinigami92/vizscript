@@ -3,7 +3,6 @@ import {
   arrayOf,
   CHAIN_OPERATORS,
   chainPinId,
-  ELEMENT_GET,
   elementAccess,
   flattenChain,
   isArrayType,
@@ -99,7 +98,7 @@ export abstract class ExpressionLowering extends CallLowering {
         const access = elementAccess(target.type);
         return this.pureNode({
           kind: 'getProperty',
-          title: slice ? '[..]' : ELEMENT_GET,
+          title: slice ? '[..]' : access.title,
           range,
           path,
           inputs: [

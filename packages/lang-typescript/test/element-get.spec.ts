@@ -20,6 +20,14 @@ function describeRead(node: GraphNode): string {
 }
 
 describe('element reads (UE GET)', () => {
+  it('is a FIND node for a record', () => {
+    expect(
+      reads(
+        'function f(prices: Record<string, number>) {\n  const a = prices["tea"];\n}\n'
+      )
+    ).toEqual(['FIND(Map<string, number>, string) -> number']);
+  });
+
   it('is a GET node typed by the container', () => {
     expect(
       reads(

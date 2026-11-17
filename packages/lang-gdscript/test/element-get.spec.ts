@@ -20,6 +20,14 @@ function describeRead(node: GraphNode): string {
 }
 
 describe('element reads (UE GET)', () => {
+  it('is a FIND node for a typed dictionary', () => {
+    expect(
+      reads(
+        'func f(prices: Dictionary[String, float]):\n\tvar a = prices["tea"]\n'
+      )
+    ).toEqual(['FIND(Map<string, number>, string) -> number']);
+  });
+
   it('is a GET node typed by the container', () => {
     expect(
       reads(
