@@ -14,6 +14,7 @@ export class ConfigController {
       github: {
         apiUrl: this.config.githubApiUrl,
         rawUrl: this.config.githubRawUrl,
+        webUrl: this.config.githubWebUrl,
       },
     };
   }

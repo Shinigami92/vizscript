@@ -120,6 +120,8 @@ export interface ClientConfig {
      * `<rawUrl>/<owner>/<repo>/<ref>/<path>`.
      */
     rawUrl: string;
+    /** Web pages of GitHub (`https://github.com`, or the Enterprise host). */
+    webUrl: string;
   };
 }
 

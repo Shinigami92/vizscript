@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import { SecretBox } from '../src/common/crypto';
 import type { AppConfig } from '../src/config/config';
+import { loadConfig } from '../src/config/config';
 import { createDatabase } from '../src/database/database.module';
 import { runMigrations } from '../src/database/migrate';
 import type { ScmProvider } from '../src/scm/scm-provider';
@@ -91,6 +92,21 @@ function layoutUrl(name: string): string {
   return `/api/layouts/github/octo/${name}?ref=main&path=src/index.ts`;
 }
 
+describe('loadConfig', () => {
+  it('derives the GitHub hosts of an Enterprise server', () => {
+    const config = loadConfig({
+      APP_SECRET: 'x'.repeat(32),
+      DATABASE_URL: 'postgres://db',
+      GITHUB_API_URL: 'https://ghe.example/api/v3/',
+    });
+    expect(config).toMatchObject({
+      githubApiUrl: 'https://ghe.example/api/v3',
+      githubRawUrl: 'https://ghe.example/raw',
+      githubWebUrl: 'https://ghe.example',
+    });
+  });
+});
+
 describe('SecretBox', () => {
   it('round-trips secrets and rejects tampering', () => {
     const box = new SecretBox('x'.repeat(32));
@@ -118,6 +134,7 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
       runMigrations: true,
       githubApiUrl: 'https://api.github.com',
       githubRawUrl: 'https://raw.githubusercontent.com',
+      githubWebUrl: 'https://github.com',
     };
     await runMigrations(
       config.databaseUrl,
@@ -287,6 +304,7 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
       github: {
         apiUrl: 'https://api.github.com',
         rawUrl: 'https://raw.githubusercontent.com',
+        webUrl: 'https://github.com',
       },
     });
   });

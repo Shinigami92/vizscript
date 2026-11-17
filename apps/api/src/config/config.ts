@@ -12,6 +12,8 @@ export interface AppConfig {
   githubApiUrl: string;
   /** Raw file contents of GitHub (`https://raw.githubusercontent.com`). */
   githubRawUrl: string;
+  /** Web pages of GitHub (`https://github.com`, or the Enterprise host). */
+  githubWebUrl: string;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -41,6 +43,13 @@ function rawUrlOf(apiUrl: string): string {
   return `${apiUrl.replace(/\/api\/v3$/, '')}/raw`;
 }
 
+/** `https://api.github.com` → `https://github.com`; Enterprise: its host. */
+function webUrlOf(apiUrl: string): string {
+  return apiUrl === 'https://api.github.com'
+    ? 'https://github.com'
+    : apiUrl.replace(/\/api\/v3$/, '');
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const appSecret = required(env, 'APP_SECRET');
   if (appSecret.length < 32) {
@@ -60,5 +69,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     runMigrations: env.RUN_MIGRATIONS !== 'false',
     githubApiUrl,
     githubRawUrl: withoutSlash(env.GITHUB_RAW_URL ?? rawUrlOf(githubApiUrl)),
+    githubWebUrl: withoutSlash(env.GITHUB_WEB_URL ?? webUrlOf(githubApiUrl)),
   };
 }
