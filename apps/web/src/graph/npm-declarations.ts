@@ -67,16 +67,68 @@ const SPECIFIERS = [
   /\brequire\(\s*['"]([^'"]+)['"]\s*\)/g,
 ];
 
+/**
+ * The text with its comments blanked out (strings stay), so examples in doc
+ * comments (`import Home from './pages/Home.vue'`) aren't taken for imports.
+ */
+export function withoutComments(text: string): string {
+  let out = '';
+  let quote: string | null = null;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i] ?? '';
+    if (quote) {
+      out += char;
+      if (char === '\\') {
+        out += text[i + 1] ?? '';
+        i++;
+      } else if (char === quote || (char === '\n' && quote !== '`')) {
+        quote = null;
+      }
+    } else if (char === '/' && text[i + 1] === '/') {
+      const end = text.indexOf('\n', i);
+      const stop = end === -1 ? text.length : end;
+      out += ' '.repeat(stop - i);
+      i = stop - 1;
+    } else if (char === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      const stop = end === -1 ? text.length : end + 2;
+      // Line breaks stay, so nothing joins across lines.
+      out += text.slice(i, stop).replaceAll(/[^\n]/g, ' ');
+      i = stop - 1;
+    } else {
+      if (char === "'" || char === '"' || char === '`') {
+        quote = char;
+      }
+
+      out += char;
+    }
+  }
+
+  return out;
+}
+
+/**
+ * A module specifier as written in code: a relative or absolute path, or a
+ * package name with an optional subpath (`node:fs`, `@scope/pkg/sub`).
+ */
+function isSpecifier(value: string): boolean {
+  return (
+    /^\.{0,2}\/[^\s*,]*$/.test(value) ||
+    /^(?:[a-z]+:)?(?:@[\w.-]+\/)?[\w.-]+(?:\/[\w.@/-]*)?$/.test(value)
+  );
+}
+
 /** Modules a declaration file refers to; `types` from `/// <reference>`. */
 export function declarationSpecifiers(text: string): {
   modules: string[];
   types: string[];
   paths: string[];
 } {
+  const code = withoutComments(text);
   const modules = new Set<string>();
   for (const pattern of SPECIFIERS) {
-    for (const match of text.matchAll(pattern)) {
-      if (match[1]) {
+    for (const match of code.matchAll(pattern)) {
+      if (match[1] && isSpecifier(match[1])) {
         modules.add(match[1]);
       }
     }

@@ -5,6 +5,22 @@ import {
 } from '../src/graph/npm-declarations';
 
 describe('declarationSpecifiers', () => {
+  it('ignores imports in comments and text that is no module', () => {
+    const text = [
+      '/**',
+      ' * Creates a router:',
+      " * import Home from './pages/Home.vue'",
+      " * It's what the user's app imports from 'vue-router'.",
+      ' */',
+      "// export { x } from './commented-out';",
+      "/* import './block' */ import { ref } from 'vue';",
+      "declare const sep: '  | ';",
+      "export type Opts = { file: string }; // from 'node:fs' or ', * file'",
+      "export * from './real';",
+    ].join('\n');
+    expect(declarationSpecifiers(text).modules).toEqual(['vue', './real']);
+  });
+
   it('finds imports, re-exports and references', () => {
     const text = [
       '/// <reference types="node" />',
