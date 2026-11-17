@@ -289,15 +289,21 @@ const {
     typeFloating: (edit, source) => typeFloating(edit, source),
     placed: (ids) => {
       placedNodes(ids);
+      // The written nodes take the places of their floating nodes, in the
+      // undo step that wrote them: undo shows the floating ones where they
+      // were (their own entries are kept for that).
       const moved: Positions = {};
       for (const [from, to] of Object.entries(ids)) {
         const p = pinned.value[from];
         if (p) {
           moved[to] = p;
+          moved[from] = p;
         }
       }
 
-      movePinned(moved);
+      if (Object.keys(moved).length > 0) {
+        recordCodeLayout(moved);
+      }
     },
     writing: (written, wrote) => {
       const kept = keepWired(written, wrote);
