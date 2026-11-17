@@ -1,4 +1,9 @@
-import { conversionCall, isTypeConstant } from '@vizscript/core';
+import {
+  conversionCall,
+  ELEMENT_GET,
+  elementAccess,
+  isTypeConstant,
+} from '@vizscript/core';
 import type {
   DataType,
   InputSpec,
@@ -458,22 +463,30 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       }
 
       case 'Subscript': {
+        // UE's GET node: the container, the index, the element.
+        const target = this.lowerExpr(expr.object, `${path}.target`, mode);
+        const access = elementAccess(target.type);
         return this.pureNode({
           kind: 'getProperty',
-          title: '[ ]',
+          title: ELEMENT_GET,
           range: rangeOf(expr),
           path,
           inputs: [
             {
-              pin: this.dataIn('target', '', rangeOf(expr.object), 'object'),
-              value: this.lowerExpr(expr.object, `${path}.target`, mode),
+              pin: this.dataIn(
+                'target',
+                '',
+                rangeOf(expr.object),
+                access.targetType
+              ),
+              value: target,
             },
             {
-              pin: this.dataIn('key', '', rangeOf(expr.index)),
+              pin: this.dataIn('key', '', rangeOf(expr.index), access.keyType),
               value: this.lowerExpr(expr.index, `${path}.key`, mode),
             },
           ],
-          outType: 'any',
+          outType: access.outType,
           compact: true,
         });
       }

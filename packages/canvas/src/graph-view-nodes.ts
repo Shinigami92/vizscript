@@ -3,8 +3,8 @@ import {
   compactTitle,
   headerIcon,
   ICON_SPACE,
-  isArrayType,
   isCompact,
+  isElementGet,
   isLatent,
   isMathNode,
   isSetter,
@@ -13,7 +13,7 @@ import {
   pinKey,
   pinLabel,
 } from '@vizscript/core';
-import type { HeaderIcon, Pin, PinGeometry, Point } from '@vizscript/core';
+import type { HeaderIcon, Pin, PinGeometry } from '@vizscript/core';
 import {
   BUBBLE_GAP,
   BUBBLE_LINE_HEIGHT,
@@ -22,6 +22,11 @@ import {
 } from './bubble';
 import { easeOut } from './camera';
 import type { Rect } from './camera';
+import {
+  containerShape,
+  drawContainerPin,
+  drawContainerSymbol,
+} from './container-shapes';
 import { GraphViewCamera } from './graph-view-camera';
 import {
   ADVANCED_ROW,
@@ -253,13 +258,14 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     const { node, geom } = ns;
     const lod = this.camera.zoom < 0.4;
     const compact = isCompact(node);
+    const math = isMathNode(node);
     // UE's Get pill: a dark capsule lit by its type's color.
     const getPill =
       compact &&
+      !math &&
       ((node.category === 'variable' && node.kind !== 'setVar') ||
         node.kind === 'getProperty');
     const setter = isSetter(node);
-    const math = isMathNode(node);
     // UE's pills are rounded rectangles, not full capsules.
     const r = getPill
       ? Math.min(geom.height * 0.36, 14)
@@ -420,13 +426,28 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       const right =
         geom.rightColumn > 0 ? geom.rightColumn + 4 : NODE_METRICS.paddingX;
       // Math glyphs sit in the middle of the node, behind pins and values.
-      const centerX = math
-        ? ns.x + geom.width / 2
-        : ns.x + (left + geom.width - right) / 2;
+      const centerX =
+        math && !isElementGet(node)
+          ? ns.x + geom.width / 2
+          : ns.x + (left + geom.width - right) / 2;
       // A setter shows `SET` and, small below, how it declares (`const`).
       const sub = node.subtitle && !lod ? node.subtitle : '';
       const centerY = ns.y + (geom.glyphY ?? geom.height / 2) - (sub ? 6 : 0);
       if (math) {
+        const target = isElementGet(node)
+          ? node.pins.find((p) => p.direction === 'in' && p.kind === 'data')
+          : undefined;
+        if (target && !lod) {
+          drawContainerSymbol(
+            ctx,
+            centerX,
+            centerY,
+            Math.min(geom.height - 10, 34),
+            target.type,
+            theme.scheme
+          );
+        }
+
         // UE's big faded glyph or word, behind the pins and values.
         ctx.font = this.font('glyph');
         ctx.fillStyle = theme.operatorGlyph;
@@ -692,8 +713,16 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       ctx.stroke();
     } else {
       const color = pinColor(pin.type, theme.scheme);
-      if (isArrayType(pin.type)) {
-        this.drawArrayPin(p, r, color, connected);
+      if (containerShape(pin.type)) {
+        drawContainerPin(
+          ctx,
+          p.x,
+          p.y,
+          r * 2 + 2,
+          pin.type,
+          theme.scheme,
+          connected
+        );
       } else {
         ctx.beginPath();
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
@@ -798,40 +827,6 @@ export abstract class GraphViewNodes extends GraphViewCamera {
    * Blueprint array pin: a 3×3 grid of squares in the element color,
    * filled when connected and outlined when not.
    */
-  private drawArrayPin(
-    center: Point,
-    radius: number,
-    color: string,
-    connected: boolean
-  ): void {
-    const { ctx } = this;
-    const size = radius * 2 + 2;
-    const gap = size * 0.12;
-    const cell = (size - gap * 2) / 3;
-    const left = center.x - size / 2;
-    const top = center.y - size / 2;
-    ctx.beginPath();
-    for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 3; col++) {
-        ctx.rect(
-          left + col * (cell + gap),
-          top + row * (cell + gap),
-          cell,
-          cell
-        );
-      }
-    }
-
-    if (connected) {
-      ctx.fillStyle = color;
-      ctx.fill();
-    } else {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-  }
-
   private drawProblemBanner(ns: NodeState, lod: boolean): void {
     const severity = this.problems.get(ns.node.id);
     if (!severity) {

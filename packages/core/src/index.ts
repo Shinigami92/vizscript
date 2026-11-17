@@ -8,6 +8,7 @@ export * from './comment-ops';
 export * from './comments';
 export * from './declaration-syntax';
 export * from './display';
+export * from './element-access';
 export * from './edit-meta';
 export * from './flow';
 export * from './conversions';

@@ -1,5 +1,6 @@
 import type { InputPinMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
+import { isElementGet } from './element-access';
 import type { GraphNode, Pin } from './ir';
 import { canAddPin } from './operator-chain';
 
@@ -102,11 +103,14 @@ export function isCompact(node: GraphNode): boolean {
 }
 
 /**
- * UE's compact math node: an operator or conversion drawn as a box with a
- * large faded glyph or word (`+`, `×`, `SIN`, `String`).
+ * UE's compact math node: an operator, conversion or element read drawn as
+ * a box with a large faded glyph or word (`+`, `×`, `SIN`, `String`, `GET`).
  */
 export function isMathNode(node: GraphNode): boolean {
-  return isCompact(node) && (node.kind === 'operator' || node.kind === 'call');
+  return (
+    isCompact(node) &&
+    (node.kind === 'operator' || node.kind === 'call' || isElementGet(node))
+  );
 }
 
 /** UE's SET node: `SET` sits in the exec row, above the value. */
@@ -303,6 +307,17 @@ export function computeNodeGeometry(
         NODE_METRICS.paddingX * 2 +
         (leftWidth && rightWidth ? NODE_METRICS.columnGap : 0)
     );
+    height =
+      rows * NODE_METRICS.rowHeight + NODE_METRICS.compactPaddingY * 2 - 4;
+  } else if (isElementGet(node)) {
+    // UE's GET: the word sits between the container and index on the left
+    // and the element on the right, clear of inline values.
+    width =
+      leftWidth +
+      rightWidth +
+      measure(compactTitle(node), 'glyph') +
+      NODE_METRICS.paddingX * 2 +
+      12;
     height =
       rows * NODE_METRICS.rowHeight + NODE_METRICS.compactPaddingY * 2 - 4;
   } else if (isMathNode(node)) {

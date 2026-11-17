@@ -11,6 +11,8 @@ import type { InsertPoint, OutputPinMeta } from '@vizscript/core';
 import {
   arrayElementType,
   arrayOfAll,
+  ELEMENT_GET,
+  elementAccess,
   formatLiteral,
   truncate,
 } from '@vizscript/core';
@@ -51,6 +53,36 @@ function binaryType(
 }
 
 /** Lowers expressions into pure nodes, hoisted calls and literals. */
+/**
+ * The type `new Name()` makes: built-in containers are untyped arrays,
+ * maps and sets until the checker knows their elements.
+ */
+function constructedType(name: string | undefined): DataType {
+  switch (name) {
+    case undefined: {
+      return 'object';
+    }
+
+    case 'Array': {
+      return 'array';
+    }
+
+    case 'Map':
+    case 'WeakMap': {
+      return 'map';
+    }
+
+    case 'Set':
+    case 'WeakSet': {
+      return 'set';
+    }
+
+    default: {
+      return name;
+    }
+  }
+}
+
 export abstract class ExpressionLowering extends GraphBuilder {
   protected lowerCall(
     expr: t.CallExpression | t.OptionalCallExpression | t.NewExpression,
@@ -158,7 +190,7 @@ export abstract class ExpressionLowering extends GraphBuilder {
     const returnType: DataType =
       converts ??
       (knownName ? this.doc.functionReturnTypes.get(knownName) : undefined) ??
-      (isNew && chain ? (chain.at(-1) ?? 'object') : 'any');
+      (isNew && chain ? constructedType(chain.at(-1)) : 'any');
 
     if (freeTarget && converts === undefined) {
       inputs.unshift({ pin: freeTarget, value: undefined });
@@ -391,29 +423,52 @@ export abstract class ExpressionLowering extends GraphBuilder {
           return this.getVar(chain.join('.'), expr, path, 'any');
         }
 
-        const inputs: InputSpec[] = [
-          {
-            pin: this.dataIn('target', '', rangeOf(expr.object), 'object'),
-            value: this.lowerExpr(expr.object, `${path}.target`, mode),
-          },
-        ];
-        let title: string;
+        const target = this.lowerExpr(expr.object, `${path}.target`, mode);
+        const optional = expr.type === 'OptionalMemberExpression';
         if (expr.computed) {
-          title = expr.type === 'OptionalMemberExpression' ? '?.[ ]' : '[ ]';
-          inputs.push({
-            pin: this.dataIn('key', '', rangeOf(expr.property)),
-            value: this.lowerExpr(expr.property, `${path}.key`, mode),
+          // UE's GET node: the container, the index, the element.
+          const access = elementAccess(target.type);
+          return this.pureNode({
+            kind: 'getProperty',
+            title: optional ? '?.[ ]' : ELEMENT_GET,
+            expr,
+            path,
+            inputs: [
+              {
+                pin: this.dataIn(
+                  'target',
+                  '',
+                  rangeOf(expr.object),
+                  access.targetType
+                ),
+                value: target,
+              },
+              {
+                pin: this.dataIn(
+                  'key',
+                  '',
+                  rangeOf(expr.property),
+                  access.keyType
+                ),
+                value: this.lowerExpr(expr.property, `${path}.key`, mode),
+              },
+            ],
+            outType: access.outType,
+            compact: true,
           });
-        } else {
-          title = `${expr.type === 'OptionalMemberExpression' ? '?.' : '.'}${this.source(rangeOf(expr.property))}`;
         }
 
         return this.pureNode({
           kind: 'getProperty',
-          title,
+          title: `${optional ? '?.' : '.'}${this.source(rangeOf(expr.property))}`,
           expr,
           path,
-          inputs,
+          inputs: [
+            {
+              pin: this.dataIn('target', '', rangeOf(expr.object), 'object'),
+              value: target,
+            },
+          ],
           outType: 'any',
           compact: true,
         });

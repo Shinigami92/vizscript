@@ -1,4 +1,9 @@
-import { conversionCall, isTypeConstant } from '@vizscript/core';
+import {
+  conversionCall,
+  ELEMENT_GET,
+  elementAccess,
+  isTypeConstant,
+} from '@vizscript/core';
 import type {
   DataType,
   InputSpec,
@@ -320,28 +325,52 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
 
       case 'Subscript': {
         const sliced = expr.index.type === 'Opaque';
-        const inputs: InputSpec[] = [
-          {
-            pin: this.dataIn('target', '', rangeOf(expr.object), 'object'),
-            value: this.lowerExpr(expr.object, `${path}.target`, mode),
-          },
-        ];
-        if (!sliced) {
-          inputs.push({
-            pin: this.dataIn('key', '', rangeOf(expr.index)),
-            value: this.lowerExpr(expr.index, `${path}.key`, mode),
+        const target = this.lowerExpr(expr.object, `${path}.target`, mode);
+        if (sliced) {
+          return this.pureNode({
+            kind: 'getProperty',
+            title: `[${truncate(this.src(rangeOf(expr.index)), 12)}]`,
+            range,
+            path,
+            inputs: [
+              {
+                pin: this.dataIn(
+                  'target',
+                  '',
+                  rangeOf(expr.object),
+                  elementAccess(target.type).targetType
+                ),
+                value: target,
+              },
+            ],
+            outType: 'any',
+            compact: true,
           });
         }
 
+        // UE's GET node: the container, the index, the element.
+        const access = elementAccess(target.type);
         return this.pureNode({
           kind: 'getProperty',
-          title: sliced
-            ? `[${truncate(this.src(rangeOf(expr.index)), 12)}]`
-            : '[ ]',
+          title: ELEMENT_GET,
           range,
           path,
-          inputs,
-          outType: 'any',
+          inputs: [
+            {
+              pin: this.dataIn(
+                'target',
+                '',
+                rangeOf(expr.object),
+                access.targetType
+              ),
+              value: target,
+            },
+            {
+              pin: this.dataIn('key', '', rangeOf(expr.index), access.keyType),
+              value: this.lowerExpr(expr.index, `${path}.key`, mode),
+            },
+          ],
+          outType: access.outType,
           compact: true,
         });
       }

@@ -1,9 +1,10 @@
 import type { DataType, InputSpec, ValueSource } from '@vizscript/core';
 import {
-  arrayElementType,
   arrayOf,
   CHAIN_OPERATORS,
   chainPinId,
+  ELEMENT_GET,
+  elementAccess,
   flattenChain,
   isArrayType,
   truncate,
@@ -91,25 +92,41 @@ export abstract class ExpressionLowering extends CallLowering {
       }
 
       case 'Index': {
+        // UE's GET node: the container, the index, the element. A range
+        // (`&v[1..3]`) is a slice: part of the container.
         const target = this.lowerExpr(expr.object, `${path}.target`, mode);
+        const slice = unwrap(expr.index).type === 'Range';
+        const access = elementAccess(target.type);
         return this.pureNode({
           kind: 'getProperty',
-          title: '[ ]',
+          title: slice ? '[..]' : ELEMENT_GET,
           range,
           path,
           inputs: [
             {
-              pin: this.dataIn('target', '', rangeOf(expr.object), 'object'),
+              pin: this.dataIn(
+                'target',
+                '',
+                rangeOf(expr.object),
+                access.targetType
+              ),
               value: target,
             },
             {
-              pin: this.dataIn('key', '', rangeOf(expr.index)),
+              pin: this.dataIn(
+                'key',
+                '',
+                rangeOf(expr.index),
+                slice ? 'any' : access.keyType
+              ),
               value: this.lowerExpr(expr.index, `${path}.key`, mode),
             },
           ],
-          outType: isArrayType(target.type)
-            ? arrayElementType(target.type)
-            : 'any',
+          outType: slice
+            ? isArrayType(target.type) || target.type === 'string'
+              ? target.type
+              : 'any'
+            : access.outType,
           compact: true,
         });
       }
