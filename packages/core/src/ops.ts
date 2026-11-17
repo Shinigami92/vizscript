@@ -419,6 +419,11 @@ export interface TypeSystemInfo {
    */
   throwValue?: string;
   /**
+   * Written before a map key that is no string literal when indexing
+   * (`&` in Rust: `prices[&id]`, but `prices["tea"]`), for UE's FIND.
+   */
+  keyReference?: string;
+  /**
    * Operators and values of the action menu (UE: `+`, Make Literal String,
    * Select, Make Array …). `$1`, `$2` … are their inputs.
    */

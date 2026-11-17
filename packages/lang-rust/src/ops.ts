@@ -128,6 +128,7 @@ export const RUST_TYPES: TypeSystemInfo = {
     set: 'HashSet::new()',
   },
   placeholder: 'todo!()',
+  keyReference: '&',
   valueHost: {
     typed: 'fn __value__() {\n    let value: $type = $value;\n}',
     untyped: 'fn __value__() {\n    let value = $value;\n}',
