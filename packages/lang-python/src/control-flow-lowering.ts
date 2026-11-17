@@ -1,4 +1,5 @@
 import type {
+  DataType,
   GraphNode,
   InputSpec,
   InsertPoint,
@@ -9,6 +10,11 @@ import { iteratedType, lineEnd, lineIndent, truncate } from '@vizscript/core';
 import type { Block, IfStmt, Span, Stmt } from './ast';
 import { ExpressionLowering } from './expression-lowering';
 import { rangeOf, unwrap } from './lower-utils';
+
+/** The type of an `except` clause's error: the class it names, if one. */
+function errorType(exception: string | undefined): DataType {
+  return exception && /^\w+$/.test(exception) ? exception : 'any';
+}
 
 /** Lowers branches, loops, `with` and `try` into flow nodes. */
 export abstract class ControlFlowLowering extends ExpressionLowering {
@@ -369,10 +375,12 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
       this.execIn(),
       this.execOut('try', 'Try', this.blockInsert(stmt.body)),
     ];
+    const errorTypes: DataType[] = [];
     for (const [i, handler] of stmt.handlers.entries()) {
       const exception = handler.exception
         ? this.src(rangeOf(handler.exception))
         : undefined;
+      errorTypes.push(errorType(exception));
       pins.push(
         this.execOut(
           `except${i}`,
@@ -382,12 +390,9 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
       );
       if (handler.name) {
         pins.push(
-          this.dataOut(
-            `error${i}`,
-            handler.name,
-            exception && /^\w+$/.test(exception) ? exception : 'any',
-            { sourceText: handler.name }
-          )
+          this.dataOut(`error${i}`, handler.name, errorTypes[i] ?? 'any', {
+            sourceText: handler.name,
+          })
         );
       }
     }
@@ -419,9 +424,10 @@ export abstract class ControlFlowLowering extends ExpressionLowering {
       this.cursor = { node: node.id, pin: `except${i}` };
       this.withScope(() => {
         if (handler.name) {
+          // Its readers take the error's type too (`{1}` of a Format Text).
           this.declare(handler.name, {
             source: { node: node.id, pin: `error${i}` },
-            type: 'any',
+            type: errorTypes[i] ?? 'any',
           });
         }
 
