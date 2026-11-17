@@ -139,13 +139,24 @@ function setParameterType(index: number, typeText: string | null): void {
 
 function setParameterValue(index: number, event: Event): void {
   const value = (event.target as HTMLInputElement).value.trim();
+  const current = code(props.symbol.params?.[index]?.defaultRange).trim();
   emit('op', {
     type: 'setParameterValue',
     symbol: props.symbol.id,
     index,
     value: value === '' ? null : value,
-    kind: 'expression',
+    // An empty field takes text unless it is code; code stays code.
+    kind:
+      current === '' || PLACEHOLDER_VALUES.has(current) ? 'auto' : 'expression',
   });
+}
+
+/** The default is code (a name, a call), not text: shown as such. */
+function defaultIsCode(
+  param: NonNullable<ScriptSymbol['params']>[number]
+): boolean {
+  const current = code(param.defaultRange).trim();
+  return current !== '' && !PLACEHOLDER_VALUES.has(current);
 }
 
 /** Inputs whose details are folded out (UE: collapsed by default). */
@@ -408,6 +419,17 @@ function setReturnType(typeText: string | null): void {
                 "
                 @change="setParameterValue(index, $event)"
               />
+              <span
+                v-if="
+                  defaultKind(param) === 'expression' &&
+                  !defaultFields(param) &&
+                  !isArrayParam(param) &&
+                  defaultIsCode(param)
+                "
+                class="shrink-0 text-[11px] text-zinc-500"
+                title="Written as code, as it is: put text in quotes"
+                >code</span
+              >
             </dd>
           </template>
           <dt class="text-zinc-500">Order</dt>

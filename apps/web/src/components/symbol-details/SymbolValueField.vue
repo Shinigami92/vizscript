@@ -98,9 +98,21 @@ function commitValue(): void {
     type: 'setSymbolValue',
     symbol: props.symbol.id,
     value: next === '' && valueKind.value !== 'string' ? null : next,
-    kind: valueKind.value,
+    // An empty field of an untyped value takes text unless it is code.
+    kind:
+      valueKind.value === 'expression' && current === ''
+        ? 'auto'
+        : valueKind.value,
   });
 }
+
+/** The field holds code (a name, a call): not text, written as it is. */
+const showsCode = computed(
+  () =>
+    valueKind.value === 'expression' &&
+    valueCode.value !== '' &&
+    placeholderValue.value === ''
+);
 
 /** The Make Array of an array literal value (UE: an array's elements). */
 const arrayNode = computed(() => {
@@ -332,6 +344,12 @@ function resetValue(): void {
         @keydown.enter.prevent="commitValue"
         @blur="commitValue"
       />
+      <span
+        v-if="editable && showsCode && !computedValue && !fields"
+        class="shrink-0 text-[11px] text-zinc-500"
+        title="Written as code, as it is: put text in quotes"
+        >code</span
+      >
       <button
         v-if="
           editable &&
