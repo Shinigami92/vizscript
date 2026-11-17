@@ -77,8 +77,8 @@ function checkout
   #23 await "Await" [<exec:▶ >then:▶ <awaitable:any >result:any]
   #24 call "print" [<exec:▶ >then:▶ <target:object <arg0:string="offline" <arg1:any <arg2:string=" - " <param:end:string=]
   #25 getVar "subtotal" [>value:any]
-  #26 call "len" [<exec:▶ >then:▶ <target:object <arg0:Item[] >return:number]
-  #27 makeObject "Make Dict" [<p0:any <p1:any >value:map]
+  #26 call "len" [<arg0:Item[] >return:number]
+  #27 makeObject "Make Dict" [<p0:any <p1:number >value:map]
   #28 setVar "Set log" [<exec:▶ >then:▶ <value:object >out:map]
   #29 getVar "subtotal" [>value:any]
   #30 getVar "TAX" [>value:number]
@@ -124,11 +124,10 @@ function checkout
   --> #20.error0 -> #24.arg1
   ==> #20.except0 -> #24.exec
   --> #0.param0 -> #26.arg0
-  ==> #20.finally -> #26.exec
   --> #25.value -> #27.p0
   --> #26.return -> #27.p1
   --> #27.value -> #28.value
-  ==> #26.then -> #28.exec
+  ==> #20.finally -> #28.exec
   --> #30.value -> #31.b
   --> #29.value -> #32.a
   --> #31.value -> #32.b

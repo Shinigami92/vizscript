@@ -1,4 +1,11 @@
-import { conversionCall, elementAccess, isTypeConstant } from '@vizscript/core';
+import {
+  conversionCall,
+  elementAccess,
+  findContainerOp,
+  findContainerOperator,
+  isTypeConstant,
+  styleContainerValue,
+} from '@vizscript/core';
 import type {
   DataType,
   InputSpec,
@@ -18,6 +25,7 @@ import {
   truncate,
 } from '@vizscript/core';
 import type { Expr, Span } from './ast';
+import { PYTHON_CONTAINER_OPS } from './container-ops';
 import { CONVERSIONS } from './conversions';
 import type { DocumentContext, GraphSource, Signature } from './lower-utils';
 import { COMPARISONS, rangeOf, simpleChain, unwrap } from './lower-utils';
@@ -188,11 +196,30 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
         ? undefined
         : conversionCall(CONVERSIONS, title, inputs.length);
     const returnType: DataType = converts ?? signature?.returnType ?? 'any';
+    // UE's container nodes (LENGTH, ADD …): a known operation on a typed
+    // list, dict or set (`items.append(x)`, `len(items)`); reads are pure.
+    const method = callee.type === 'Attribute';
+    const container =
+      (method || freeTarget) && expr.args.every((a) => !a.keyword && !a.star)
+        ? inputs[0]
+        : undefined;
+    const op = container
+      ? findContainerOp(
+          PYTHON_CONTAINER_OPS,
+          method ? 'method' : 'function',
+          title,
+          container.value?.type,
+          method ? expr.args.length : expr.args.length - 1
+        )
+      : undefined;
     if (freeTarget && converts === undefined) {
       inputs.unshift({ pin: freeTarget, value: undefined });
     }
 
-    const impure = mode !== 'pure' && converts === undefined;
+    const impure =
+      mode !== 'pure' &&
+      converts === undefined &&
+      (op === undefined || op.mutates === true || mode === 'statement');
     const pins: Pin[] = impure
       ? [this.execIn(), this.execOut('then', '', statement?.insert)]
       : [];
@@ -230,7 +257,19 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       this.chain(node);
     }
 
-    return { pin: { node: node.id, pin: 'return' }, type: returnType };
+    const value: ValueSource = {
+      pin: { node: node.id, pin: 'return' },
+      type: returnType,
+    };
+    return op && container?.value
+      ? styleContainerValue(
+          this.nodes,
+          value,
+          op,
+          container.value.type,
+          container.pin.id
+        )
+      : value;
   }
 
   protected lowerExpr(
@@ -640,7 +679,7 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
         values[0]?.type ?? 'any'
       );
 
-    return this.pureNode({
+    const value = this.pureNode({
       kind: 'operator',
       title: expr.op,
       range: rangeOf(expr),
@@ -652,6 +691,21 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       outType: type,
       compact: true,
     });
+    // UE's container nodes: `x in items` is CONTAINS, `a | b` of sets UNION.
+    const found = findContainerOperator(
+      PYTHON_CONTAINER_OPS,
+      expr.op,
+      values.map((v) => v.type)
+    );
+    return found
+      ? styleContainerValue(
+          this.nodes,
+          value,
+          found.op,
+          values[found.index]?.type ?? 'any',
+          chainPinId(found.index)
+        )
+      : value;
   }
 
   protected lowerAwait(
