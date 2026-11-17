@@ -1,3 +1,4 @@
+import { isContainerNode } from './container-ops';
 import type { InputPinMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import type { EngineClass } from './engine-classes';
@@ -465,6 +466,19 @@ function moduleImport(
   return whole ? imports.get(whole.name) : undefined;
 }
 
+/** `pins` with the names of the same inputs among `named`. */
+export function namedPins(
+  pins: ReadonlyArray<Pin>,
+  named: ReadonlyArray<Pin>
+): Pin[] {
+  return pins.map((pin) => {
+    const name = named.find((p) => p.id === pin.id)?.name;
+    return pin.direction === 'in' && name !== undefined && name !== pin.name
+      ? { ...pin, name }
+      : pin;
+  });
+}
+
 /**
  * Completes the input pins of calls to functions of the same file, like
  * UE's call nodes: every parameter is a pin, named and typed like it.
@@ -485,6 +499,19 @@ export function completeCallPins(
       }
 
       const symbol = calledSymbol(text, doc, fn, node, imports, options);
+      if (isContainerNode(node)) {
+        // Container nodes (LENGTH, ADD …) keep their pins and types: they
+        // take the values they show. The signature names them.
+        if (symbol?.params) {
+          node.pins = namedPins(
+            node.pins,
+            withParamPins(text, node, symbol.params, options)
+          );
+        }
+
+        continue;
+      }
+
       if (symbol && !own.has(symbol)) {
         typeResult(fn, node, symbol);
       }

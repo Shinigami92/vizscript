@@ -1,6 +1,6 @@
+import { containerWord, isContainerNode } from './container-ops';
 import type { InputPinMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
-import { isElementGet } from './element-access';
 import type { GraphNode, Pin } from './ir';
 import { canAddPin } from './operator-chain';
 
@@ -109,7 +109,7 @@ export function isCompact(node: GraphNode): boolean {
 export function isMathNode(node: GraphNode): boolean {
   return (
     isCompact(node) &&
-    (node.kind === 'operator' || node.kind === 'call' || isElementGet(node))
+    (node.kind === 'operator' || node.kind === 'call' || isContainerNode(node))
   );
 }
 
@@ -148,10 +148,18 @@ export function isAdvancedPin(pin: Pin): boolean {
 /** Math signs of binary operators (`*` is a small superscript in most fonts). */
 const GLYPHS: Record<string, string> = { '*': '×', '/': '÷' };
 
-/** Text in the middle of a compact node (`SET` for setters). */
+/**
+ * Text in the middle of a compact node (`SET` for setters, the word of a
+ * container node).
+ */
 export function compactTitle(node: GraphNode): string {
   if (isSetter(node)) {
     return 'SET';
+  }
+
+  const word = containerWord(node);
+  if (word !== undefined) {
+    return word;
   }
 
   // Two values or more (`a * b * c`); one is a sign (`-x`).
@@ -309,9 +317,10 @@ export function computeNodeGeometry(
     );
     height =
       rows * NODE_METRICS.rowHeight + NODE_METRICS.compactPaddingY * 2 - 4;
-  } else if (isElementGet(node)) {
-    // UE's GET: the word sits between the container and index on the left
-    // and the element on the right, clear of inline values.
+  } else if (isContainerNode(node)) {
+    // UE's container nodes (GET, LENGTH, ADD …): the word sits between the
+    // container and its values on the left and the result on the right,
+    // clear of inline values.
     width =
       leftWidth +
       rightWidth +

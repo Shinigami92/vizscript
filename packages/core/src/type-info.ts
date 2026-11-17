@@ -1,5 +1,6 @@
 import type { CallPinOptions } from './call-pins';
-import { takesMoreArguments, withParamPins } from './call-pins';
+import { namedPins, takesMoreArguments, withParamPins } from './call-pins';
+import { isContainerNode } from './container-ops';
 import type {
   DataType,
   FunctionGraph,
@@ -161,7 +162,11 @@ function typedNode(
 ): GraphNode {
   let changed = false;
   const params = calls ? calledParams(node, types) : undefined;
-  const addPin = params !== undefined && takesMoreArguments(params);
+  // Container nodes (LENGTH, ADD …) take the values they show; the
+  // signature only names them.
+  const container = isContainerNode(node);
+  const addPin =
+    !container && params !== undefined && takesMoreArguments(params);
   let pins = node.pins.flatMap((pin) => {
     const next = typedPin(pin, types);
     // A result of nothing (`void`) has no pin, like a UE function without
@@ -191,7 +196,13 @@ function typedNode(
   }
 
   if (calls && params && params.length > 0) {
-    pins = withParamPins(calls.text, { ...node, pins }, params, calls.options);
+    const completed = withParamPins(
+      calls.text,
+      { ...node, pins },
+      params,
+      calls.options
+    );
+    pins = container ? namedPins(pins, completed) : completed;
     changed = true;
   }
 

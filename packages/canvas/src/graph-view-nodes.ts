@@ -1,10 +1,11 @@
 import {
   ADD_PIN_LABEL,
   compactTitle,
+  containerPinOf,
   headerIcon,
   ICON_SPACE,
   isCompact,
-  isElementGet,
+  isContainerNode,
   isLatent,
   isMathNode,
   isSetter,
@@ -427,16 +428,14 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         geom.rightColumn > 0 ? geom.rightColumn + 4 : NODE_METRICS.paddingX;
       // Math glyphs sit in the middle of the node, behind pins and values.
       const centerX =
-        math && !isElementGet(node)
+        math && !isContainerNode(node)
           ? ns.x + geom.width / 2
           : ns.x + (left + geom.width - right) / 2;
       // A setter shows `SET` and, small below, how it declares (`const`).
       const sub = node.subtitle && !lod ? node.subtitle : '';
       const centerY = ns.y + (geom.glyphY ?? geom.height / 2) - (sub ? 6 : 0);
       if (math) {
-        const target = isElementGet(node)
-          ? node.pins.find((p) => p.direction === 'in' && p.kind === 'data')
-          : undefined;
+        const target = isContainerNode(node) ? containerPinOf(node) : undefined;
         if (target && !lod) {
           drawContainerSymbol(
             ctx,
