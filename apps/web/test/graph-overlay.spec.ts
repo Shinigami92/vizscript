@@ -162,3 +162,37 @@ describe('loose graph-only nodes', () => {
     expect(Object.keys(pinned.value)).toEqual([]);
   });
 });
+
+describe('a node picked from a value', () => {
+  it('writes a function input by its name, wired to `this`', async () => {
+    const { overlay } = setup();
+    const entry = parseTypeScript(TEXT, 't.ts')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'entry' && n.title === 'f');
+    expect(
+      await overlay.floatValueUse(
+        {
+          type: 'useValue',
+          pin: { node: entry?.id ?? '', pin: 'param0' },
+          expression: '$value.toFixed(2)',
+        },
+        'undefined'
+      )
+    ).toBe(true);
+    await settle();
+    const [made, ...rest] = overlay.overlay.value.edits;
+    expect(made?.type === 'addNodes' && made.code).toBe('x.toFixed(2);');
+    // The input's wire is part of the new nodes; nothing else is fed.
+    expect(rest).toEqual([]);
+    const call =
+      made?.type === 'addNodes'
+        ? made.nodes.find((n) => n.title === 'toFixed')
+        : undefined;
+    expect(made?.type === 'addNodes' && made.edges).toContainEqual(
+      expect.objectContaining({
+        from: { node: entry?.id, pin: 'param0' },
+        to: { node: call?.id, pin: 'target' },
+      })
+    );
+  });
+});

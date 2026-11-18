@@ -352,6 +352,18 @@ export function useGraphOverlay(
       : undefined;
   }
 
+  /** The name of a function's input at `ref`, if it is one. */
+  function inputName(ref: PinRef): string | undefined {
+    const doc = deps.doc.value;
+    const node = doc ? findNode(doc, ref.node) : undefined;
+    const pin = node?.pins.find((p) => p.id === ref.pin);
+    return node?.kind === 'entry' &&
+      pin?.kind === 'data' &&
+      /^[A-Za-z_$][\w$]*$/.test(pin.name)
+      ? pin.name
+      : undefined;
+  }
+
   async function floatValueUse(
     op: Extract<GraphOp, { type: 'useValue' | 'callWith' }>,
     placeholder: string
@@ -390,6 +402,22 @@ export function useGraphOverlay(
     // written as code.
     if (op.type === 'useValue' && !/\)\s*$/.test(op.expression)) {
       return false;
+    }
+
+    // A function's input is written by its name (`items.push('')`): the
+    // new nodes are wired to it and typed by it like code (the checker
+    // names `push`'s value pin), with no placeholder to feed.
+    const input = inputName(op.pin);
+    if (input !== undefined) {
+      await addFloating(
+        { type: 'value', expression: write(input) },
+        world,
+        fnId,
+        {
+          asCall,
+        }
+      );
+      return true;
     }
 
     await addFloating(
