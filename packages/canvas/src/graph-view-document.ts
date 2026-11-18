@@ -17,6 +17,8 @@ import type {
   Point,
   Positions,
 } from '@vizscript/core';
+import type { AlignNode } from './align';
+import { alignNodes, levelEdge } from './align';
 import { BUBBLE_GAP, bubbleText, layoutBubble } from './bubble';
 import { worldToScreen } from './camera';
 import type { Rect } from './camera';
@@ -505,99 +507,23 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     const selected = [...this.selection]
       .map((id) => this.nodes.get(id))
       .filter((ns): ns is NodeState => ns !== undefined);
-    if (
-      selected.length === 0 ||
-      (mode !== 'straighten' && selected.length < 2)
-    ) {
-      return;
-    }
-
-    const moved = new Map<NodeState, Point>();
-    const set = (ns: NodeState, x: number, y: number): void => {
-      moved.set(ns, { x: Math.round(x), y: Math.round(y) });
-    };
-    const top = Math.min(...selected.map((ns) => ns.y));
-    const bottom = Math.max(...selected.map((ns) => ns.y + ns.geom.height));
-    const left = Math.min(...selected.map((ns) => ns.x));
-    const right = Math.max(...selected.map((ns) => ns.x + ns.geom.width));
-    switch (mode) {
-      case 'top':
-      case 'middle':
-      case 'bottom': {
-        const middle =
-          selected.reduce((sum, ns) => sum + ns.y + ns.geom.height / 2, 0) /
-          selected.length;
-        for (const ns of selected) {
-          const y =
-            mode === 'top'
-              ? top
-              : mode === 'bottom'
-                ? bottom - ns.geom.height
-                : middle - ns.geom.height / 2;
-          set(ns, ns.x, y);
-        }
-
-        break;
-      }
-
-      case 'left':
-      case 'center':
-      case 'right': {
-        const center =
-          selected.reduce((sum, ns) => sum + ns.x + ns.geom.width / 2, 0) /
-          selected.length;
-        for (const ns of selected) {
-          const x =
-            mode === 'left'
-              ? left
-              : mode === 'right'
-                ? right - ns.geom.width
-                : center - ns.geom.width / 2;
-          set(ns, x, ns.y);
-        }
-
-        break;
-      }
-
-      case 'distributeHorizontally':
-      case 'distributeVertically': {
-        // Equal gaps between the nodes, the outer ones stay.
-        const horizontal = mode === 'distributeHorizontally';
-        const sorted = selected.toSorted((a, b) =>
-          horizontal ? a.x - b.x : a.y - b.y
-        );
-        const size = sorted.reduce(
-          (sum, ns) => sum + (horizontal ? ns.geom.width : ns.geom.height),
-          0
-        );
-        const span = horizontal ? right - left : bottom - top;
-        const gap = (span - size) / Math.max(1, sorted.length - 1);
-        let at = horizontal ? left : top;
-        for (const ns of sorted) {
-          set(ns, horizontal ? at : ns.x, horizontal ? ns.y : at);
-          at += (horizontal ? ns.geom.width : ns.geom.height) + gap;
-        }
-
-        break;
-      }
-
-      case 'straighten': {
-        for (const ns of selected.toSorted((a, b) => a.x - b.x)) {
-          const level = this.straightenOffset(ns, moved);
-          if (level !== undefined) {
-            set(ns, ns.x, ns.y + level);
-          }
-        }
-
-        break;
-      }
-    }
-
+    const moved = alignNodes(
+      mode,
+      selected.map((ns) => ({
+        id: ns.node.id,
+        x: ns.x,
+        y: ns.y,
+        width: ns.geom.width,
+        height: ns.geom.height,
+        ...(mode === 'straighten' ? this.levelOf(ns) : {}),
+      }))
+    );
     const patch: LayoutPatch = {};
-    for (const [ns, point] of moved) {
-      if (point.x !== ns.x || point.y !== ns.y) {
+    for (const [id, point] of moved) {
+      const ns = this.nodes.get(id);
+      if (ns && (point.x !== ns.x || point.y !== ns.y)) {
         this.placeNode(ns, point);
-        patch[ns.node.id] = { ...point };
+        patch[id] = { ...point };
       }
     }
 
@@ -608,23 +534,12 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     }
   }
 
-  /**
-   * How far a node moves down so the wire into it is level: its exec input
-   * first, else its first wired data input, else its first wired output.
-   */
-  private straightenOffset(
-    ns: NodeState,
-    moved: ReadonlyMap<NodeState, Point>
-  ): number | undefined {
+  /** The wire Straighten levels for a node, as `alignNodes` takes it. */
+  private levelOf(ns: NodeState): Pick<AlignNode, 'level'> {
     const fn = this.doc?.functions.find((f) => f.id === ns.fnId);
-    const edges = fn?.edges ?? [];
-    const incoming = edges.filter((e) => e.to.node === ns.node.id);
-    const edge =
-      incoming.find((e) => e.kind === 'exec') ??
-      incoming[0] ??
-      edges.find((e) => e.from.node === ns.node.id);
+    const edge = levelEdge(fn?.edges ?? [], ns.node.id);
     if (!edge) {
-      return undefined;
+      return {};
     }
 
     const [mine, other] =
@@ -632,11 +547,15 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     const otherNs = this.nodes.get(other.node);
     const otherPg = otherNs?.geom.pins.get(other.pin);
     const minePg = ns.geom.pins.get(mine.pin);
-    if (!otherNs || !otherPg || !minePg) {
-      return undefined;
-    }
-
-    const otherY = (moved.get(otherNs)?.y ?? otherNs.y) + otherPg.y;
-    return otherY - (ns.y + minePg.y);
+    return otherNs && otherPg && minePg
+      ? {
+          level: {
+            pinY: minePg.y,
+            other: other.node,
+            otherY: otherNs.y,
+            otherPinY: otherPg.y,
+          },
+        }
+      : {};
   }
 }
