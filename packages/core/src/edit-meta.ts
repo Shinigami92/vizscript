@@ -38,6 +38,14 @@ export interface StatementMeta {
   unused?: boolean;
 }
 
+/**
+ * A node whose own code is not the text of its range: the CONTAINS of
+ * Python's `x not in items` covers it all, its code is `x in items`.
+ */
+export interface NodeCodeMeta {
+  code: string;
+}
+
 /** Metadata attached to data output pins. */
 export interface OutputPinMeta {
   /** Expression text that yields this value (identifier or expression). */

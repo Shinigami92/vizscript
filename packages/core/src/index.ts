@@ -45,6 +45,7 @@ export * from './symbol-edits';
 export * from './symbol-ops';
 export * from './symbols';
 export * from './text-ops';
+export { nodeCode } from './text-op-helpers';
 export * from './text-utils';
 export * from './type-info';
 export * from './wildcard-pins';

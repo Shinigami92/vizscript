@@ -4,6 +4,7 @@ import type {
   GraphDocument,
   GraphNode,
   GraphOp,
+  NodeCodeMeta,
   Pin,
   PinRef,
   Point,
@@ -405,26 +406,30 @@ export function selectionCode(
       node,
       statement: getMeta<StatementMeta>(node).stmt !== undefined,
       range: getMeta<StatementMeta>(node).stmt ?? node.range,
+      /** Its own code differs from its range's (`x in items` of `not in`). */
+      own: getMeta<NodeCodeMeta>(node).code,
     }))
     .filter(({ range }) => range.end > range.start);
+  const covers = (
+    b: (typeof ranges)[number],
+    a: (typeof ranges)[number]
+  ): boolean =>
+    b.range.start <= a.range.start &&
+    a.range.end <= b.range.end &&
+    (b.range.start < a.range.start ||
+      b.range.end > a.range.end ||
+      // Same range (`x not in items` as CONTAINS → NOT): the one whose
+      // code is the range's covers the other, so it is copied once.
+      (a.own !== undefined && b.own === undefined));
   const outer = ranges
-    .filter(
-      (a) =>
-        !ranges.some(
-          (b) =>
-            b !== a &&
-            b.range.start <= a.range.start &&
-            a.range.end <= b.range.end &&
-            (b.range.start < a.range.start || b.range.end > a.range.end)
-        )
-    )
+    .filter((a) => !ranges.some((b) => b !== a && covers(b, a)))
     .toSorted((a, b) => a.range.start - b.range.start);
   const code = outer
-    .map(({ range }) => {
+    .map(({ range, own }) => {
       const lineStart = text.lastIndexOf('\n', range.start - 1) + 1;
       const before = text.slice(lineStart, range.start);
       const indent = /^[ \t]*$/.test(before) ? before : '';
-      return indent + text.slice(range.start, range.end);
+      return indent + (own ?? text.slice(range.start, range.end));
     })
     .join('\n');
   return {

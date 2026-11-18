@@ -22,6 +22,7 @@ import {
   functionEdgesOf,
   inputEdit,
   insertText,
+  nodeCode,
   templateSnippet,
 } from './text-op-helpers';
 import type { StatementSyntax } from './text-ops';
@@ -482,7 +483,7 @@ export function useValue(
   const node = findNode(doc, ref.node);
   const own = node ? getMeta<StatementMeta>(node) : undefined;
   if (node && own?.unused && own.stmt) {
-    const code = text.slice(node.range.start, node.range.end);
+    const code = nodeCode(text, node);
     return succeeded([
       {
         start: node.range.start,

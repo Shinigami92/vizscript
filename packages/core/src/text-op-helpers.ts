@@ -1,4 +1,9 @@
-import type { InputPinMeta, InsertPoint, StatementMeta } from './edit-meta';
+import type {
+  InputPinMeta,
+  InsertPoint,
+  NodeCodeMeta,
+  StatementMeta,
+} from './edit-meta';
 import { getMeta } from './edit-meta';
 import type {
   GraphDocument,
@@ -38,6 +43,14 @@ export function inputEdit(
   }
 
   return { start: range.start, end: range.end, text: value };
+}
+
+/** A node's own code: `NodeCodeMeta.code`, else the text of its range. */
+export function nodeCode(text: string, node: GraphNode): string {
+  return (
+    getMeta<NodeCodeMeta>(node).code ??
+    text.slice(node.range.start, node.range.end)
+  );
 }
 
 export function asStatement(
