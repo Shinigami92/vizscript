@@ -768,6 +768,23 @@ function applyTextOpEdits(
       return failed('This value cannot be edited here.');
     }
 
+    case 'inFloating': {
+      const { group } = op;
+      const nodes = {
+        id: group.fnId,
+        name: '',
+        range: { start: 0, end: group.code.length },
+        nodes: group.nodes,
+        edges: group.edges,
+      };
+      return applyTextOp(
+        group.code,
+        { ...doc, functions: [nodes] },
+        op.op,
+        syntax
+      );
+    }
+
     default: {
       return applySymbolOp(text, doc, op, syntax);
     }

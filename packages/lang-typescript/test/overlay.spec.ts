@@ -771,6 +771,86 @@ describe('nodes made from a dragged value', () => {
     );
   });
 
+  it('writes values into missing arguments of floating calls', () => {
+    const code =
+      "declare function g(n: number, s: string): void;\nfunction f() {\n  const q = 'a';\n}\n";
+    const floating = floatingNodes(
+      code,
+      { type: 'value', expression: 'g()' },
+      'fn:f',
+      'g5',
+      backend
+    );
+    if (!floating.ok) {
+      throw new Error(floating.error);
+    }
+
+    const group = floating.edit;
+    const node = group.nodes.find((n) => n.title === 'g')?.id ?? '';
+    const write = (pinId: string, value: string): string => {
+      const result = applyTypeScriptOp(code, {
+        type: 'inFloating',
+        group,
+        op: { type: 'setLiteral', node, pin: pinId, value },
+      });
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+
+      return applyTextEdits(group.code, result.edits);
+    };
+    expect(write('param:n', '1')).toBe('g(1);');
+    // The file's quotes; the skipped argument gets a placeholder.
+    expect(write('param:s', 'x')).toBe("g(undefined, 'x');");
+  });
+
+  it('writes a value into a typed missing argument of a floating call', () => {
+    const floating = floatingNodes(
+      source,
+      { type: 'value', expression: 'Math.round()' },
+      'fn:f',
+      'g6',
+      backend
+    );
+    if (!floating.ok) {
+      throw new Error(floating.error);
+    }
+
+    const result = floating.edit.nodes
+      .find((n) => n.title === 'round')
+      ?.pins.find((p) => p.id === 'return');
+    const range = result?.range ?? { start: 0, end: 0 };
+    const typed = typedFloatingNodes(
+      floating.edit,
+      new Map([
+        [
+          `${range.start}:${range.end}`,
+          {
+            dataType: 'number',
+            text: 'number',
+            signature: [
+              {
+                name: 'x',
+                nameRange: { start: 0, end: 0 },
+                dataType: 'number',
+              },
+            ],
+          },
+        ],
+      ]),
+      { placeholder: 'undefined' }
+    );
+    const node = typed.nodes.find((n) => n.title === 'round')?.id ?? '';
+    const written = applyTypeScriptOp(source, {
+      type: 'inFloating',
+      group: typed,
+      op: { type: 'setLiteral', node, pin: 'param:x', value: '2.5' },
+    });
+    expect(written.ok && applyTextEdits(typed.code, written.edits).trim()).toBe(
+      'Math.round(2.5);'
+    );
+  });
+
   it('wires a value of the code into the call it was dragged to', () => {
     const entry = byTitle('f');
     const floating = floatingNodes(

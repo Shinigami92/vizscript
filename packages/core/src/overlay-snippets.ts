@@ -1,6 +1,6 @@
 import type { ContainerOp } from './container-ops';
 import { restyleContainerNodes } from './container-ops';
-import type { StatementMeta } from './edit-meta';
+import type { InputPinMeta, StatementMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import { endOfFunction } from './flow';
 import type { FloatingNodes, GraphEdit, GraphOverlay } from './graph-overlay';
@@ -140,6 +140,14 @@ function collect(
       start: n.range.start - written.base,
       end: n.range.end - written.base,
     },
+    // Where a missing argument goes, too (`inFloating` ops); pin ranges
+    // stay in the copy, where the checker types them.
+    pins: n.pins.map((pin) => {
+      const at = getMeta<InputPinMeta>(pin).insertInitAt;
+      return at === undefined
+        ? pin
+        : { ...pin, meta: { ...pin.meta, insertInitAt: at - written.base } };
+    }),
   }));
   // Parameters the new code reads come from the function's entry (no Get
   // node of their own): those wires stay, or a method on one (`items.push`)

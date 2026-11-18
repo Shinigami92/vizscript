@@ -1,6 +1,7 @@
 import type { ContainerOp } from './container-ops';
 import type { Conversion } from './conversions';
 import type { EngineClass } from './engine-classes';
+import type { FloatingNodes } from './graph-overlay';
 import type { ImportRequest, ParseOptions } from './imports';
 import type { DataType, GraphDocument, PinRef, Point, SourceRange } from './ir';
 import type { LanguageVersion, ProjectFile } from './language-version';
@@ -111,6 +112,12 @@ export type GraphOp =
    * default, at `range`): applied to its `valueHost` file.
    */
   | { type: 'inValue'; range: SourceRange; typeText?: string; op: GraphOp }
+  /**
+   * An op on floating (graph-only) nodes: applied to the group's own code
+   * and nodes (their offsets are relative to it), with the file's syntax.
+   * The edits are for `group.code`, not the file.
+   */
+  | { type: 'inFloating'; group: FloatingNodes; op: GraphOp }
   /** Breaks every data wire of a node (UE: "Break Node Link(s)"). */
   | { type: 'disconnectNode'; node: string }
   /**
