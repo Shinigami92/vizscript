@@ -8,6 +8,7 @@ import type {
   SourceRange,
 } from '@vizscript/core';
 import {
+  addFoundPins,
   applyTypes,
   attachComments,
   completeCallPins,
@@ -18,6 +19,7 @@ import {
   truncate,
 } from '@vizscript/core';
 import type { ClassDef, FunctionDef, Param, Stmt } from './ast';
+import { PYTHON_CONTAINER_OPS } from './container-ops';
 import { parsePython } from './convert';
 import { pythonImports } from './imports';
 import type {
@@ -126,6 +128,8 @@ class FnGraphBuilder extends StatementLowering {
       this.runFunction(source.name, source.kind, source.fn);
     }
 
+    // UE's map FIND: whether the key is there.
+    addFoundPins(this.nodes, PYTHON_CONTAINER_OPS, (r) => this.src(r));
     this.doc.functions.push({
       id: this.fnId,
       name: this.name,

@@ -25,7 +25,7 @@ describe('element reads (UE GET)', () => {
       reads(
         'fn f(prices: HashMap<String, f64>) {\n    let a = prices["tea"];\n}\n'
       )
-    ).toEqual(['FIND(Map<string, number>, string) -> number']);
+    ).toEqual(['FIND(Map<string, number>, string) -> number, bool']);
   });
 
   it('is a GET node typed by the container', () => {

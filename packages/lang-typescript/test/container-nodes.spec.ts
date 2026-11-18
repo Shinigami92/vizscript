@@ -1,7 +1,7 @@
 import type { GraphNode } from '@vizscript/core';
-import { compactTitle, isContainerNode } from '@vizscript/core';
+import { applyTextEdits, compactTitle, isContainerNode } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { parseTypeScript } from '../src';
+import { applyTypeScriptOp, parseTypeScript } from '../src';
 
 /** A container node: its word, exec pins, input and output types. */
 function describeNode(node: GraphNode): string {
@@ -37,7 +37,7 @@ describe('container operations (UE container nodes)', () => {
       'ADD [exec] (string[], string) -> number',
       'LENGTH (string[]) -> number',
       'CONTAINS (Map<string, number>, string) -> bool',
-      'FIND (Map<string, number>, string) -> number',
+      'FIND (Map<string, number>, string) -> number, bool',
       'ADD [exec] (Set<string>, string) -> Set<string>',
     ]);
   });
@@ -70,5 +70,33 @@ describe('container operations (UE container nodes)', () => {
         .filter((n) => isContainerNode(n))
         .map(describeNode)
     ).toEqual(['LAST INDEX (string[]) -> number']);
+  });
+
+  it('writes whether a Map has the key where FIND’s found is wired', () => {
+    const text =
+      "function f(m: Map<string, number>) {\n  const v = m.get('a');\n  show(v);\n}\n";
+    const nodes = parseTypeScript(text, 't.ts').functions.flatMap(
+      (f) => f.nodes
+    );
+    const finds = nodes.filter((n) => compactTitle(n) === 'FIND');
+    const call = nodes.find((n) => n.title === 'show');
+    const wired = finds.map((find) => {
+      const result = applyTypeScriptOp(
+        text,
+        {
+          type: 'connect',
+          from: { node: find.id, pin: 'found' },
+          to: { node: call?.id ?? '', pin: 'arg0' },
+        },
+        't.ts'
+      );
+      return result.ok
+        ? applyTextEdits(text, result.edits)
+            .split('\n')
+            .find((l) => l.includes('show('))
+            ?.trim()
+        : result.error;
+    });
+    expect(wired).toEqual(["show(m.has('a'));"]);
   });
 });

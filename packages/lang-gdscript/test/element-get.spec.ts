@@ -25,7 +25,7 @@ describe('element reads (UE GET)', () => {
       reads(
         'func f(prices: Dictionary[String, float]):\n\tvar a = prices["tea"]\n'
       )
-    ).toEqual(['FIND(Map<string, number>, string) -> number']);
+    ).toEqual(['FIND(Map<string, number>, string) -> number, bool']);
   });
 
   it('is a GET node typed by the container', () => {

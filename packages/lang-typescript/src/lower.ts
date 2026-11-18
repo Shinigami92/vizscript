@@ -12,6 +12,7 @@ import type {
 } from '@vizscript/core';
 import type { InsertPoint } from '@vizscript/core';
 import {
+  addFoundPins,
   applyTypes,
   attachComments,
   completeCallPins,
@@ -21,6 +22,7 @@ import {
   linkSymbolGraphs,
 } from '@vizscript/core';
 import { patternAnnotation, typeFromAnnotation } from './annotations';
+import { TYPESCRIPT_CONTAINER_OPS } from './container-ops';
 import { constructedType } from './expression-lowering';
 import type { DocumentContext, PendingFunction } from './lower-utils';
 import { DECLARATION_ONLY, patternName, rangeOf, unwrap } from './lower-utils';
@@ -222,6 +224,10 @@ class FnGraphBuilder extends StatementLowering {
       this.chain(node, null);
     }
 
+    // UE's map FIND: whether the key is there.
+    addFoundPins(this.nodes, TYPESCRIPT_CONTAINER_OPS, (range) =>
+      this.source(range)
+    );
     this.doc.functions.push({
       id: this.fnId,
       name: this.name,

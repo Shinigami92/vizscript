@@ -55,7 +55,7 @@ describe('container operations (UE container nodes)', () => {
       'ADD [exec] (string[], string)',
       'LENGTH (string[]) -> number',
       'CONTAINS (Map<string, number>, string) -> bool',
-      'FIND (Map<string, number>, string) -> number',
+      'FIND (Map<string, number>, string) -> number, bool',
       'UNION (Set<string>, Set<string>) -> Set<string>',
     ]);
   });
@@ -251,5 +251,33 @@ describe('container operations (UE container nodes)', () => {
         '    missing = x not in items\n    ok = missing\n'
       );
     });
+  });
+
+  it('writes whether a map has the key where FIND’s found is wired', () => {
+    const text =
+      'def f(d: dict[str, int]):\n    v = d.get("a")\n    w = d["b"]\n    print(v)\n';
+    const nodes = parsePythonDocument(text, 't.py').functions.flatMap(
+      (f) => f.nodes
+    );
+    const finds = nodes.filter((n) => compactTitle(n) === 'FIND');
+    const call = nodes.find((n) => n.title === 'print');
+    const wired = finds.map((find) => {
+      const result = applyPythonOp(
+        text,
+        {
+          type: 'connect',
+          from: { node: find.id, pin: 'found' },
+          to: { node: call?.id ?? '', pin: 'arg0' },
+        },
+        't.py'
+      );
+      return result.ok
+        ? applyTextEdits(text, result.edits)
+            .split('\n')
+            .find((l) => l.includes('print('))
+            ?.trim()
+        : result.error;
+    });
+    expect(wired).toEqual(['print("a" in d)', 'print("b" in d)']);
   });
 });

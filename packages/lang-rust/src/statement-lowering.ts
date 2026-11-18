@@ -5,8 +5,14 @@ import type {
   Pin,
   SourceRange,
 } from '@vizscript/core';
-import { lineIndent, markUnusedValue, truncate } from '@vizscript/core';
+import {
+  addFoundPins,
+  lineIndent,
+  markUnusedValue,
+  truncate,
+} from '@vizscript/core';
 import type { Block, Expr, FunctionItem, Span, Stmt, ValueItem } from './ast';
+import { RUST_CONTAINER_OPS } from './container-ops';
 import { ControlFlowLowering } from './control-flow-lowering';
 import { dataTypeOf } from './data-type';
 import type { ClosureSource } from './lower-utils';
@@ -40,6 +46,8 @@ export class FnGraphBuilder extends ControlFlowLowering {
       this.runFunction(source.name, source.kind, source.fn);
     }
 
+    // UE's map FIND: whether the key is there.
+    addFoundPins(this.nodes, RUST_CONTAINER_OPS, (r) => this.src(r));
     this.doc.functions.push({
       id: this.fnId,
       name: this.name,

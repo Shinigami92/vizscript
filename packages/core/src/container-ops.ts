@@ -354,3 +354,95 @@ export function lastIndexValue(
   } satisfies ContainerNodeMeta;
   return { ...length, type: 'number' };
 }
+
+/**
+ * The code that tells whether `container` has `key`, written like the
+ * map CONTAINS `op` (`key in d`, `m.has(key)`, `m.contains_key(&key)`).
+ */
+export function containsKeyCode(
+  op: ContainerOp,
+  container: string,
+  key: string
+): string {
+  switch (op.form) {
+    case 'method': {
+      return `${container}.${op.name}(${key})`;
+    }
+
+    case 'property': {
+      return `${container}.${op.name}`;
+    }
+
+    case 'function': {
+      return `${op.name}(${container}, ${key})`;
+    }
+
+    case 'operator': {
+      return op.containerLast
+        ? `${key} ${op.name} ${container}`
+        : `${container} ${op.name} ${key}`;
+    }
+  }
+}
+
+/**
+ * UE's map FIND has a second output, whether the key is there. FIND nodes
+ * of maps (`d.get(k)`, `d[k]`) among `nodes` get a `found` output whose
+ * code is the language's CONTAINS of the same map and key
+ * (`containsKeyCode`), so wiring it writes that. `source` reads the code
+ * of a range.
+ */
+export function addFoundPins(
+  nodes: ReadonlyArray<GraphNode>,
+  ops: ReadonlyArray<ContainerOp>,
+  source: (range: SourceRange) => string
+): void {
+  for (const node of nodes) {
+    const word = containerWord(node) ?? (isElementGet(node) ? node.title : '');
+    const container = containerPinOf(node);
+    if (
+      word !== 'FIND' ||
+      !container?.range ||
+      !isMapType(container.type) ||
+      node.pins.some((p) => p.id === 'found')
+    ) {
+      continue;
+    }
+
+    const key = node.pins.find(
+      (p) =>
+        p.direction === 'in' &&
+        p.kind === 'data' &&
+        p !== container &&
+        p.range !== undefined
+    );
+    // A type written only for some maps (TypeScript's `Map`, not a
+    // `Record`): the pin's `typeText`, or a FIND that is a method, which
+    // exists for those maps only.
+    const fits = (op: ContainerOp): boolean =>
+      op.typeText === undefined ||
+      (container.typeText === undefined
+        ? containerWord(node) === 'FIND'
+        : new RegExp(op.typeText).test(container.typeText));
+    const contains = ops.find(
+      (op) => op.word === 'CONTAINS' && op.on.includes('map') && fits(op)
+    );
+    const code =
+      key?.range && contains
+        ? containsKeyCode(contains, source(container.range), source(key.range))
+        : undefined;
+    if (code) {
+      node.pins = [
+        ...node.pins,
+        {
+          id: 'found',
+          name: 'found',
+          direction: 'out',
+          kind: 'data',
+          type: 'bool',
+          meta: { sourceText: code } satisfies OutputPinMeta,
+        },
+      ];
+    }
+  }
+}

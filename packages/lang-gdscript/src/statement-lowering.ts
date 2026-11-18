@@ -5,8 +5,9 @@ import type {
   SourceRange,
   ValueSource,
 } from '@vizscript/core';
-import { markUnusedValue, truncate } from '@vizscript/core';
+import { addFoundPins, markUnusedValue, truncate } from '@vizscript/core';
 import type { Block, Expr, Span, Stmt, VarDecl } from './ast';
+import { GDSCRIPT_CONTAINER_OPS } from './container-ops';
 import { ControlFlowLowering } from './control-flow-lowering';
 import { dataTypeOf } from './data-type';
 import { rangeOf, simpleChain, unwrap } from './lower-utils';
@@ -111,6 +112,8 @@ export class FnGraphBuilder extends ControlFlowLowering {
       this.lowerBlock(fn.body, 'body');
     }
 
+    // UE's map FIND: whether the key is there.
+    addFoundPins(this.nodes, GDSCRIPT_CONTAINER_OPS, (r) => this.src(r));
     this.doc.functions.push({
       id: this.fnId,
       name: this.name,

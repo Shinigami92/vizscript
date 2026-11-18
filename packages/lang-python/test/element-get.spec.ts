@@ -24,7 +24,7 @@ describe('element reads (UE GET)', () => {
   it('is a FIND node for a map', () => {
     expect(
       reads('def f(prices: dict[str, float]):\n    a = prices["tea"]\n')
-    ).toEqual(['FIND(Map<string, number>, string) -> number']);
+    ).toEqual(['FIND(Map<string, number>, string) -> number, bool']);
   });
 
   it('is a GET node typed by the container', () => {

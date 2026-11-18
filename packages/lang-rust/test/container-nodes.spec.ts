@@ -1,7 +1,7 @@
 import type { GraphNode } from '@vizscript/core';
-import { compactTitle, isContainerNode } from '@vizscript/core';
+import { applyTextEdits, compactTitle, isContainerNode } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { parseRustDocument } from '../src';
+import { applyRustOp, parseRustDocument } from '../src';
 
 /** A container node: its word, exec pins, input and output types. */
 function describeNode(node: GraphNode): string {
@@ -74,5 +74,33 @@ fn f(a: HashSet<u32>, b: HashSet<u32>) {
         .filter((n) => isContainerNode(n))
         .map(describeNode)
     ).toEqual(['LAST INDEX (number[]) -> number']);
+  });
+
+  it('writes whether a map has the key where FIND’s found is wired', () => {
+    const text =
+      'use std::collections::HashMap;\nfn f(m: HashMap<u32, f64>, id: u32) {\n    let v = m.get(&id);\n    show(v);\n}\n';
+    const nodes = parseRustDocument(text, 't.rs').functions.flatMap(
+      (f) => f.nodes
+    );
+    const finds = nodes.filter((n) => compactTitle(n) === 'FIND');
+    const call = nodes.find((n) => n.title === 'show');
+    const wired = finds.map((find) => {
+      const result = applyRustOp(
+        text,
+        {
+          type: 'connect',
+          from: { node: find.id, pin: 'found' },
+          to: { node: call?.id ?? '', pin: 'arg0' },
+        },
+        't.rs'
+      );
+      return result.ok
+        ? applyTextEdits(text, result.edits)
+            .split('\n')
+            .find((l) => l.includes('show('))
+            ?.trim()
+        : result.error;
+    });
+    expect(wired).toEqual(['show(m.contains_key(&id));']);
   });
 });
