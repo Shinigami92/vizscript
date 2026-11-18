@@ -53,19 +53,7 @@ export abstract class GraphViewCamera extends GraphViewBase {
       this.requestRender();
     }
 
-    this.renderer.draw({
-      time,
-      editable: this.editable,
-      selection: this.selection,
-      knotSelection: this.knotSelection,
-      highlight: this.highlight,
-      hoverNode: this.hoverNode,
-      hoverPin: this.hoverPin,
-      hoverAddPin: this.hoverAddPin,
-      hoverEdge: this.hoverEdge,
-      drag: this.drag,
-      pendingWire: this.pendingWire,
-    });
+    this.renderer.draw({ ...this.ui, time, editable: this.editable });
   }
 
   /** Turns eased camera and node moves on or off (reduced motion). */
@@ -108,7 +96,7 @@ export abstract class GraphViewCamera extends GraphViewBase {
 
   /** Zooms to the selection, or to everything when nothing is selected. */
   public frameSelection(): void {
-    const bounds = this.scene.boundsOf(this.selection);
+    const bounds = this.scene.boundsOf(this.ui.selection);
     if (bounds) {
       const { width, height } = this.viewport;
       this.moveCamera(fitSelection(bounds, width, height));

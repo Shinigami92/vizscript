@@ -1,14 +1,13 @@
-import type { Conversion, PinGeometry, Point } from '@vizscript/core';
-import { screenToWorld } from './camera';
+import type { Conversion, Point } from '@vizscript/core';
 import { Emitter } from './emitter';
 import { FontMetrics } from './font-metrics';
+import { wireTolerance } from './graph-view-constants';
 import type {
-  Drag,
   GraphViewEvents,
   GraphViewOptions,
   Hit,
-  NodeState,
 } from './graph-view-types';
+import { newInteraction } from './interaction';
 import { Renderer } from './renderer';
 import { Scene } from './scene';
 import { DARK_THEME } from './theme';
@@ -22,28 +21,15 @@ export abstract class GraphViewBase {
   protected readonly metrics: FontMetrics;
   protected readonly scene: Scene;
   protected readonly viewport = new Viewport();
+  protected readonly ui = newInteraction();
   protected readonly renderer: Renderer;
 
   protected theme: Theme;
   protected editable: boolean;
-  protected knotSelection = new Set<string>();
-  protected hoverEdge: string | null = null;
-  /** Wire dropped on empty space, drawn while its menu is open. */
-  protected pendingWire: {
-    from: { ns: NodeState; pg: PinGeometry };
-    world: Point;
-  } | null = null;
 
   protected motion: boolean;
   protected conversions: () => ReadonlyArray<Conversion> | undefined;
 
-  protected selection = new Set<string>();
-  protected highlight = new Set<string>();
-  protected hoverNode: string | null = null;
-  protected hoverPin: string | null = null;
-  /** The node whose "Add pin +" button is under the cursor. */
-  protected hoverAddPin: string | null = null;
-  protected drag: Drag | null = null;
   private frameRequest: number | null = null;
   /** Set by `destroy`: no more frames. */
   protected destroyed = false;
@@ -110,19 +96,19 @@ export abstract class GraphViewBase {
     return this.scene.hitTest(world, {
       zoom: this.viewport.camera.zoom,
       editable: this.editable,
-      selection: this.selection,
+      selection: this.ui.selection,
     });
   }
 
   protected wireTolerance(): number {
-    return 8 / this.viewport.camera.zoom;
+    return wireTolerance(this.viewport.camera.zoom);
   }
 
   protected setSelectionInternal(selection: Set<string>): void {
     const changed =
-      selection.size !== this.selection.size ||
-      [...selection].some((id) => !this.selection.has(id));
-    this.selection = selection;
+      selection.size !== this.ui.selection.size ||
+      [...selection].some((id) => !this.ui.selection.has(id));
+    this.ui.selection = selection;
     if (changed) {
       this.emitter.emit('selectionChange', { nodeIds: [...selection] });
     }
@@ -131,42 +117,33 @@ export abstract class GraphViewBase {
   }
 
   protected setHover(nodeId: string | null, pin: string | null): void {
-    if (nodeId === this.hoverNode && pin === this.hoverPin) {
+    if (nodeId === this.ui.hoverNode && pin === this.ui.hoverPin) {
       return;
     }
 
-    this.hoverNode = nodeId;
-    this.hoverPin = pin;
+    this.ui.hoverNode = nodeId;
+    this.ui.hoverPin = pin;
     this.emitter.emit('hoverChange', { nodeId, pin });
     this.requestRender();
   }
 
   /** Under the cursor: the node whose "Add pin +" button it is on. */
   protected setHoverAddPin(nodeId: string | null): void {
-    if (nodeId !== this.hoverAddPin) {
-      this.hoverAddPin = nodeId;
+    if (nodeId !== this.ui.hoverAddPin) {
+      this.ui.hoverAddPin = nodeId;
       this.requestRender();
     }
   }
 
   protected setHoverEdge(edgeId: string | null): void {
-    if (edgeId === this.hoverEdge) {
+    if (edgeId === this.ui.hoverEdge) {
       return;
     }
 
-    this.hoverEdge = edgeId;
+    this.ui.hoverEdge = edgeId;
     this.emitter.emit('wireHoverChange', {
       edge: edgeId ? (this.scene.edgesById.get(edgeId) ?? null) : null,
     });
     this.requestRender();
-  }
-
-  protected clientPoint(e: MouseEvent): Point {
-    const rect = this.canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  }
-
-  protected toWorld(e: MouseEvent): Point {
-    return screenToWorld(this.viewport.camera, this.clientPoint(e));
   }
 }

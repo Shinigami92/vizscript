@@ -41,3 +41,8 @@ export function parseKnotId(id: string): { edgeId: string; index: number } {
 export function isChecked(value: string): boolean {
   return value.trim().toLowerCase() === 'true';
 }
+
+/** How close (world units) the pointer must be to a wire to hit it. */
+export function wireTolerance(zoom: number): number {
+  return 8 / zoom;
+}

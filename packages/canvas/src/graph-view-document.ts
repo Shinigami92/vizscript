@@ -36,24 +36,24 @@ export abstract class GraphViewDocument extends GraphViewCamera {
     const previous = this.scene.load(source, positions);
     this.animateLoad(previous, now);
 
-    this.selection = new Set(
-      [...this.selection].filter((id) => this.scene.nodes.has(id))
+    this.ui.selection = new Set(
+      [...this.ui.selection].filter((id) => this.scene.nodes.has(id))
     );
-    this.knotSelection = new Set(
-      [...this.knotSelection].filter((id) => {
+    this.ui.knotSelection = new Set(
+      [...this.ui.knotSelection].filter((id) => {
         const { edgeId, index } = parseKnotId(id);
         return (this.scene.reroutes.get(edgeId)?.length ?? 0) > index;
       })
     );
-    this.highlight = new Set(
-      [...this.highlight].filter((id) => this.scene.nodes.has(id))
+    this.ui.highlight = new Set(
+      [...this.ui.highlight].filter((id) => this.scene.nodes.has(id))
     );
-    if (this.hoverNode && !this.scene.nodes.has(this.hoverNode)) {
-      this.hoverNode = null;
-      this.hoverPin = null;
+    if (this.ui.hoverNode && !this.scene.nodes.has(this.ui.hoverNode)) {
+      this.ui.hoverNode = null;
+      this.ui.hoverPin = null;
     }
 
-    if (this.hoverEdge && !this.scene.edgesById.has(this.hoverEdge)) {
+    if (this.ui.hoverEdge && !this.scene.edgesById.has(this.ui.hoverEdge)) {
       this.setHoverEdge(null);
     }
 
@@ -76,19 +76,19 @@ export abstract class GraphViewDocument extends GraphViewCamera {
    * looked up by id. It ends when the pin it started from is gone.
    */
   private resolveDragPins(): void {
-    if (this.pendingWire) {
-      const from = resolvePin(this.scene.nodes, this.pendingWire.from);
-      this.pendingWire = from ? { ...this.pendingWire, from } : null;
+    if (this.ui.pendingWire) {
+      const from = resolvePin(this.scene.nodes, this.ui.pendingWire.from);
+      this.ui.pendingWire = from ? { ...this.ui.pendingWire, from } : null;
     }
 
-    const drag = this.drag;
+    const drag = this.ui.drag;
     if (drag?.type !== 'wire' && drag?.type !== 'moveWires') {
       return;
     }
 
     const from = resolvePin(this.scene.nodes, drag.from);
     if (!from) {
-      this.drag = null;
+      this.ui.drag = null;
       return;
     }
 
@@ -149,17 +149,17 @@ export abstract class GraphViewDocument extends GraphViewCamera {
   }
 
   public getSelection(): string[] {
-    return [...this.selection];
+    return [...this.ui.selection];
   }
 
   public setSelection(ids: ReadonlyArray<string>): void {
-    this.selection = new Set(ids.filter((id) => this.scene.nodes.has(id)));
-    this.knotSelection.clear();
+    this.ui.selection = new Set(ids.filter((id) => this.scene.nodes.has(id)));
+    this.ui.knotSelection.clear();
     this.requestRender();
   }
 
   public selectAll(): void {
-    this.knotSelection = new Set(
+    this.ui.knotSelection = new Set(
       [...this.scene.reroutes].flatMap(([edgeId, points]) =>
         points.map((_, i) => knotId(edgeId, i))
       )
@@ -171,15 +171,15 @@ export abstract class GraphViewDocument extends GraphViewCamera {
   public selectFunction(fnId: string): void {
     const frame = this.scene.frames.find((f) => f.fnId === fnId);
     if (frame) {
-      this.knotSelection.clear();
+      this.ui.knotSelection.clear();
       this.setSelectionInternal(new Set(frame.nodeIds));
     }
   }
 
   /** Removes the wire left over from a drop on empty space. */
   public clearPendingWire(): void {
-    if (this.pendingWire) {
-      this.pendingWire = null;
+    if (this.ui.pendingWire) {
+      this.ui.pendingWire = null;
       this.requestRender();
     }
   }
@@ -231,7 +231,7 @@ export abstract class GraphViewDocument extends GraphViewCamera {
       this.scene.reroutes.delete(edgeId);
     }
 
-    this.knotSelection.clear();
+    this.ui.knotSelection.clear();
     this.emitter.emit('layoutChange', {
       patch: reroutePatch(edgeId, before, after),
     });
@@ -240,7 +240,7 @@ export abstract class GraphViewDocument extends GraphViewCamera {
 
   protected deleteSelectedKnots(): void {
     const byEdge = new Map<string, Set<number>>();
-    for (const id of this.knotSelection) {
+    for (const id of this.ui.knotSelection) {
       const { edgeId, index } = parseKnotId(id);
       const set = byEdge.get(edgeId) ?? new Set();
       set.add(index);
@@ -259,7 +259,7 @@ export abstract class GraphViewDocument extends GraphViewCamera {
       }
     }
 
-    this.knotSelection.clear();
+    this.ui.knotSelection.clear();
     this.emitter.emit('layoutChange', { patch });
     this.requestRender();
   }
@@ -275,7 +275,7 @@ export abstract class GraphViewDocument extends GraphViewCamera {
   }
 
   public setHighlight(ids: ReadonlyArray<string>): void {
-    this.highlight = new Set(ids);
+    this.ui.highlight = new Set(ids);
     this.requestRender();
   }
 
@@ -386,7 +386,7 @@ export abstract class GraphViewDocument extends GraphViewCamera {
    */
   public alignSelection(mode: AlignMode): void {
     this.finishNodeMoves();
-    const selected = [...this.selection]
+    const selected = [...this.ui.selection]
       .map((id) => this.scene.nodes.get(id))
       .filter((ns): ns is NodeState => ns !== undefined);
     const moved = alignNodes(

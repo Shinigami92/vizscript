@@ -127,3 +127,31 @@ export function alignNodes(
 
   return moved;
 }
+
+/** UE's alignment shortcuts. */
+export function alignKey(
+  e: Pick<KeyboardEvent, 'key' | 'code' | 'shiftKey' | 'altKey'>
+): AlignMode | undefined {
+  const key = e.key.toLowerCase();
+  if (key === 'q' && !e.shiftKey && !e.altKey) {
+    return 'straighten';
+  }
+
+  if (!e.shiftKey) {
+    return undefined;
+  }
+
+  // Alt changes `e.key` on macOS (Alt+Shift+W is „): use the key's code.
+  const code = e.code.replace(/^Key/, '').toLowerCase();
+  if (e.altKey) {
+    return code === 'w' ? 'middle' : code === 's' ? 'center' : undefined;
+  }
+
+  const modes: Record<string, AlignMode> = {
+    w: 'top',
+    s: 'bottom',
+    a: 'left',
+    d: 'right',
+  };
+  return modes[code];
+}

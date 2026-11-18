@@ -1,7 +1,7 @@
 import type { GraphEdge } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import type { AlignNode } from '../src/align';
-import { alignNodes, levelEdge } from '../src/align';
+import { alignKey, alignNodes, levelEdge } from '../src/align';
 
 const a: AlignNode = { id: 'a', x: 0, y: 0, width: 100, height: 40 };
 const b: AlignNode = { id: 'b', x: 200, y: 50, width: 60, height: 80 };
@@ -77,5 +77,41 @@ describe('levelEdge', () => {
     expect(levelEdge([edge('data', 'x', 'n')], 'n')?.from.node).toBe('x');
     expect(levelEdge([edge('data', 'n', 'z')], 'n')?.to.node).toBe('z');
     expect(levelEdge([], 'n')).toBeUndefined();
+  });
+});
+
+/** `alignKey` of a letter, its code like a QWERTY keyboard's. */
+function key(
+  k: string,
+  mods: { shift?: boolean; alt?: boolean } = {}
+): ReturnType<typeof alignKey> {
+  return alignKey({
+    key: k,
+    code: `Key${k.toUpperCase()}`,
+    shiftKey: mods.shift ?? false,
+    altKey: mods.alt ?? false,
+  });
+}
+
+describe('alignKey', () => {
+  it('maps UE’s alignment keys', () => {
+    expect(key('q')).toBe('straighten');
+    expect(key('W', { shift: true })).toBe('top');
+    expect(key('S', { shift: true })).toBe('bottom');
+    expect(key('A', { shift: true })).toBe('left');
+    expect(key('D', { shift: true })).toBe('right');
+  });
+
+  it('reads Alt+Shift by the key code (macOS changes the key)', () => {
+    expect(
+      alignKey({ key: '„', code: 'KeyW', shiftKey: true, altKey: true })
+    ).toBe('middle');
+    expect(key('s', { shift: true, alt: true })).toBe('center');
+  });
+
+  it('ignores other keys', () => {
+    expect(key('w')).toBeUndefined();
+    expect(key('q', { shift: true })).toBeUndefined();
+    expect(key('x', { shift: true })).toBeUndefined();
   });
 });
