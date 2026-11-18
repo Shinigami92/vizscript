@@ -27,3 +27,34 @@ describe('new calls', () => {
     );
   });
 });
+
+describe('new variables', () => {
+  it('start with the value they are given', () => {
+    const text = 'fn main() {\n    let x = 1;\n}\n';
+    const doc = parseRustDocument(text, 'm.rs');
+    const set = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'setVar');
+    const result = applyRustOp(
+      text,
+      {
+        type: 'addNode',
+        template: {
+          type: 'setVar',
+          name: 'y',
+          declaration: 'let',
+          value: 'x * 2',
+        },
+        after: { node: set?.id ?? '', pin: 'then' },
+      },
+      'm.rs'
+    );
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+
+    expect(applyTextEdits(text, result.edits)).toContain(
+      '    let y = x * 2;\n'
+    );
+  });
+});

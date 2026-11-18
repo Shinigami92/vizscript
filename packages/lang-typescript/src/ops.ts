@@ -802,11 +802,12 @@ export const TYPESCRIPT_SYNTAX: StatementSyntax = {
         }
 
         // `let x;` needs no value (its value pin inserts one); `const` does.
+        const value = template.value?.trim();
         return template.declaration === 'none'
-          ? `${name} = ${template.value?.trim() || 'undefined'};`
-          : template.declaration === 'let'
+          ? `${name} = ${value || 'undefined'};`
+          : template.declaration === 'let' && !value
             ? `let ${name};`
-            : `${template.declaration} ${name} = undefined;`;
+            : `${template.declaration} ${name} = ${value || 'undefined'};`;
       }
 
       case 'branch': {

@@ -571,7 +571,12 @@ export const RUST_SYNTAX: StatementSyntax = {
         }
 
         // `let x;` needs no value (its value pin inserts one).
-        return IDENTIFIER.test(name) ? `let ${name};` : undefined;
+        const value = template.value?.trim();
+        if (!IDENTIFIER.test(name)) {
+          return undefined;
+        }
+
+        return value ? `let ${name} = ${value};` : `let ${name};`;
       }
 
       case 'branch': {
