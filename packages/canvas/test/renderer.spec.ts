@@ -6,53 +6,7 @@ import { Renderer } from '../src/renderer';
 import { Scene } from '../src/scene';
 import { DARK_THEME } from '../src/theme';
 import { Viewport } from '../src/viewport';
-
-/**
- * A 2D context that records the texts it fills; every other call does
- * nothing, gradients and measurements return what the canvas would.
- */
-function recordingContext(): {
-  ctx: CanvasRenderingContext2D;
-  texts: string[];
-} {
-  const texts: string[] = [];
-  const state: Record<string | symbol, unknown> = {};
-  const ctx = new Proxy(state, {
-    get(target, key) {
-      if (key in target) {
-        return target[key];
-      }
-
-      switch (key) {
-        case 'fillText': {
-          return (text: string) => texts.push(text);
-        }
-
-        case 'measureText': {
-          return (text: string) => ({ width: text.length * 7 });
-        }
-
-        case 'createLinearGradient':
-        case 'createRadialGradient': {
-          return () => ({ addColorStop: () => undefined });
-        }
-
-        case 'getLineDash': {
-          return () => [];
-        }
-
-        default: {
-          return () => undefined;
-        }
-      }
-    },
-    set(target, key, value) {
-      target[key] = value;
-      return true;
-    },
-  });
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, texts };
-}
+import { recordingContext } from './fake-canvas';
 
 const measure: MeasureText = (text) => text.length * 7;
 

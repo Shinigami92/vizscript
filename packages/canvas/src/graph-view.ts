@@ -419,9 +419,9 @@ export class GraphView {
     ui.highlight = new Set(
       [...ui.highlight].filter((id) => scene.nodes.has(id))
     );
+    // Through `setHover`, so `hoverChange` tells the app (its hover card).
     if (ui.hoverNode && !scene.nodes.has(ui.hoverNode)) {
-      ui.hoverNode = null;
-      ui.hoverPin = null;
+      this.setHover(null, null);
     }
 
     if (ui.hoverEdge && !scene.edgesById.has(ui.hoverEdge)) {
