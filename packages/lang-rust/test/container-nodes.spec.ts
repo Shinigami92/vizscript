@@ -62,4 +62,17 @@ fn f(a: HashSet<u32>, b: HashSet<u32>) {
       'DIFFERENCE (Set<number>, Set<number>) -> Set<number>',
     ]);
   });
+
+  it('draws `items.len() - 1` as LAST INDEX', () => {
+    const doc = parseRustDocument(
+      'fn f(items: Vec<u32>) -> usize {\n    items.len() - 1usize\n}\n',
+      't.rs'
+    );
+    expect(
+      doc.functions
+        .flatMap((f) => f.nodes)
+        .filter((n) => isContainerNode(n))
+        .map(describeNode)
+    ).toEqual(['LAST INDEX (number[]) -> number']);
+  });
 });

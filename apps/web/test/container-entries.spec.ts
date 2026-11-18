@@ -40,6 +40,10 @@ describe('container nodes in the action menu', () => {
     expect(entries).toContain('Contains: "" in $value');
     expect(entries).toContain('Add: $value.append("")');
     expect(entries).toContain('Remove Index: $value.pop(0)');
+    expect(entries).toContain('Last Index: len($value) - 1');
+    expect(offered(pythonBackend.typeSystem, output('string'))).not.toContain(
+      'Last Index: len($value) - 1'
+    );
   });
 
   it('writes references where Rust takes them', () => {

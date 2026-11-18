@@ -1,7 +1,13 @@
-import type { GraphNode } from '@vizscript/core';
-import { compactTitle, isContainerNode, searchNodes } from '@vizscript/core';
+import type { GraphNode, GraphOp } from '@vizscript/core';
+import {
+  applyTextEdits,
+  compactTitle,
+  containerPinOf,
+  isContainerNode,
+  searchNodes,
+} from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { parsePythonDocument } from '../src';
+import { applyPythonOp, parsePythonDocument } from '../src';
 
 /** A container node: its word, exec pins, input and output types. */
 function describeNode(node: GraphNode): string {
@@ -67,5 +73,64 @@ describe('container operations (UE container nodes)', () => {
     expect(
       searchNodes(doc, 'add').map((m) => `${m.node.title} ${m.text}`)
     ).toEqual(['append ADD']);
+  });
+
+  it('draws `len(items) - 1` as LAST INDEX, other subtractions not', () => {
+    const doc = parsePythonDocument(
+      'def f(items: list[str], name: str):\n    a = len(items) - 1\n    b = len(items) - 2\n    c = len(name) - 1\n',
+      't.py'
+    );
+    const nodes = doc.functions.flatMap((f) => f.nodes);
+    expect(nodes.filter((n) => isContainerNode(n)).map(describeNode)).toEqual([
+      'LAST INDEX (string[]) -> number',
+      'LENGTH (string[]) -> number',
+      'LENGTH (string) -> number',
+    ]);
+    expect(nodes.filter((n) => n.title === '-')).toHaveLength(2);
+  });
+
+  it('edits LAST INDEX as the whole `len(items) - 1`', () => {
+    const text =
+      'def f(items: list[str], more: list[str]):\n    last = len(items) - 1\n    print(more)\n';
+    const nodes = parsePythonDocument(text, 't.py').functions.flatMap(
+      (f) => f.nodes
+    );
+    const last = nodes.find((n) => compactTitle(n) === 'LAST INDEX');
+    const entry = nodes.find((n) => n.kind === 'entry' && n.title === 'f');
+    const print = nodes.find((n) => n.title === 'print');
+    const apply = (op: GraphOp): string => {
+      const result = applyPythonOp(text, op, 't.py');
+      return result.ok ? applyTextEdits(text, result.edits) : result.error;
+    };
+
+    expect(last?.range).toEqual({
+      start: text.indexOf('len('),
+      end: text.indexOf(' - 1') + 4,
+    });
+    // Another list into its container pin.
+    expect(
+      apply({
+        type: 'connect',
+        from: {
+          node: entry?.id ?? '',
+          pin: entry?.pins.find((p) => p.name === 'more')?.id ?? '',
+        },
+        to: {
+          node: last?.id ?? '',
+          pin: containerPinOf(last as GraphNode)?.id ?? '',
+        },
+      })
+    ).toContain('last = len(more) - 1\n');
+    // Its value wired elsewhere is the whole expression.
+    expect(
+      apply({
+        type: 'connect',
+        from: {
+          node: last?.id ?? '',
+          pin: last?.pins.find((p) => p.direction === 'out')?.id ?? '',
+        },
+        to: { node: print?.id ?? '', pin: 'arg0' },
+      })
+    ).toContain('print(len(items) - 1)');
   });
 });

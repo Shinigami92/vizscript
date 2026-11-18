@@ -7,6 +7,7 @@ import {
   findContainerOperator,
   flattenChain,
   isArrayType,
+  lastIndexValue,
   styleContainerValue,
   truncate,
 } from '@vizscript/core';
@@ -483,6 +484,19 @@ export abstract class ExpressionLowering extends CallLowering {
         (left, right) => binaryType(expr.op, logical, left, right.type),
         values[0]?.type ?? 'any'
       );
+
+    // UE's LAST INDEX: `items.len() - 1` is one node.
+    const lastIndex = lastIndexValue(
+      this.nodes,
+      expr.op,
+      values,
+      operands.map((operand) => this.src(rangeOf(operand))),
+      rangeOf(expr),
+      this.src(rangeOf(expr))
+    );
+    if (lastIndex) {
+      return lastIndex;
+    }
 
     const value = this.pureNode({
       kind: 'operator',

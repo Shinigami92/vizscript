@@ -1,7 +1,8 @@
 import { getMeta } from './edit-meta';
+import type { OutputPinMeta } from './edit-meta';
 import { isElementGet } from './element-access';
 import type { ValueSource } from './graph-builder';
-import type { DataType, GraphNode, Pin } from './ir';
+import type { DataType, GraphNode, Pin, SourceRange } from './ir';
 import {
   arrayElementType,
   arrayOf,
@@ -281,4 +282,75 @@ export function findContainerOperator(
   }
 
   return undefined;
+}
+
+/** `1`, also with a Rust suffix (`1usize`). */
+const ONE = /^1(?:_?[iu](?:8|16|32|64|128|size))?$/;
+
+/**
+ * UE's LAST INDEX: `len(items) - 1` (`items.length - 1` …). When `op` is
+ * `-` of an array's LENGTH node (just built, among `nodes`) and the
+ * literal 1, that node becomes LAST INDEX and covers the whole
+ * subtraction (`range`, its code `text`): one node, its container pin
+ * still `items`. `undefined` for anything else; the backend then builds
+ * the `-` as usual.
+ */
+export function lastIndexValue(
+  nodes: ReadonlyArray<GraphNode>,
+  op: string,
+  values: ReadonlyArray<ValueSource>,
+  operandTexts: ReadonlyArray<string>,
+  range: SourceRange,
+  text: string
+): ValueSource | undefined {
+  const [length] = values;
+  if (
+    op !== '-' ||
+    values.length !== 2 ||
+    !length ||
+    !ONE.test(operandTexts[1]?.trim() ?? '')
+  ) {
+    return undefined;
+  }
+
+  const node =
+    'pin' in length ? nodes.find((n) => n.id === length.pin.node) : undefined;
+  const container = node ? containerPinOf(node) : undefined;
+  if (
+    !node ||
+    containerWord(node) !== 'LENGTH' ||
+    !container ||
+    !isArrayType(container.type)
+  ) {
+    return undefined;
+  }
+
+  const old = node.range;
+  const same = (r: SourceRange | undefined): boolean =>
+    r?.start === old.start && r.end === old.end;
+  node.range = { start: range.start, end: range.end };
+  node.pins = node.pins.map((pin) => {
+    if (pin.direction !== 'out' || pin.kind !== 'data') {
+      return pin;
+    }
+
+    // What wiring the value elsewhere copies or binds: the whole `- 1`.
+    const meta = getMeta<OutputPinMeta>(pin);
+    return {
+      ...pin,
+      ...(same(pin.range) ? { range: node.range } : {}),
+      meta: {
+        ...pin.meta,
+        ...(meta.sourceText === undefined ? {} : { sourceText: text }),
+        ...(meta.bind && same(meta.bind.expr)
+          ? { bind: { ...meta.bind, expr: node.range } }
+          : {}),
+      },
+    };
+  });
+  node.meta = {
+    ...node.meta,
+    container: { word: 'LAST INDEX', pin: container.id },
+  } satisfies ContainerNodeMeta;
+  return { ...length, type: 'number' };
 }

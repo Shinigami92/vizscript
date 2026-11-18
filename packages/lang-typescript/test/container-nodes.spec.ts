@@ -58,4 +58,17 @@ describe('container operations (UE container nodes)', () => {
       'UNION (Set<string>, Set<string>) -> Set<string>',
     ]);
   });
+
+  it('draws `items.length - 1` as LAST INDEX', () => {
+    const doc = parseTypeScript(
+      'function f(items: string[]) {\n  return items.length - 1;\n}\n',
+      't.ts'
+    );
+    expect(
+      doc.functions
+        .flatMap((f) => f.nodes)
+        .filter((n) => isContainerNode(n))
+        .map(describeNode)
+    ).toEqual(['LAST INDEX (string[]) -> number']);
+  });
 });

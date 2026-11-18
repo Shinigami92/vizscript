@@ -6,6 +6,7 @@ import {
   findContainerOp,
   flattenChain,
   isTypeConstant,
+  lastIndexValue,
   styleContainerValue,
 } from '@vizscript/core';
 import type { DataType, Pin } from '@vizscript/core';
@@ -706,6 +707,19 @@ export abstract class ExpressionLowering extends GraphBuilder {
         (left, right) => binaryType(op, logical, left, right.type),
         values[0]?.type ?? 'any'
       );
+
+    // UE's LAST INDEX: `items.length - 1` is one node.
+    const lastIndex = lastIndexValue(
+      this.nodes,
+      op,
+      values,
+      operands.map((operand) => this.source(rangeOf(operand))),
+      rangeOf(expr),
+      this.source(rangeOf(expr))
+    );
+    if (lastIndex) {
+      return lastIndex;
+    }
 
     return this.pureNode({
       kind: 'operator',

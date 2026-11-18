@@ -113,6 +113,25 @@ export function containerEntries(
     return [];
   }
 
+  const entry = (
+    word: string,
+    name: string,
+    expression: string
+  ): ActionEntry => ({
+    label: titled(word),
+    category: CATEGORIES[kind],
+    icon: ICONS[kind],
+    keywords: `${word.toLowerCase()} ${name} ${kind}`,
+    hint: expression.replaceAll('$value', '…'),
+    fits: true,
+    action: () =>
+      emitOp({
+        type: 'useValue',
+        pin: source,
+        expression,
+        position: { ...world },
+      }),
+  });
   const words = new Set<string>();
   return types.containerOps.flatMap((op): ActionEntry[] => {
     if (!opFits(op, kind, pin) || words.has(op.word)) {
@@ -121,22 +140,12 @@ export function containerEntries(
 
     words.add(op.word);
     const expression = opExpression(types, op, String(pin.type));
-    return [
-      {
-        label: titled(op.word),
-        category: CATEGORIES[kind],
-        icon: ICONS[kind],
-        keywords: `${op.word.toLowerCase()} ${op.name} ${kind}`,
-        hint: expression.replaceAll('$value', '…'),
-        fits: true,
-        action: () =>
-          emitOp({
-            type: 'useValue',
-            pin: source,
-            expression,
-            position: { ...world },
-          }),
-      },
-    ];
+    // UE's LAST INDEX of an array: its LENGTH minus one (`lastIndexValue`).
+    return op.word === 'LENGTH' && kind === 'array'
+      ? [
+          entry(op.word, op.name, expression),
+          entry('LAST INDEX', op.name, `${expression} - 1`),
+        ]
+      : [entry(op.word, op.name, expression)];
   });
 }

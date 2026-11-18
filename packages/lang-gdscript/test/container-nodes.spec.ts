@@ -36,4 +36,17 @@ describe('container operations (UE container nodes)', () => {
       'CONTAINS (Map<string, number>, string) -> bool',
     ]);
   });
+
+  it('draws `items.size() - 1` as LAST INDEX', () => {
+    const doc = parseGDScriptDocument(
+      'func f(items: Array[String]):\n\treturn items.size() - 1\n',
+      't.gd'
+    );
+    expect(
+      doc.functions
+        .flatMap((f) => f.nodes)
+        .filter((n) => isContainerNode(n))
+        .map(describeNode)
+    ).toEqual(['LAST INDEX (string[]) -> number']);
+  });
 });
