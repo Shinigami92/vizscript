@@ -41,6 +41,7 @@ export * from './reconcile';
 export * from './reroute';
 export * from './search';
 export * from './signature-ops';
+export * from './spread-ops';
 export * from './summarize';
 export * from './symbol-edits';
 export * from './symbol-ops';

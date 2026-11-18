@@ -15,6 +15,7 @@ import {
   COMMENT_BOX_COLORS,
   declaringNode,
   getMeta,
+  spreadName,
 } from '@vizscript/core';
 import { computed, provide, ref } from 'vue';
 import { indexDocument, pinPeers } from '../graph/doc-index';
@@ -188,7 +189,7 @@ const stats = computed(() => {
 });
 
 function pinLabel(pin: Pin): string {
-  return pin.name || (pin.kind === 'exec' ? 'Exec' : 'Value');
+  return spreadName(pin) || (pin.kind === 'exec' ? 'Exec' : 'Value');
 }
 
 function pinExpression(pin: Pin): string {

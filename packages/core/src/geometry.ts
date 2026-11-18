@@ -3,6 +3,7 @@ import type { InputPinMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import type { GraphNode, Pin } from './ir';
 import { canAddPin } from './operator-chain';
+import { spreadName } from './spread-ops';
 
 export type TextStyle =
   | 'title'
@@ -175,7 +176,7 @@ export function compactTitle(node: GraphNode): string {
  */
 export function pinLabel(node: GraphNode, pin: Pin): string {
   if (!isCompact(node)) {
-    return pin.name;
+    return spreadName(pin);
   }
 
   return isSetter(node) && pin.direction === 'in' && pin.kind === 'data'

@@ -162,6 +162,11 @@ export type GraphOp =
     }
   /** Stores the value of a data output in a new variable. */
   | { type: 'promote'; pin: PinRef; name: string; position?: Point }
+  /**
+   * Writes an input's value as a spread (`...items`) or as one value again
+   * (`InputPinMeta.spreadable`).
+   */
+  | { type: 'setSpread'; pin: PinRef; spread: boolean }
   /** Adds a call that receives the value of a data output. */
   | { type: 'callWith'; pin: PinRef; callee: string; position?: Point }
   /**

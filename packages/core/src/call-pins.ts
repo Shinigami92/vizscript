@@ -283,7 +283,8 @@ export function withParamPins(
   const keywords = new Set(args.flatMap((p) => keywordOf(p) ?? []));
   const positional = args.filter(
     (p) =>
-      keywordOf(p) === undefined && p.name !== '...' && !p.name.startsWith('*')
+      keywordOf(p) === undefined &&
+      getMeta<InputPinMeta>(p).spread === undefined
   );
 
   // Positional arguments from a `*rest` parameter on all belong to it.
@@ -327,6 +328,15 @@ export function withParamPins(
       if (pin.type === 'any') {
         pin.type = restElementType(param);
       }
+    }
+  }
+
+  // A spread from a `...rest` parameter on fills it too: `...data[1]`.
+  const rest = restAt === -1 ? undefined : params[restAt];
+  const unnamed = args.filter((p) => keywordOf(p) === undefined);
+  for (const [index, pin] of unnamed.entries()) {
+    if (rest && index >= restAt && getMeta<InputPinMeta>(pin).spread) {
+      pin.name = `${rest.name}[${index - restAt}]`;
     }
   }
 

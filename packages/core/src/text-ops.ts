@@ -46,6 +46,7 @@ import {
   setParameterValue,
   setReturnType,
 } from './signature-ops';
+import { setSpread } from './spread-ops';
 import {
   deleteSymbol,
   renameSymbol,
@@ -693,6 +694,10 @@ function applyTextOpEdits(
 
     case 'promote': {
       return promote(text, doc, op.pin, op.name, syntax);
+    }
+
+    case 'setSpread': {
+      return setSpread(text, doc, op.pin, op.spread);
     }
 
     case 'callWith': {

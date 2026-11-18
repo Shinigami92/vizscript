@@ -8,6 +8,7 @@ import {
   isTypeConstant,
   lastIndexValue,
   markContainerCandidate,
+  spreadOf,
   styleContainerValue,
 } from '@vizscript/core';
 import type { DataType, Pin } from '@vizscript/core';
@@ -156,12 +157,10 @@ export abstract class ExpressionLowering extends GraphBuilder {
     for (const [index, arg] of expr.arguments.entries()) {
       if (arg.type === 'SpreadElement') {
         inputs.push({
-          pin: this.dataIn(
-            `arg${index}`,
-            '...',
-            rangeOf(arg.argument),
-            'array'
-          ),
+          pin: this.dataIn(`arg${index}`, '', rangeOf(arg.argument), 'array', {
+            spread: '...',
+            spreadable: '...',
+          }),
           value: this.lowerExpr(arg.argument, `${path}.arg${index}`, evalMode),
         });
         continue;
@@ -175,7 +174,9 @@ export abstract class ExpressionLowering extends GraphBuilder {
         pin: this.dataIn(
           `arg${index}`,
           paramNames?.[index] ?? '',
-          rangeOf(arg)
+          rangeOf(arg),
+          'any',
+          { spreadable: '...' }
         ),
         value: this.lowerExpr(
           arg,
@@ -639,9 +640,10 @@ export abstract class ExpressionLowering extends GraphBuilder {
             inputs.push({
               pin: this.dataIn(
                 `e${i}`,
-                '...',
+                '',
                 rangeOf(element.argument),
-                'array'
+                'array',
+                { spread: '...', spreadable: '...' }
               ),
               value: this.lowerExpr(element.argument, `${path}.e${i}`, mode),
             });
@@ -649,7 +651,9 @@ export abstract class ExpressionLowering extends GraphBuilder {
           }
 
           inputs.push({
-            pin: this.dataIn(`e${i}`, `[${i}]`, rangeOf(element)),
+            pin: this.dataIn(`e${i}`, `[${i}]`, rangeOf(element), 'any', {
+              spreadable: '...',
+            }),
             value: this.lowerExpr(element, `${path}.e${i}`, mode),
           });
         }
@@ -662,7 +666,7 @@ export abstract class ExpressionLowering extends GraphBuilder {
           inputs,
           outType: arrayOfAll(
             inputs.map((i) =>
-              i.pin.name === '...'
+              spreadOf(i.pin) !== undefined
                 ? arrayElementType(i.value?.type ?? 'any')
                 : (i.value?.type ?? 'any')
             )
@@ -783,8 +787,9 @@ export abstract class ExpressionLowering extends GraphBuilder {
     for (const [i, prop] of expr.properties.entries()) {
       if (prop.type === 'SpreadElement') {
         inputs.push({
-          pin: this.dataIn(`p${i}`, '...', rangeOf(prop.argument), 'object', {
+          pin: this.dataIn(`p${i}`, '', rangeOf(prop.argument), 'object', {
             property: rangeOf(prop),
+            spread: '...',
           }),
           value: this.lowerExpr(prop.argument, `${path}.p${i}`, mode),
         });

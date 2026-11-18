@@ -10,6 +10,7 @@ import {
 } from '@vizscript/core';
 import type {
   DataType,
+  InputPinMeta,
   InputSpec,
   InsertPoint,
   OutputPinMeta,
@@ -173,16 +174,19 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       const param = arg.keyword || arg.star ? undefined : positional++;
       const named = param === undefined ? '' : (signature?.params[param] ?? '');
       // An argument passed by name is named after its parameter.
-      const label =
-        arg.keyword ?? arg.star ?? (named.startsWith('*') ? '' : named);
+      const label = arg.keyword ?? (named.startsWith('*') ? '' : named);
+      // `*args` can be one value again, a positional one spread (`**` and
+      // keywords stay as they are).
+      const meta: InputPinMeta =
+        arg.keyword !== undefined
+          ? { keyword: arg.keyword }
+          : arg.star === '**'
+            ? { spread: '**' }
+            : arg.star === '*'
+              ? { spread: '*', spreadable: '*' }
+              : { spreadable: '*' };
       inputs.push({
-        pin: this.dataIn(
-          `arg${i}`,
-          label,
-          rangeOf(arg.value),
-          'any',
-          arg.keyword === undefined ? undefined : { keyword: arg.keyword }
-        ),
+        pin: this.dataIn(`arg${i}`, label, rangeOf(arg.value), 'any', meta),
         value: this.lowerExpr(
           arg.value,
           `${path}.arg${i}`,
@@ -497,11 +501,15 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
           range,
           path,
           inputs: expr.items.map((item, i) => ({
-            pin: this.dataIn(
-              `e${i}`,
-              item.type === 'Starred' ? '*' : `[${i}]`,
-              rangeOf(item)
-            ),
+            pin:
+              item.type === 'Starred'
+                ? this.dataIn(`e${i}`, '', rangeOf(item.value), 'any', {
+                    spread: '*',
+                    spreadable: '*',
+                  })
+                : this.dataIn(`e${i}`, `[${i}]`, rangeOf(item), 'any', {
+                    spreadable: '*',
+                  }),
             value: this.lowerExpr(
               item.type === 'Starred' ? item.value : item,
               `${path}.e${i}`,
@@ -525,7 +533,7 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
           inputs: expr.entries.map((entry, i) => {
             const key = entry.key ? unwrap(entry.key) : undefined;
             const label = !key
-              ? '**'
+              ? ''
               : key.type === 'Literal' && key.kind === 'string'
                 ? key.value
                 : truncate(this.src(rangeOf(key)), 16);
@@ -541,13 +549,13 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
                 label,
                 rangeOf(entry.value),
                 'any',
-                property ? { property } : undefined
+                property ? { property } : { spread: '**' }
               ),
               value: this.lowerExpr(
                 entry.value,
                 `${path}.p${i}`,
                 mode,
-                `${nameHint ?? 'dict'}.${label}`
+                `${nameHint ?? 'dict'}.${label || '**'}`
               ),
             };
           }),

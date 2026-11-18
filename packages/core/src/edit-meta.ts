@@ -110,6 +110,17 @@ export interface InputPinMeta {
    * the whole expression (`x in items` has no code of its own there).
    */
   wrap?: string;
+  /**
+   * The value is written as a spread with this token (`...items`, Python's
+   * `*items` / `**options`): it is unpacked into the call or collection.
+   * The pin's range is the value's, after the token.
+   */
+  spread?: string;
+  /**
+   * The value can be written as a spread with this token (an argument, an
+   * element of a collection): `setSpread` adds or removes it.
+   */
+  spreadable?: string;
 }
 
 export interface ExecOutPinMeta {

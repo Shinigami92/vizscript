@@ -11,6 +11,8 @@ import {
   objectEntries,
   referenceName,
   shownAsCall,
+  spreadableWith,
+  spreadOf,
 } from '@vizscript/core';
 import type { Ref } from 'vue';
 import { toRaw } from 'vue';
@@ -376,6 +378,11 @@ export function createContextEntries(
       entry.node.kind === 'call' && pin.range && ARG_PIN.test(pin.id)
         ? pin.range
         : undefined;
+    // Only a value can be spread (an empty input has none).
+    const spreadable =
+      pin.range && pin.range.end > pin.range.start
+        ? spreadableWith(pin)
+        : undefined;
     const element =
       arrayElements(entry.node)?.some((p) => p.id === pin.id) ||
       objectEntries(entry.node)?.some(
@@ -431,6 +438,25 @@ export function createContextEntries(
         : []),
       ...(pin.kind === 'data' && pin.direction === 'in' && props.editable
         ? [commands.extractEntry(source, pin, state.world)]
+        : []),
+      // A value unpacked into the call or collection (`...items`), or one
+      // value again: the language's spread token.
+      ...(props.editable && spreadable
+        ? [
+            spreadOf(pin)
+              ? {
+                  label: 'Pass as one value',
+                  icon: 'i-mdi-arrow-collapse-horizontal',
+                  action: () =>
+                    emitOp({ type: 'setSpread', pin: source, spread: false }),
+                }
+              : {
+                  label: `Spread value (${spreadable}${pin.name})`,
+                  icon: 'i-mdi-arrow-expand-horizontal',
+                  action: () =>
+                    emitOp({ type: 'setSpread', pin: source, spread: true }),
+                },
+          ]
         : []),
       ...(pin.kind === 'data' &&
       pin.direction === 'out' &&
