@@ -44,6 +44,7 @@ import {
   useTemplateRef,
   watch,
 } from 'vue';
+import { searchScore, searchTokens } from './action-search';
 import CollapseTransition from './CollapseTransition.vue';
 
 const props = defineProps<{
@@ -134,22 +135,10 @@ const position = computed(() => ({
   top: `${Math.max(4, Math.min(props.y, viewport.height.value - height.value - 4))}px`,
 }));
 
-function score(entry: ActionEntry, tokens: string[]): number | undefined {
-  const label = entry.label.toLowerCase();
-  const haystack =
-    `${label} ${entry.category} ${entry.keywords ?? ''}`.toLowerCase();
-  if (!tokens.every((t) => haystack.includes(t))) {
-    return undefined;
-  }
-
-  const first = tokens[0] ?? '';
-  return label.startsWith(first) ? 0 : label.includes(first) ? 1 : 2;
-}
-
 /** Matching actions, grouped by category, best groups first. */
 const groups = computed(() => {
   const text = query.value.trim();
-  const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
+  const tokens = searchTokens(text);
   const typed = text && props.suggest ? props.suggest(text) : [];
   const candidates = [...typed, ...props.entries].filter(
     (e) => !(props.contextToggle && contextSensitive.value && e.fits === false)
@@ -159,18 +148,21 @@ const groups = computed(() => {
     string,
     { best: number; order: number; items: ActionEntry[] }
   >();
-  let count = 0;
-  for (const entry of candidates) {
-    const matched = tokens.length > 0 ? score(entry, tokens) : 2;
-    if (matched === undefined || count >= MAX_RESULTS) {
-      continue;
-    }
-
-    // Made from the search text ("Call loop()"): after real actions that
-    // match as well, before ones that match worse.
-    const s = typed.includes(entry) ? matched + 1.5 : matched;
-
-    count++;
+  // The best matches, so the cap never drops a better one listed later.
+  const matches = candidates
+    .flatMap((entry) => {
+      const matched = tokens.length > 0 ? searchScore(entry, tokens) : 2;
+      // Made from the search text ("Call loop()"): after real actions that
+      // match as well, before ones that match worse.
+      return matched === undefined
+        ? []
+        : [{ entry, s: typed.includes(entry) ? matched + 1.5 : matched }];
+    })
+    .map((m, index) => ({ ...m, index }))
+    .toSorted((a, b) => a.s - b.s || a.index - b.index)
+    .slice(0, MAX_RESULTS)
+    .toSorted((a, b) => a.index - b.index);
+  for (const { entry, s } of matches) {
     const category =
       entry.category === '' && entry.first ? FIRST : entry.category;
     const group = byCategory.get(category) ?? {
