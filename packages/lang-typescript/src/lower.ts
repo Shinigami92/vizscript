@@ -354,6 +354,7 @@ export function parseTypeScript(
     ? applyTypes(doc, options.checked.types, {
         text,
         options: { placeholder: 'undefined' },
+        containerOps: TYPESCRIPT_CONTAINER_OPS,
       })
     : doc;
 }

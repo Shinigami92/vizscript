@@ -2,7 +2,15 @@ import { getMeta } from './edit-meta';
 import type { OutputPinMeta } from './edit-meta';
 import { isElementGet } from './element-access';
 import type { ValueSource } from './graph-builder';
-import type { DataType, GraphNode, Pin, SourceRange } from './ir';
+import { createEdge } from './ids';
+import type {
+  DataType,
+  FunctionGraph,
+  GraphEdge,
+  GraphNode,
+  Pin,
+  SourceRange,
+} from './ir';
 import {
   arrayElementType,
   arrayOf,
@@ -445,4 +453,163 @@ export function addFoundPins(
       ];
     }
   }
+}
+
+/**
+ * A call or property read that a backend couldn't type while lowering
+ * (`items.includes(x)` of a value only the checker types): what it is, so
+ * `restyleContainerNodes` makes it a container node once its container
+ * pin is typed.
+ */
+export interface ContainerCandidate {
+  form: ContainerOp['form'];
+  name: string;
+  /** Number of values after the container. */
+  args: number;
+  /** The container pin (any value pin of an operator: it is found then). */
+  pin: string;
+  /** Written as a statement of its own: stays on the exec chain. */
+  statement: boolean;
+  /** Its code, for the value of a pure read (`sourceText`). */
+  code: string;
+}
+
+interface ContainerCandidateMeta {
+  containerCandidate: ContainerCandidate;
+}
+
+/** Notes on `node` what it could be once its container is typed. */
+export function markContainerCandidate(
+  node: GraphNode,
+  candidate: ContainerCandidate
+): void {
+  node.meta = {
+    ...node.meta,
+    containerCandidate: candidate,
+  } satisfies ContainerCandidateMeta;
+}
+
+/**
+ * Container nodes for candidates (`markContainerCandidate`) whose
+ * container pin has a container type now (after `applyTypes`). Reads
+ * become pure like UE's: their exec pins go, the exec wire runs from the
+ * node before to the node after. Unchanged functions are returned as
+ * they are.
+ */
+export function restyleContainerNodes(
+  fn: FunctionGraph,
+  ops: ReadonlyArray<ContainerOp>
+): FunctionGraph {
+  let edges: GraphEdge[] = fn.edges;
+  let changed = false;
+  const nodes = fn.nodes.map((original) => {
+    const candidate =
+      getMeta<ContainerCandidateMeta>(original).containerCandidate;
+    const own = candidate
+      ? original.pins.find((p) => p.id === candidate.pin)
+      : undefined;
+    if (!candidate || !own || containerWord(original) !== undefined) {
+      return original;
+    }
+
+    // Types come with the wires into the pins.
+    const typed = (input: Pin): Pin => {
+      if (containerKind(input.type)) {
+        return input;
+      }
+
+      const wire = fn.edges.find(
+        (e) => e.to.node === original.id && e.to.pin === input.id
+      );
+      const source = wire
+        ? fn.nodes
+            .find((n) => n.id === wire.from.node)
+            ?.pins.find((p) => p.id === wire.from.pin)
+        : undefined;
+      return source ?? input;
+    };
+    let op: ContainerOp | undefined;
+    let containerPin = candidate.pin;
+    let pin = typed(own);
+    if (candidate.form === 'operator') {
+      // Which value is the container depends on the operator (`x in xs`).
+      const values = original.pins.filter(
+        (p) => p.direction === 'in' && p.kind === 'data'
+      );
+      const found = findContainerOperator(
+        ops,
+        candidate.name,
+        values.map((v) => typed(v).type)
+      );
+      const at = found ? values[found.index] : undefined;
+      if (found && at) {
+        op = found.op;
+        containerPin = at.id;
+        pin = typed(at);
+      }
+    } else {
+      const kind = containerKind(pin.type);
+      op = ops.find(
+        (o) =>
+          kind !== undefined &&
+          o.form === candidate.form &&
+          o.name === candidate.name &&
+          o.on.includes(kind) &&
+          (o.args?.length ?? 0) === candidate.args &&
+          (o.typeText === undefined ||
+            (pin.typeText !== undefined &&
+              new RegExp(o.typeText).test(pin.typeText)))
+      );
+    }
+
+    if (!op) {
+      return original;
+    }
+
+    changed = true;
+    const node: GraphNode = { ...original, pins: [...original.pins] };
+    styleContainerNode(node, op, pin.type, containerPin);
+    if (op.mutates || candidate.statement || node.purity === 'pure') {
+      return node;
+    }
+
+    // A read: pure, off the exec chain.
+    const execIn = node.pins.find(
+      (p) => p.kind === 'exec' && p.direction === 'in'
+    );
+    const execOut = node.pins.find(
+      (p) => p.kind === 'exec' && p.direction === 'out'
+    );
+    const into = edges.filter(
+      (e) => e.to.node === node.id && e.to.pin === execIn?.id
+    );
+    const from = edges.filter(
+      (e) => e.from.node === node.id && e.from.pin === execOut?.id
+    );
+    edges = [
+      ...edges.filter((e) => !into.includes(e) && !from.includes(e)),
+      ...into.flatMap((a) => from.map((b) => createEdge('exec', a.from, b.to))),
+    ];
+    node.purity = 'pure';
+    node.category = 'pure';
+    node.pins = node.pins
+      .filter((p) => p.kind !== 'exec')
+      .map((p) => {
+        if (p.direction !== 'out') {
+          return p;
+        }
+
+        const { bind, ...rest } = getMeta<OutputPinMeta>(p);
+        return {
+          ...p,
+          meta: {
+            ...rest,
+            sourceText: candidate.code,
+            ...(bind ? { scope: bind.stmt } : {}),
+          },
+        };
+      });
+    return node;
+  });
+  return changed ? { ...fn, nodes, edges } : fn;
 }

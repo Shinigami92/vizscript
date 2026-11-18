@@ -625,7 +625,11 @@ const { refineTypes, checkedFor, typeFloating } = useCheckerTypes({
   apply: (typed) => {
     parsedDoc.value = typed;
     doc.value = applyOverlay(typed, overlay.value);
+    // Typed nodes change: container nodes leave the exec chain, calls get
+    // their parameter pins. Generated positions follow, pinned ones stay.
+    relayout();
   },
+  containerOps: () => typeSystem.value?.containerOps,
 });
 
 async function reparse(): Promise<void> {

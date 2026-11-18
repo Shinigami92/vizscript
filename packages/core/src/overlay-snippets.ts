@@ -398,13 +398,15 @@ export function typedFloatingNodes(
   edit: FloatingNodes,
   types: TypeMap,
   /** Calls get a pin per parameter of what they call (like code's). */
-  calls?: CallTyping['options']
+  calls?: CallTyping['options'],
+  /** Calls and reads typed only now become container nodes. */
+  containerOps?: CallTyping['containerOps']
 ): FloatingNodes {
   // Node ranges of floating nodes are relative to their code.
   const typed = applyTypes(
     floatingDoc(edit),
     types,
-    calls ? { text: edit.code, options: calls } : undefined
+    calls ? { text: edit.code, options: calls, containerOps } : undefined
   );
   const nodes = typed.functions[0]?.nodes ?? edit.nodes;
   return {

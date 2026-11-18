@@ -1,4 +1,5 @@
 import type {
+  ContainerOp,
   FloatingNodes,
   GraphDocument,
   ParseOptions,
@@ -29,6 +30,8 @@ interface CheckerTypeDeps {
   parseSeq: () => number;
   /** Shows the document with the checker's types. */
   apply: (typed: GraphDocument) => void;
+  /** The language's container operations (`TypeSystemInfo.containerOps`). */
+  containerOps: () => ReadonlyArray<ContainerOp> | undefined;
 }
 
 function withoutMembers(types: TypeMap): TypeMap {
@@ -74,6 +77,7 @@ export function useCheckerTypes(deps: CheckerTypeDeps): {
     const typed = applyTypes(parsed, types, {
       text: source,
       options: { placeholder: 'undefined' },
+      containerOps: deps.containerOps(),
     });
     if (typed !== parsed) {
       deps.apply(typed);
@@ -107,7 +111,12 @@ export function useCheckerTypes(deps: CheckerTypeDeps): {
         typescriptTypesInText
       );
       return types
-        ? typedFloatingNodes(edit, types, { placeholder: 'undefined' })
+        ? typedFloatingNodes(
+            edit,
+            types,
+            { placeholder: 'undefined' },
+            deps.containerOps()
+          )
         : edit;
     },
   };

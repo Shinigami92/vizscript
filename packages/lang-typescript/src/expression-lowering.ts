@@ -7,6 +7,7 @@ import {
   flattenChain,
   isTypeConstant,
   lastIndexValue,
+  markContainerCandidate,
   styleContainerValue,
 } from '@vizscript/core';
 import type { DataType, Pin } from '@vizscript/core';
@@ -255,6 +256,18 @@ export abstract class ExpressionLowering extends GraphBuilder {
       meta: statement?.statementMeta,
     });
     this.feedAll(node.id, inputs);
+    // Its container typed only later (by the checker): `applyTypes` makes
+    // it a container node then.
+    if (container && !op) {
+      markContainerCandidate(node, {
+        form: 'method',
+        name: title,
+        args: expr.arguments.length,
+        pin: container.pin.id,
+        statement: mode === 'statement',
+        code: this.source(rangeOf(expr)),
+      });
+    }
 
     if (impure) {
       this.chain(node);
@@ -524,9 +537,32 @@ export abstract class ExpressionLowering extends GraphBuilder {
               name,
               target.type
             );
-        return op
-          ? styleContainerValue(this.nodes, read, op, target.type, 'target')
-          : read;
+        if (op) {
+          return styleContainerValue(
+            this.nodes,
+            read,
+            op,
+            target.type,
+            'target'
+          );
+        }
+
+        const node =
+          'pin' in read
+            ? this.nodes.find((n) => n.id === read.pin.node)
+            : undefined;
+        if (node && !optional) {
+          markContainerCandidate(node, {
+            form: 'property',
+            name,
+            args: 0,
+            pin: 'target',
+            statement: false,
+            code: this.source(rangeOf(expr)),
+          });
+        }
+
+        return read;
       }
 
       case 'CallExpression':

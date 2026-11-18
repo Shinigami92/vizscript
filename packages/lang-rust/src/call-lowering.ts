@@ -12,6 +12,7 @@ import {
   arrayOfAll,
   findContainerOp,
   GraphBuilderBase,
+  markContainerCandidate,
   styleContainerValue,
   truncate,
 } from '@vizscript/core';
@@ -270,6 +271,19 @@ export abstract class CallLowering extends GraphBuilderBase {
       meta: statement?.meta,
     });
     this.feedAll(node.id, inputs);
+    // Its container typed only later (`rustTypes`): `applyTypes` makes it a
+    // container node then.
+    if (container && !op) {
+      markContainerCandidate(node, {
+        form: 'method',
+        name: title,
+        args: args.length,
+        pin: container.pin.id,
+        statement: mode === 'statement',
+        code: this.src(rangeOf(expr)),
+      });
+    }
+
     if (impure) {
       this.chain(node);
     }

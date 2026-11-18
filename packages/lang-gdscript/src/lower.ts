@@ -16,6 +16,7 @@ import {
   linkSymbolGraphs,
 } from '@vizscript/core';
 import type { Stmt } from './ast';
+import { GDSCRIPT_CONTAINER_OPS } from './container-ops';
 import { dataTypeOf } from './data-type';
 import { godotClasses } from './godot';
 import type { GraphSource, LoweringContext, Signature } from './lower-utils';
@@ -139,5 +140,6 @@ export function parseGDScriptDocument(
   return applyTypes(doc, gdscriptTypes(script), {
     text,
     options: { placeholder: 'null' },
+    containerOps: GDSCRIPT_CONTAINER_OPS,
   });
 }

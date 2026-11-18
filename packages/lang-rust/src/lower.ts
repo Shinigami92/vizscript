@@ -15,6 +15,7 @@ import {
   linkSymbolGraphs,
 } from '@vizscript/core';
 import type { FunctionItem, Item, ValueItem } from './ast';
+import { RUST_CONTAINER_OPS } from './container-ops';
 import { parseRust } from './convert';
 import { dataTypeOf } from './data-type';
 import { rustImports } from './imports';
@@ -171,5 +172,6 @@ export function parseRustDocument(
   return applyTypes(doc, rustTypes(text, items), {
     text,
     options: { placeholder: 'todo!()' },
+    containerOps: RUST_CONTAINER_OPS,
   });
 }

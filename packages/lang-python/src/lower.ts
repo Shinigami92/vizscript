@@ -307,5 +307,6 @@ export function parsePythonDocument(
   return applyTypes(doc, pythonTypes(text, body, options.imports), {
     text,
     options: { placeholder: 'None', keywordArguments: true },
+    containerOps: PYTHON_CONTAINER_OPS,
   });
 }

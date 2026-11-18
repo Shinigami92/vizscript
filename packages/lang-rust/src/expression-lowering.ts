@@ -8,6 +8,7 @@ import {
   flattenChain,
   isArrayType,
   lastIndexValue,
+  markContainerCandidate,
   styleContainerValue,
   truncate,
 } from '@vizscript/core';
@@ -516,15 +517,38 @@ export abstract class ExpressionLowering extends CallLowering {
       expr.op,
       values.map((v) => v.type)
     );
-    return found
-      ? styleContainerValue(
-          this.nodes,
-          value,
-          found.op,
-          values[found.index]?.type ?? 'any',
-          chainPinId(found.index)
-        )
-      : value;
+    if (found) {
+      return styleContainerValue(
+        this.nodes,
+        value,
+        found.op,
+        values[found.index]?.type ?? 'any',
+        chainPinId(found.index)
+      );
+    }
+
+    // Its values typed only later: `applyTypes` makes it one then.
+    const node =
+      'pin' in value
+        ? this.nodes.find((n) => n.id === value.pin.node)
+        : undefined;
+    if (
+      node &&
+      RUST_CONTAINER_OPS.some(
+        (o) => o.form === 'operator' && o.name === expr.op
+      )
+    ) {
+      markContainerCandidate(node, {
+        form: 'operator',
+        name: expr.op,
+        args: operands.length - 1,
+        pin: chainPinId(0),
+        statement: false,
+        code: this.src(rangeOf(expr)),
+      });
+    }
+
+    return value;
   }
 
   protected lowerAwait(

@@ -1,6 +1,7 @@
 import type { CallPinOptions } from './call-pins';
 import { namedPins, takesMoreArguments, withParamPins } from './call-pins';
-import { isContainerNode } from './container-ops';
+import type { ContainerOp } from './container-ops';
+import { isContainerNode, restyleContainerNodes } from './container-ops';
 import type {
   DataType,
   FunctionGraph,
@@ -44,6 +45,11 @@ export interface CallTyping {
   /** The text the document was parsed from. */
   text: string;
   options: Pick<CallPinOptions, 'placeholder' | 'keywordArguments'>;
+  /**
+   * The language's container operations: calls and reads typed only now
+   * become container nodes (`restyleContainerNodes`).
+   */
+  containerOps?: ReadonlyArray<ContainerOp>;
 }
 
 /**
@@ -279,7 +285,8 @@ function typedSymbol(symbol: ScriptSymbol, types: TypeMap): ScriptSymbol {
  * parser found. Unchanged parts are shared, not copied.
  *
  * With `calls`, calls whose answer has a `signature` get a pin for each
- * parameter (`withParamPins`).
+ * parameter (`withParamPins`), and with its `containerOps` the calls and
+ * reads typed only now become container nodes (`restyleContainerNodes`).
  *
  * `types` must come from the same text the document was parsed from.
  */
@@ -303,9 +310,14 @@ export function applyTypes(
 
   return {
     ...doc,
-    functions: doc.functions.map((fn) =>
-      typeWildcardPins(typeOutputsByUse(typedFunction(fn, types, calls)))
-    ),
+    functions: doc.functions.map((fn) => {
+      const typed = typeWildcardPins(
+        typeOutputsByUse(typedFunction(fn, types, calls))
+      );
+      return calls?.containerOps
+        ? restyleContainerNodes(typed, calls.containerOps)
+        : typed;
+    }),
     ...(doc.symbols
       ? { symbols: doc.symbols.map((s) => typedSymbol(s, types)) }
       : {}),

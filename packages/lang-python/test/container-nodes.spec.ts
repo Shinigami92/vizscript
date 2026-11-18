@@ -280,4 +280,27 @@ describe('container operations (UE container nodes)', () => {
     });
     expect(wired).toEqual(['print("a" in d)', 'print("b" in d)']);
   });
+
+  it('makes container nodes of values typed only after lowering', () => {
+    // `sorted` returns a list: known from the stubs, after lowering.
+    const fn = parsePythonDocument(
+      'def f():\n    names = sorted(["b", "a"])\n    n = len(names)\n    has = "a" in names\n    names.append("c")\n',
+      't.py'
+    ).functions.find((f) => f.name === 'f');
+    expect(
+      fn?.nodes.filter((n) => isContainerNode(n)).map(describeNode)
+    ).toEqual([
+      'LENGTH (string[]) -> number',
+      'CONTAINS (string[], string) -> bool',
+      'ADD [exec] (string[], string)',
+    ]);
+    // The reads left the exec chain: `names = …` runs on into `n = …`.
+    const title = (id: string): string =>
+      fn?.nodes.find((n) => n.id === id)?.title ?? id;
+    expect(
+      fn?.edges
+        .filter((e) => e.kind === 'exec')
+        .map((e) => `${title(e.from.node)} -> ${title(e.to.node)}`)
+    ).toContain('Set names -> Set n');
+  });
 });

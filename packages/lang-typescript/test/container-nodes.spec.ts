@@ -1,5 +1,10 @@
-import type { GraphNode } from '@vizscript/core';
-import { applyTextEdits, compactTitle, isContainerNode } from '@vizscript/core';
+import type { GraphNode, TypeInfo } from '@vizscript/core';
+import {
+  applyTextEdits,
+  compactTitle,
+  isContainerNode,
+  rangeKey,
+} from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
 
@@ -98,5 +103,50 @@ describe('container operations (UE container nodes)', () => {
         : result.error;
     });
     expect(wired).toEqual(["show(m.has('a'));"]);
+  });
+
+  it('makes container nodes of values only the checker types', () => {
+    const text =
+      "async function f() {\n  const items = await load();\n  const has = items.includes('a');\n  items.push('b');\n  const n = items.length;\n}\n";
+    const plain = parseTypeScript(text, 't.ts');
+    // The checker's answer for the reads of `items`.
+    const types = new Map<string, TypeInfo>();
+    for (const node of plain.functions.flatMap((f) => f.nodes)) {
+      const out = node.pins.find((p) => p.direction === 'out' && p.range);
+      if (node.kind === 'getVar' && node.title === 'items' && out?.range) {
+        types.set(rangeKey(out.range), {
+          text: 'string[]',
+          dataType: 'string[]',
+        });
+      }
+    }
+
+    const fn = parseTypeScript(text, 't.ts', {
+      checked: { text, types },
+    }).functions.find((f) => f.name === 'f');
+    expect(
+      fn?.nodes.filter((n) => isContainerNode(n)).map(describeNode)
+    ).toEqual([
+      'CONTAINS (string[], string) -> bool',
+      'ADD [exec] (string[], string) -> number',
+      'LENGTH (string[]) -> number',
+    ]);
+    // CONTAINS left the exec chain: `const items` runs on into `const has`.
+    const titles = (id: string): string =>
+      fn?.nodes.find((n) => n.id === id)?.title ?? id;
+    expect(
+      fn?.edges
+        .filter((e) => e.kind === 'exec')
+        .map((e) => `${titles(e.from.node)} -> ${titles(e.to.node)}`)
+    ).toEqual(expect.arrayContaining(['Set items -> Set has']));
+    expect(
+      fn?.edges.some(
+        (e) =>
+          e.kind === 'exec' &&
+          [e.from.node, e.to.node].includes(
+            fn.nodes.find((n) => compactTitle(n) === 'CONTAINS')?.id ?? ''
+          )
+      )
+    ).toBe(false);
   });
 });

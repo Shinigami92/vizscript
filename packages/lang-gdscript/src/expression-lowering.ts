@@ -5,6 +5,7 @@ import {
   findContainerOperator,
   isTypeConstant,
   lastIndexValue,
+  markContainerCandidate,
   styleContainerValue,
 } from '@vizscript/core';
 import type {
@@ -262,6 +263,19 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
       meta: statement?.statementMeta,
     });
     this.feedAll(node.id, inputs);
+    // Its container typed only later (the script's types): `applyTypes` makes it a
+    // container node then.
+    if (container && !op && converts === undefined) {
+      markContainerCandidate(node, {
+        form: 'method',
+        name: title,
+        args: expr.args.length,
+        pin: container.pin.id,
+        statement: mode === 'statement',
+        code: this.src(rangeOf(expr)),
+      });
+    }
+
     if (impure) {
       this.chain(node);
     }
@@ -448,15 +462,38 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
           expr.op,
           values.map((v) => v.type)
         );
-        return found
-          ? styleContainerValue(
-              this.nodes,
-              value,
-              found.op,
-              values[found.index]?.type ?? 'any',
-              chainPinId(found.index)
-            )
-          : value;
+        if (found) {
+          return styleContainerValue(
+            this.nodes,
+            value,
+            found.op,
+            values[found.index]?.type ?? 'any',
+            chainPinId(found.index)
+          );
+        }
+
+        // Its values typed only later: `applyTypes` makes it one then.
+        const node =
+          'pin' in value
+            ? this.nodes.find((n) => n.id === value.pin.node)
+            : undefined;
+        if (
+          node &&
+          GDSCRIPT_CONTAINER_OPS.some(
+            (o) => o.form === 'operator' && o.name === expr.op
+          )
+        ) {
+          markContainerCandidate(node, {
+            form: 'operator',
+            name: expr.op,
+            args: operands.length - 1,
+            pin: chainPinId(0),
+            statement: false,
+            code: this.src(rangeOf(expr)),
+          });
+        }
+
+        return value;
       }
 
       case 'Ternary': {
