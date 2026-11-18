@@ -11,7 +11,7 @@
     /** Everything that should look the same after an undo. */
     snapshot() {
       const v = view();
-      const nodes = [...v.nodes.values()]
+      const nodes = [...v.scene.nodes.values()]
         .map((ns) => ({
           id: ns.node.id,
           title: ns.node.title,
@@ -25,9 +25,9 @@
           graphOnly: !!ns.full.graphOnly,
         }))
         .sort((a, b) => a.id.localeCompare(b.id));
-      const edges = v.edges.map((e) => e.edge.id).sort();
-      v.updateFrames?.();
-      const frames = v.frames
+      const edges = v.scene.edges.map((e) => e.edge.id).sort();
+      v.scene.updateFrames();
+      const frames = v.scene.frames
         .map((f) => ({
           kind: f.kind,
           name: f.name,
@@ -43,7 +43,7 @@
         }))
         .sort((a, b) => `${a.kind}${a.id}`.localeCompare(`${b.kind}${b.id}`));
       const reroutes = Object.fromEntries(
-        [...v.reroutes.entries()].map(([k, pts]) => [
+        [...v.scene.reroutes.entries()].map(([k, pts]) => [
           k,
           pts.map((p) => [round(p.x), round(p.y)]),
         ])
@@ -67,13 +67,13 @@
     /** Client position of a pin, or null. */
     pinClient(nodeId, pinId) {
       const v = view();
-      const ns = v.nodes.get(nodeId);
+      const ns = v.scene.nodes.get(nodeId);
       const pg = ns?.geom.pins.get(pinId);
       if (!ns || !pg) {
         return null;
       }
 
-      const cam = v.camera;
+      const cam = v.viewport.camera;
       const rect = v.canvas.getBoundingClientRect();
       return {
         x: rect.left + (ns.x + pg.x - cam.x) * cam.zoom,
@@ -84,12 +84,12 @@
     /** Client position of a node's header. */
     nodeClient(nodeId) {
       const v = view();
-      const ns = v.nodes.get(nodeId);
+      const ns = v.scene.nodes.get(nodeId);
       if (!ns) {
         return null;
       }
 
-      const cam = v.camera;
+      const cam = v.viewport.camera;
       const rect = v.canvas.getBoundingClientRect();
       return {
         x:
@@ -100,13 +100,13 @@
     },
 
     hasNode(nodeId) {
-      return view().nodes.has(nodeId);
+      return view().scene.nodes.has(nodeId);
     },
 
     /** Centers the camera on a node (keeps the zoom). */
     center(nodeId) {
       const v = view();
-      const ns = v.nodes.get(nodeId);
+      const ns = v.scene.nodes.get(nodeId);
       const rect = v.canvas.getBoundingClientRect();
       const cam = v.getCamera();
       v.setCamera({
@@ -126,7 +126,7 @@
     },
 
     edgeList() {
-      return view().edges.map((e) => ({
+      return view().scene.edges.map((e) => ({
         id: e.edge.id,
         kind: e.edge.kind,
         from: e.edge.from,

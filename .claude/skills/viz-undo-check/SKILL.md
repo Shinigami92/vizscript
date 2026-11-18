@@ -66,7 +66,7 @@ Same rules as `viz-user-test`:
    - It must return `object`.
    - `addInitScript` adds the helper again on every call. Add it once per browser session; after that, `goto` alone is enough.
 
-4. **Switch to the graph alone.** Click **Viz** in the editor bar if it isn't active, so the graph has the whole width.
+4. **Switch to the graph alone.** Click **Viz** in the editor bar if it isn't active, so the graph has the whole width. Check that the zoom is at least 50 % (`view.setCamera({ ...view.getCamera(), zoom: 0.7 })` otherwise): zoomed out, pins' hit areas grow and cover the header point the run clicks, so the click starts a wire instead of selecting the node, and the item shows as not removed.
 5. **List the items:** run `setup.js`. It returns the number of wires and nodes.
 
 ## 3. Run
