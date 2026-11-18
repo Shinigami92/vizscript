@@ -8,6 +8,8 @@ import type {
   Point,
   Positions,
 } from '@vizscript/core';
+import { A11yLayer } from './a11y-layer';
+import type { A11yElement } from './a11y-layer';
 import { alignNodes } from './align';
 import { screenToWorld } from './camera';
 import type { Camera, Rect } from './camera';
@@ -65,6 +67,8 @@ export class GraphView {
   private readonly renderer: Renderer;
   private readonly controller: Controller;
   private readonly resizeObserver: ResizeObserver;
+  /** The graph as invisible DOM next to the canvas, if there is a DOM. */
+  private readonly a11y: A11yLayer | null;
   private stopWatchingPixelRatio: (() => void) | undefined;
 
   private theme: Theme;
@@ -103,6 +107,11 @@ export class GraphView {
     );
     this.controller = new Controller(this.controllerHost());
     this.controller.attach();
+    const parent = canvas.parentElement;
+    this.a11y =
+      options.a11y !== false && parent
+        ? new A11yLayer(document, parent as unknown as A11yElement)
+        : null;
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
@@ -120,6 +129,7 @@ export class GraphView {
     this.stopWatchingPixelRatio?.();
     this.resizeObserver.disconnect();
     this.controller.detach();
+    this.a11y?.destroy();
     this.emitter.clear();
   }
 
@@ -152,6 +162,7 @@ export class GraphView {
     }
 
     this.renderer.draw({ ...this.ui, time, editable: this.editable });
+    this.a11y?.sync(this.scene, this.viewport.camera, this.ui.selection);
   }
 
   /** Switches colors, e.g. between `DARK_THEME` and `LIGHT_THEME`. */

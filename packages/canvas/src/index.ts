@@ -1,3 +1,4 @@
+export * from './a11y-layer';
 export * from './bezier';
 export * from './bubble';
 export * from './camera';

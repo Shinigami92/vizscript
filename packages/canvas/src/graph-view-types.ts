@@ -96,6 +96,11 @@ export interface GraphViewOptions {
    * pins of different types that one of them converts is allowed.
    */
   conversions?: () => ReadonlyArray<Conversion> | undefined;
+  /**
+   * Mirror the graph as invisible DOM next to the canvas (`A11yLayer`) for
+   * screen readers and UI tests. On by default where there is a DOM.
+   */
+  a11y?: boolean;
 }
 
 /** A position change drawn as a short slide. */

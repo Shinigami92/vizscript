@@ -123,6 +123,8 @@ Then summarize the most important findings for the user and ask whether to fix t
 
 **Motion:** camera moves (fit all, zoom to selection, reveal, zoom buttons) ease over 250 ms moved nodes slide for 200 ms, new nodes fade in for 180 ms, and menus pop in for 120 ms. Wait about 300 ms before a screenshot or before reading the zoom. Animations follow `prefers-reduced-motion`; `page.emulateMedia({ reducedMotion: 'reduce' })` turns them off.
 
+**Find nodes and pins:** the canvas mirrors its scene as invisible DOM (`[data-ui=graph-a11y]`): nodes are `[data-node-id="…"]` (`role=group`, named by title), pins `[data-pin="…"]`, inline values `[data-literal="…"]` and Add pin `[data-add-pin]` (all `role=button`, e.g. "items, string[], output", "Value of arg0: 2"). Take a target's `boundingBox()` and use its middle for `page.mouse`; the layer takes no pointer events. Before a click, check that `document.elementFromPoint(x, y)` is the canvas, not a banner, menu or zoom control on top of it. Small pins at low zoom: zoom in first.
+
 **Read the code panel:**
 
 ```js
