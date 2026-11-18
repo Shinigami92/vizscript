@@ -95,4 +95,17 @@ describe('types of values read from flow nodes', () => {
       doc.typeMembers?.HTTPResponse?.map((m) => `${m.kind} ${m.name}`)
     ).toContain('property status');
   });
+
+  it('shows untyped results with the type of where they go', () => {
+    const fn = parsePythonDocument(
+      'def f(text: str) -> dict:\n    a = None\n    print(make(text))\n    return make(text)\n\ndef make(text):\n    return text\n',
+      't.py'
+    ).functions.find((f) => f.name === 'f');
+    const results = (fn?.nodes ?? [])
+      .filter((n) => n.title === 'make')
+      .map((n) => n.pins.find((p) => p.id === 'return'))
+      .map((p) => `${p?.type}${p?.usedAs ? ' (used as)' : ''}`);
+    // Into print (anything): untyped; into the Return of a dict: a map.
+    expect(results).toEqual(['any', 'map (used as)']);
+  });
 });

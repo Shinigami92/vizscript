@@ -73,7 +73,7 @@ function total_price
   #15 getVar "TAX_RATE" [>value:number]
   #16 operator "+" [<a:number=1.0 <b:number >value:number]
   #17 operator "*" [<a:number <b:number >value:number]
-  #18 call "round" [<exec:▶ >then:▶ <target:object <arg0:number >return:any]
+  #18 call "round" [<exec:▶ >then:▶ <target:object <arg0:number >return:number]
   #19 return "Return" (value) [<exec:▶ <value:number]
   ==> #0.then -> #1.exec
   --> #0.param0 -> #2.array

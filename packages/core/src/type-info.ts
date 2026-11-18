@@ -11,7 +11,7 @@ import type {
 } from './ir';
 import type { ScriptSymbol, SymbolParam } from './symbols';
 import { refinesType } from './types';
-import { typeWildcardPins } from './wildcard-pins';
+import { typeOutputsByUse, typeWildcardPins } from './wildcard-pins';
 
 /** A field or method of a type, for the action menu (`response.ok`). */
 export interface TypeMember {
@@ -130,7 +130,9 @@ function typedPin(pin: Pin, types: TypeMap): Pin {
     return pin;
   }
 
-  return { ...pin, type: info.dataType, typeText: info.text };
+  // A type the code has: no longer one only taken from its uses.
+  const { usedAs: _usedAs, ...rest } = pin;
+  return { ...rest, type: info.dataType, typeText: info.text };
 }
 
 /**
@@ -302,7 +304,7 @@ export function applyTypes(
   return {
     ...doc,
     functions: doc.functions.map((fn) =>
-      typeWildcardPins(typedFunction(fn, types, calls))
+      typeWildcardPins(typeOutputsByUse(typedFunction(fn, types, calls)))
     ),
     ...(doc.symbols
       ? { symbols: doc.symbols.map((s) => typedSymbol(s, types)) }

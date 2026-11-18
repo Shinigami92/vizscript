@@ -1,5 +1,5 @@
 import { isElementGet } from './element-access';
-import type { FunctionGraph, GraphNode, Pin } from './ir';
+import type { DataType, FunctionGraph, GraphNode, Pin } from './ir';
 
 /**
  * Nodes whose untyped inputs take any value, like UE's wildcard pins:
@@ -61,4 +61,83 @@ export function typeWildcardPins(fn: FunctionGraph): FunctionGraph {
         : node;
     }),
   };
+}
+
+/** Input types that take any value. */
+const OPEN_TYPES = new Set<DataType>(['any', 'void', 'object']);
+
+/**
+ * Nodes whose results come from code the graph can't see into: calls,
+ * awaits and members. Gets of variables keep the variable's type (`None`
+ * fed into a number is no number), operators type themselves.
+ */
+const COMPUTED = new Set<string>(['call', 'await', 'getProperty']);
+
+/**
+ * The function with untyped outputs (`json.load(…)` is `Any`,
+ * `JSON.parse(…)` too) typed like the inputs they are wired into when
+ * those agree (`return json.load(f)` in a function returning `dict`), as
+ * UE's wildcard pins take the type of a connection in either direction.
+ * They are marked `usedAs`: the code doesn't say so. Only results of
+ * calls, awaits and members; inputs that take anything don't count; uses
+ * that disagree leave the output untyped.
+ */
+export function typeOutputsByUse(fn: FunctionGraph): FunctionGraph {
+  const nodes = new Map(fn.nodes.map((n) => [n.id, n]));
+  const uses = new Map<string, Set<DataType>>();
+  for (const edge of fn.edges) {
+    if (edge.kind !== 'data') {
+      continue;
+    }
+
+    const type = nodes
+      .get(edge.to.node)
+      ?.pins.find((p) => p.id === edge.to.pin)?.type;
+    const key = `${edge.from.node}\u0000${edge.from.pin}`;
+    const types = uses.get(key) ?? new Set<DataType>();
+    // Inputs that take anything say nothing (a call's Target is `object`).
+    if (type !== undefined && !OPEN_TYPES.has(type)) {
+      types.add(type);
+    }
+
+    uses.set(key, types);
+  }
+
+  let changed = false;
+  const typed = fn.nodes.map((node) => {
+    if (!COMPUTED.has(node.kind)) {
+      return node;
+    }
+
+    let pinsChanged = false;
+    const pins = node.pins.map((pin) => {
+      if (
+        pin.direction !== 'out' ||
+        pin.kind !== 'data' ||
+        (pin.type !== 'any' && pin.usedAs !== true)
+      ) {
+        return pin;
+      }
+
+      const types = uses.get(`${node.id}\u0000${pin.id}`);
+      const [only] = types ?? [];
+      const next: Pin =
+        types?.size === 1 && only !== undefined
+          ? { ...pin, type: only, usedAs: true }
+          : { ...pin, type: 'any', usedAs: undefined };
+      if (next.type === pin.type && next.usedAs === pin.usedAs) {
+        return pin;
+      }
+
+      pinsChanged = true;
+      if (next.usedAs === undefined) {
+        delete next.usedAs;
+      }
+
+      return next;
+    });
+    changed ||= pinsChanged;
+    return pinsChanged ? { ...node, pins } : node;
+  });
+  return changed ? { ...fn, nodes: typed } : fn;
 }

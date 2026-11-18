@@ -69,6 +69,19 @@ describe('wireType', () => {
     expect(typeNameOf('map')).toBe('Map');
   });
 
+  it('says when a type is only taken from where the value goes', () => {
+    const index = indexDocument(
+      docWith(
+        pin('out', 'out', { type: 'map', typeText: 'Any', usedAs: true }),
+        pin('in', 'in', { type: 'map' })
+      )
+    );
+    expect(wireType(index, edge('data'))).toEqual({
+      name: 'Map',
+      detail: 'Any, used as Map',
+    });
+  });
+
   it("takes the input's type when the output has none", () => {
     const index = indexDocument(
       docWith(

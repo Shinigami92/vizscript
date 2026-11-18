@@ -74,6 +74,12 @@ export interface Pin {
    * checker gave it (`applyTypes`).
    */
   typeText?: string;
+  /**
+   * An output the code leaves untyped (`json.load(…)` is `Any`) that shows
+   * the type of the inputs it is wired into, like UE's wildcard pins
+   * (`typeOutputsByUse`): the code doesn't declare it.
+   */
+  usedAs?: boolean;
   /** Source range of the expression feeding (in) or produced by (out) this pin. */
   range?: SourceRange;
   literal?: PinLiteral;

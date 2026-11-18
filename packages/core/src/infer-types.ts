@@ -2,7 +2,7 @@ import type { StatementMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import type { GraphDocument, GraphNode } from './ir';
 import type { ScriptSymbol } from './symbols';
-import { typeWildcardPins } from './wildcard-pins';
+import { typeOutputsByUse, typeWildcardPins } from './wildcard-pins';
 
 const VARIABLE_KINDS = new Set(['variable', 'constant', 'local']);
 
@@ -90,5 +90,7 @@ export function inferTypes(doc: GraphDocument): void {
     }
   }
 
-  doc.functions = doc.functions.map(typeWildcardPins);
+  doc.functions = doc.functions.map((fn) =>
+    typeWildcardPins(typeOutputsByUse(fn))
+  );
 }

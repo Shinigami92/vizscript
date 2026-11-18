@@ -144,6 +144,14 @@ export function wireType(
 
   const type = String(pin.type);
   const name = typeName(type);
+  // An untyped value shown with the type of where it goes.
+  if (pin.usedAs) {
+    return {
+      name,
+      detail: `${pin.typeText?.trim() || 'Any'}, used as ${name}`,
+    };
+  }
+
   const detail = pin.typeText?.trim();
   return detail && detail !== type && detail !== name
     ? { name, detail }

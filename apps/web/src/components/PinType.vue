@@ -12,9 +12,15 @@ const props = defineProps<{ pin?: Pin; type?: DataType }>();
 const shown = computed<Pick<Pin, 'kind' | 'type'>>(
   () => props.pin ?? { kind: 'data', type: props.type ?? 'any' }
 );
-const label = computed(() =>
-  shown.value.kind === 'exec' ? 'exec' : shown.value.type || 'any'
-);
+const label = computed(() => {
+  if (shown.value.kind === 'exec') {
+    return 'exec';
+  }
+
+  const type = shown.value.type || 'any';
+  // An untyped value shown with the type of where it goes.
+  return props.pin?.usedAs ? `any, used as ${type}` : type;
+});
 </script>
 
 <template>
