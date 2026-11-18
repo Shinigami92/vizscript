@@ -13,8 +13,11 @@ import {
   setElementType,
 } from './types';
 
-/** The containers UE has nodes for: arrays, maps and sets. */
-export type ContainerKind = 'array' | 'map' | 'set';
+/**
+ * The containers UE has nodes for: arrays, maps and sets; and strings, for
+ * their LENGTH.
+ */
+export type ContainerKind = 'array' | 'map' | 'set' | 'string';
 
 /**
  * A pin's type in terms of its container: an `element` (of an array or
@@ -60,6 +63,16 @@ export interface ContainerOp {
   mutates?: boolean;
   /** An operator whose container is its last value (`x in items`). */
   containerLast?: boolean;
+  /**
+   * Its values are passed by reference (Rust's `contains(&x)`): the action
+   * menu writes `TypeSystemInfo.keyReference` before them.
+   */
+  byReference?: boolean;
+  /**
+   * Only for values whose type is written like this (a regular
+   * expression): TypeScript's `Map` methods don't exist on a `Record`.
+   */
+  typeText?: string;
 }
 
 /** Which container a type is, if any (untyped ones too). */
@@ -70,6 +83,10 @@ export function containerKind(type: DataType): ContainerKind | undefined {
 
   if (isMapType(type)) {
     return 'map';
+  }
+
+  if (type === 'string') {
+    return 'string';
   }
 
   return isSetType(type) ? 'set' : undefined;
@@ -108,6 +125,10 @@ export function containerPartType(
 ): DataType {
   switch (part) {
     case 'element': {
+      if (container === 'string') {
+        return 'string';
+      }
+
       return isSetType(container)
         ? setElementType(container)
         : arrayElementType(container);

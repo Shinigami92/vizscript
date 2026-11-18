@@ -1,5 +1,8 @@
 import type { ContainerOp } from '@vizscript/core';
 
+/** `Map` and `Set` methods: a `Record` (also a map) has none of them. */
+const MAP_OR_SET = String.raw`^(?:Readonly|Weak)?(?:Map|Set)<`;
+
 /**
  * TypeScript's operations on arrays, `Map`s and `Set`s that UE draws as
  * container nodes (LENGTH, CONTAINS, ADD …).
@@ -7,7 +10,7 @@ import type { ContainerOp } from '@vizscript/core';
 export const TYPESCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
   {
     word: 'LENGTH',
-    on: ['array'],
+    on: ['array', 'string'],
     form: 'property',
     name: 'length',
     result: 'number',
@@ -17,6 +20,7 @@ export const TYPESCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     on: ['map', 'set'],
     form: 'property',
     name: 'size',
+    typeText: MAP_OR_SET,
     result: 'number',
   },
   {
@@ -40,6 +44,7 @@ export const TYPESCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     on: ['map'],
     form: 'method',
     name: 'has',
+    typeText: MAP_OR_SET,
     args: ['key'],
     result: 'bool',
   },
@@ -56,15 +61,24 @@ export const TYPESCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     on: ['map'],
     form: 'method',
     name: 'get',
+    typeText: MAP_OR_SET,
     args: ['key'],
     result: 'value',
   },
-  { word: 'KEYS', on: ['map'], form: 'method', name: 'keys', result: 'keys' },
+  {
+    word: 'KEYS',
+    on: ['map'],
+    form: 'method',
+    name: 'keys',
+    result: 'keys',
+    typeText: MAP_OR_SET,
+  },
   {
     word: 'VALUES',
     on: ['map'],
     form: 'method',
     name: 'values',
+    typeText: MAP_OR_SET,
     result: 'values',
   },
   {
@@ -90,6 +104,7 @@ export const TYPESCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     on: ['map'],
     form: 'method',
     name: 'set',
+    typeText: MAP_OR_SET,
     args: ['key', 'value'],
     result: 'container',
     mutates: true,
@@ -108,15 +123,40 @@ export const TYPESCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     on: ['map'],
     form: 'method',
     name: 'delete',
+    typeText: MAP_OR_SET,
     args: ['key'],
     result: 'bool',
     mutates: true,
   },
   {
+    word: 'REMOVE INDEX',
+    on: ['array'],
+    form: 'method',
+    name: 'splice',
+    args: ['number', 'number'],
+    result: 'container',
+    mutates: true,
+  },
+  ...(
+    [
+      ['UNION', 'union'],
+      ['INTERSECTION', 'intersection'],
+      ['DIFFERENCE', 'difference'],
+    ] as const
+  ).map(([word, name]): ContainerOp => ({
+    word,
+    on: ['set'],
+    form: 'method',
+    name,
+    args: ['container'],
+    result: 'container',
+  })),
+  {
     word: 'CLEAR',
     on: ['map', 'set'],
     form: 'method',
     name: 'clear',
+    typeText: MAP_OR_SET,
     mutates: true,
   },
 ];

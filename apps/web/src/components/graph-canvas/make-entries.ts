@@ -14,6 +14,7 @@ import {
   mapKeyType,
 } from '@vizscript/core';
 import type { ActionEntry } from '../ActionMenu.vue';
+import { emptyValueOf, opFits } from './container-entries';
 import { EXPRESSION_ICONS } from './menu-data';
 
 /**
@@ -80,17 +81,6 @@ export function throwEntries(
     : [];
 }
 
-/** A new key of `type`: an empty string or number, else the placeholder. */
-function emptyKey(types: TypeSystemInfo, type: string): string {
-  const option = types.primitives.find(
-    (p) =>
-      p.dataType === type &&
-      !p.defaultIsNode &&
-      (type !== 'string' || /^(["'])\1$/.test(p.defaultValue ?? ''))
-  );
-  return option?.defaultValue ?? types.placeholder ?? 'undefined';
-}
-
 /**
  * UE's GET and FIND from a container's output: one element of an array
  * (`items[0]`) or the value of a key in a map (`prices['']`), written as
@@ -131,11 +121,16 @@ export function elementEntries(
     ];
   }
 
-  if (!indexable) {
+  // A FIND of the language (`d.get(k)`, no error when missing, like UE's)
+  // goes before an index.
+  const finds = types.containerOps?.some(
+    (op) => op.word === 'FIND' && opFits(op, 'map', pin)
+  );
+  if (!indexable || finds) {
     return [];
   }
 
-  const key = emptyKey(types, mapKeyType(pin.type));
+  const key = emptyValueOf(types, mapKeyType(pin.type));
   const literal = /^["']/.test(key);
   return [
     {

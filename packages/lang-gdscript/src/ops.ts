@@ -20,6 +20,7 @@ import {
 } from '@vizscript/core';
 import { addGDScriptImport } from './add-import';
 import type { Annotation } from './ast';
+import { GDSCRIPT_CONTAINER_OPS } from './container-ops';
 import { CONVERSIONS } from './conversions';
 import { godotClasses, godotSingletonCalls } from './godot';
 import { setGDScriptSymbolGroup } from './groups';
@@ -61,6 +62,7 @@ const KEYWORDS = new Set(
 const KINDS = ['var', 'const'];
 
 export const GDSCRIPT_TYPES: TypeSystemInfo = {
+  containerOps: GDSCRIPT_CONTAINER_OPS,
   callback: 'func(): pass',
   conversions: CONVERSIONS,
   classes: godotClasses(),

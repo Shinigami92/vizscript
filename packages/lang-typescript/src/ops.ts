@@ -21,6 +21,7 @@ import {
   withStartValue,
 } from '@vizscript/core';
 import { addTypeScriptImport } from './add-import';
+import { TYPESCRIPT_CONTAINER_OPS } from './container-ops';
 import { CONVERSIONS } from './conversions';
 import { parseFile, parseTypeScript } from './lower';
 import { renameTypeScriptSymbol, typeScriptCallSites } from './rename';
@@ -39,6 +40,7 @@ const KINDS = ['const', 'let', 'var'];
 const ACCESS = ['public', 'protected', 'private'];
 
 export const TYPESCRIPT_TYPES: TypeSystemInfo = {
+  containerOps: TYPESCRIPT_CONTAINER_OPS,
   callback: '() => {}',
   conversions: CONVERSIONS,
   keywords: [...KEYWORDS],

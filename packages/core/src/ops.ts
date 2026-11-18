@@ -1,3 +1,4 @@
+import type { ContainerOp } from './container-ops';
 import type { Conversion } from './conversions';
 import type { EngineClass } from './engine-classes';
 import type { ImportRequest, ParseOptions } from './imports';
@@ -418,6 +419,11 @@ export interface TypeSystemInfo {
    * is dragged from an output, like a Throw node with it wired in.
    */
   throwValue?: string;
+  /**
+   * Operations on containers drawn as UE's container nodes (LENGTH, ADD …);
+   * the action menu offers them from a container's output.
+   */
+  containerOps?: ReadonlyArray<ContainerOp>;
   /**
    * Written before a map key that is no string literal when indexing
    * (`&` in Rust: `prices[&id]`, but `prices["tea"]`), for UE's FIND.

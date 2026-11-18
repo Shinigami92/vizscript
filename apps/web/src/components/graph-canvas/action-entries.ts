@@ -9,6 +9,7 @@ import { isTypeCompatible, qualifiedName } from '@vizscript/core';
 import { shortcut } from '../../graph/source';
 import { topLevelGraph } from '../../graph/symbols';
 import type { ActionEntry } from '../ActionMenu.vue';
+import { containerEntries } from './container-entries';
 import { engineMembers, scriptBaseClass } from './engine-entries';
 import {
   callSignature,
@@ -651,6 +652,7 @@ export function createActionEntries(
               ),
           })),
         ...elementEntries(props.types, pin, source, state.world, emitOp),
+        ...containerEntries(props.types, pin, source, state.world, emitOp),
         ...throwEntries(props.types, source, state.world, emitOp),
         // Set a variable to this value (`score = value`).
         ...scopeVariables(props.doc, index.value.nodes.get(source.node)?.fn.id)

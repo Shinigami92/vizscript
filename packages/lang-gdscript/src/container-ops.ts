@@ -13,6 +13,13 @@ export const GDSCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     result: 'number',
   },
   {
+    word: 'LENGTH',
+    on: ['string'],
+    form: 'method',
+    name: 'length',
+    result: 'number',
+  },
+  {
     word: 'CONTAINS',
     on: ['array'],
     form: 'method',
@@ -101,6 +108,22 @@ export const GDSCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     name: 'erase',
     args: ['key'],
     result: 'bool',
+    mutates: true,
+  },
+  {
+    word: 'REMOVE INDEX',
+    on: ['array'],
+    form: 'method',
+    name: 'remove_at',
+    args: ['number'],
+    mutates: true,
+  },
+  {
+    word: 'APPEND',
+    on: ['array'],
+    form: 'method',
+    name: 'append_array',
+    args: ['container'],
     mutates: true,
   },
   {

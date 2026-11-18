@@ -1,13 +1,20 @@
 import type { ContainerOp } from '@vizscript/core';
 
 const ALL = ['array', 'map', 'set'] as const;
+const SIZED = ['array', 'map', 'set', 'string'] as const;
 
 /**
  * Python's operations on lists, dicts and sets that UE draws as container
  * nodes (LENGTH, CONTAINS, ADD …).
  */
 export const PYTHON_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
-  { word: 'LENGTH', on: ALL, form: 'function', name: 'len', result: 'number' },
+  {
+    word: 'LENGTH',
+    on: SIZED,
+    form: 'function',
+    name: 'len',
+    result: 'number',
+  },
   {
     word: 'CONTAINS',
     on: ['array', 'set'],
@@ -97,6 +104,31 @@ export const PYTHON_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     name: 'pop',
     args: ['key'],
     result: 'value',
+    mutates: true,
+  },
+  {
+    word: 'REMOVE INDEX',
+    on: ['array'],
+    form: 'method',
+    name: 'pop',
+    args: ['number'],
+    result: 'element',
+    mutates: true,
+  },
+  {
+    word: 'APPEND',
+    on: ['array'],
+    form: 'method',
+    name: 'extend',
+    args: ['container'],
+    mutates: true,
+  },
+  {
+    word: 'ADD ITEMS',
+    on: ['set'],
+    form: 'method',
+    name: 'update',
+    args: ['container'],
     mutates: true,
   },
   { word: 'CLEAR', on: ALL, form: 'method', name: 'clear', mutates: true },

@@ -41,4 +41,21 @@ describe('container operations (UE container nodes)', () => {
       'ADD [exec] (Set<string>, string) -> Set<string>',
     ]);
   });
+
+  it('reads strings, removals by index and set operations too', () => {
+    const doc = parseTypeScript(
+      'function f(name: string, items: string[], a: Set<string>, b: Set<string>) {\n  const n = name.length;\n  items.splice(0, 1);\n  const u = a.union(b);\n}\n',
+      't.ts'
+    );
+    expect(
+      doc.functions
+        .flatMap((f) => f.nodes)
+        .filter((n) => isContainerNode(n))
+        .map(describeNode)
+    ).toEqual([
+      'LENGTH (string) -> number',
+      'REMOVE INDEX [exec] (string[], number, number) -> string[]',
+      'UNION (Set<string>, Set<string>) -> Set<string>',
+    ]);
+  });
 });

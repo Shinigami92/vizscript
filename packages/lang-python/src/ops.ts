@@ -13,6 +13,7 @@ import {
   removeModifier,
   typeCoversInput,
 } from '@vizscript/core';
+import { PYTHON_CONTAINER_OPS } from './container-ops';
 import { CONVERSIONS } from './conversions';
 import { parsePython } from './convert';
 import { splitString } from './convert-utils';
@@ -53,6 +54,7 @@ const KEYWORDS = new Set(
 );
 
 export const PYTHON_TYPES: TypeSystemInfo = {
+  containerOps: PYTHON_CONTAINER_OPS,
   callback: 'lambda: None',
   conversions: CONVERSIONS,
   keywords: [...KEYWORDS],
