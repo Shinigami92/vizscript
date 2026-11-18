@@ -38,6 +38,7 @@ export interface OpRunnerDeps {
     | 'addFloating'
     | 'fillCutReceiver'
     | 'floatInput'
+    | 'floatLiteral'
     | 'floatPromote'
     | 'floatReceiver'
     | 'floatValueUse'
@@ -118,6 +119,11 @@ export function useOpRunner(deps: OpRunnerDeps): {
       ((await overlay.fillCutReceiver(op, deps.freezeLayout)) ||
         (await overlay.floatInput(op)))
     ) {
+      return true;
+    }
+
+    // A value for a missing argument of a floating call.
+    if (op.type === 'setLiteral' && (await overlay.floatLiteral(op))) {
       return true;
     }
 

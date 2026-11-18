@@ -140,6 +140,9 @@ export interface WorkspaceGraphOverlay {
   floatPromote: (op: Extract<GraphOp, { type: 'promote' }>) => Promise<boolean>;
   /** A value for an input of a floating node; `false` for code's nodes. */
   floatInput: (op: Extract<GraphOp, { type: 'setInput' }>) => Promise<boolean>;
+  floatLiteral: (
+    op: Extract<GraphOp, { type: 'setLiteral' }>
+  ) => Promise<boolean>;
   /**
    * A value wired into the empty `this` of a floating call (`round()`):
    * the call is made again with it (`Math.round()`), so it gets the typed
@@ -549,18 +552,75 @@ export function useGraphOverlay(
     }
 
     const start = node.range.start + at;
-    const code = `${group.code.slice(0, start)}${op.expression}${group.code.slice(start + raw.length)}`;
+    await refloat(
+      group,
+      node,
+      `${group.code.slice(0, start)}${op.expression}${group.code.slice(start + raw.length)}`,
+      op.position
+    );
+    return true;
+  }
+
+  /**
+   * A value for a missing argument of a floating call (`.at()`'s index,
+   * from Details or its inline box): written into the group's code with
+   * the file's syntax (`inFloating`), and the group is made again.
+   */
+  async function floatLiteral(
+    op: Extract<GraphOp, { type: 'setLiteral' }>
+  ): Promise<boolean> {
+    const name = floatingGroup(op.node);
+    const group = overlay.value.edits.find(
+      (e): e is FloatingNodes => e.type === 'addNodes' && e.id === name
+    );
+    const node = group?.nodes.find((n) => n.id === op.node);
+    const pin = node?.pins.find((p) => p.id === op.pin);
+    const at = pin ? getMeta<InputPinMeta>(pin).insertInitAt : undefined;
+    // Inside the node's code (older groups kept offsets of their copy).
+    if (
+      !group ||
+      !node ||
+      !pin?.literal ||
+      pin.range ||
+      at === undefined ||
+      at < node.range.start ||
+      at > node.range.end
+    ) {
+      return false;
+    }
+
+    const result = await deps.client.applyOp(
+      deps.text.value,
+      deps.path(),
+      { type: 'inFloating', group, op },
+      deps.imports()
+    );
+    if (!result.ok) {
+      deps.show(result.error, 'error');
+      return true;
+    }
+
+    await refloat(group, node, applyTextEdits(group.code, result.edits));
+    return true;
+  }
+
+  /** A floating group made again from new code, around `node`'s place. */
+  async function refloat(
+    group: FloatingNodes,
+    node: GraphNode,
+    code: string,
+    position?: Point
+  ): Promise<void> {
     const statement = group.nodes.some((n) =>
       n.pins.some((p) => p.kind === 'exec')
     );
     await addFloating(
       statement ? { type: 'code', code } : { type: 'value', expression: code },
       // Laid out around the node it was set on, which keeps its place.
-      deps.positionOf(node.id) ?? op.position ?? { x: 0, y: 0 },
+      deps.positionOf(node.id) ?? position ?? { x: 0, y: 0 },
       group.fnId,
       { replaces: [group], anchored: true }
     );
-    return true;
   }
 
   async function floatReceiver(
@@ -772,6 +832,7 @@ export function useGraphOverlay(
     floatPromote,
     floatReceiver,
     floatInput,
+    floatLiteral,
     fillCutReceiver,
     setOverlay,
     discard,

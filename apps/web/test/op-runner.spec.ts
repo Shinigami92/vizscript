@@ -61,6 +61,7 @@ function runner(
       addFloating: async () => undefined,
       fillCutReceiver: async () => false,
       floatInput: async () => false,
+      floatLiteral: async () => false,
       floatReceiver: async () => false,
       floatValueUse: async () => false,
       floatPromote: async () => false,

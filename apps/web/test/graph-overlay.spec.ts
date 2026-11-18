@@ -200,6 +200,42 @@ describe('a node picked from a value', () => {
   });
 });
 
+describe('a value for a floating call', () => {
+  it('fills a missing argument (Details, inline box)', async () => {
+    const { overlay } = setup();
+    const call = group('g()', 'a');
+    overlay.setOverlay({ edits: [call] });
+    const node = call.nodes.find((n) => n.title === 'g')?.id ?? '';
+    expect(
+      await overlay.floatLiteral({
+        type: 'setLiteral',
+        node,
+        pin: 'param:n',
+        value: '1',
+      })
+    ).toBe(true);
+    await settle();
+    expect(
+      overlay.overlay.value.edits.map((e) => e.type === 'addNodes' && e.code)
+    ).toEqual(['g(1);']);
+  });
+
+  it('leaves the code’s nodes to the code', async () => {
+    const { overlay } = setup();
+    const call = parseTypeScript(TEXT, 't.ts')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.title === 'g');
+    expect(
+      await overlay.floatLiteral({
+        type: 'setLiteral',
+        node: call?.id ?? '',
+        pin: 'arg0',
+        value: '2',
+      })
+    ).toBe(false);
+  });
+});
+
 describe('Promote to Variable', () => {
   it('floats the SET of an unused value, out of the flow', async () => {
     const code =

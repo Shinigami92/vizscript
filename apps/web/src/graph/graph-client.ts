@@ -138,9 +138,14 @@ export class GraphClient {
     imports?: ImportedDeclaration[],
     checked?: ParseOptions['checked']
   ): Promise<OpResult> {
-    return this.send('applyOp', { text, fileName, op, imports, checked }).catch(
-      (error: Error): OpResult => ({ ok: false, error: error.message })
-    );
+    return this.send('applyOp', {
+      text,
+      fileName,
+      // Plain data for the worker (`inFloating` carries reactive state).
+      op: JSON.parse(JSON.stringify(op)) as GraphOp,
+      imports,
+      checked,
+    }).catch((error: Error): OpResult => ({ ok: false, error: error.message }));
   }
 
   /**
