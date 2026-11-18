@@ -1,15 +1,24 @@
-import { linkPin, pinKey, reroutePatch, snapToGrid } from '@vizscript/core';
+import { linkPin, pinKey, reroutePatch } from '@vizscript/core';
 import type { LayoutPatch, Point } from '@vizscript/core';
 import { normalizeRect, zoomAt } from './camera';
-import { DRAG_THRESHOLD, knotId, parseKnotId } from './graph-view-constants';
+import { knotId, parseKnotId } from './graph-view-constants';
 import { GraphViewDocument } from './graph-view-document';
 import type { AlignMode, GraphViewOptions } from './graph-view-types';
-import { samePin } from './pin-ref';
+import {
+  connectOp,
+  hoverOf,
+  knotsInRect,
+  moveDropTarget,
+  panCamera,
+  pastThreshold,
+  pinchCamera,
+  snappedOffset,
+  wireDropTarget,
+} from './pointer-drag';
 import type { PointerIntent } from './pointer-intent';
 import { classifyPointerDown } from './pointer-intent';
 import { clickSelection, marqueeSelection } from './selection';
 import type { SelectionModifiers } from './selection';
-import { connectProblem, conversionOf, moveProblem } from './wire-rules';
 
 /** UE's alignment shortcuts. */
 function alignKey(e: KeyboardEvent): AlignMode | undefined {
@@ -385,35 +394,29 @@ export class GraphView extends GraphViewDocument {
         }
 
         const [a, b] = [...this.pointers.values()] as [Point, Point];
-        const distance = Math.hypot(a.x - b.x, a.y - b.y);
-        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        let camera = zoomAt(
-          drag.startCamera,
-          drag.startMid,
-          distance / Math.max(drag.startDistance, 1)
+        this.setCameraInternal(
+          pinchCamera(
+            {
+              camera: drag.startCamera,
+              mid: drag.startMid,
+              distance: drag.startDistance,
+            },
+            a,
+            b
+          )
         );
-        camera = {
-          ...camera,
-          x: camera.x - (mid.x - drag.startMid.x) / camera.zoom,
-          y: camera.y - (mid.y - drag.startMid.y) / camera.zoom,
-        };
-        this.setCameraInternal(camera);
         return;
       }
 
       case 'pan': {
         const dx = client.x - drag.startClient.x;
         const dy = client.y - drag.startClient.y;
-        if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) {
+        if (!drag.moved && !pastThreshold(dx, dy)) {
           return;
         }
 
         drag.moved = true;
-        this.setCameraInternal({
-          zoom: drag.startCamera.zoom,
-          x: drag.startCamera.x - dx / drag.startCamera.zoom,
-          y: drag.startCamera.y - dy / drag.startCamera.zoom,
-        });
+        this.setCameraInternal(panCamera(drag.startCamera, dx, dy));
         return;
       }
 
@@ -421,21 +424,13 @@ export class GraphView extends GraphViewDocument {
         const world = this.toWorld(e);
         const dx = world.x - drag.startWorld.x;
         const dy = world.y - drag.startWorld.y;
-        if (
-          !drag.moved &&
-          Math.hypot(dx, dy) * this.camera.zoom < DRAG_THRESHOLD
-        ) {
+        const zoom = this.camera.zoom;
+        if (!drag.moved && !pastThreshold(dx * zoom, dy * zoom)) {
           return;
         }
 
         drag.moved = true;
-        // The grabbed node snaps to the grid; the others keep their offset.
-        const snapped = snapToGrid({
-          x: drag.anchor.x + dx,
-          y: drag.anchor.y + dy,
-        });
-        const sx = snapped.x - drag.anchor.x;
-        const sy = snapped.y - drag.anchor.y;
+        const { x: sx, y: sy } = snappedOffset(drag.anchor, dx, dy);
         for (const [id, origin] of drag.origins) {
           const ns = this.nodes.get(id);
           if (ns) {
@@ -462,20 +457,7 @@ export class GraphView extends GraphViewDocument {
         drag.currentWorld = this.toWorld(e);
         const rect = normalizeRect(drag.startWorld, drag.currentWorld);
         const hits = this.index.query(rect);
-        const knots: string[] = [];
-        for (const [edgeId, points] of this.reroutes) {
-          for (const [index, p] of points.entries()) {
-            if (
-              p.x >= rect.x &&
-              p.x <= rect.x + rect.width &&
-              p.y >= rect.y &&
-              p.y <= rect.y + rect.height
-            ) {
-              knots.push(knotId(edgeId, index));
-            }
-          }
-        }
-
+        const knots = knotsInRect(this.reroutes, rect);
         this.knotSelection = marqueeSelection(drag.baseKnots, knots, drag.mods);
         this.setSelectionInternal(marqueeSelection(drag.base, hits, drag.mods));
         return;
@@ -484,16 +466,7 @@ export class GraphView extends GraphViewDocument {
       case 'moveWires': {
         const world = this.toWorld(e);
         drag.currentWorld = world;
-        const hit = this.hitTest(world);
-        const problem =
-          hit?.type === 'pin' && !samePin(hit, drag.from)
-            ? moveProblem(drag, hit)
-            : null;
-        drag.target =
-          hit?.type === 'pin' && !samePin(hit, drag.from) && !problem
-            ? { ns: hit.ns, pg: hit.pg }
-            : null;
-        drag.problem = problem;
+        Object.assign(drag, moveDropTarget(drag, this.hitTest(world)));
         this.requestRender();
         return;
       }
@@ -501,40 +474,18 @@ export class GraphView extends GraphViewDocument {
       case 'wire': {
         const world = this.toWorld(e);
         drag.currentWorld = world;
-        const hit = this.hitTest(world);
-        const problem =
-          hit?.type === 'pin' && !samePin(hit, drag.from)
-            ? connectProblem(drag.from, hit, this.conversions())
-            : null;
-        drag.target =
-          hit?.type === 'pin' && !samePin(hit, drag.from) && !problem
-            ? { ns: hit.ns, pg: hit.pg }
-            : null;
-        drag.problem = problem;
-        // A data input and an exec output take one wire: the new one
-        // replaces it.
-        const [output, input] =
-          drag.target?.pg.pin.direction === 'in'
-            ? [drag.from, drag.target]
-            : [drag.target, drag.from];
-        const wired = (end: typeof input | null): boolean =>
-          end !== null &&
-          this.connectedPins.has(
-            pinKey({ node: end.ns.node.id, pin: end.pg.pin.id })
-          );
-        drag.replaces =
-          drag.target === null
-            ? null
-            : input.pg.pin.kind === 'data' && wired(input)
-              ? 'input'
-              : output?.pg.pin.kind === 'exec' && wired(output)
-                ? 'output'
-                : null;
-        // A frame or comment box title counts as empty space too.
-        drag.empty = (hit?.type ?? 'frame') === 'frame';
-        drag.convert = drag.target
-          ? (conversionOf(drag.from, drag.target, this.conversions()) ?? null)
-          : null;
+        Object.assign(
+          drag,
+          wireDropTarget(
+            drag.from,
+            this.hitTest(world),
+            this.conversions(),
+            (end) =>
+              this.connectedPins.has(
+                pinKey({ node: end.ns.node.id, pin: end.pg.pin.id })
+              )
+          )
+        );
         this.requestRender();
       }
     }
@@ -542,42 +493,17 @@ export class GraphView extends GraphViewDocument {
 
   private updateHover(world: Point): void {
     const hit = this.hitTest(world);
-    let cursor = 'default';
     const edge = hit ? null : this.hitWire(world, this.wireTolerance());
-    this.setHoverEdge(edge?.edge.id ?? null);
-    this.setHoverAddPin(
-      hit?.type === 'node' && hit.addPin ? hit.ns.node.id : null
+    const hover = hoverOf(
+      hit,
+      edge?.edge.id ?? null,
+      this.editable,
+      this.spaceDown
     );
-
-    if (!hit) {
-      this.setHover(null, null);
-      if (edge) {
-        cursor = 'pointer';
-      }
-    } else if (hit.type === 'frame' || hit.type === 'knot') {
-      this.setHover(null, null);
-      cursor = 'move';
-    } else {
-      this.setHover(hit.ns.node.id, hit.type === 'pin' ? hit.pg.pin.id : null);
-      cursor =
-        hit.type === 'node' && (hit.advanced || hit.addPin)
-          ? 'pointer'
-          : hit.type === 'pin' && this.editable
-            ? 'crosshair'
-            : hit.type === 'literal' &&
-                this.editable &&
-                hit.pg.pin.literal?.editable !== false
-              ? hit.pg.pin.literal?.kind === 'boolean'
-                ? 'pointer'
-                : 'text'
-              : 'move';
-    }
-
-    if (this.spaceDown) {
-      cursor = 'grab';
-    }
-
-    this.canvas.style.cursor = cursor;
+    this.setHoverEdge(hover.edge);
+    this.setHoverAddPin(hover.addPin);
+    this.setHover(hover.node, hover.pin);
+    this.canvas.style.cursor = hover.cursor;
   }
 
   private onPointerUp(e: PointerEvent): void {
@@ -666,15 +592,7 @@ export class GraphView extends GraphViewDocument {
       case 'wire': {
         const from = drag.from;
         if (drag.target) {
-          const outIsFrom = from.pg.pin.direction === 'out';
-          const out = outIsFrom ? from : drag.target;
-          const input = outIsFrom ? drag.target : from;
-          this.emitter.emit('op', {
-            type: 'connect',
-            from: { node: out.ns.node.id, pin: out.pg.pin.id },
-            to: { node: input.ns.node.id, pin: input.pg.pin.id },
-            ...(drag.convert ? { convert: drag.convert.template } : {}),
-          });
+          this.emitter.emit('op', connectOp(from, drag.target, drag.convert));
         } else if (
           // A frame or comment box title counts as empty space too.
           (this.hitTest(drag.currentWorld)?.type ?? 'frame') === 'frame'
