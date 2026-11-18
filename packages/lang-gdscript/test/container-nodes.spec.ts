@@ -80,4 +80,20 @@ describe('container operations (UE container nodes)', () => {
       })
     ).toContain('\tvar ok = not flag\n');
   });
+
+  it('draws an element write as Set Array Elem, a dictionary’s as ADD', () => {
+    const doc = parseGDScriptDocument(
+      'func f(items: Array[String], stock: Dictionary[String, int]):\n\titems[3] = "date"\n\tstock["apple"] = 2\n',
+      't.gd'
+    );
+    expect(
+      doc.functions
+        .flatMap((fn) => fn.nodes)
+        .filter((n) => n.kind === 'setElement')
+        .map(describeNode)
+    ).toEqual([
+      'Set Array Elem [exec] (string[], number, string)',
+      'ADD [exec] (Map<string, number>, string, number)',
+    ]);
+  });
 });

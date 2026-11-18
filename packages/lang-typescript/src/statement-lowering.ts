@@ -1,7 +1,13 @@
 import type * as t from '@babel/types';
 import type { Pin, SourceRange } from '@vizscript/core';
 import type { InsertPoint } from '@vizscript/core';
-import { markUnusedValue, truncate } from '@vizscript/core';
+import {
+  elementWrite,
+  markUnusedValue,
+  SET_ARRAY_ELEM,
+  styleElementWrite,
+  truncate,
+} from '@vizscript/core';
 import { patternAnnotation, typeFromAnnotation } from './annotations';
 import { ControlFlowLowering } from './control-flow-lowering';
 import type { InputSpec, ValueSource } from './lower-utils';
@@ -512,13 +518,65 @@ export abstract class StatementLowering extends ControlFlowLowering {
       left.type === 'MemberExpression' ||
       left.type === 'OptionalMemberExpression'
     ) {
+      const target = this.lowerExpr(left.object, `${path}.target`, 'eager');
+      // UE's Set Array Elem (`items[3] = x`), a map's ADD (`r['k'] = v`).
+      const write =
+        left.computed && expr.operator === '='
+          ? elementWrite(target.type)
+          : undefined;
+      if (write) {
+        const element: InputSpec[] = [
+          {
+            pin: this.dataIn(
+              'target',
+              write.map ? 'Target Map' : 'Target Array',
+              rangeOf(left.object),
+              write.targetType
+            ),
+            value: target,
+          },
+          {
+            pin: this.dataIn(
+              'index',
+              write.map ? 'Key' : 'Index',
+              rangeOf(left.property),
+              write.keyType
+            ),
+            value: this.lowerExpr(left.property, `${path}.index`, 'eager'),
+          },
+          {
+            pin: this.dataIn(
+              'item',
+              write.map ? 'Value' : 'Item',
+              rangeOf(expr.right),
+              write.itemType
+            ),
+            value: this.lowerExpr(expr.right, `${path}.value`, 'eager'),
+          },
+        ];
+        const node = this.addNode({
+          kind: 'setElement',
+          title: SET_ARRAY_ELEM,
+          category: 'function',
+          purity: 'impure',
+          range: rangeOf(stmt),
+          pins: [...pins, ...element.map((i) => i.pin)],
+          path,
+          meta: statementMeta,
+        });
+        this.feedAll(node.id, element);
+        styleElementWrite(node, write.targetType);
+        this.chain(node);
+        return;
+      }
+
       const property = left.computed
         ? `[${truncate(this.source(rangeOf(left.property)), 16)}]`
         : this.source(rangeOf(left.property));
       title = `Set .${property}`;
       inputs.push({
         pin: this.dataIn('target', 'Target', rangeOf(left.object), 'object'),
-        value: this.lowerExpr(left.object, `${path}.target`, 'eager'),
+        value: target,
       });
     } else {
       title = `Set ${truncate(this.source(rangeOf(left)), 24)}`;

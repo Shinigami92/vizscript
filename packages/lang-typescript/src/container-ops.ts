@@ -25,6 +25,7 @@ export const TYPESCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
   },
   {
     word: 'CONTAINS',
+    label: 'INCLUDES',
     on: ['array'],
     form: 'method',
     name: 'includes',
@@ -33,6 +34,7 @@ export const TYPESCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
   },
   {
     word: 'CONTAINS',
+    label: 'HAS',
     on: ['set'],
     form: 'method',
     name: 'has',
@@ -41,6 +43,7 @@ export const TYPESCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
   },
   {
     word: 'CONTAINS',
+    label: 'HAS',
     on: ['map'],
     form: 'method',
     name: 'has',
@@ -49,7 +52,7 @@ export const TYPESCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     result: 'bool',
   },
   {
-    word: 'FIND',
+    word: 'INDEX OF',
     on: ['array'],
     form: 'method',
     name: 'indexOf',

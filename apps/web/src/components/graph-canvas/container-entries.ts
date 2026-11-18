@@ -116,12 +116,13 @@ export function containerEntries(
   const entry = (
     word: string,
     name: string,
-    expression: string
+    expression: string,
+    label = word
   ): ActionEntry => ({
-    label: titled(word),
+    label: titled(label),
     category: CATEGORIES[kind],
     icon: ICONS[kind],
-    keywords: `${word.toLowerCase()} ${name} ${kind}`,
+    keywords: `${label.toLowerCase()} ${word.toLowerCase()} ${name} ${kind}`,
     hint: expression.replaceAll('$value', '…'),
     fits: true,
     action: () =>
@@ -143,9 +144,9 @@ export function containerEntries(
     // UE's LAST INDEX of an array: its LENGTH minus one (`lastIndexValue`).
     return op.word === 'LENGTH' && kind === 'array'
       ? [
-          entry(op.word, op.name, expression),
+          entry(op.word, op.name, expression, op.label),
           entry('LAST INDEX', op.name, `${expression} - 1`),
         ]
-      : [entry(op.word, op.name, expression)];
+      : [entry(op.word, op.name, expression, op.label)];
   });
 }

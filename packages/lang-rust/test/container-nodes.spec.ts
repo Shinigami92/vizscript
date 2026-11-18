@@ -103,4 +103,17 @@ fn f(a: HashSet<u32>, b: HashSet<u32>) {
     });
     expect(wired).toEqual(['show(m.contains_key(&id));']);
   });
+
+  it('draws an element write as Set Array Elem', () => {
+    const doc = parseRustDocument(
+      'fn f(mut items: Vec<String>) {\n    items[3] = String::from("date");\n}\n',
+      't.rs'
+    );
+    expect(
+      doc.functions
+        .flatMap((fn) => fn.nodes)
+        .filter((n) => n.kind === 'setElement')
+        .map(describeNode)
+    ).toEqual(['Set Array Elem [exec] (string[], number, string)']);
+  });
 });

@@ -1,11 +1,19 @@
 import type {
+  ElementWrite,
   GraphNode,
   InputSpec,
   Pin,
   SourceRange,
   ValueSource,
 } from '@vizscript/core';
-import { addFoundPins, markUnusedValue, truncate } from '@vizscript/core';
+import {
+  addFoundPins,
+  elementWrite,
+  markUnusedValue,
+  SET_ARRAY_ELEM,
+  styleElementWrite,
+  truncate,
+} from '@vizscript/core';
 import type { Block, Expr, Span, Stmt, VarDecl } from './ast';
 import { GDSCRIPT_CONTAINER_OPS } from './container-ops';
 import { ControlFlowLowering } from './control-flow-lowering';
@@ -529,6 +537,7 @@ export class FnGraphBuilder extends ControlFlowLowering {
     const inputs: InputSpec[] = [];
     let title: string;
     let varName: string | undefined;
+    let write: ElementWrite | undefined;
 
     const chain = simpleChain(target, this.text);
     const rootWired =
@@ -544,18 +553,28 @@ export class FnGraphBuilder extends ControlFlowLowering {
       });
     } else if (target.type === 'Subscript') {
       title = 'Set [ ]';
+      const object = this.lowerExpr(target.object, `${path}.target`, 'eager');
+      // UE's Set Array Elem (`items[3] = x`), a dictionary's ADD.
+      write = stmt.op === '=' ? elementWrite(object.type) : undefined;
       inputs.push(
         {
           pin: this.dataIn(
             'target',
-            'Target',
+            write ? (write.map ? 'Target Map' : 'Target Array') : 'Target',
             rangeOf(target.object),
-            'object'
+            write?.targetType ?? 'object'
           ),
-          value: this.lowerExpr(target.object, `${path}.target`, 'eager'),
+          value: object,
         },
         {
-          pin: this.dataIn('key', 'Key', rangeOf(target.index)),
+          pin: write
+            ? this.dataIn(
+                'index',
+                write.map ? 'Key' : 'Index',
+                rangeOf(target.index),
+                write.keyType
+              )
+            : this.dataIn('key', 'Key', rangeOf(target.index)),
           value: this.lowerExpr(target.index, `${path}.key`, 'eager'),
         }
       );
@@ -564,10 +583,34 @@ export class FnGraphBuilder extends ControlFlowLowering {
     }
 
     inputs.push({
-      pin: this.dataIn('value', '', rangeOf(stmt.value)),
+      pin: write
+        ? this.dataIn(
+            'item',
+            write.map ? 'Value' : 'Item',
+            rangeOf(stmt.value),
+            write.itemType
+          )
+        : this.dataIn('value', '', rangeOf(stmt.value)),
       value: this.lowerExpr(stmt.value, `${path}.value`, 'eager', varName),
     });
     pins.push(...inputs.map((i) => i.pin));
+    if (write) {
+      const node = this.addNode({
+        kind: 'setElement',
+        title: SET_ARRAY_ELEM,
+        category: 'function',
+        purity: 'impure',
+        range: rangeOf(stmt),
+        pins,
+        path,
+        meta: this.statementMeta(stmt, inline, sole),
+      });
+      this.feedAll(node.id, inputs);
+      styleElementWrite(node, write.targetType);
+      this.chain(node);
+      return;
+    }
+
     const scoped = varName ? this.lookup(varName) : undefined;
     pins.push(
       this.dataOut(

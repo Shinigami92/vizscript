@@ -1,4 +1,4 @@
-import { containerWord } from './container-ops';
+import { containerLabel, containerWord } from './container-ops';
 import type { FunctionGraph, GraphDocument, GraphNode } from './ir';
 
 export interface SearchMatch {
@@ -32,10 +32,14 @@ export function searchNodes(
   for (const fn of doc.functions) {
     for (const node of fn.nodes) {
       let match: SearchMatch | undefined;
-      // A container node by its word too (`push` is ADD).
+      // A container node by its word too (`push` is ADD), shown or UE's
+      // (`includes` is INCLUDES and CONTAINS).
       const word = containerWord(node);
+      const label = containerLabel(node);
       if (hit(node.title)) {
         match = { node, fn, field: 'title', text: node.title };
+      } else if (hit(label)) {
+        match = { node, fn, field: 'title', text: label };
       } else if (hit(word)) {
         match = { node, fn, field: 'title', text: word };
       } else if (hit(node.subtitle)) {

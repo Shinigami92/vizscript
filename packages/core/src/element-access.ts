@@ -70,6 +70,45 @@ export function elementAccess(target: DataType): ElementAccess {
   };
 }
 
+/** Title of UE's Set Array Elem node (`items[3] = x`). */
+export const SET_ARRAY_ELEM = 'Set Array Elem';
+
+/** How a backend lowers writing one element (`items[3] = x`). */
+export interface ElementWrite {
+  /** A map's key (`d["k"] = v`, UE's map ADD), else an array's index. */
+  map: boolean;
+  targetType: DataType;
+  /** Type of the index or key pin. */
+  keyType: DataType;
+  /** Type of the item (array) or value (map) pin. */
+  itemType: DataType;
+}
+
+/**
+ * Writing one element of a container of type `target`: UE's Set Array
+ * Elem for an array, the map's ADD for a map. `undefined` for other
+ * targets (an object's computed key): those stay a SET.
+ */
+export function elementWrite(target: DataType): ElementWrite | undefined {
+  if (isArrayType(target)) {
+    return {
+      map: false,
+      targetType: target,
+      keyType: 'number',
+      itemType: arrayElementType(target),
+    };
+  }
+
+  return isMapType(target)
+    ? {
+        map: true,
+        targetType: target,
+        keyType: mapKeyType(target),
+        itemType: mapValueType(target),
+      }
+    : undefined;
+}
+
 /**
  * UE's GET or FIND node (`items[0]`, `prices["tea"]`), drawn as a word
  * over the container's symbol.

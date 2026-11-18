@@ -1,4 +1,4 @@
-import { containerWord, isContainerNode } from './container-ops';
+import { containerLabel, isContainerNode } from './container-ops';
 import type { InputPinMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import type { GraphNode, Pin } from './ir';
@@ -157,7 +157,7 @@ export function compactTitle(node: GraphNode): string {
     return 'SET';
   }
 
-  const word = containerWord(node);
+  const word = containerLabel(node);
   if (word !== undefined) {
     return word;
   }

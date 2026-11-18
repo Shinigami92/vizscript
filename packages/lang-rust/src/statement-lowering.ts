@@ -1,4 +1,5 @@
 import type {
+  ElementWrite,
   GraphNode,
   InputSpec,
   InsertPoint,
@@ -7,8 +8,11 @@ import type {
 } from '@vizscript/core';
 import {
   addFoundPins,
+  elementWrite,
   lineIndent,
   markUnusedValue,
+  SET_ARRAY_ELEM,
+  styleElementWrite,
   truncate,
 } from '@vizscript/core';
 import type { Block, Expr, FunctionItem, Span, Stmt, ValueItem } from './ast';
@@ -634,6 +638,7 @@ export class FnGraphBuilder extends ControlFlowLowering {
     const inputs: InputSpec[] = [];
     let title: string;
     let varName: string | undefined;
+    let write: ElementWrite | undefined;
     const chain = simpleChain(target);
     const rootWired =
       chain?.[0] !== undefined &&
@@ -650,18 +655,28 @@ export class FnGraphBuilder extends ControlFlowLowering {
       });
     } else if (target.type === 'Index') {
       title = 'Set [ ]';
+      const object = this.lowerExpr(target.object, `${path}.target`, 'eager');
+      // UE's Set Array Elem (`items[3] = x`).
+      write = stmt.op === '=' ? elementWrite(object.type) : undefined;
       inputs.push(
         {
           pin: this.dataIn(
             'target',
-            'Target',
+            write ? (write.map ? 'Target Map' : 'Target Array') : 'Target',
             rangeOf(target.object),
-            'object'
+            write?.targetType ?? 'object'
           ),
-          value: this.lowerExpr(target.object, `${path}.target`, 'eager'),
+          value: object,
         },
         {
-          pin: this.dataIn('key', 'Index', rangeOf(target.index)),
+          pin: write
+            ? this.dataIn(
+                'index',
+                write.map ? 'Key' : 'Index',
+                rangeOf(target.index),
+                write.keyType
+              )
+            : this.dataIn('key', 'Index', rangeOf(target.index)),
           value: this.lowerExpr(target.index, `${path}.key`, 'eager'),
         }
       );
@@ -676,6 +691,26 @@ export class FnGraphBuilder extends ControlFlowLowering {
     }
 
     const value = this.lowerExpr(stmt.value, `${path}.value`, 'eager', varName);
+    if (write) {
+      inputs.push({
+        pin: this.dataIn(
+          'item',
+          write.map ? 'Value' : 'Item',
+          rangeOf(stmt.value),
+          write.itemType
+        ),
+        value,
+      });
+      const node = this.simpleNode(stmt, path, meta, insert, {
+        kind: 'setElement',
+        title: SET_ARRAY_ELEM,
+        category: 'function',
+        inputs,
+      });
+      styleElementWrite(node, write.targetType);
+      return;
+    }
+
     const valuePin = this.dataIn('value', '', rangeOf(stmt.value));
     inputs.push({ pin: valuePin, value });
     const known = varName

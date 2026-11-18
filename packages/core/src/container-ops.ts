@@ -49,8 +49,13 @@ export type ContainerPart =
  * lists how its language writes them; the code stays as it is.
  */
 export interface ContainerOp {
-  /** The word on the node, like UE's. */
+  /** What it does, in UE's word (CONTAINS); found by it, shown unless `label`. */
   word: string;
+  /**
+   * The word shown instead, where the language's own name reads better
+   * (TypeScript's INCLUDES and HAS for CONTAINS).
+   */
+  label?: string;
   /** The containers it is for. */
   on: ReadonlyArray<ContainerKind>;
   /**
@@ -175,7 +180,7 @@ export function containerPartType(
 
 /** What `styleContainerNode` keeps on a node. */
 interface ContainerNodeMeta {
-  container: { word: string; pin: string };
+  container: { word: string; pin: string; label?: string };
 }
 
 /**
@@ -221,13 +226,23 @@ export function styleContainerNode(
   node.compact = true;
   node.meta = {
     ...node.meta,
-    container: { word: op.word, pin: containerPin },
+    container: {
+      word: op.word,
+      pin: containerPin,
+      ...(op.label === undefined ? {} : { label: op.label }),
+    },
   } satisfies ContainerNodeMeta;
 }
 
-/** The word of a container node (`LENGTH`), if it is one. */
+/** The word of a container node (`LENGTH`), if it is one: UE's. */
 export function containerWord(node: GraphNode): string | undefined {
   return getMeta<ContainerNodeMeta>(node).container?.word;
+}
+
+/** The word a container node shows: its label (INCLUDES), else its word. */
+export function containerLabel(node: GraphNode): string | undefined {
+  const container = getMeta<ContainerNodeMeta>(node).container;
+  return container?.label ?? container?.word;
 }
 
 /**
@@ -612,4 +627,25 @@ export function restyleContainerNodes(
     return node;
   });
   return changed ? { ...fn, nodes, edges } : fn;
+}
+
+/** UE's map ADD written as `d[key] = value`. */
+const MAP_ADD_ELEMENT: ContainerOp = {
+  word: 'ADD',
+  on: ['map'],
+  form: 'operator',
+  name: '[]=',
+  args: ['key', 'value'],
+  mutates: true,
+};
+
+/**
+ * Draws a write to one element (`setElement`, pins `target`, `index`,
+ * `item`) of a map as the map's ADD, like `m.set(k, v)`; arrays keep UE's
+ * Set Array Elem node.
+ */
+export function styleElementWrite(node: GraphNode, target: DataType): void {
+  if (isMapType(target)) {
+    styleContainerNode(node, MAP_ADD_ELEMENT, target, 'target');
+  }
 }

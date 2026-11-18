@@ -1,9 +1,10 @@
-import type { GraphNode, TypeInfo } from '@vizscript/core';
+import type { GraphNode, GraphOp, TypeInfo } from '@vizscript/core';
 import {
   applyTextEdits,
   compactTitle,
   isContainerNode,
   rangeKey,
+  searchNodes,
 } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
@@ -41,7 +42,7 @@ describe('container operations (UE container nodes)', () => {
     ).toEqual([
       'ADD [exec] (string[], string) -> number',
       'LENGTH (string[]) -> number',
-      'CONTAINS (Map<string, number>, string) -> bool',
+      'HAS (Map<string, number>, string) -> bool',
       'FIND (Map<string, number>, string) -> number, bool',
       'ADD [exec] (Set<string>, string) -> Set<string>',
     ]);
@@ -127,11 +128,11 @@ describe('container operations (UE container nodes)', () => {
     expect(
       fn?.nodes.filter((n) => isContainerNode(n)).map(describeNode)
     ).toEqual([
-      'CONTAINS (string[], string) -> bool',
+      'INCLUDES (string[], string) -> bool',
       'ADD [exec] (string[], string) -> number',
       'LENGTH (string[]) -> number',
     ]);
-    // CONTAINS left the exec chain: `const items` runs on into `const has`.
+    // INCLUDES left the exec chain: `const items` runs on into `const has`.
     const titles = (id: string): string =>
       fn?.nodes.find((n) => n.id === id)?.title ?? id;
     expect(
@@ -144,9 +145,69 @@ describe('container operations (UE container nodes)', () => {
         (e) =>
           e.kind === 'exec' &&
           [e.from.node, e.to.node].includes(
-            fn.nodes.find((n) => compactTitle(n) === 'CONTAINS')?.id ?? ''
+            fn.nodes.find((n) => compactTitle(n) === 'INCLUDES')?.id ?? ''
           )
       )
     ).toBe(false);
+  });
+
+  it('draws an element write as Set Array Elem, a Record’s as ADD', () => {
+    const text =
+      "function f(items: string[], r: Record<string, number>, n: number) {\n  items[3] = 'date';\n  r['apple'] = 2;\n}\n";
+    const nodes = parseTypeScript(text, 't.ts').functions.flatMap(
+      (fn) => fn.nodes
+    );
+    const writes = nodes.filter((n) => n.kind === 'setElement');
+    expect(writes.map(describeNode)).toEqual([
+      'Set Array Elem [exec] (string[], number, string)',
+      'ADD [exec] (Map<string, number>, string, number)',
+    ]);
+    const [set] = writes;
+    const entry = nodes.find((n) => n.kind === 'entry' && n.title === 'f');
+    const apply = (op: GraphOp): string => {
+      const result = applyTypeScriptOp(text, op, 't.ts');
+      return result.ok ? applyTextEdits(text, result.edits) : result.error;
+    };
+    expect(
+      apply({
+        type: 'setLiteral',
+        node: set?.id ?? '',
+        pin: 'index',
+        value: '5',
+      })
+    ).toContain("  items[5] = 'date';\n");
+    expect(
+      apply({
+        type: 'connect',
+        from: {
+          node: entry?.id ?? '',
+          pin: entry?.pins.find((p) => p.name === 'n')?.id ?? '',
+        },
+        to: { node: set?.id ?? '', pin: 'index' },
+      })
+    ).toContain("  items[n] = 'date';\n");
+    expect(
+      apply({ type: 'deleteNodes', nodeIds: [set?.id ?? ''] })
+    ).not.toContain('items[');
+  });
+
+  it('shows TypeScript’s own words: INCLUDES, HAS; search finds CONTAINS too', () => {
+    const doc = parseTypeScript(
+      "function f(items: string[], seen: Set<string>) {\n  const a = items.includes('x');\n  const b = seen.has('y');\n}\n",
+      't.ts'
+    );
+    const nodes = doc.functions.flatMap((fn) => fn.nodes);
+    expect(nodes.filter((n) => isContainerNode(n)).map(compactTitle)).toEqual([
+      'INCLUDES',
+      'HAS',
+    ]);
+    expect(searchNodes(doc, 'contains').map((m) => m.text)).toEqual([
+      'CONTAINS',
+      'CONTAINS',
+    ]);
+    // By the method's own name, its title.
+    expect(searchNodes(doc, 'includes').map((m) => m.text)).toEqual([
+      'includes',
+    ]);
   });
 });

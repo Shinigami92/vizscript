@@ -1,5 +1,17 @@
-import type { GraphNode, InputSpec, InsertPoint, Pin } from '@vizscript/core';
-import { markUnusedValue, truncate } from '@vizscript/core';
+import type {
+  ElementWrite,
+  GraphNode,
+  InputSpec,
+  InsertPoint,
+  Pin,
+} from '@vizscript/core';
+import {
+  elementWrite,
+  markUnusedValue,
+  SET_ARRAY_ELEM,
+  styleElementWrite,
+  truncate,
+} from '@vizscript/core';
 import type { Block, ClassDef, Expr, FunctionDef, Span, Stmt } from './ast';
 import { ControlFlowLowering } from './control-flow-lowering';
 import {
@@ -486,6 +498,7 @@ export abstract class StatementLowering extends ControlFlowLowering {
     const inputs: InputSpec[] = [];
     let title: string;
     let varName: string | undefined;
+    let write: ElementWrite | undefined;
     const chain = first ? simpleChain(first) : undefined;
     const rootWired =
       chain?.[0] !== undefined && this.lookup(chain[0])?.source !== undefined;
@@ -503,13 +516,31 @@ export abstract class StatementLowering extends ControlFlowLowering {
       title = sliced
         ? `Set [${truncate(this.src(rangeOf(first.index)), 12)}]`
         : 'Set [ ]';
+      const target = this.lowerExpr(first.object, `${path}.target`, 'eager');
+      // UE's Set Array Elem (`items[3] = x`), a dict's ADD (`d["k"] = v`).
+      write =
+        !sliced && value && targets.length === 1 && !stmt.annotation
+          ? elementWrite(target.type)
+          : undefined;
       inputs.push({
-        pin: this.dataIn('target', 'Target', rangeOf(first.object), 'object'),
-        value: this.lowerExpr(first.object, `${path}.target`, 'eager'),
+        pin: this.dataIn(
+          'target',
+          write ? (write.map ? 'Target Map' : 'Target Array') : 'Target',
+          rangeOf(first.object),
+          write?.targetType ?? 'object'
+        ),
+        value: target,
       });
       if (!sliced) {
         inputs.push({
-          pin: this.dataIn('key', 'Key', rangeOf(first.index)),
+          pin: write
+            ? this.dataIn(
+                'index',
+                write.map ? 'Key' : 'Index',
+                rangeOf(first.index),
+                write.keyType
+              )
+            : this.dataIn('key', 'Key', rangeOf(first.index)),
           value: this.lowerExpr(first.index, `${path}.key`, 'eager'),
         });
       }
@@ -518,10 +549,10 @@ export abstract class StatementLowering extends ControlFlowLowering {
     }
 
     const valuePin = this.dataIn(
-      'value',
-      '',
+      write ? 'item' : 'value',
+      write ? (write.map ? 'Value' : 'Item') : '',
       value ? rangeOf(value) : undefined,
-      declared,
+      write?.itemType ?? declared,
       value
         ? undefined
         : { insertInitAt: stmt.annotation?.end ?? targets[0]?.end ?? stmt.end }
@@ -531,6 +562,17 @@ export abstract class StatementLowering extends ControlFlowLowering {
       : undefined;
     inputs.push({ pin: valuePin, value: lowered });
     const type = declared === 'any' ? (lowered?.type ?? 'any') : declared;
+    if (write) {
+      const node = this.simpleNode(stmt, path, meta, insert, {
+        kind: 'setElement',
+        title: SET_ARRAY_ELEM,
+        category: 'function',
+        inputs,
+      });
+      styleElementWrite(node, write.targetType);
+      return;
+    }
+
     this.simpleNode(stmt, path, meta, insert, {
       kind: 'setVar',
       title,

@@ -303,4 +303,42 @@ describe('container operations (UE container nodes)', () => {
         .map((e) => `${title(e.from.node)} -> ${title(e.to.node)}`)
     ).toContain('Set names -> Set n');
   });
+
+  it('draws an element write as Set Array Elem, a dict’s as ADD', () => {
+    const text =
+      'def f(items: list[str], stock: dict[str, int]):\n    items[3] = "date"\n    stock["apple"] = 2\n    items[1:2] = ["x"]\n';
+    const nodes = parsePythonDocument(text, 't.py').functions.flatMap(
+      (fn) => fn.nodes
+    );
+    expect(
+      nodes.filter((n) => n.kind === 'setElement').map(describeNode)
+    ).toEqual([
+      'Set Array Elem [exec] (string[], number, string)',
+      'ADD [exec] (Map<string, number>, string, number)',
+    ]);
+    // A slice stays a SET.
+    expect(nodes.some((n) => n.title === 'Set [1:2]')).toBe(true);
+    const set = nodes.find((n) => n.kind === 'setElement');
+    const result = applyPythonOp(
+      text,
+      { type: 'setLiteral', node: set?.id ?? '', pin: 'item', value: 'fig' },
+      't.py'
+    );
+    expect(result.ok && applyTextEdits(text, result.edits)).toContain(
+      '    items[3] = "fig"\n'
+    );
+  });
+
+  it('draws a list’s `index` as INDEX OF: it returns the index', () => {
+    const doc = parsePythonDocument(
+      'def f(items: list[str]):\n    where = items.index("b")\n',
+      't.py'
+    );
+    expect(
+      doc.functions
+        .flatMap((fn) => fn.nodes)
+        .filter((n) => isContainerNode(n))
+        .map(describeNode)
+    ).toEqual(['INDEX OF (string[], string) -> number']);
+  });
 });

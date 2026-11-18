@@ -54,7 +54,7 @@ export const GDSCRIPT_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     result: 'bool',
   },
   {
-    word: 'FIND',
+    word: 'INDEX OF',
     on: ['array'],
     form: 'method',
     name: 'find',

@@ -41,6 +41,7 @@ describe('container nodes in the action menu', () => {
     expect(entries).toContain('Add: $value.append("")');
     expect(entries).toContain('Remove Index: $value.pop(0)');
     expect(entries).toContain('Last Index: len($value) - 1');
+    expect(entries).toContain('Index Of: $value.index("")');
     expect(offered(pythonBackend.typeSystem, output('string'))).not.toContain(
       'Last Index: len($value) - 1'
     );
@@ -67,6 +68,10 @@ describe('container nodes in the action menu', () => {
     const map = output('Map<string, number>', 'Map<string, number>');
     const record = output('Map<string, number>', 'Record<string, number>');
     expect(offered(types, map)).toContain("Find: $value.get('')");
+    expect(offered(types, map)).toContain("Has: $value.has('')");
+    expect(offered(types, output('string[]'))).toContain(
+      "Includes: $value.includes('')"
+    );
     expect(offered(types, record)).not.toContain("Find: $value.get('')");
     expect(offered(types, record, elementEntries)).toEqual([
       "Find: $value['']",

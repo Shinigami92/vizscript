@@ -99,6 +99,8 @@ export type NodeKind =
   | 'getProperty'
   | 'getVar'
   | 'setVar'
+  /** Writes one element: UE's Set Array Elem (`items[3] = x`), a map's ADD. */
+  | 'setElement'
   | 'functionRef'
   | 'branch'
   | 'switch'
