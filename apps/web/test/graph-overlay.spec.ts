@@ -167,6 +167,32 @@ describe('loose graph-only nodes', () => {
 });
 
 describe('a node picked from a value', () => {
+  it('floats a statement made from it (Set Array Elem)', async () => {
+    const code = "function f(items: string[]) {\n  items.push('a');\n}\n";
+    const { overlay, text } = setup(undefined, code);
+    const entry = parseTypeScript(code, 't.ts')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'entry' && n.title === 'f');
+    expect(
+      await overlay.floatValueUse(
+        {
+          type: 'useValue',
+          pin: { node: entry?.id ?? '', pin: 'param0' },
+          expression: "$value[0] = ''",
+          statement: true,
+        },
+        'undefined'
+      )
+    ).toBe(true);
+    await settle();
+    expect(text.value).toBe(code);
+    const [made] = overlay.overlay.value.edits;
+    expect(made?.type === 'addNodes' && made.code).toBe("items[0] = '';");
+    expect(made?.type === 'addNodes' && made.nodes.map((n) => n.title)).toEqual(
+      ['Set Array Elem']
+    );
+  });
+
   it('writes a function input by its name, wired to `this`', async () => {
     const { overlay } = setup();
     const entry = parseTypeScript(TEXT, 't.ts')
@@ -218,6 +244,25 @@ describe('a value for a floating call', () => {
     expect(
       overlay.overlay.value.edits.map((e) => e.type === 'addNodes' && e.code)
     ).toEqual(['g(1);']);
+  });
+
+  it('replaces a value it has (Set Array Elem’s index and item)', async () => {
+    const { overlay } = setup();
+    const write = group('[1, 2][0] = 5', 'a');
+    overlay.setOverlay({ edits: [write] });
+    const node = write.nodes.find((n) => n.title === 'Set Array Elem')?.id;
+    expect(
+      await overlay.floatLiteral({
+        type: 'setLiteral',
+        node: node ?? '',
+        pin: 'item',
+        value: '7',
+      })
+    ).toBe(true);
+    await settle();
+    expect(
+      overlay.overlay.value.edits.map((e) => e.type === 'addNodes' && e.code)
+    ).toEqual(['[1, 2][0] = 7;']);
   });
 
   it('leaves the code’s nodes to the code', async () => {

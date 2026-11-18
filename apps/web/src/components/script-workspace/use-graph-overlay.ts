@@ -10,6 +10,7 @@ import type {
   InputPinMeta,
   NodeTemplate,
   OverlayIssue,
+  Pin,
   PinRef,
   Point,
   Positions,
@@ -168,6 +169,39 @@ export interface WorkspaceGraphOverlay {
   resolve: () => Promise<void>;
   /** Loose nodes stored with the layout, made again (after loading). */
   restoreLoose: () => Promise<void>;
+}
+
+/**
+ * A floating node's literal pin with offsets in the group's code, or
+ * null. Pin ranges stay in the copy the checker typed the group in, so a
+ * value's range is found by its text, only when it is there once.
+ */
+function literalIn(
+  group: FloatingNodes,
+  node: GraphNode,
+  pin: Pin
+): Pin | null {
+  if (!pin.literal) {
+    return null;
+  }
+
+  if (!pin.range) {
+    // Inside the node's code (older groups kept offsets of their copy).
+    const at = getMeta<InputPinMeta>(pin).insertInitAt;
+    return at !== undefined && at >= node.range.start && at <= node.range.end
+      ? pin
+      : null;
+  }
+
+  const raw = pin.literal.raw;
+  const own = group.code.slice(node.range.start, node.range.end);
+  const at = raw ? own.indexOf(raw) : -1;
+  if (at === -1 || own.indexOf(raw, at + 1) !== -1) {
+    return null;
+  }
+
+  const start = node.range.start + at;
+  return { ...pin, range: { start, end: start + raw.length } };
 }
 
 /**
@@ -410,9 +444,13 @@ export function useGraphOverlay(
       return true;
     }
 
-    // Only calls float; a lone value of the code's value (`.length`) is
-    // written as code.
-    if (op.type === 'useValue' && !/\)\s*$/.test(op.expression)) {
+    // Only calls and statements float; a lone value of the code's value
+    // (`.length`) is written as code.
+    if (
+      op.type === 'useValue' &&
+      !op.statement &&
+      !/\)\s*$/.test(op.expression)
+    ) {
       return false;
     }
 
@@ -562,9 +600,11 @@ export function useGraphOverlay(
   }
 
   /**
-   * A value for a missing argument of a floating call (`.at()`'s index,
-   * from Details or its inline box): written into the group's code with
-   * the file's syntax (`inFloating`), and the group is made again.
+   * A value typed for an input of a floating node (Details, its inline
+   * box): written into the group's code with the file's syntax
+   * (`inFloating`), and the group is made again. Missing arguments
+   * (`.at()`'s index) insert it; a value there (Set Array Elem's `0`) is
+   * replaced where its text is in the node's code.
    */
   async function floatLiteral(
     op: Extract<GraphOp, { type: 'setLiteral' }>
@@ -575,24 +615,20 @@ export function useGraphOverlay(
     );
     const node = group?.nodes.find((n) => n.id === op.node);
     const pin = node?.pins.find((p) => p.id === op.pin);
-    const at = pin ? getMeta<InputPinMeta>(pin).insertInitAt : undefined;
-    // Inside the node's code (older groups kept offsets of their copy).
-    if (
-      !group ||
-      !node ||
-      !pin?.literal ||
-      pin.range ||
-      at === undefined ||
-      at < node.range.start ||
-      at > node.range.end
-    ) {
+    const target = group && node && pin ? literalIn(group, node, pin) : null;
+    if (!group || !node || !target) {
       return false;
     }
 
+    const nodes = group.nodes.map((n) =>
+      n === node
+        ? { ...n, pins: n.pins.map((p) => (p === pin ? target : p)) }
+        : n
+    );
     const result = await deps.client.applyOp(
       deps.text.value,
       deps.path(),
-      { type: 'inFloating', group, op },
+      { type: 'inFloating', group: { ...group, nodes }, op },
       deps.imports()
     );
     if (!result.ok) {

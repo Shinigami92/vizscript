@@ -8,10 +8,12 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  arrayElementType,
   holdsFields,
   isArrayType,
   isMapType,
   mapKeyType,
+  mapValueType,
 } from '@vizscript/core';
 import type { ActionEntry } from '../ActionMenu.vue';
 import { emptyValueOf, opFits } from './container-entries';
@@ -84,7 +86,10 @@ export function throwEntries(
 /**
  * UE's GET and FIND from a container's output: one element of an array
  * (`items[0]`) or the value of a key in a map (`prices['']`), written as
- * an index, which the graph shows as a GET or FIND node.
+ * an index, which the graph shows as a GET or FIND node. Writing one
+ * goes the same way: UE's Set Array Elem (`items[0] = ''`), and a map's
+ * ADD where the language has none of its own (`prices[''] = 0`); they
+ * float until their exec pins are wired.
  */
 export function elementEntries(
   types: TypeSystemInfo | null | undefined,
@@ -100,14 +105,16 @@ export function elementEntries(
     return [];
   }
 
-  const read = (expression: string): void =>
+  const use = (expression: string, statement = false): void =>
     emitOp({
       type: 'useValue',
       pin: source,
       expression,
       position: { ...world },
+      ...(statement ? { statement } : {}),
     });
   if (isArrayType(pin.type)) {
+    const item = emptyValueOf(types, arrayElementType(pin.type));
     return [
       {
         label: 'Get',
@@ -116,32 +123,57 @@ export function elementEntries(
         keywords: 'get index element item array list [ ]',
         hint: 'element at an index',
         fits: true,
-        action: () => read('$value[0]'),
+        action: () => use('$value[0]'),
+      },
+      {
+        label: 'Set Array Elem',
+        category: 'Array',
+        icon: 'i-mdi-grid text-amber-400',
+        keywords: 'set array elem element item index write assign [ ] =',
+        hint: 'write the element at an index',
+        fits: true,
+        action: () => use(`$value[0] = ${item}`, true),
       },
     ];
   }
 
-  // A FIND of the language (`d.get(k)`, no error when missing, like UE's)
-  // goes before an index.
-  const finds = types.containerOps?.some(
-    (op) => op.word === 'FIND' && opFits(op, 'map', pin)
-  );
-  if (!indexable || finds) {
+  if (!indexable) {
     return [];
   }
 
   const key = emptyValueOf(types, mapKeyType(pin.type));
-  const literal = /^["']/.test(key);
-  return [
-    {
+  const index = `$value[${/^["']/.test(key) ? '' : (types.keyReference ?? '')}${key}]`;
+  const has = (word: string): boolean =>
+    types.containerOps?.some(
+      (op) => op.word === word && opFits(op, 'map', pin)
+    ) ?? false;
+  const entries: ActionEntry[] = [];
+  // A FIND or ADD of the language (`d.get(k)`, no error when missing, like
+  // UE's) goes before an index.
+  if (!has('FIND')) {
+    entries.push({
       label: 'Find',
       category: 'Map',
       icon: 'i-mdi-view-list text-amber-400',
       keywords: 'find get key value map dict dictionary [ ]',
       hint: 'value of a key',
       fits: true,
-      action: () =>
-        read(`$value[${literal ? '' : (types.keyReference ?? '')}${key}]`),
-    },
-  ];
+      action: () => use(index),
+    });
+  }
+
+  if (!has('ADD')) {
+    const value = emptyValueOf(types, mapValueType(pin.type));
+    entries.push({
+      label: 'Add',
+      category: 'Map',
+      icon: 'i-mdi-view-list text-amber-400',
+      keywords: 'add set put key value map dict dictionary [ ] =',
+      hint: 'set the value of a key',
+      fits: true,
+      action: () => use(`${index} = ${value}`, true),
+    });
+  }
+
+  return entries;
 }

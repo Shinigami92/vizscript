@@ -85,18 +85,20 @@ describe('container nodes in the action menu', () => {
     expect(offered(types, record)).not.toContain("Find: $value.get('')");
     expect(offered(types, record, elementEntries)).toEqual([
       "Find: $value['']",
+      "Add: $value[''] = 0",
     ]);
     expect(offered(types, map, elementEntries)).toEqual([]);
   });
 
   it('prefers a FIND of the language over an index', () => {
+    // Python's dict has `get`, but no ADD method: `d[k] = v` is its ADD.
     expect(
       offered(
         pythonBackend.typeSystem,
         output('Map<string, number>'),
         elementEntries
       )
-    ).toEqual([]);
+    ).toEqual(['Add: $value[""] = 0']);
   });
 
   it('writes a container method from the menu with its values', () => {
