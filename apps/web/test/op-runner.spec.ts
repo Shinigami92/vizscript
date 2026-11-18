@@ -63,6 +63,7 @@ function runner(
       floatInput: async () => false,
       floatReceiver: async () => false,
       floatValueUse: async () => false,
+      floatPromote: async () => false,
     },
     freezeLayout: () => undefined,
     beforeCodeEdit: () => undefined,

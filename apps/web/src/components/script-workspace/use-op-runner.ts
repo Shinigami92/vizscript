@@ -38,6 +38,7 @@ export interface OpRunnerDeps {
     | 'addFloating'
     | 'fillCutReceiver'
     | 'floatInput'
+    | 'floatPromote'
     | 'floatReceiver'
     | 'floatValueUse'
   >;
@@ -136,6 +137,14 @@ export function useOpRunner(deps: OpRunnerDeps): {
     ) {
       deps.freezeLayout();
       return true;
+    }
+
+    // Like UE's, a SET for a value outside the flow isn't wired into it.
+    if (op.type === 'promote') {
+      deps.freezeLayout();
+      if (await overlay.floatPromote(op)) {
+        return true;
+      }
     }
 
     // A node made from a dragged value floats unwired, like UE's.

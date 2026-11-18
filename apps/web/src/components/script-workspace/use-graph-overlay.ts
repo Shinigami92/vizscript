@@ -13,8 +13,10 @@ import type {
   PinRef,
   Point,
   Positions,
+  StatementMeta,
 } from '@vizscript/core';
 import {
+  applyTextEdits,
   callViewKey,
   compactOverlay,
   EMPTY_OVERLAY,
@@ -25,6 +27,7 @@ import {
   getMeta,
   isCutReceiver,
   isEmptyOverlay,
+  nodeCode,
   sameFloatingNodes,
   splitLoose,
   withFedType,
@@ -129,6 +132,12 @@ export interface WorkspaceGraphOverlay {
     op: Extract<GraphOp, { type: 'useValue' | 'callWith' }>,
     placeholder: string
   ) => Promise<boolean>;
+  /**
+   * UE's "Promote to Variable" on a value outside the flow (a floating
+   * value, or an unused one of the code: `items[0];`): the new SET floats,
+   * its exec pins are wired by hand. `false` for other values.
+   */
+  floatPromote: (op: Extract<GraphOp, { type: 'promote' }>) => Promise<boolean>;
   /** A value for an input of a floating node; `false` for code's nodes. */
   floatInput: (op: Extract<GraphOp, { type: 'setInput' }>) => Promise<boolean>;
   /**
@@ -432,6 +441,76 @@ export function useGraphOverlay(
     return true;
   }
 
+  async function floatPromote(
+    op: Extract<GraphOp, { type: 'promote' }>
+  ): Promise<boolean> {
+    const shown = deps.doc.value;
+    const node = shown ? findNode(shown, op.pin.node) : undefined;
+    if (!shown || !node) {
+      return false;
+    }
+
+    const set = (value: string): NodeTemplate => ({
+      type: 'setVar',
+      name: op.name.trim(),
+      declaration: 'const',
+      value,
+    });
+    const world = op.position ?? deps.positionOf(node.id) ?? { x: 0, y: 0 };
+    const name = floatingGroup(node.id);
+    if (name !== undefined) {
+      const group = overlay.value.edits.find(
+        (e): e is FloatingNodes => e.type === 'addNodes' && e.id === name
+      );
+      const out = group ? floatingOutput(group) : undefined;
+      const value =
+        group &&
+        out?.node === op.pin.node &&
+        out.pin === op.pin.pin &&
+        !execWired(group);
+      if (!group || !value) {
+        return false;
+      }
+
+      // The same nodes (a Get, a call not in the flow): the SET's value.
+      await addFloating(
+        set(group.code.replace(/;\s*$/, '')),
+        world,
+        group.fnId,
+        { replaces: [group] }
+      );
+      return true;
+    }
+
+    // An unused value of the code leaves it with the SET floating.
+    if (!getMeta<StatementMeta>(node).unused) {
+      return false;
+    }
+
+    const source = deps.text.value;
+    const removed = await deps.client.applyOp(
+      source,
+      deps.path(),
+      { type: 'deleteNodes', nodeIds: [node.id] },
+      deps.imports()
+    );
+    if (!removed.ok || deps.text.value !== source) {
+      return false;
+    }
+
+    const before = overlay.value;
+    const fnId = shown.functions.find((f) => f.nodes.includes(node))?.id;
+    await addFloating(set(nodeCode(source, node)), world, fnId);
+    // Not made (its error is shown), or the code changed meanwhile.
+    if (overlay.value === before || deps.text.value !== source) {
+      return true;
+    }
+
+    deps.writeCode(applyTextEdits(source, removed.edits));
+    deps.recordCode();
+    return true;
+  }
+
   /** Whether a floating group is wired into the flow (graph-only). */
   function execWired(group: FloatingNodes): boolean {
     const ids = new Set(group.nodes.map((n) => n.id));
@@ -690,6 +769,7 @@ export function useGraphOverlay(
     },
     addFloating,
     floatValueUse,
+    floatPromote,
     floatReceiver,
     floatInput,
     fillCutReceiver,

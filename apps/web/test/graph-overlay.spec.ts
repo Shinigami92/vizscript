@@ -4,7 +4,7 @@ import type {
   GraphOverlay,
   Positions,
 } from '@vizscript/core';
-import { applyOverlay, floatingNodes } from '@vizscript/core';
+import { applyOverlay, floatingNodes, floatingOutput } from '@vizscript/core';
 import { applyTypeScriptOp, parseTypeScript } from '@vizscript/lang-typescript';
 import { describe, expect, it } from 'vitest';
 import type { Ref } from 'vue';
@@ -54,12 +54,15 @@ function wiredIn(): GraphOverlay {
   };
 }
 
-function setup(pinned = shallowRef<Positions>({})): {
+function setup(
+  pinned = shallowRef<Positions>({}),
+  source = TEXT
+): {
   overlay: ReturnType<typeof useGraphOverlay>;
   text: Ref<string>;
 } {
-  const text = ref(TEXT);
-  const parsed = parseTypeScript(TEXT, 't.ts');
+  const text = ref(source);
+  const parsed = parseTypeScript(source, 't.ts');
   const doc = shallowRef(parsed);
   const overlay = useGraphOverlay(
     {
@@ -194,5 +197,62 @@ describe('a node picked from a value', () => {
         to: { node: call?.id, pin: 'target' },
       })
     );
+  });
+});
+
+describe('Promote to Variable', () => {
+  it('floats the SET of an unused value, out of the flow', async () => {
+    const code =
+      'declare function g(n: number): void;\nfunction f(x: number) {\n  x * 2;\n  g(0);\n}\n';
+    const { overlay, text } = setup(undefined, code);
+    const times = parseTypeScript(code, 't.ts')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.title === '*');
+    expect(
+      await overlay.floatPromote({
+        type: 'promote',
+        pin: { node: times?.id ?? '', pin: 'result' },
+        name: 'twice',
+      })
+    ).toBe(true);
+    await settle();
+    // The value leaves the code; its SET floats with no exec wires.
+    expect(text.value).not.toContain('x * 2');
+    const [made, ...rest] = overlay.overlay.value.edits;
+    expect(made?.type === 'addNodes' && made.code).toBe('const twice = x * 2;');
+    expect(rest).toEqual([]);
+  });
+
+  it('floats the SET of a floating value with its nodes', async () => {
+    const { overlay } = setup();
+    const value = group('x * 3', 'a');
+    overlay.setOverlay({ edits: [value] });
+    const out = floatingOutput(value);
+    expect(
+      await overlay.floatPromote({
+        type: 'promote',
+        pin: out ?? { node: '', pin: '' },
+        name: 'y',
+      })
+    ).toBe(true);
+    await settle();
+    const edits = overlay.overlay.value.edits;
+    expect(edits.map((e) => e.type === 'addNodes' && e.code)).toEqual([
+      'const y = x * 3;',
+    ]);
+  });
+
+  it('keeps values in the flow for the code', async () => {
+    const { overlay } = setup();
+    const call = parseTypeScript(TEXT, 't.ts')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.title === 'g');
+    expect(
+      await overlay.floatPromote({
+        type: 'promote',
+        pin: { node: call?.id ?? '', pin: 'return' },
+        name: 'y',
+      })
+    ).toBe(false);
   });
 });

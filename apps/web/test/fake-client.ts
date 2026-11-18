@@ -14,9 +14,10 @@ export function fakeClient(): GraphClient {
   };
   const client: Pick<
     GraphClient,
-    'parse' | 'floatingNodes' | 'resolveOverlay'
+    'parse' | 'applyOp' | 'floatingNodes' | 'resolveOverlay'
   > = {
     parse: (text) => Promise.resolve(backend.parse(text)),
+    applyOp: (text, _file, op) => Promise.resolve(backend.applyOp(text, op)),
     resolveOverlay: (text, _file, overlay) =>
       Promise.resolve(resolveOverlay(text, overlay, backend)),
     floatingNodes: (text, _file, template, fnId, group) =>
