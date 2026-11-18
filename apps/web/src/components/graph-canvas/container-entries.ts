@@ -97,6 +97,30 @@ function opExpression(
 }
 
 /**
+ * The call of method `name` on a value of `pin`'s type. A container
+ * operation (`push` on an array) is written with its values empty
+ * (`$value.push('')`), like the container entries, so the node has its
+ * value pins and can be drawn as its container node (ADD); other methods
+ * without arguments.
+ */
+export function methodCallExpression(
+  types: TypeSystemInfo | null | undefined,
+  pin: Pin | undefined,
+  name: string
+): string {
+  const kind = pin ? containerKind(pin.type) : undefined;
+  const op =
+    types && pin && kind
+      ? types.containerOps?.find(
+          (o) => o.form === 'method' && o.name === name && opFits(o, kind, pin)
+        )
+      : undefined;
+  return op && types && pin
+    ? opExpression(types, op, String(pin.type))
+    : `$value.${name}()`;
+}
+
+/**
  * UE's container nodes from a container's output (LENGTH, CONTAINS,
  * ADD …), written the way the language does (`len(items)`,
  * `items.append(x)`, `x in d`), one per word, the values empty.

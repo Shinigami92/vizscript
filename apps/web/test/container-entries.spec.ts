@@ -3,7 +3,10 @@ import { pythonBackend } from '@vizscript/lang-python';
 import { rustBackend } from '@vizscript/lang-rust';
 import { typescriptBackend } from '@vizscript/lang-typescript';
 import { describe, expect, it } from 'vitest';
-import { containerEntries } from '../src/components/graph-canvas/container-entries';
+import {
+  containerEntries,
+  methodCallExpression,
+} from '../src/components/graph-canvas/container-entries';
 import { elementEntries } from '../src/components/graph-canvas/make-entries';
 
 function output(type: string, typeText?: string): Pin {
@@ -87,5 +90,19 @@ describe('container nodes in the action menu', () => {
         elementEntries
       )
     ).toEqual([]);
+  });
+
+  it('writes a container method from the menu with its values', () => {
+    const types = typescriptBackend.typeSystem;
+    // `.push()` has its value pin and can be drawn as ADD.
+    expect(methodCallExpression(types, output('string[]'), 'push')).toBe(
+      "$value.push('')"
+    );
+    expect(methodCallExpression(types, output('string[]'), 'reverse')).toBe(
+      '$value.reverse()'
+    );
+    expect(methodCallExpression(types, output('string'), 'push')).toBe(
+      '$value.push()'
+    );
   });
 });

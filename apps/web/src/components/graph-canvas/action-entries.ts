@@ -9,7 +9,7 @@ import { isTypeCompatible, qualifiedName } from '@vizscript/core';
 import { shortcut } from '../../graph/source';
 import { topLevelGraph } from '../../graph/symbols';
 import type { ActionEntry } from '../ActionMenu.vue';
-import { containerEntries } from './container-entries';
+import { containerEntries, methodCallExpression } from './container-entries';
 import { engineMembers, scriptBaseClass } from './engine-entries';
 import {
   callSignature,
@@ -401,7 +401,7 @@ export function createActionEntries(
         type: 'useValue',
         pin: source,
         expression: member.method
-          ? `$value.${member.name}()`
+          ? methodCallExpression(props.types, pinOf(source)?.pin, member.name)
           : `$value.${member.name}`,
         position: { ...state.world },
       });
@@ -601,7 +601,7 @@ export function createActionEntries(
                   emitOp({
                     type: 'useValue',
                     pin: source,
-                    expression: `$value.${name}()`,
+                    expression: methodCallExpression(props.types, pin, name),
                     position: { ...state.world },
                   }),
               },
@@ -900,7 +900,8 @@ export function createActionEntries(
               category: 'Typed',
               icon: ICON_CALL,
               hint: 'call on the value',
-              action: () => useMember(`$value.${member}()`),
+              action: () =>
+                useMember(methodCallExpression(props.types, found.pin, member)),
             },
             {
               label: `.${member}`,
