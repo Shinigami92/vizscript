@@ -52,6 +52,48 @@ describe('camera targets', () => {
 });
 
 describe('Viewport', () => {
+  it('frames below the notices covering its top', () => {
+    const viewport = new Viewport();
+    viewport.width = 800;
+    viewport.height = 600;
+    viewport.set({ x: 0, y: 0, zoom: 1 });
+    viewport.top = 100;
+    const fit = viewport.framed((_, width, height) =>
+      fitAll(BOUNDS, width, height)
+    );
+    // Centered in the 500 px below the notice, not in all 600 px.
+    const top = (BOUNDS.y - fit.y) * fit.zoom;
+    const bottom = 600 - (BOUNDS.y + BOUNDS.height - fit.y) * fit.zoom;
+    expect(top - 100).toBeCloseTo(bottom);
+  });
+
+  it('reveals nodes hidden under the notices', () => {
+    const viewport = new Viewport();
+    viewport.width = 800;
+    viewport.height = 600;
+    // BOUNDS is in view, but its top 50 px are under a 150 px notice.
+    viewport.set({ x: 0, y: 0, zoom: 1 });
+    const reveal = (): ReturnType<typeof revealCamera> =>
+      viewport.framed((camera, width, height) =>
+        revealCamera(BOUNDS, camera, width, height)
+      );
+    expect(reveal()).toBeNull();
+    viewport.top = 150;
+    const to = reveal();
+    expect(to && (BOUNDS.y - to.y) * to.zoom).toBeGreaterThan(150);
+  });
+
+  it('keeps at least half the view for the graph', () => {
+    const viewport = new Viewport();
+    viewport.width = 800;
+    viewport.height = 600;
+    viewport.top = 1000;
+    const fit = viewport.framed((_, width, height) =>
+      fitAll(BOUNDS, width, height)
+    );
+    expect((BOUNDS.y - fit.y) * fit.zoom).toBeGreaterThanOrEqual(300);
+  });
+
   it('eases to a camera and reports while it moves', () => {
     const viewport = new Viewport();
     viewport.width = 800;

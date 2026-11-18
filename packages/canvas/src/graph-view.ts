@@ -236,11 +236,22 @@ export class GraphView {
     this.zoomBy(zoom / this.getCamera().zoom);
   }
 
+  /**
+   * How much of the canvas's top is covered by notices (CSS pixels):
+   * fitting, focusing and revealing keep nodes below it.
+   */
+  public setTopInset(top: number): void {
+    this.viewport.top = top;
+  }
+
   public frameAll(): void {
     const bounds = this.scene.boundsOf(this.scene.nodes.keys());
     if (bounds) {
-      const { width, height } = this.viewport;
-      this.moveCamera(fitAll(bounds, width, height));
+      this.moveCamera(
+        this.viewport.framed((_, width, height) =>
+          fitAll(bounds, width, height)
+        )
+      );
     }
   }
 
@@ -248,8 +259,11 @@ export class GraphView {
   public frameSelection(): void {
     const bounds = this.scene.boundsOf(this.ui.selection);
     if (bounds) {
-      const { width, height } = this.viewport;
-      this.moveCamera(fitSelection(bounds, width, height));
+      this.moveCamera(
+        this.viewport.framed((_, width, height) =>
+          fitSelection(bounds, width, height)
+        )
+      );
     } else {
       this.frameAll();
     }
@@ -258,18 +272,24 @@ export class GraphView {
   /** Centers the given nodes at a readable zoom. */
   public focusNodes(ids: ReadonlyArray<string>): void {
     const bounds = this.scene.boundsOf(ids);
-    const { camera, width, height } = this.viewport;
-    if (bounds && width > 0) {
-      this.moveCamera(focusCamera(bounds, camera, width, height));
+    if (bounds && this.viewport.width > 0) {
+      this.moveCamera(
+        this.viewport.framed((camera, width, height) =>
+          focusCamera(bounds, camera, width, height)
+        )
+      );
     }
   }
 
   /** Pans (and zooms out if needed) so that the given nodes are visible. */
   public revealNodes(ids: ReadonlyArray<string>): void {
     const bounds = this.scene.boundsOf(ids);
-    const { camera, width, height } = this.viewport;
     const to =
-      bounds && width > 0 ? revealCamera(bounds, camera, width, height) : null;
+      bounds && this.viewport.width > 0
+        ? this.viewport.framed((camera, width, height) =>
+            revealCamera(bounds, camera, width, height)
+          )
+        : null;
     if (to) {
       this.moveCamera(to);
     }
@@ -308,10 +328,13 @@ export class GraphView {
     }
 
     const bounds = this.scene.boundsOf(this.scene.nodes.keys());
-    const { width, height } = this.viewport;
-    if (bounds && width > 0) {
+    if (bounds && this.viewport.width > 0) {
       this.hasFramed = true;
-      this.setCameraInternal(initialCamera(bounds, width, height));
+      this.setCameraInternal(
+        this.viewport.framed((_, width, height) =>
+          initialCamera(bounds, width, height)
+        )
+      );
     }
   }
 

@@ -98,7 +98,31 @@ export class Viewport {
   /** CSS pixels. */
   public width = 0;
   public height = 0;
+  /**
+   * CSS pixels at the top covered by notices over the canvas (breadcrumb,
+   * out-of-sync banner): framing and reveals keep nodes below them.
+   */
+  public top = 0;
   public dpr = 1;
+
+  /**
+   * A camera target (`fitAll`, `revealCamera` …) for the part of the view
+   * below `top`: `make` gets that part's camera and size, its result is
+   * moved back to the whole view.
+   */
+  public framed<T extends Camera | null>(
+    make: (camera: Camera, width: number, height: number) => T
+  ): T {
+    const camera = this.target();
+    // A notice taller than half the view doesn't squeeze the graph further.
+    const top = Math.min(Math.max(0, this.top), this.height / 2);
+    const result = make(
+      { ...camera, y: camera.y + top / camera.zoom },
+      this.width,
+      this.height - top
+    );
+    return result && { ...result, y: result.y - top / result.zoom };
+  }
 
   /** The camera, or where an eased move ends. */
   public target(): Camera {
