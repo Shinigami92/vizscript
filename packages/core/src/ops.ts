@@ -174,6 +174,12 @@ export type GraphOp =
       expression: string;
       position?: Point;
       /**
+       * Made from the action menu's container entry (ADD …): the new node
+       * is drawn as the container node. Other calls the menu makes are
+       * drawn as calls (`~call|`, `withCallViews`).
+       */
+      container?: boolean;
+      /**
        * Waits for the value (`await $value`): a call's result is wrapped in
        * place (`await fetch(url)`) and its function becomes `async`.
        */

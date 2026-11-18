@@ -1,3 +1,4 @@
+import { isCallViewKey, reconcileCallViews } from './call-views';
 import type { GraphDocument, Positions } from './ir';
 import { isLooseKey } from './loose-overlay';
 import type { TextChange } from './reconcile';
@@ -25,6 +26,8 @@ const FAMILIES: ReadonlyArray<LayoutFamily> = [
   { is: isRerouteKey, reconcile: reconcileReroutes },
   // Gets drawn as wires from their SET, joins of Gets and pure nodes.
   { is: isViaKey, reconcile: reconcileVias },
+  // Container nodes shown as their calls (`items.push(x)`, not ADD).
+  { is: isCallViewKey, reconcile: reconcileCallViews },
   // Comment box colors (boxes come from the code's regions).
   { is: isBoxColorKey },
   // Loose graph-only nodes: their code, and wires from the code into them

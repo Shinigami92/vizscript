@@ -1,7 +1,9 @@
 import type {
+  ContainerOp,
   FloatingNodes,
   GraphDocument,
   GraphEdit,
+  GraphNode,
   GraphOp,
   GraphOverlay,
   ImportedDeclaration,
@@ -13,6 +15,7 @@ import type {
   Positions,
 } from '@vizscript/core';
 import {
+  callViewKey,
   compactOverlay,
   EMPTY_OVERLAY,
   feedFloating,
@@ -24,6 +27,7 @@ import {
   isEmptyOverlay,
   sameFloatingNodes,
   splitLoose,
+  withFedType,
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
@@ -56,12 +60,16 @@ export interface GraphOverlayDeps {
     world: Point,
     fixed?: Positions,
     /** Lay the group out around its kept nodes instead of at `world`. */
-    anchored?: boolean
+    anchored?: boolean,
+    /** Other layout entries of the new nodes (`~call|`). */
+    extra?: Positions
   ) => void;
   /** Where a node is shown. */
   positionOf: (id: string) => Point | undefined;
   /** Floating nodes with a checker's types (the copy they were made in). */
   typeFloating: (edit: FloatingNodes, text: string) => Promise<FloatingNodes>;
+  /** The language's container operations (`TypeSystemInfo.containerOps`). */
+  containerOps: () => ReadonlyArray<ContainerOp> | undefined;
   /** The graph-only edits are about to be written (`wrote`: new code). */
   writing: (overlay: GraphOverlay, wrote: boolean) => void;
   /** Floating nodes were written as code: their nodes got these ids. */
@@ -78,6 +86,11 @@ export interface FloatingOptions {
   feed?: { from: PinRef; placeholder: string };
   /** The new nodes go around the ones taken over, not at `world`. */
   anchored?: boolean;
+  /**
+   * The new call is drawn as a call, also when it is a container
+   * operation (`items.push(x)`, not ADD): the menu's call entries.
+   */
+  asCall?: boolean;
 }
 
 export interface WorkspaceGraphOverlay {
@@ -208,7 +221,7 @@ export function useGraphOverlay(
     fnId: string | undefined,
     options: FloatingOptions = {}
   ): Promise<void> {
-    const { wireTo, replaces, feed, anchored } = options;
+    const { wireTo, replaces, feed, anchored, asCall } = options;
     const group = `${Date.now().toString(36)}${(groups++).toString(36)}`;
     const result = await deps.client.floatingNodes(
       deps.text.value,
@@ -232,7 +245,16 @@ export function useGraphOverlay(
         return;
       }
 
-      edit = fed.edit;
+      // Typed by the value it is wired to: the menu's ADD is ADD at once.
+      const source = deps.doc.value
+        ? findNode(deps.doc.value, feed.from.node)?.pins.find(
+            (p) => p.id === feed.from.pin
+          )
+        : undefined;
+      edit =
+        source && fed.edge.type === 'addEdge'
+          ? withFedType(fed.edit, fed.edge.to, source, deps.containerOps())
+          : fed.edit;
       edits.push(fed.edge);
     }
 
@@ -276,7 +298,13 @@ export function useGraphOverlay(
         : [];
     });
 
-    deps.placeFloating(edit, world, fixed, anchored);
+    deps.placeFloating(
+      edit,
+      world,
+      fixed,
+      anchored,
+      asCall ? callViews(edit) : undefined
+    );
     const out = wireTo ? floatingOutput(edit) : undefined;
     addEdits([
       // Removing one node of a floating group drops all of it.
@@ -299,6 +327,31 @@ export function useGraphOverlay(
     ]);
   }
 
+  /**
+   * The new call of `edit` (its outermost one) drawn as a call when it is
+   * a container operation of the language (`~call|`).
+   */
+  function callViews(edit: FloatingNodes): Positions | undefined {
+    const names = new Set(
+      (deps.containerOps() ?? [])
+        .filter((o) => o.form !== 'operator')
+        .map((o) => o.name)
+    );
+    const outer = edit.nodes
+      .filter((n) => n.kind === 'call')
+      .reduce<GraphNode | undefined>(
+        (best, n) =>
+          !best ||
+          n.range.end - n.range.start > best.range.end - best.range.start
+            ? n
+            : best,
+        undefined
+      );
+    return outer && names.has(outer.title)
+      ? { [callViewKey(outer.id)]: { x: 0, y: 0 } }
+      : undefined;
+  }
+
   async function floatValueUse(
     op: Extract<GraphOp, { type: 'useValue' | 'callWith' }>,
     placeholder: string
@@ -312,6 +365,7 @@ export function useGraphOverlay(
         ? `${op.callee}(${value})`
         : op.expression.replaceAll('$value', value);
     const world = op.position ?? { x: 0, y: 0 };
+    const asCall = op.type === 'callWith' || op.container !== true;
     const name = floatingGroup(op.pin.node);
     if (name !== undefined) {
       const group = overlay.value.edits.find(
@@ -327,7 +381,7 @@ export function useGraphOverlay(
         { type: 'value', expression: write(group.code.replace(/;\s*$/, '')) },
         world,
         fnId ?? group.fnId,
-        { replaces: [group] }
+        { replaces: [group], asCall }
       );
       return true;
     }
@@ -344,6 +398,7 @@ export function useGraphOverlay(
       fnId,
       {
         feed: { from: op.pin, placeholder },
+        asCall,
       }
     );
     return true;

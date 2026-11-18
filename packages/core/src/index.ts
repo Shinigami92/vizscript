@@ -6,6 +6,7 @@ export * from './infer-types';
 export * from './collapse';
 export * from './comment-ops';
 export * from './comments';
+export * from './call-views';
 export * from './container-ops';
 export * from './declaration-syntax';
 export * from './display';

@@ -131,6 +131,7 @@ export function containerEntries(
         pin: source,
         expression,
         position: { ...world },
+        container: true,
       }),
   });
   const words = new Set<string>();

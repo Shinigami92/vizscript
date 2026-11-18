@@ -3,6 +3,7 @@ import type {
   GraphDocument,
   GraphNode,
   GraphOp,
+  LayoutPatch,
   NodeTemplate,
   Pin,
   PinRef,
@@ -103,4 +104,6 @@ export interface CanvasEvents {
   jumpTo: (id: string) => void;
   resetLayout: (ids: string[]) => void;
   openFunction: (fnId: string) => void;
+  /** Layout entries besides positions (`~call|` …), as one undo step. */
+  layout: (patch: LayoutPatch) => void;
 }

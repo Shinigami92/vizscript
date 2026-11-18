@@ -1,10 +1,12 @@
+import type { ContainerOp } from './container-ops';
+import { restyleContainerNodes } from './container-ops';
 import type { StatementMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
 import { endOfFunction } from './flow';
 import type { FloatingNodes, GraphEdit, GraphOverlay } from './graph-overlay';
 import { floatingGroup, floatingPrefix } from './graph-overlay';
 import { edgeId } from './ids';
-import type { GraphDocument, GraphNode, PinRef, SourceRange } from './ir';
+import type { GraphDocument, GraphNode, Pin, PinRef, SourceRange } from './ir';
 import type { GraphOp, NodeTemplate, OpResult, TextEdit } from './ops';
 import { applyTextEdits } from './ops';
 import type { TextChange } from './reconcile';
@@ -139,11 +141,28 @@ function collect(
       end: n.range.end - written.base,
     },
   }));
+  // Parameters the new code reads come from the function's entry (no Get
+  // node of their own): those wires stay, or a method on one (`items.push`)
+  // would have no receiver.
+  const entries = new Set(
+    doc.functions
+      .flatMap((f) => f.nodes)
+      .filter((n) => n.kind === 'entry')
+      .map((n) => n.id)
+  );
   const edges = next.functions
     .flatMap((f) => f.edges)
-    .filter((e) => ids.has(e.from.node) && ids.has(e.to.node))
+    .filter(
+      (e) =>
+        ids.has(e.to.node) &&
+        (ids.has(e.from.node) ||
+          (e.kind === 'data' && entries.has(e.from.node)))
+    )
     .map((e) => {
-      const from = { node: `${prefix}${e.from.node}`, pin: e.from.pin };
+      const from = {
+        node: ids.has(e.from.node) ? `${prefix}${e.from.node}` : e.from.node,
+        pin: e.from.pin,
+      };
       const to = { node: `${prefix}${e.to.node}`, pin: e.to.pin };
       return { ...e, id: edgeId(from, to), from, to };
     });
@@ -414,6 +433,54 @@ export function typedFloatingNodes(
     nodes,
     ...(typed.typeMembers ? { typeMembers: typed.typeMembers } : {}),
   };
+}
+
+/**
+ * Floating nodes fed by a value of the code (`feedFloating`): the fed pin
+ * takes that value's type, so a call that is a container operation on it
+ * shows as one at once (`$value.push('')` from a `string[]` is UE's ADD,
+ * `restyleContainerNodes`), not only once it is code.
+ */
+export function withFedType(
+  edit: FloatingNodes,
+  to: PinRef,
+  from: Pick<Pin, 'type' | 'typeText'>,
+  containerOps?: ReadonlyArray<ContainerOp>
+): FloatingNodes {
+  const nodes = edit.nodes.map((node) =>
+    node.id === to.node
+      ? {
+          ...node,
+          pins: node.pins.map((pin) =>
+            // A typed pin keeps its type (`push`'s value is a `string`).
+            pin.id === to.pin && (pin.type === 'any' || pin.type === 'object')
+              ? {
+                  ...pin,
+                  type: from.type,
+                  ...(from.typeText === undefined
+                    ? {}
+                    : { typeText: from.typeText }),
+                }
+              : pin
+          ),
+        }
+      : node
+  );
+  if (!containerOps) {
+    return { ...edit, nodes };
+  }
+
+  const fn = restyleContainerNodes(
+    {
+      id: edit.fnId,
+      name: '',
+      range: { start: 0, end: 0 },
+      nodes,
+      edges: edit.edges,
+    },
+    containerOps
+  );
+  return { ...edit, nodes: fn.nodes, edges: fn.edges };
 }
 
 /** Floating nodes as a document of their own (to ask for their types). */

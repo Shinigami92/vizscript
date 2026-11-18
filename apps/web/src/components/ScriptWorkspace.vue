@@ -10,6 +10,7 @@ import type {
 import {
   applyOverlay,
   boxColorEntries,
+  callViewKey,
   diffEdits,
   findDefinition,
   findNode,
@@ -18,6 +19,7 @@ import {
   remapOverlay,
   renamedNodes,
   rerouteEntries,
+  withCallViews,
 } from '@vizscript/core';
 import { useDebounceFn, useMediaQuery } from '@vueuse/core';
 import {
@@ -276,9 +278,13 @@ const {
     record: (before, after) => recordOverlay(before, after),
     // The editor reports its new version in a microtask.
     recordCode: () => queueMicrotask(recordOverlayCode),
-    placeFloating: (edit, world, fixed, anchored) => {
+    placeFloating: (edit, world, fixed, anchored, extra) => {
       const laid = floatingLayout(edit, world);
-      movePinned({ ...(anchored ? anchoredTo(laid, fixed) : laid), ...fixed });
+      movePinned({
+        ...(anchored ? anchoredTo(laid, fixed) : laid),
+        ...fixed,
+        ...extra,
+      });
       // Selected like any node just placed (once the overlay shows them).
       const ids = edit.nodes.map((n) => n.id);
       void nextTick(() => {
@@ -288,6 +294,7 @@ const {
     },
     positionOf: (id) => canvas.value?.getPositions()[id] ?? positions.value[id],
     typeFloating: (edit, source) => typeFloating(edit, source),
+    containerOps: () => typeSystem.value?.containerOps,
     placed: (ids) => {
       placedNodes(ids);
       // The written nodes take the places of their floating nodes, in the
@@ -299,6 +306,12 @@ const {
         if (p) {
           moved[to] = p;
           moved[from] = p;
+        }
+
+        // Shown as its call while floating: also once it is code.
+        const view = pinned.value[callViewKey(from)];
+        if (view) {
+          moved[callViewKey(to)] = view;
         }
       }
 
@@ -364,7 +377,10 @@ const {
   cancelOp: cancelViaOp,
   afterParse,
 } = useViaWires({
-  shownDoc,
+  // Container nodes the user shows as their calls (`~call|…`).
+  shownDoc: computed(() =>
+    shownDoc.value ? withCallViews(shownDoc.value, pinned.value) : null
+  ),
   parsedDoc,
   pinned,
   autoLayout: (shown) => layoutDocument(shown, layoutOptions),
@@ -585,7 +601,11 @@ function relayout(): void {
   }
 
   positions.value = {
-    ...layoutDocument(doc.value, layoutOptions, pinned.value),
+    ...layoutDocument(
+      withCallViews(doc.value, pinned.value),
+      layoutOptions,
+      pinned.value
+    ),
     ...rerouteEntries(pinned.value),
     ...boxColorEntries(pinned.value),
   };

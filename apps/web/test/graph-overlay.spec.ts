@@ -92,6 +92,7 @@ function setup(pinned = shallowRef<Positions>({})): {
       placeFloating: () => undefined,
       positionOf: () => undefined,
       typeFloating: (edit) => Promise.resolve(edit),
+      containerOps: () => undefined,
       writing: () => undefined,
       placed: () => undefined,
       show: () => undefined,

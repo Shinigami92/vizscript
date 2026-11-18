@@ -7,6 +7,7 @@ import type {
 import {
   applyOverlay,
   applyTextEdits,
+  compactTitle,
   EMPTY_OVERLAY,
   feedFloating,
   floatingNodes,
@@ -15,10 +16,14 @@ import {
   overlayIssues,
   remapOverlay,
   resolveOverlay,
+  showAsCall,
+  shownAsCall,
   typedFloatingNodes,
+  withFedType,
 } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { applyTypeScriptOp, parseTypeScript } from '../src';
+import { TYPESCRIPT_CONTAINER_OPS } from '../src/container-ops';
 
 const backend = {
   parse: (text: string): GraphDocument => parseTypeScript(text),
@@ -749,5 +754,92 @@ describe('nodes made from a dragged value', () => {
     expect(result.status === 'synced' && result.text).toContain(
       '  const x = d * 2;\n  items.pop();\n'
     );
+  });
+
+  it('shows the action menu’s container node at once, while it floats', () => {
+    const entry = byTitle('f');
+    const floating = floatingNodes(
+      source,
+      { type: 'value', expression: "undefined.push('')" },
+      'fn:f',
+      'g3',
+      backend
+    );
+    if (!floating.ok) {
+      throw new Error(floating.error);
+    }
+
+    const fed = feedFloating(floating.edit, 'undefined', {
+      node: entry.id,
+      pin: 'param0',
+    });
+    if (fed?.edge.type !== 'addEdge') {
+      throw new Error('not fed');
+    }
+
+    const items = entry.pins.find((p) => p.id === 'param0');
+    const typed = withFedType(
+      fed.edit,
+      fed.edge.to,
+      items ?? { type: 'any' },
+      TYPESCRIPT_CONTAINER_OPS
+    );
+    const push = typed.nodes.find((n) => n.title === 'push');
+    expect(push && compactTitle(push)).toBe('ADD');
+    expect(push?.pins.find((p) => p.id === 'target')?.type).toBe('string[]');
+    // Without the language's operations it stays the call.
+    const plain = withFedType(fed.edit, fed.edge.to, items ?? { type: 'any' });
+    const call = plain.nodes.find((n) => n.title === 'push');
+    expect(call && compactTitle(call)).toBe('push');
+  });
+
+  it('keeps a typed value’s type when the value is wired into it', () => {
+    const entry = byTitle('f');
+    const floating = floatingNodes(
+      source,
+      { type: 'value', expression: 'items.push(undefined)' },
+      'fn:f',
+      'g4',
+      backend
+    );
+    if (!floating.ok) {
+      throw new Error(floating.error);
+    }
+
+    const fed = feedFloating(floating.edit, 'undefined', {
+      node: entry.id,
+      pin: 'param0',
+    });
+    if (fed?.edge.type !== 'addEdge') {
+      throw new Error('not fed');
+    }
+
+    const items = entry.pins.find((p) => p.id === 'param0');
+    const typed = withFedType(
+      fed.edit,
+      fed.edge.to,
+      items ?? { type: 'any' },
+      TYPESCRIPT_CONTAINER_OPS
+    );
+    const push = typed.nodes.find((n) => n.title === 'push');
+    // The parameter it is called on stays wired (the receiver).
+    expect(typed.edges).toContainEqual(
+      expect.objectContaining({
+        from: { node: entry.id, pin: 'param0' },
+        to: { node: push?.id, pin: 'target' },
+      })
+    );
+    expect(push?.pins.find((p) => p.id === 'arg0')?.type).toBe('string');
+    // The menu's "items.push(value)" draws it as the call (`~call|`).
+    const shown = push && showAsCall(push);
+    expect(shown && compactTitle(shown)).toBe('push');
+    expect(shown?.pins.map((p) => p.id)).toEqual([
+      'exec',
+      'then',
+      'target',
+      'arg0',
+      'return',
+    ]);
+    expect(shown && shownAsCall(shown)).toEqual({ word: 'ADD' });
   });
 });

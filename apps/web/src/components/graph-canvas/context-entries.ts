@@ -1,13 +1,16 @@
 import type { ContextTarget, GraphView } from '@vizscript/canvas';
-import type { InputPinMeta, Point } from '@vizscript/core';
+import type { GraphNode, InputPinMeta, Point } from '@vizscript/core';
 import {
   ARG_PIN,
   arrayElements,
+  callViewKey,
   chainValues,
   getMeta,
+  hasCallLook,
   linkPin,
   objectEntries,
   referenceName,
+  shownAsCall,
 } from '@vizscript/core';
 import type { Ref } from 'vue';
 import { toRaw } from 'vue';
@@ -57,6 +60,35 @@ export function createContextEntries(
   ctx: CanvasContext & ContextEntryDeps
 ): (target: ContextTarget, state: MenuState) => MenuEntry[] {
   const { props, emitOp, events, commands } = ctx;
+
+  /**
+   * A container node is a way to draw a call of the code: show it as the
+   * call (`push`) or as the container node again (ADD), as a layout entry.
+   */
+  function viewEntries(node: GraphNode | undefined): MenuEntry[] {
+    const shown = node ? shownAsCall(node) : undefined;
+    if (node && shown) {
+      const word = shown.label ?? shown.word;
+      return [
+        {
+          label: `Show as ${word}`,
+          icon: 'i-mdi-view-grid-outline',
+          action: () => events.layout({ [callViewKey(node.id)]: null }),
+        },
+      ];
+    }
+
+    return node && hasCallLook(node)
+      ? [
+          {
+            label: `Show as ${node.title}() call`,
+            icon: 'i-mdi-function-variant',
+            action: () =>
+              events.layout({ [callViewKey(node.id)]: { x: 0, y: 0 } }),
+          },
+        ]
+      : [];
+  }
 
   function nodeEntries(
     v: GraphView,
@@ -109,6 +141,7 @@ export function createContextEntries(
           ]
         : []),
       // The node's own actions first, then the generic editing ones.
+      ...viewEntries(ids.length === 1 ? first?.node : undefined),
       ...(props.editable && ids.length === 1 && first?.node.kind === 'call'
         ? [
             {

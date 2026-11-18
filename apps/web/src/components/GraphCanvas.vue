@@ -427,6 +427,7 @@ const events: CanvasEvents = {
   jumpTo: (id) => emit('jumpTo', id),
   resetLayout: (ids) => emit('resetLayout', ids),
   openFunction: (fnId) => emit('openFunction', fnId),
+  layout: (patch) => emit('layoutChange', patch),
 };
 const commands = createNodeCommands({
   ...ctx,

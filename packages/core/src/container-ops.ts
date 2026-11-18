@@ -178,9 +178,19 @@ export function containerPartType(
   }
 }
 
+/**
+ * A call drawn as a container node: how it looked as the call (the order
+ * of its pins, compact or not), so it can be shown as that call again
+ * (`showAsCall`).
+ */
+export interface CallLook {
+  order: string[];
+  compact: boolean;
+}
+
 /** What `styleContainerNode` keeps on a node. */
-interface ContainerNodeMeta {
-  container: { word: string; pin: string; label?: string };
+export interface ContainerNodeMeta {
+  container: { word: string; pin: string; label?: string; call?: CallLook };
 }
 
 /**
@@ -217,6 +227,10 @@ export function styleContainerNode(
   const outputs = node.pins.filter(
     (p) => p.direction === 'out' && p.kind === 'data'
   );
+  const call: CallLook | undefined =
+    node.kind === 'call' && op.form !== 'operator'
+      ? { order: node.pins.map((p) => p.id), compact: node.compact === true }
+      : undefined;
   node.pins = [
     ...exec,
     { ...target, type: container },
@@ -230,6 +244,7 @@ export function styleContainerNode(
       word: op.word,
       pin: containerPin,
       ...(op.label === undefined ? {} : { label: op.label }),
+      ...(call ? { call } : {}),
     },
   } satisfies ContainerNodeMeta;
 }
