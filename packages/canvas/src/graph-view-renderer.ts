@@ -40,7 +40,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     this.height = rect.height;
     this.canvas.width = Math.max(1, Math.round(rect.width * this.dpr));
     this.canvas.height = Math.max(1, Math.round(rect.height * this.dpr));
-    if (!this.hasFramed && this.nodes.size > 0 && this.width > 0) {
+    if (!this.hasFramed && this.scene.nodes.size > 0 && this.width > 0) {
       this.hasFramed = true;
       this.initialView();
     }
@@ -63,7 +63,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     ctx.fillRect(0, 0, this.width, this.height);
     this.drawGrid();
 
-    if (!this.doc) {
+    if (!this.scene.doc) {
       return;
     }
 
@@ -77,14 +77,14 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     );
 
     const view = visibleWorldRect(camera, this.width, this.height);
-    this.updateFrames();
+    this.scene.updateFrames();
     this.drawFrames(view);
     this.drawWires(view);
 
-    const visible = this.index.query(view);
+    const visible = this.scene.index.query(view);
     const selected: NodeState[] = [];
     for (const id of visible) {
-      const ns = this.nodes.get(id);
+      const ns = this.scene.nodes.get(id);
       if (!ns) {
         continue;
       }
@@ -143,7 +143,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
   private drawFrames(view: Rect): void {
     const { ctx, theme } = this;
     // Function frames, then comment boxes from the outside in.
-    const frames = this.frames.toSorted(
+    const frames = this.scene.frames.toSorted(
       (a, b) =>
         Number(a.kind === 'comment') - Number(b.kind === 'comment') ||
         b.nodeIds.length - a.nodeIds.length
@@ -183,7 +183,9 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       frame.nodeIds.length > 0 &&
       frame.nodeIds.every((id) => this.selection.has(id));
     // UE-like comment colors: a tinted body and a stronger header.
-    const color = frame.boxId ? this.boxColors.get(frame.boxId) : undefined;
+    const color = frame.boxId
+      ? this.scene.boxColors.get(frame.boxId)
+      : undefined;
     ctx.beginPath();
     ctx.roundRect(b.x, b.y, b.width, b.height, 6);
     ctx.fillStyle = color ? `${color}1f` : theme.commentFill;
@@ -233,8 +235,8 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
 
   private drawWires(view: Rect): void {
     const highlighted: Array<{ edge: GraphEdge; wire: WireShape[] }> = [];
-    for (const { edge } of this.edges) {
-      const wire = this.edgeWire(edge);
+    for (const { edge } of this.scene.edges) {
+      const wire = this.scene.edgeWire(edge);
       if (!wire || !wire.some((shape) => rectsIntersect(shape.bounds, view))) {
         continue;
       }
@@ -255,8 +257,8 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
 
   private drawKnots(view: Rect): void {
     const { ctx, theme } = this;
-    for (const [edgeId, points] of this.reroutes) {
-      const edge = this.edgesById.get(edgeId);
+    for (const [edgeId, points] of this.scene.reroutes) {
+      const edge = this.scene.edgesById.get(edgeId);
       if (!edge) {
         continue;
       }
@@ -300,7 +302,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       return this.theme.exec;
     }
 
-    const pin = this.nodes
+    const pin = this.scene.nodes
       .get(edge.from.node)
       ?.geom.pins.get(edge.from.pin)?.pin;
     return pinColor(pin?.type ?? 'any', this.theme.scheme);
@@ -346,7 +348,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
 
     if (drag?.type === 'moveWires') {
       const end = drag.target
-        ? this.pinWorld(drag.target.ns, drag.target.pg)
+        ? this.scene.pinWorld(drag.target.ns, drag.target.pg)
         : drag.currentWorld;
       for (const other of drag.ends) {
         this.drawLooseWire(other, end, drag.target !== null);
@@ -368,7 +370,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       this.drawLooseWire(
         drag.from,
         drag.target
-          ? this.pinWorld(drag.target.ns, drag.target.pg)
+          ? this.scene.pinWorld(drag.target.ns, drag.target.pg)
           : drag.currentWorld,
         drag.target !== null
       );
@@ -477,7 +479,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     attached: boolean
   ): void {
     const { ctx, theme } = this;
-    const start = this.pinWorld(from.ns, from.pg);
+    const start = this.scene.pinWorld(from.ns, from.pg);
     const pin = from.pg.pin;
     const wire =
       pin.direction === 'out' ? wireCurve(start, end) : wireCurve(end, start);

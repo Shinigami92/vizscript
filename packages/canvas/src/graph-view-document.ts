@@ -1,13 +1,4 @@
-import {
-  boxColorIndex,
-  COMMENT_BOX_COLORS,
-  extractReroutes,
-  noReroutesKey,
-  pinKey,
-  reroutePatch,
-  wiredNodes,
-  withImplicitSelf,
-} from '@vizscript/core';
+import { reroutePatch } from '@vizscript/core';
 import type {
   GraphDocument,
   GraphEdge,
@@ -19,8 +10,8 @@ import type {
 } from '@vizscript/core';
 import type { AlignNode } from './align';
 import { alignNodes, levelEdge } from './align';
-import { BUBBLE_GAP, bubbleText, layoutBubble } from './bubble';
-import { worldToScreen } from './camera';
+import { BUBBLE_GAP } from './bubble';
+import { screenToWorld, worldToScreen } from './camera';
 import type { Rect } from './camera';
 import { COMMENT_HEADER, knotId, parseKnotId } from './graph-view-constants';
 import { GraphViewRenderer } from './graph-view-renderer';
@@ -41,138 +32,39 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
   }
 
   public setDocument(source: GraphDocument, positions: Positions): void {
-    // Drawn with UE's implicit `self` (Target boxes instead of wires).
-    const doc = {
-      ...source,
-      functions: source.functions.map(withImplicitSelf),
-    };
-    this.doc = doc;
-    const previous = this.nodes;
     const now = performance.now();
-    this.nodes = new Map();
-    this.edges = [];
-    this.edgesById = new Map();
-    this.edgesByNode = new Map();
-    this.connectedPins = new Set();
-    this.frames = [];
-
-    for (const fn of doc.functions) {
-      for (const node of fn.nodes) {
-        const p = positions[node.id] ?? { x: 0, y: 0 };
-        const shown = this.nodeGeometry(node);
-        const ns: NodeState = {
-          node: shown.node,
-          full: node,
-          advanced: shown.advanced,
-          fnId: fn.id,
-          geom: shown.geom,
-          x: p.x,
-          y: p.y,
-          bubble: bubbleText(node.comment)
-            ? layoutBubble(bubbleText(node.comment), this.metrics.measure)
-            : null,
-        };
-        this.continueMove(previous.get(node.id), ns, now);
-        ns.appear = previous.get(node.id)?.appear;
-        this.nodes.set(node.id, ns);
-      }
-
-      for (const edge of fn.edges) {
-        this.edges.push({ edge, fnId: fn.id });
-        this.edgesById.set(edge.id, edge);
-        for (const id of [edge.from.node, edge.to.node]) {
-          const list = this.edgesByNode.get(id) ?? [];
-          list.push(edge);
-          this.edgesByNode.set(id, list);
-        }
-
-        this.connectedPins.add(pinKey(edge.from));
-        this.connectedPins.add(pinKey(edge.to));
-      }
-
-      const wired = wiredNodes(fn);
-      this.frames.push({
-        kind: 'function',
-        fnId: fn.id,
-        name: fn.name,
-        // Nodes not wired in yet (a Get just placed, floating nodes) stay
-        // outside the frame, so moving them never moves the frame.
-        nodeIds: fn.nodes
-          .filter((n) => !n.floating && wired.has(n.id))
-          .map((n) => n.id),
-        bounds: null,
-      });
-      for (const box of fn.comments ?? []) {
-        this.frames.push({
-          kind: 'comment',
-          fnId: fn.id,
-          boxId: box.id,
-          name: box.title,
-          nodeIds: box.nodes,
-          bounds: null,
-        });
-      }
-    }
-
-    this.boxColors = new Map();
-    for (const frame of this.frames) {
-      const index = frame.boxId ? boxColorIndex(positions, frame.boxId) : 0;
-      const color = COMMENT_BOX_COLORS[index]?.color;
-      if (frame.boxId && color) {
-        this.boxColors.set(frame.boxId, color);
-      }
-    }
-
-    this.reroutes = new Map();
-    for (const [edgeId, points] of Object.entries(extractReroutes(positions))) {
-      if (this.edgesById.has(edgeId) && points.length > 0) {
-        this.reroutes.set(
-          edgeId,
-          points.map((p) => ({ ...p }))
-        );
-      }
-    }
-
-    // Exec chains wrapped to a lower row get two reroute points in the gap
-    // above it, like one would route them in UE. They follow the nodes
-    // until the user moves or removes one (then they are saved).
-    for (const { edge } of this.edges) {
-      const knots =
-        edge.kind === 'exec' &&
-        !this.reroutes.has(edge.id) &&
-        !positions[noReroutesKey(edge.id)]
-          ? this.wrapKnots(edge)
-          : undefined;
-      if (knots) {
-        this.reroutes.set(edge.id, knots);
-      }
+    const previous = this.scene.load(source, positions);
+    for (const [id, ns] of this.scene.nodes) {
+      const before = previous.get(id);
+      this.continueMove(before, ns, now);
+      ns.appear = before?.appear;
     }
 
     this.selection = new Set(
-      [...this.selection].filter((id) => this.nodes.has(id))
+      [...this.selection].filter((id) => this.scene.nodes.has(id))
     );
     this.knotSelection = new Set(
       [...this.knotSelection].filter((id) => {
         const { edgeId, index } = parseKnotId(id);
-        return (this.reroutes.get(edgeId)?.length ?? 0) > index;
+        return (this.scene.reroutes.get(edgeId)?.length ?? 0) > index;
       })
     );
     this.highlight = new Set(
-      [...this.highlight].filter((id) => this.nodes.has(id))
+      [...this.highlight].filter((id) => this.scene.nodes.has(id))
     );
-    if (this.hoverNode && !this.nodes.has(this.hoverNode)) {
+    if (this.hoverNode && !this.scene.nodes.has(this.hoverNode)) {
       this.hoverNode = null;
       this.hoverPin = null;
     }
 
-    if (this.hoverEdge && !this.edgesById.has(this.hoverEdge)) {
+    if (this.hoverEdge && !this.scene.edgesById.has(this.hoverEdge)) {
       this.setHoverEdge(null);
     }
 
     this.resolveDragPins();
     this.fadeInNewNodes(previous, now);
-    this.rebuildIndex();
-    if (!this.hasFramed && this.nodes.size > 0 && this.width > 0) {
+    this.scene.rebuildIndex();
+    if (!this.hasFramed && this.scene.nodes.size > 0 && this.width > 0) {
       this.hasFramed = true;
       this.initialView();
     }
@@ -186,7 +78,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
    */
   private resolveDragPins(): void {
     if (this.pendingWire) {
-      const from = resolvePin(this.nodes, this.pendingWire.from);
+      const from = resolvePin(this.scene.nodes, this.pendingWire.from);
       this.pendingWire = from ? { ...this.pendingWire, from } : null;
     }
 
@@ -195,17 +87,17 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
       return;
     }
 
-    const from = resolvePin(this.nodes, drag.from);
+    const from = resolvePin(this.scene.nodes, drag.from);
     if (!from) {
       this.drag = null;
       return;
     }
 
     drag.from = from;
-    drag.target = drag.target && resolvePin(this.nodes, drag.target);
+    drag.target = drag.target && resolvePin(this.scene.nodes, drag.target);
     if (drag.type === 'moveWires') {
       drag.ends = drag.ends.flatMap((end) => {
-        const resolved = resolvePin(this.nodes, end);
+        const resolved = resolvePin(this.scene.nodes, end);
         return resolved ? [resolved] : [];
       });
     }
@@ -214,37 +106,43 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
   /** Rendered size of a node; use it for layout so both agree. */
   public readonly sizeOf = (
     node: GraphNode
-  ): { width: number; height: number } => {
-    const { geom } = this.nodeGeometry(node);
-    return { width: geom.width, height: geom.height };
-  };
+  ): { width: number; height: number } => this.scene.sizeOf(node);
 
   /** Room a node needs above it (its comment bubble); use it for layout. */
-  public readonly spaceAbove = (node: GraphNode): number => {
-    const text = bubbleText(node.comment);
-    return text
-      ? layoutBubble(text, this.metrics.measure).height + BUBBLE_GAP
-      : 0;
-  };
+  public readonly spaceAbove = (node: GraphNode): number =>
+    this.scene.spaceAbove(node);
 
   /** Shows or hides the advanced pins of a node (UE's ▼ / ▲). */
   protected toggleAdvanced(ns: NodeState): void {
-    if (this.expandedNodes.has(ns.full.id)) {
-      this.expandedNodes.delete(ns.full.id);
-    } else {
-      this.expandedNodes.add(ns.full.id);
-    }
-
-    const shown = this.nodeGeometry(ns.full);
-    ns.node = shown.node;
-    ns.geom = shown.geom;
-    this.rebuildIndex();
+    this.scene.toggleAdvanced(ns);
     this.requestRender();
+  }
+
+  /** World point under a client (viewport) position, e.g. of a drop. */
+  public worldAt(clientX: number, clientY: number): Point {
+    const rect = this.canvas.getBoundingClientRect();
+    return screenToWorld(this.camera, {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    });
+  }
+
+  /** No node, pin, reroute point or frame title at a world point. */
+  public isEmptyAt(world: Point): boolean {
+    return (
+      this.hitTest(world) === null &&
+      this.scene.hitWire(world, this.wireTolerance()) === null
+    );
+  }
+
+  /** The function whose frame contains a world point (innermost). */
+  public functionAt(world: Point): string | undefined {
+    return this.scene.functionAt(world);
   }
 
   public getPositions(): Positions {
     const result: Positions = {};
-    for (const [id, ns] of this.nodes) {
+    for (const [id, ns] of this.scene.nodes) {
       result[id] = ns.tween ? { ...ns.tween.to } : { x: ns.x, y: ns.y };
     }
 
@@ -256,23 +154,23 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
   }
 
   public setSelection(ids: ReadonlyArray<string>): void {
-    this.selection = new Set(ids.filter((id) => this.nodes.has(id)));
+    this.selection = new Set(ids.filter((id) => this.scene.nodes.has(id)));
     this.knotSelection.clear();
     this.requestRender();
   }
 
   public selectAll(): void {
     this.knotSelection = new Set(
-      [...this.reroutes].flatMap(([edgeId, points]) =>
+      [...this.scene.reroutes].flatMap(([edgeId, points]) =>
         points.map((_, i) => knotId(edgeId, i))
       )
     );
-    this.setSelectionInternal(new Set(this.nodes.keys()));
+    this.setSelectionInternal(new Set(this.scene.nodes.keys()));
   }
 
   /** Selects every node of a function (like clicking its frame title). */
   public selectFunction(fnId: string): void {
-    const frame = this.frames.find((f) => f.fnId === fnId);
+    const frame = this.scene.frames.find((f) => f.fnId === fnId);
     if (frame) {
       this.knotSelection.clear();
       this.setSelectionInternal(new Set(frame.nodeIds));
@@ -288,16 +186,16 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
   }
 
   public getEdge(edgeId: string): GraphEdge | undefined {
-    return this.edgesById.get(edgeId);
+    return this.scene.edgesById.get(edgeId);
   }
 
   public getReroutes(edgeId: string): Point[] {
-    return (this.reroutes.get(edgeId) ?? []).map((p) => ({ ...p }));
+    return (this.scene.reroutes.get(edgeId) ?? []).map((p) => ({ ...p }));
   }
 
   /** Adds a reroute point on the wire, at the segment nearest to `world`. */
   public addReroute(edgeId: string, world: Point): void {
-    const segment = this.hitWire(world, Number.POSITIVE_INFINITY, edgeId);
+    const segment = this.scene.hitWire(world, Number.POSITIVE_INFINITY, edgeId);
     const before = this.getReroutes(edgeId);
     const after = [...before];
     after.splice(segment?.segment ?? before.length, 0, {
@@ -326,12 +224,12 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     after: ReadonlyArray<Point>
   ): void {
     if (after.length > 0) {
-      this.reroutes.set(
+      this.scene.reroutes.set(
         edgeId,
         after.map((p) => ({ ...p }))
       );
     } else {
-      this.reroutes.delete(edgeId);
+      this.scene.reroutes.delete(edgeId);
     }
 
     this.knotSelection.clear();
@@ -356,9 +254,9 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
       const after = before.filter((_, i) => !indices.has(i));
       Object.assign(patch, reroutePatch(edgeId, before, after));
       if (after.length > 0) {
-        this.reroutes.set(edgeId, after);
+        this.scene.reroutes.set(edgeId, after);
       } else {
-        this.reroutes.delete(edgeId);
+        this.scene.reroutes.delete(edgeId);
       }
     }
 
@@ -373,24 +271,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
    * NOT IN CODE for nodes of graph-only edits.
    */
   public setProblems(problems: ReadonlyMap<string, NodeBannerKind>): void {
-    const before = this.problems;
-    this.problems = new Map(problems);
-    // Nodes that got or lost a banner change their height.
-    let resized = false;
-    for (const [id, ns] of this.nodes) {
-      if (before.has(id) !== this.problems.has(id)) {
-        const shown = this.nodeGeometry(ns.full);
-        ns.node = shown.node;
-        ns.geom = shown.geom;
-        resized = true;
-      }
-    }
-
-    if (resized) {
-      this.rebuildIndex();
-    }
-
-    this.framesDirty = true;
+    this.scene.setProblems(problems);
     this.requestRender();
   }
 
@@ -411,14 +292,14 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     let world: Rect;
     let value: string;
     if (target.kind === 'node') {
-      const ns = this.nodes.get(target.nodeId);
+      const ns = this.scene.nodes.get(target.nodeId);
       if (!ns) {
         return;
       }
 
       this.revealNodes([target.nodeId]);
       value = ns.node.comment?.text ?? '';
-      world = this.bubbleRect(ns) ?? {
+      world = this.scene.bubbleRect(ns) ?? {
         x: ns.x,
         y: ns.y - BUBBLE_GAP - 60,
         width: Math.max(ns.geom.width, 220),
@@ -431,8 +312,8 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
       };
       world.y = Math.min(world.y, ns.y - BUBBLE_GAP - world.height);
     } else {
-      this.updateFrames();
-      const frame = this.frames.find((f) => f.boxId === target.boxId);
+      this.scene.updateFrames();
+      const frame = this.scene.frames.find((f) => f.boxId === target.boxId);
       if (!frame?.bounds) {
         return;
       }
@@ -464,7 +345,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
 
   /** Opens the inline value editor of an unconnected input pin. */
   public editLiteral(nodeId: string, pinId: string): void {
-    const ns = this.nodes.get(nodeId);
+    const ns = this.scene.nodes.get(nodeId);
     const pg = ns?.geom.pins.get(pinId);
     if (ns && pg && this.editable) {
       this.revealNodes([nodeId]);
@@ -473,7 +354,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
   }
 
   protected startLiteralEdit(ns: NodeState, pg: PinGeometry): void {
-    const r = this.literalRect(ns, pg);
+    const r = this.scene.literalRect(ns, pg);
     const literal = pg.pin.literal;
     if (!r || !literal) {
       return;
@@ -507,7 +388,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
   public alignSelection(mode: AlignMode): void {
     this.finishNodeMoves();
     const selected = [...this.selection]
-      .map((id) => this.nodes.get(id))
+      .map((id) => this.scene.nodes.get(id))
       .filter((ns): ns is NodeState => ns !== undefined);
     const moved = alignNodes(
       mode,
@@ -522,7 +403,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     );
     const patch: LayoutPatch = {};
     for (const [id, point] of moved) {
-      const ns = this.nodes.get(id);
+      const ns = this.scene.nodes.get(id);
       if (ns && (point.x !== ns.x || point.y !== ns.y)) {
         this.placeNode(ns, point);
         patch[id] = { ...point };
@@ -530,7 +411,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     }
 
     if (Object.keys(patch).length > 0) {
-      this.framesDirty = true;
+      this.scene.framesDirty = true;
       this.emitter.emit('layoutChange', { patch });
       this.requestRender();
     }
@@ -538,7 +419,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
 
   /** The wire Straighten levels for a node, as `alignNodes` takes it. */
   private levelOf(ns: NodeState): Pick<AlignNode, 'level'> {
-    const fn = this.doc?.functions.find((f) => f.id === ns.fnId);
+    const fn = this.scene.doc?.functions.find((f) => f.id === ns.fnId);
     const edge = levelEdge(fn?.edges ?? [], ns.node.id);
     if (!edge) {
       return {};
@@ -546,7 +427,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
 
     const [mine, other] =
       edge.to.node === ns.node.id ? [edge.to, edge.from] : [edge.from, edge.to];
-    const otherNs = this.nodes.get(other.node);
+    const otherNs = this.scene.nodes.get(other.node);
     const otherPg = otherNs?.geom.pins.get(other.pin);
     const minePg = ns.geom.pins.get(mine.pin);
     return otherNs && otherPg && minePg

@@ -245,7 +245,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
           ? theme.codeHighlight
           : theme.hover;
       ctx.lineWidth = selected || highlighted ? 2.5 : 1.5;
-    } else if (this.problems.get(id) === 'sync') {
+    } else if (this.scene.problems.get(id) === 'sync') {
       // Not in the code yet: a dashed outline like the banner.
       ctx.strokeStyle = theme.syncBanner;
       ctx.lineWidth = 2;
@@ -425,7 +425,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     const { ctx, theme } = this;
     const x = ns.x + ns.geom.width / 2;
     const y = ns.y + ns.geom.height - ADVANCED_ROW / 2 - 1;
-    const open = this.expandedNodes.has(ns.full.id);
+    const open = this.scene.expandedNodes.has(ns.full.id);
     const hovered = this.hoverNode === ns.node.id;
     ctx.beginPath();
     if (open) {
@@ -448,8 +448,8 @@ export abstract class GraphViewNodes extends GraphViewCamera {
   private drawPin(ns: NodeState, pg: PinGeometry, lod: boolean): void {
     const { ctx, theme } = this;
     const pin: Pin = pg.pin;
-    const p = this.pinWorld(ns, pg);
-    const connected = this.connectedPins.has(
+    const p = this.scene.pinWorld(ns, pg);
+    const connected = this.scene.connectedPins.has(
       pinKey({ node: ns.node.id, pin: pin.id })
     );
     const hovered = this.hoverNode === ns.node.id && this.hoverPin === pin.id;
@@ -525,7 +525,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       ctx.fillText(label, labelX, p.y);
     }
 
-    const lr = this.literalRect(ns, pg);
+    const lr = this.scene.literalRect(ns, pg);
     if (lr && pin.literal?.kind === 'boolean') {
       drawCheckbox(this.painter(), lr, isChecked(pin.literal.value));
     } else if (lr && pin.literal) {
@@ -559,7 +559,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
 
   /** UE's ERROR / WARNING / NOT IN CODE banner under a node. */
   private drawProblemBanner(ns: NodeState, lod: boolean): void {
-    const severity = this.problems.get(ns.node.id);
+    const severity = this.scene.problems.get(ns.node.id);
     if (!severity) {
       return;
     }
@@ -611,7 +611,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
   }
 
   private drawBubble(ns: NodeState, lod: boolean): void {
-    const r = this.bubbleRect(ns);
+    const r = this.scene.bubbleRect(ns);
     const bubble = ns.bubble;
     if (!r || !bubble) {
       return;

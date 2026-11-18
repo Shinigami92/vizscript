@@ -7,6 +7,7 @@ import {
   zoomAt,
 } from './camera';
 import type { Camera } from './camera';
+import { GraphViewBase } from './graph-view-base';
 import {
   CAMERA_MOTION_MS,
   NODE_APPEAR_MS,
@@ -14,18 +15,17 @@ import {
   NODE_PULSE_MS,
   samePoint,
 } from './graph-view-constants';
-import { GraphViewHitTest } from './graph-view-hit-test';
 import type { NodeState } from './graph-view-types';
 
 /** Camera moves and the eased motion of the camera and nodes. */
-export abstract class GraphViewCamera extends GraphViewHitTest {
+export abstract class GraphViewCamera extends GraphViewBase {
   /** Turns eased camera and node moves on or off (reduced motion). */
   public setMotion(motion: boolean): void {
     this.motion = motion;
     if (!motion) {
       this.cameraTween = null;
       this.finishNodeMoves();
-      for (const ns of this.nodes.values()) {
+      for (const ns of this.scene.nodes.values()) {
         ns.appear = undefined;
         ns.pulse = undefined;
       }
@@ -56,7 +56,7 @@ export abstract class GraphViewCamera extends GraphViewHitTest {
   }
 
   public frameAll(): void {
-    const bounds = this.boundsOf([...this.nodes.keys()]);
+    const bounds = this.scene.boundsOf([...this.scene.nodes.keys()]);
     if (bounds) {
       this.moveCamera(fitCamera(bounds, this.width, this.height, 48, 1));
     }
@@ -64,7 +64,7 @@ export abstract class GraphViewCamera extends GraphViewHitTest {
 
   /** Zooms to the selection, or to everything when nothing is selected. */
   public frameSelection(): void {
-    const bounds = this.boundsOf(this.selection);
+    const bounds = this.scene.boundsOf(this.selection);
     if (bounds) {
       this.moveCamera(fitCamera(bounds, this.width, this.height, 80, 1));
     } else {
@@ -74,7 +74,7 @@ export abstract class GraphViewCamera extends GraphViewHitTest {
 
   /** Centers the given nodes at a readable zoom. */
   public focusNodes(ids: ReadonlyArray<string>): void {
-    const bounds = this.boundsOf(ids);
+    const bounds = this.scene.boundsOf(ids);
     if (!bounds || this.width === 0) {
       return;
     }
@@ -94,7 +94,7 @@ export abstract class GraphViewCamera extends GraphViewHitTest {
 
   /** Pans (and zooms out if needed) so that the given nodes are visible. */
   public revealNodes(ids: ReadonlyArray<string>): void {
-    const bounds = this.boundsOf(ids);
+    const bounds = this.scene.boundsOf(ids);
     if (!bounds || this.width === 0) {
       return;
     }
@@ -130,7 +130,7 @@ export abstract class GraphViewCamera extends GraphViewHitTest {
    * start at the top-left (module entry) at a readable zoom.
    */
   protected initialView(): void {
-    const bounds = this.boundsOf([...this.nodes.keys()]);
+    const bounds = this.scene.boundsOf([...this.scene.nodes.keys()]);
     if (!bounds) {
       return;
     }
@@ -180,7 +180,7 @@ export abstract class GraphViewCamera extends GraphViewHitTest {
 
     const now = performance.now();
     for (const id of ids) {
-      const ns = this.nodes.get(id);
+      const ns = this.scene.nodes.get(id);
       if (ns) {
         ns.pulse = now;
       }
@@ -201,13 +201,15 @@ export abstract class GraphViewCamera extends GraphViewHitTest {
       return;
     }
 
-    const added = [...this.nodes.keys()].filter((id) => !previous.has(id));
-    if (added.length === 0 || added.length === this.nodes.size) {
+    const added = [...this.scene.nodes.keys()].filter(
+      (id) => !previous.has(id)
+    );
+    if (added.length === 0 || added.length === this.scene.nodes.size) {
       return;
     }
 
     for (const id of added) {
-      const ns = this.nodes.get(id);
+      const ns = this.scene.nodes.get(id);
       if (ns) {
         ns.appear = now;
       }
@@ -249,24 +251,24 @@ export abstract class GraphViewCamera extends GraphViewHitTest {
 
     ns.x = to.x;
     ns.y = to.y;
-    this.index.insert(ns.node.id, this.nodeRect(ns));
+    this.scene.index.insert(ns.node.id, this.scene.nodeRect(ns));
   }
 
   /** Puts sliding nodes at their targets (before the user acts on them). */
   protected finishNodeMoves(): void {
     let finished = false;
-    for (const ns of this.nodes.values()) {
+    for (const ns of this.scene.nodes.values()) {
       if (ns.tween) {
         ns.x = ns.tween.to.x;
         ns.y = ns.tween.to.y;
         ns.tween = undefined;
-        this.index.insert(ns.node.id, this.nodeRect(ns));
+        this.scene.index.insert(ns.node.id, this.scene.nodeRect(ns));
         finished = true;
       }
     }
 
     if (finished) {
-      this.framesDirty = true;
+      this.scene.framesDirty = true;
       this.requestRender();
     }
   }
@@ -294,7 +296,7 @@ export abstract class GraphViewCamera extends GraphViewHitTest {
       this.emitter.emit('cameraChange', { ...this.camera });
     }
 
-    for (const ns of this.nodes.values()) {
+    for (const ns of this.scene.nodes.values()) {
       const move = ns.tween;
       if (!move) {
         continue;
@@ -304,16 +306,16 @@ export abstract class GraphViewCamera extends GraphViewHitTest {
       const k = easeOut(t);
       ns.x = move.from.x + (move.to.x - move.from.x) * k;
       ns.y = move.from.y + (move.to.y - move.from.y) * k;
-      this.framesDirty = true;
+      this.scene.framesDirty = true;
       if (t >= 1) {
         ns.tween = undefined;
-        this.index.insert(ns.node.id, this.nodeRect(ns));
+        this.scene.index.insert(ns.node.id, this.scene.nodeRect(ns));
       } else {
         running = true;
       }
     }
 
-    for (const ns of this.nodes.values()) {
+    for (const ns of this.scene.nodes.values()) {
       if (ns.appear !== undefined && now - ns.appear >= NODE_APPEAR_MS) {
         ns.appear = undefined;
       }

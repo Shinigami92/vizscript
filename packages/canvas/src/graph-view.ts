@@ -1,9 +1,13 @@
 import { linkPin, pinKey, reroutePatch } from '@vizscript/core';
 import type { LayoutPatch, Point } from '@vizscript/core';
 import { normalizeRect, zoomAt } from './camera';
-import { knotId, parseKnotId } from './graph-view-constants';
+import { knotId, parseKnotId, PIN_MENU_ZOOM } from './graph-view-constants';
 import { GraphViewDocument } from './graph-view-document';
-import type { AlignMode, GraphViewOptions } from './graph-view-types';
+import type {
+  AlignMode,
+  ContextTarget,
+  GraphViewOptions,
+} from './graph-view-types';
 import {
   connectOp,
   hoverOf,
@@ -172,8 +176,9 @@ export class GraphView extends GraphViewDocument {
       alt: e.altKey,
       editable: this.editable,
       wireEnds: () =>
-        hit?.type === 'pin' ? this.wireEnds(hit.ns, hit.pg) : [],
-      wireAt: () => this.hitWire(world, this.wireTolerance())?.edge ?? null,
+        hit?.type === 'pin' ? this.scene.wireEnds(hit.ns, hit.pg) : [],
+      wireAt: () =>
+        this.scene.hitWire(world, this.wireTolerance())?.edge ?? null,
     });
     this.startIntent(intent, e, client, world);
   }
@@ -341,10 +346,57 @@ export class GraphView extends GraphViewDocument {
   }
 
   /** `grabbed`: the node or reroute (knot id) under the pointer. */
+  protected contextTarget(world: Point): ContextTarget {
+    const hit = this.hitTest(world);
+    // Zoomed out, pins are too small to aim at: the node's menu instead.
+    const pinTarget =
+      (hit?.type === 'pin' || hit?.type === 'literal') &&
+      this.camera.zoom >= PIN_MENU_ZOOM;
+    switch (hit?.type) {
+      case 'pin':
+      case 'literal':
+      case 'node':
+      case 'bubble': {
+        if (pinTarget && (hit.type === 'pin' || hit.type === 'literal')) {
+          return {
+            kind: 'pin',
+            pin: { node: hit.ns.node.id, pin: hit.pg.pin.id },
+          };
+        }
+
+        // Like UE: right-clicking an unselected node selects it.
+        const id = hit.ns.node.id;
+        if (!this.selection.has(id)) {
+          this.knotSelection.clear();
+          this.setSelectionInternal(new Set([id]));
+        }
+
+        return { kind: 'node', nodeId: id };
+      }
+
+      case 'knot': {
+        return { kind: 'knot', edgeId: hit.edgeId, index: hit.index };
+      }
+
+      case 'frame': {
+        return hit.frame.kind === 'comment' && hit.frame.boxId
+          ? { kind: 'comment', boxId: hit.frame.boxId, fnId: hit.frame.fnId }
+          : { kind: 'function', fnId: hit.frame.fnId };
+      }
+
+      case undefined: {
+        const wire = this.scene.hitWire(world, this.wireTolerance());
+        return wire
+          ? { kind: 'wire', edge: wire.edge }
+          : { kind: 'background' };
+      }
+    }
+  }
+
   private startNodeDrag(ids: string[], world: Point, grabbed?: string): void {
     const origins = new Map<string, Point>();
     for (const id of ids) {
-      const ns = this.nodes.get(id);
+      const ns = this.scene.nodes.get(id);
       if (ns) {
         origins.set(id, { x: ns.x, y: ns.y });
       }
@@ -353,7 +405,7 @@ export class GraphView extends GraphViewDocument {
     const knotOrigins = new Map<string, Point>();
     for (const id of this.knotSelection) {
       const { edgeId, index } = parseKnotId(id);
-      const p = this.reroutes.get(edgeId)?.[index];
+      const p = this.scene.reroutes.get(edgeId)?.[index];
       if (p) {
         knotOrigins.set(id, { ...p });
       }
@@ -432,7 +484,7 @@ export class GraphView extends GraphViewDocument {
         drag.moved = true;
         const { x: sx, y: sy } = snappedOffset(drag.anchor, dx, dy);
         for (const [id, origin] of drag.origins) {
-          const ns = this.nodes.get(id);
+          const ns = this.scene.nodes.get(id);
           if (ns) {
             ns.x = Math.round(origin.x + sx);
             ns.y = Math.round(origin.y + sy);
@@ -441,14 +493,14 @@ export class GraphView extends GraphViewDocument {
 
         for (const [id, origin] of drag.knotOrigins) {
           const { edgeId, index } = parseKnotId(id);
-          const p = this.reroutes.get(edgeId)?.[index];
+          const p = this.scene.reroutes.get(edgeId)?.[index];
           if (p) {
             p.x = Math.round(origin.x + sx);
             p.y = Math.round(origin.y + sy);
           }
         }
 
-        this.framesDirty = true;
+        this.scene.framesDirty = true;
         this.requestRender();
         return;
       }
@@ -456,8 +508,8 @@ export class GraphView extends GraphViewDocument {
       case 'marquee': {
         drag.currentWorld = this.toWorld(e);
         const rect = normalizeRect(drag.startWorld, drag.currentWorld);
-        const hits = this.index.query(rect);
-        const knots = knotsInRect(this.reroutes, rect);
+        const hits = this.scene.index.query(rect);
+        const knots = knotsInRect(this.scene.reroutes, rect);
         this.knotSelection = marqueeSelection(drag.baseKnots, knots, drag.mods);
         this.setSelectionInternal(marqueeSelection(drag.base, hits, drag.mods));
         return;
@@ -481,7 +533,7 @@ export class GraphView extends GraphViewDocument {
             this.hitTest(world),
             this.conversions(),
             (end) =>
-              this.connectedPins.has(
+              this.scene.connectedPins.has(
                 pinKey({ node: end.ns.node.id, pin: end.pg.pin.id })
               )
           )
@@ -493,7 +545,7 @@ export class GraphView extends GraphViewDocument {
 
   private updateHover(world: Point): void {
     const hit = this.hitTest(world);
-    const edge = hit ? null : this.hitWire(world, this.wireTolerance());
+    const edge = hit ? null : this.scene.hitWire(world, this.wireTolerance());
     const hover = hoverOf(
       hit,
       edge?.edge.id ?? null,
@@ -551,10 +603,10 @@ export class GraphView extends GraphViewDocument {
         if (drag.moved) {
           const patch: LayoutPatch = {};
           for (const id of drag.ids) {
-            const ns = this.nodes.get(id);
+            const ns = this.scene.nodes.get(id);
             if (ns) {
               patch[id] = { x: ns.x, y: ns.y };
-              this.index.insert(id, this.nodeRect(ns));
+              this.scene.index.insert(id, this.scene.nodeRect(ns));
             }
           }
 
@@ -566,7 +618,7 @@ export class GraphView extends GraphViewDocument {
             Object.assign(patch, reroutePatch(edgeId, points, points));
           }
 
-          this.framesDirty = true;
+          this.scene.framesDirty = true;
           this.emitter.emit('layoutChange', { patch });
         }
 
@@ -643,7 +695,7 @@ export class GraphView extends GraphViewDocument {
     switch (drag.type) {
       case 'nodes': {
         for (const [id, origin] of drag.origins) {
-          const ns = this.nodes.get(id);
+          const ns = this.scene.nodes.get(id);
           if (ns) {
             ns.x = origin.x;
             ns.y = origin.y;
@@ -652,14 +704,14 @@ export class GraphView extends GraphViewDocument {
 
         for (const [id, origin] of drag.knotOrigins) {
           const { edgeId, index } = parseKnotId(id);
-          const p = this.reroutes.get(edgeId)?.[index];
+          const p = this.scene.reroutes.get(edgeId)?.[index];
           if (p) {
             p.x = origin.x;
             p.y = origin.y;
           }
         }
 
-        this.framesDirty = true;
+        this.scene.framesDirty = true;
         break;
       }
 
@@ -685,7 +737,7 @@ export class GraphView extends GraphViewDocument {
     const world = this.toWorld(e);
     const hit = this.hitTest(world);
     if (!hit) {
-      const wire = this.hitWire(world, this.wireTolerance());
+      const wire = this.scene.hitWire(world, this.wireTolerance());
       if (wire) {
         this.addReroute(wire.edge.id, world);
       }

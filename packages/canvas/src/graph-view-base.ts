@@ -1,48 +1,17 @@
-import type { Conversion } from '@vizscript/core';
-import {
-  computeNodeGeometry,
-  isAdvancedPin,
-  isCompact,
-  literalWidth,
-  NODE_METRICS,
-  pinKey,
-  pinLabel,
-} from '@vizscript/core';
-import type {
-  GraphDocument,
-  GraphEdge,
-  GraphNode,
-  NodeGeometry,
-  PinGeometry,
-  Point,
-} from '@vizscript/core';
-import { distanceToShape, reroutedShapes, wireShape } from './bezier';
-import type { WireShape } from './bezier';
-import { BUBBLE_GAP } from './bubble';
-import { screenToWorld, unionRect } from './camera';
-import type { Camera, Rect } from './camera';
+import type { Conversion, PinGeometry, Point } from '@vizscript/core';
+import { screenToWorld } from './camera';
+import type { Camera } from './camera';
 import { Emitter } from './emitter';
 import { FontMetrics } from './font-metrics';
-import {
-  ADVANCED_ROW,
-  BANNER_GAP,
-  BANNER_HEIGHT,
-  COMMENT_HEADER,
-  COMMENT_PADDING,
-  FRAME_HEADER,
-  FRAME_PADDING,
-} from './graph-view-constants';
 import type {
   Drag,
-  FrameState,
   GraphViewEvents,
   GraphViewOptions,
-  NodeBannerKind,
+  Hit,
   NodeState,
   Tween,
-  WireHit,
 } from './graph-view-types';
-import { SpatialIndex } from './spatial-index';
+import { Scene } from './scene';
 import { DARK_THEME } from './theme';
 import type { Theme } from './theme';
 
@@ -51,19 +20,10 @@ export abstract class GraphViewBase {
   protected readonly ctx: CanvasRenderingContext2D;
   protected readonly emitter = new Emitter<GraphViewEvents>();
   protected readonly metrics: FontMetrics;
-  protected readonly index = new SpatialIndex<string>(256);
+  protected readonly scene: Scene;
 
   protected theme: Theme;
   protected editable: boolean;
-  protected doc: GraphDocument | null = null;
-  /** Colors of comment boxes by box id (from the layout). */
-  protected boxColors = new Map<string, string>();
-  protected nodes = new Map<string, NodeState>();
-  protected edges: Array<{ edge: GraphEdge; fnId: string }> = [];
-  protected edgesById = new Map<string, GraphEdge>();
-  protected edgesByNode = new Map<string, GraphEdge[]>();
-  /** Reroute points per edge id (mutable while dragging). */
-  protected reroutes = new Map<string, Point[]>();
   protected knotSelection = new Set<string>();
   protected hoverEdge: string | null = null;
   /** Wire dropped on empty space, drawn while its menu is open. */
@@ -71,11 +31,6 @@ export abstract class GraphViewBase {
     from: { ns: NodeState; pg: PinGeometry };
     world: Point;
   } | null = null;
-  protected connectedPins = new Set<string>();
-  /** Nodes whose advanced pins are shown (UE's ▲). */
-  protected expandedNodes = new Set<string>();
-  protected frames: FrameState[] = [];
-  protected framesDirty = true;
 
   protected camera: Camera = { x: -40, y: -40, zoom: 1 };
   protected motion: boolean;
@@ -89,8 +44,6 @@ export abstract class GraphViewBase {
 
   protected selection = new Set<string>();
   protected highlight = new Set<string>();
-  /** Nodes with problems (worst severity), shown as banners like UE. */
-  protected problems = new Map<string, NodeBannerKind>();
   protected hoverNode: string | null = null;
   protected hoverPin: string | null = null;
   /** The node whose "Add pin +" button is under the cursor. */
@@ -114,6 +67,7 @@ export abstract class GraphViewBase {
     this.ctx = ctx;
     this.theme = options.theme ?? DARK_THEME;
     this.metrics = new FontMetrics(measureCtx, this.theme);
+    this.scene = new Scene(this.metrics.measure);
     this.editable = options.editable ?? true;
     this.motion = options.motion ?? false;
     this.conversions = options.conversions ?? ((): undefined => undefined);
@@ -149,281 +103,13 @@ export abstract class GraphViewBase {
     }
   }
 
-  /**
-   * A node as drawn: advanced pins (arguments left at their default) fold
-   * behind a ▼ row like UE's, unless the node was expanded.
-   */
-  protected nodeGeometry(node: GraphNode): {
-    node: GraphNode;
-    geom: NodeGeometry;
-    advanced: number;
-  } {
-    const advanced = node.pins.filter(isAdvancedPin).length;
-    const shown =
-      advanced === 0 || this.expandedNodes.has(node.id)
-        ? node
-        : { ...node, pins: node.pins.filter((p) => !isAdvancedPin(p)) };
-    let geom = computeNodeGeometry(shown, this.metrics.measure);
-    // UE's ERROR! / WARNING! band sits under the header: the rows move down.
-    if (this.problems.has(node.id) && !isCompact(shown)) {
-      geom = {
-        ...geom,
-        height: geom.height + BANNER_HEIGHT,
-        pins: new Map(
-          [...geom.pins].map(([id, pg]) => [
-            id,
-            { ...pg, y: pg.y + BANNER_HEIGHT },
-          ])
-        ),
-        ...(geom.addPin
-          ? { addPin: { ...geom.addPin, y: geom.addPin.y + BANNER_HEIGHT } }
-          : {}),
-      };
-    }
-
-    return {
-      node: shown,
-      advanced,
-      geom: advanced ? { ...geom, height: geom.height + ADVANCED_ROW } : geom,
-    };
-  }
-
-  protected nodeRect(ns: NodeState): Rect {
-    return { x: ns.x, y: ns.y, width: ns.geom.width, height: ns.geom.height };
-  }
-
-  protected rebuildIndex(): void {
-    this.index.clear();
-    for (const [id, ns] of this.nodes) {
-      this.index.insert(id, this.nodeRect(ns));
-    }
-
-    this.framesDirty = true;
-  }
-
-  protected boundsOf(ids: Iterable<string>): Rect | null {
-    let minX = Number.POSITIVE_INFINITY;
-    let minY = Number.POSITIVE_INFINITY;
-    let maxX = Number.NEGATIVE_INFINITY;
-    let maxY = Number.NEGATIVE_INFINITY;
-    for (const id of ids) {
-      const ns = this.nodes.get(id);
-      if (!ns) {
-        continue;
-      }
-
-      const top = ns.bubble ? ns.bubble.height + BUBBLE_GAP : 0;
-      const { x, y } = ns.tween?.to ?? ns;
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y - top);
-      maxX = Math.max(maxX, x + Math.max(ns.geom.width, ns.bubble?.width ?? 0));
-      maxY = Math.max(
-        maxY,
-        y +
-          ns.geom.height +
-          (this.problems.has(id) && isCompact(ns.node)
-            ? BANNER_GAP + BANNER_HEIGHT
-            : 0)
-      );
-    }
-
-    if (!Number.isFinite(minX)) {
-      return null;
-    }
-
-    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-  }
-
-  protected updateFrames(): void {
-    if (!this.framesDirty) {
-      return;
-    }
-
-    // Comment boxes, inner (fewer nodes) first so outer boxes contain them.
-    const boxes = this.frames
-      .filter((f) => f.kind === 'comment')
-      .toSorted((a, b) => a.nodeIds.length - b.nodeIds.length);
-    const done: FrameState[] = [];
-    for (const box of boxes) {
-      const members = new Set(box.nodeIds);
-      let b = this.boundsOf(box.nodeIds);
-      for (const inner of done) {
-        if (inner.bounds && inner.nodeIds.every((id) => members.has(id))) {
-          b = b ? unionRect(b, inner.bounds) : inner.bounds;
-        }
-      }
-
-      box.bounds = b
-        ? {
-            x: b.x - COMMENT_PADDING,
-            y: b.y - COMMENT_PADDING - COMMENT_HEADER,
-            width: b.width + COMMENT_PADDING * 2,
-            height: b.height + COMMENT_PADDING * 2 + COMMENT_HEADER,
-          }
-        : null;
-      done.push(box);
-    }
-
-    for (const frame of this.frames) {
-      if (frame.kind !== 'function') {
-        continue;
-      }
-
-      let b = this.boundsOf(frame.nodeIds);
-      for (const box of done) {
-        if (box.fnId === frame.fnId && box.bounds) {
-          b = b ? unionRect(b, box.bounds) : box.bounds;
-        }
-      }
-
-      frame.bounds = b
-        ? {
-            x: b.x - FRAME_PADDING,
-            y: b.y - FRAME_PADDING - FRAME_HEADER,
-            width: b.width + FRAME_PADDING * 2,
-            height: b.height + FRAME_PADDING * 2 + FRAME_HEADER,
-          }
-        : null;
-    }
-
-    this.framesDirty = false;
-  }
-
-  /** World rectangle of a node's comment bubble. */
-  protected bubbleRect(ns: NodeState): Rect | null {
-    if (!ns.bubble) {
-      return null;
-    }
-
-    return {
-      x: ns.x,
-      y: ns.y - BUBBLE_GAP - ns.bubble.height,
-      width: ns.bubble.width,
-      height: ns.bubble.height,
-    };
-  }
-
-  protected pinWorld(ns: NodeState, pg: PinGeometry): Point {
-    return { x: ns.x + pg.x, y: ns.y + pg.y };
-  }
-
-  protected literalRect(ns: NodeState, pg: PinGeometry): Rect | null {
-    const pin = pg.pin;
-    if (
-      !pin.literal ||
-      pg.side !== 'left' ||
-      this.connectedPins.has(pinKey({ node: ns.node.id, pin: pin.id }))
-    ) {
-      return null;
-    }
-
-    const text = pinLabel(ns.node, pin);
-    const label = text ? this.metrics.measure(text, 'label') : 0;
-    const x =
-      ns.x +
-      pg.x +
-      NODE_METRICS.pinRadius +
-      NODE_METRICS.pinLabelGap +
-      label +
-      (label ? 6 : 0);
-    const width = literalWidth(pin, this.metrics.measure);
-    return {
-      x,
-      y: ns.y + pg.y - NODE_METRICS.literalHeight / 2,
-      width,
-      height: NODE_METRICS.literalHeight,
-    };
-  }
-
-  protected edgeWire(edge: GraphEdge): WireShape[] | null {
-    const from = this.nodes.get(edge.from.node);
-    const to = this.nodes.get(edge.to.node);
-    const fromPin = from?.geom.pins.get(edge.from.pin);
-    const toPin = to?.geom.pins.get(edge.to.pin);
-    if (!from || !to || !fromPin || !toPin) {
-      return null;
-    }
-
-    const knots = this.reroutes.get(edge.id);
-    if (knots && knots.length > 0) {
-      return reroutedShapes(
-        this.pinWorld(from, fromPin),
-        this.pinWorld(to, toPin),
-        knots
-      );
-    }
-
-    // UE's spline, also backwards (an S-loop) and for wrapped exec chains.
-    return [wireShape(this.pinWorld(from, fromPin), this.pinWorld(to, toPin))];
-  }
-
-  /**
-   * Reroute points for a wire running back to a lower row (a wrapped exec
-   * chain): one right of its output, one left of its input, both in the
-   * gap above the lower row. `undefined` for other wires.
-   */
-  protected wrapKnots(edge: GraphEdge): Point[] | undefined {
-    const from = this.nodes.get(edge.from.node);
-    const to = this.nodes.get(edge.to.node);
-    const fromPin = from?.geom.pins.get(edge.from.pin);
-    const toPin = to?.geom.pins.get(edge.to.pin);
-    if (!from || !to || !fromPin || !toPin) {
-      return undefined;
-    }
-
-    const start = this.pinWorld(from, fromPin);
-    const end = this.pinWorld(to, toPin);
-    if (end.x > start.x - 60 || to.y < from.y + from.geom.height + 24) {
-      return undefined;
-    }
-
-    const laneY = Math.round(to.y - 22);
-    return [
-      { x: Math.round(start.x + 40), y: laneY },
-      { x: Math.round(end.x - 40), y: laneY },
-    ];
-  }
-
-  /** Nearest wire within `tolerance` (world units), optionally of one edge. */
-  protected hitWire(
-    world: Point,
-    tolerance: number,
-    onlyEdge?: string
-  ): WireHit | null {
-    let best: WireHit | null = null;
-    let bestDistance = tolerance;
-    const candidates = onlyEdge
-      ? [this.edgesById.get(onlyEdge)].filter(
-          (e): e is GraphEdge => e !== undefined
-        )
-      : this.edges.map((e) => e.edge);
-    for (const edge of candidates) {
-      const shapes = this.edgeWire(edge);
-      if (!shapes) {
-        continue;
-      }
-
-      for (const [segment, shape] of shapes.entries()) {
-        const b = shape.bounds;
-        if (
-          Number.isFinite(tolerance) &&
-          (world.x < b.x - tolerance ||
-            world.x > b.x + b.width + tolerance ||
-            world.y < b.y - tolerance ||
-            world.y > b.y + b.height + tolerance)
-        ) {
-          continue;
-        }
-
-        const distance = distanceToShape(shape, world);
-        if (distance <= bestDistance) {
-          bestDistance = distance;
-          best = { edge, segment };
-        }
-      }
-    }
-
-    return best;
+  /** What is under a world point (`Scene.hitTest`). */
+  protected hitTest(world: Point): Hit | null {
+    return this.scene.hitTest(world, {
+      zoom: this.camera.zoom,
+      editable: this.editable,
+      selection: this.selection,
+    });
   }
 
   protected wireTolerance(): number {
@@ -468,7 +154,7 @@ export abstract class GraphViewBase {
 
     this.hoverEdge = edgeId;
     this.emitter.emit('wireHoverChange', {
-      edge: edgeId ? (this.edgesById.get(edgeId) ?? null) : null,
+      edge: edgeId ? (this.scene.edgesById.get(edgeId) ?? null) : null,
     });
     this.requestRender();
   }
