@@ -179,7 +179,6 @@ describe('a node picked from a value', () => {
           type: 'useValue',
           pin: { node: entry?.id ?? '', pin: 'param0' },
           expression: "$value[0] = ''",
-          statement: true,
         },
         'undefined'
       )
@@ -191,6 +190,80 @@ describe('a node picked from a value', () => {
     expect(made?.type === 'addNodes' && made.nodes.map((n) => n.title)).toEqual(
       ['Set Array Elem']
     );
+  });
+
+  it('floats plain values too (GET, LAST INDEX), like calls', async () => {
+    const code = "function f(items: string[]) {\n  items.push('a');\n}\n";
+    const { overlay, text } = setup(undefined, code);
+    const entry = parseTypeScript(code, 't.ts')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'entry' && n.title === 'f');
+    for (const expression of ['$value[0]', '$value.length - 1']) {
+      expect(
+        await overlay.floatValueUse(
+          {
+            type: 'useValue',
+            pin: { node: entry?.id ?? '', pin: 'param0' },
+            expression,
+          },
+          'undefined'
+        )
+      ).toBe(true);
+    }
+
+    await settle();
+    // Nothing in the code until they are wired.
+    expect(text.value).toBe(code);
+    expect(
+      overlay.overlay.value.edits.map((e) => e.type === 'addNodes' && e.code)
+    ).toEqual(['items[0]', 'items.length - 1']);
+  });
+
+  it('feeds a value of the code into a floating one by a wire', async () => {
+    const code =
+      'declare function g(): number;\nfunction f() {\n  const n = g();\n}\n';
+    const { overlay, text } = setup(undefined, code);
+    const call = parseTypeScript(code, 't.ts')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.title === 'g');
+    expect(
+      await overlay.floatValueUse(
+        {
+          type: 'useValue',
+          pin: { node: call?.id ?? '', pin: 'return' },
+          expression: '$value - 1',
+        },
+        'undefined'
+      )
+    ).toBe(true);
+    await settle();
+    expect(text.value).toBe(code);
+    const [made, wire] = overlay.overlay.value.edits;
+    expect(made?.type === 'addNodes' && made.code).toBe('undefined - 1');
+    expect(wire).toEqual(
+      expect.objectContaining({
+        type: 'addEdge',
+        from: { node: call?.id, pin: 'return' },
+      })
+    );
+  });
+
+  it('leaves `await` to the code, around the value where it stands', async () => {
+    const { overlay } = setup();
+    const call = parseTypeScript(TEXT, 't.ts')
+      .functions.flatMap((f) => f.nodes)
+      .find((n) => n.title === 'g');
+    expect(
+      await overlay.floatValueUse(
+        {
+          type: 'useValue',
+          pin: { node: call?.id ?? '', pin: 'return' },
+          expression: 'await $value',
+          awaits: true,
+        },
+        'undefined'
+      )
+    ).toBe(false);
   });
 
   it('writes a function input by its name, wired to `this`', async () => {

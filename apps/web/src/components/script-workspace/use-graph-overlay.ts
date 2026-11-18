@@ -444,13 +444,9 @@ export function useGraphOverlay(
       return true;
     }
 
-    // Only calls and statements float; a lone value of the code's value
-    // (`.length`) is written as code.
-    if (
-      op.type === 'useValue' &&
-      !op.statement &&
-      !/\)\s*$/.test(op.expression)
-    ) {
+    // Every new node floats until it is wired, like UE's; only `await`
+    // goes around the value where it stands (the code's `useValue`).
+    if (op.type === 'useValue' && op.awaits) {
       return false;
     }
 

@@ -88,8 +88,8 @@ export function throwEntries(
  * (`items[0]`) or the value of a key in a map (`prices['']`), written as
  * an index, which the graph shows as a GET or FIND node. Writing one
  * goes the same way: UE's Set Array Elem (`items[0] = ''`), and a map's
- * ADD where the language has none of its own (`prices[''] = 0`); they
- * float until their exec pins are wired.
+ * ADD where the language has none of its own (`prices[''] = 0`). Like
+ * every node made from a value, they float until they are wired.
  */
 export function elementEntries(
   types: TypeSystemInfo | null | undefined,
@@ -105,13 +105,12 @@ export function elementEntries(
     return [];
   }
 
-  const use = (expression: string, statement = false): void =>
+  const use = (expression: string): void =>
     emitOp({
       type: 'useValue',
       pin: source,
       expression,
       position: { ...world },
-      ...(statement ? { statement } : {}),
     });
   if (isArrayType(pin.type)) {
     const item = emptyValueOf(types, arrayElementType(pin.type));
@@ -132,7 +131,7 @@ export function elementEntries(
         keywords: 'set array elem element item index write assign [ ] =',
         hint: 'write the element at an index',
         fits: true,
-        action: () => use(`$value[0] = ${item}`, true),
+        action: () => use(`$value[0] = ${item}`),
       },
     ];
   }
@@ -171,7 +170,7 @@ export function elementEntries(
       keywords: 'add set put key value map dict dictionary [ ] =',
       hint: 'set the value of a key',
       fits: true,
-      action: () => use(`${index} = ${value}`, true),
+      action: () => use(`${index} = ${value}`),
     });
   }
 

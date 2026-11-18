@@ -91,29 +91,4 @@ describe('GET and FIND in the action menu', () => {
       'Find $value[""]',
     ]);
   });
-
-  it('makes the writes statements that float until they are wired', () => {
-    const pin: Pin = {
-      id: 'out',
-      name: '',
-      direction: 'out',
-      kind: 'data',
-      type: 'string[]',
-    };
-    const ops: GraphOp[] = [];
-    for (const entry of elementEntries(
-      TYPES,
-      pin,
-      { node: 'n', pin: 'out' },
-      { x: 0, y: 0 },
-      (op) => ops.push(op)
-    )) {
-      entry.action('');
-    }
-
-    expect(ops.map((op) => op.type === 'useValue' && op.statement)).toEqual([
-      undefined,
-      true,
-    ]);
-  });
 });

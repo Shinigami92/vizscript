@@ -196,11 +196,6 @@ export type GraphOp =
        * place (`await fetch(url)`) and its function becomes `async`.
        */
       awaits?: boolean;
-      /**
-       * A statement of its own (`$value[0] = ''`, UE's Set Array Elem):
-       * it floats until its exec pins are wired.
-       */
-      statement?: boolean;
     }
   /** Sets the comment above a node's code (empty text removes it). */
   | {
