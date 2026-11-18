@@ -72,6 +72,8 @@ packages/
 
 Packages are consumed as TypeScript source and have no build step. Only the apps build: the web app with Vite, the API with tsdown.
 
+The canvas's `GraphView` is a chain of classes (base → hit test → camera → nodes → renderer → document → view) that share its state. Decisions that need no state live in pure, tested modules beside it: `wire-rules.ts` (which wires are allowed, UE's messages, conversions), `align.ts` (UE's alignment tools) and `pointer-intent.ts` (`classifyPointerDown`: what a press starts; `GraphView.startIntent` carries it out). Add new logic of that kind there, not to the chain.
+
 ### Graph IR
 
 Every language backend lowers its AST into the IR of `@vizscript/core`:

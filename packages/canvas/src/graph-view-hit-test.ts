@@ -1,9 +1,5 @@
-import {
-  findConversion,
-  isTypeCompatible,
-  NODE_METRICS,
-} from '@vizscript/core';
-import type { Conversion, PinGeometry, Point } from '@vizscript/core';
+import { NODE_METRICS } from '@vizscript/core';
+import type { PinGeometry, Point } from '@vizscript/core';
 import { rectContains, rectsIntersect, screenToWorld } from './camera';
 import { GraphViewBase } from './graph-view-base';
 import {
@@ -199,95 +195,6 @@ export abstract class GraphViewHitTest extends GraphViewBase {
     }
 
     return ends;
-  }
-
-  /** Why the wires of a Ctrl+drag can't move to `target`. */
-  protected moveProblem(
-    drag: {
-      from: { ns: NodeState; pg: PinGeometry };
-      ends: ReadonlyArray<{ ns: NodeState; pg: PinGeometry }>;
-    },
-    target: { ns: NodeState; pg: PinGeometry }
-  ): string | null {
-    const from = drag.from.pg.pin;
-    const to = target.pg.pin;
-    if (to.kind !== from.kind || to.direction !== from.direction) {
-      const exec = from.kind === 'exec' ? ' exec pin' : '';
-      return from.direction === 'out'
-        ? `Move the wires to another output${exec}.`
-        : `Move the wire to another input${exec}.`;
-    }
-
-    for (const end of drag.ends) {
-      // Moved wires keep their values as they are: no conversion.
-      const problem = this.connectProblem(end, target, false);
-      if (problem) {
-        return problem;
-      }
-    }
-
-    return null;
-  }
-
-  /** The conversion a data wire from `a` to `b` needs (UE's autocast). */
-  protected conversionOf(
-    a: { ns: NodeState; pg: PinGeometry },
-    b: { ns: NodeState; pg: PinGeometry }
-  ): Conversion | undefined {
-    const pa = a.pg.pin;
-    const pb = b.pg.pin;
-    if (
-      pa.kind !== 'data' ||
-      pb.kind !== 'data' ||
-      pa.direction === pb.direction
-    ) {
-      return undefined;
-    }
-
-    const [out, input] = pa.direction === 'out' ? [pa, pb] : [pb, pa];
-    return findConversion(this.conversions(), out.type, input.type);
-  }
-
-  /** Why two pins can't be wired, like UE's messages; `null` if they can. */
-  protected connectProblem(
-    a: { ns: NodeState; pg: PinGeometry },
-    b: { ns: NodeState; pg: PinGeometry },
-    convert = true
-  ): string | null {
-    const pa = a.pg.pin;
-    const pb = b.pg.pin;
-    // UE's wording: "Exec is not compatible with Boolean."
-    const label = (pin: typeof pa): string =>
-      pin.kind === 'exec' ? 'Exec' : String(pin.type);
-    if (a.ns.node.id === b.ns.node.id) {
-      return 'Both are on the same node.';
-    }
-
-    // Floating nodes (not wired in yet) join the function they are wired to.
-    if (a.ns.fnId !== b.ns.fnId && !a.ns.full.floating && !b.ns.full.floating) {
-      return 'The pins are in different functions.';
-    }
-
-    if (pa.kind !== pb.kind) {
-      return `${label(pa)} is not compatible with ${label(pb)}.`;
-    }
-
-    if (pa.direction === pb.direction) {
-      return 'Directions are not compatible.';
-    }
-
-    if (pa.kind === 'data') {
-      const out = pa.direction === 'out' ? pa : pb;
-      const input = pa.direction === 'out' ? pb : pa;
-      if (
-        !isTypeCompatible(out.type, input.type) &&
-        !(convert && this.conversionOf(a, b))
-      ) {
-        return `${label(pa)} is not compatible with ${label(pb)}.`;
-      }
-    }
-
-    return null;
   }
 
   protected contextTarget(world: Point): ContextTarget {

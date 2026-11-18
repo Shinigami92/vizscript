@@ -1,17 +1,15 @@
 import { linkPin, pinKey, reroutePatch, snapToGrid } from '@vizscript/core';
 import type { LayoutPatch, Point } from '@vizscript/core';
 import { normalizeRect, zoomAt } from './camera';
-import {
-  DRAG_THRESHOLD,
-  isChecked,
-  knotId,
-  parseKnotId,
-} from './graph-view-constants';
+import { DRAG_THRESHOLD, knotId, parseKnotId } from './graph-view-constants';
 import { GraphViewDocument } from './graph-view-document';
 import type { AlignMode, GraphViewOptions } from './graph-view-types';
 import { samePin } from './pin-ref';
+import type { PointerIntent } from './pointer-intent';
+import { classifyPointerDown } from './pointer-intent';
 import { clickSelection, marqueeSelection } from './selection';
 import type { SelectionModifiers } from './selection';
+import { connectProblem, conversionOf, moveProblem } from './wire-rules';
 
 /** UE's alignment shortcuts. */
 function alignKey(e: KeyboardEvent): AlignMode | undefined {
@@ -155,85 +153,94 @@ export class GraphView extends GraphViewDocument {
 
     const world = this.toWorld(e);
     const hit = this.hitTest(world);
+    const intent = classifyPointerDown({
+      hit,
+      button: e.button,
+      pointerType: e.pointerType,
+      spaceDown: this.spaceDown,
+      shift: e.shiftKey,
+      ctrl: e.ctrlKey || e.metaKey,
+      alt: e.altKey,
+      editable: this.editable,
+      wireEnds: () =>
+        hit?.type === 'pin' ? this.wireEnds(hit.ns, hit.pg) : [],
+      wireAt: () => this.hitWire(world, this.wireTolerance())?.edge ?? null,
+    });
+    this.startIntent(intent, e, client, world);
+  }
 
-    if (
-      e.button === 1 ||
-      e.button === 2 ||
-      (e.button === 0 && this.spaceDown) ||
-      e.pointerType === 'touch'
-    ) {
-      this.drag = {
-        type: 'pan',
-        startClient: client,
-        startCamera: { ...this.camera },
-        moved: false,
-        button: e.button,
-        tapNode:
-          hit &&
-          (hit.type === 'node' ||
-            hit.type === 'bubble' ||
-            hit.type === 'pin' ||
-            hit.type === 'literal')
-            ? hit.ns.node.id
-            : null,
-      };
-      return;
-    }
-
-    if (e.button !== 0) {
-      return;
-    }
-
-    if (hit?.type === 'knot') {
-      const id = knotId(hit.edgeId, hit.index);
-      if (e.altKey) {
-        this.removeReroute(hit.edgeId, hit.index);
+  /** Carries out what a pointer press starts (`classifyPointerDown`). */
+  private startIntent(
+    intent: PointerIntent,
+    e: PointerEvent,
+    client: Point,
+    world: Point
+  ): void {
+    const mods = this.mods(e);
+    switch (intent.type) {
+      case 'none': {
         return;
       }
 
-      const mods = this.mods(e);
-      if (mods.toggle && this.knotSelection.has(id)) {
-        this.knotSelection.delete(id);
-      } else if (mods.add || mods.toggle) {
-        this.knotSelection.add(id);
-      } else if (!this.knotSelection.has(id)) {
-        this.knotSelection = new Set([id]);
-        this.setSelectionInternal(new Set());
-      }
-
-      if (this.knotSelection.has(id)) {
-        this.startNodeDrag([...this.selection], world, id);
-      }
-
-      this.requestRender();
-      return;
-    }
-
-    if (hit?.type === 'node' && hit.advanced) {
-      this.toggleAdvanced(hit.ns);
-      return;
-    }
-
-    // UE's "Add pin +": one more argument.
-    if (hit?.type === 'node' && hit.addPin) {
-      this.emitter.emit('op', { type: 'addArgument', node: hit.ns.node.id });
-      return;
-    }
-
-    if (hit?.type === 'pin' && this.editable) {
-      const ref = { node: hit.ns.node.id, pin: hit.pg.pin.id };
-      if (e.altKey) {
-        this.emitter.emit('op', { type: 'disconnect', pin: ref });
+      case 'pan': {
+        this.drag = {
+          type: 'pan',
+          startClient: client,
+          startCamera: { ...this.camera },
+          moved: false,
+          button: e.button,
+          tapNode: intent.tapNode,
+        };
         return;
       }
 
-      // Like UE: Ctrl+drag picks up all wires of the pin.
-      const ends = e.ctrlKey || e.metaKey ? this.wireEnds(hit.ns, hit.pg) : [];
-      if (ends.length > 0) {
+      case 'removeKnot': {
+        this.removeReroute(intent.edgeId, intent.index);
+        return;
+      }
+
+      case 'knot': {
+        const id = knotId(intent.edgeId, intent.index);
+        if (mods.toggle && this.knotSelection.has(id)) {
+          this.knotSelection.delete(id);
+        } else if (mods.add || mods.toggle) {
+          this.knotSelection.add(id);
+        } else if (!this.knotSelection.has(id)) {
+          this.knotSelection = new Set([id]);
+          this.setSelectionInternal(new Set());
+        }
+
+        if (this.knotSelection.has(id)) {
+          this.startNodeDrag([...this.selection], world, id);
+        }
+
+        this.requestRender();
+        return;
+      }
+
+      case 'toggleAdvanced': {
+        this.toggleAdvanced(intent.ns);
+        return;
+      }
+
+      case 'addArgument': {
+        this.emitter.emit('op', { type: 'addArgument', node: intent.nodeId });
+        return;
+      }
+
+      case 'disconnectPin': {
+        this.emitter.emit('op', {
+          type: 'disconnect',
+          pin: { node: intent.node, pin: intent.pin },
+        });
+        return;
+      }
+
+      case 'moveWires': {
         this.drag = {
           type: 'moveWires',
-          from: { ns: hit.ns, pg: hit.pg },
-          ends,
+          from: intent.from,
+          ends: [...intent.ends],
           currentWorld: world,
           target: null,
           problem: null,
@@ -242,94 +249,86 @@ export class GraphView extends GraphViewDocument {
         return;
       }
 
-      this.drag = {
-        type: 'wire',
-        from: { ns: hit.ns, pg: hit.pg },
-        currentWorld: world,
-        target: null,
-        problem: null,
-        replaces: null,
-        empty: false,
-        convert: null,
-      };
-      this.requestRender();
-      return;
-    }
-
-    // Like UE: a boolean value is a checkbox that toggles on click.
-    if (
-      hit?.type === 'literal' &&
-      this.editable &&
-      hit.pg.pin.literal?.kind === 'boolean'
-    ) {
-      this.emitter.emit('op', {
-        type: 'setLiteral',
-        node: hit.ns.node.id,
-        pin: hit.pg.pin.id,
-        value: isChecked(hit.pg.pin.literal.value) ? 'false' : 'true',
-      });
-      return;
-    }
-
-    if (hit && hit.type !== 'frame') {
-      const id = hit.ns.node.id;
-      const mods = this.mods(e);
-      if (!mods.add && !mods.toggle && !this.selection.has(id)) {
-        this.knotSelection.clear();
+      case 'wire': {
+        this.drag = {
+          type: 'wire',
+          from: intent.from,
+          currentWorld: world,
+          target: null,
+          problem: null,
+          replaces: null,
+          empty: false,
+          convert: null,
+        };
+        this.requestRender();
+        return;
       }
 
-      const selection = clickSelection(this.selection, id, mods);
-      this.setSelectionInternal(selection);
-      if (selection.has(id)) {
-        this.startNodeDrag([...selection], world, id);
-      }
-
-      return;
-    }
-
-    if (hit?.type === 'frame') {
-      const mods = this.mods(e);
-      if (!mods.add && !mods.toggle) {
-        this.knotSelection.clear();
-      }
-
-      const selection =
-        mods.add || mods.toggle
-          ? new Set([...this.selection, ...hit.frame.nodeIds])
-          : new Set(hit.frame.nodeIds);
-      this.setSelectionInternal(selection);
-      this.startNodeDrag([...selection], world);
-      return;
-    }
-
-    // Like UE: Alt + click breaks a wire.
-    if (!hit && e.altKey && this.editable) {
-      const wire = this.hitWire(world, this.wireTolerance());
-      if (wire) {
+      case 'toggleCheckbox': {
         this.emitter.emit('op', {
-          type: 'disconnect',
-          pin: { ...linkPin(wire.edge) },
+          type: 'setLiteral',
+          node: intent.node,
+          pin: intent.pin,
+          value: intent.value,
         });
         return;
       }
-    }
 
-    const mods = this.mods(e);
-    const base =
-      mods.add || mods.toggle ? new Set(this.selection) : new Set<string>();
-    if (!mods.add && !mods.toggle) {
-      this.knotSelection.clear();
-      this.setSelectionInternal(new Set());
-    }
+      case 'node': {
+        const id = intent.nodeId;
+        if (!mods.add && !mods.toggle && !this.selection.has(id)) {
+          this.knotSelection.clear();
+        }
 
-    this.drag = {
-      type: 'marquee',
-      startWorld: world,
-      currentWorld: world,
-      base,
-      baseKnots: new Set(this.knotSelection),
-      mods,
-    };
+        const selection = clickSelection(this.selection, id, mods);
+        this.setSelectionInternal(selection);
+        if (selection.has(id)) {
+          this.startNodeDrag([...selection], world, id);
+        }
+
+        return;
+      }
+
+      case 'frame': {
+        if (!mods.add && !mods.toggle) {
+          this.knotSelection.clear();
+        }
+
+        const selection =
+          mods.add || mods.toggle
+            ? new Set([...this.selection, ...intent.frame.nodeIds])
+            : new Set(intent.frame.nodeIds);
+        this.setSelectionInternal(selection);
+        this.startNodeDrag([...selection], world);
+        return;
+      }
+
+      case 'breakWire': {
+        this.emitter.emit('op', {
+          type: 'disconnect',
+          pin: { ...linkPin(intent.edge) },
+        });
+        return;
+      }
+
+      case 'marquee': {
+        const base =
+          mods.add || mods.toggle ? new Set(this.selection) : new Set<string>();
+        if (!mods.add && !mods.toggle) {
+          this.knotSelection.clear();
+          this.setSelectionInternal(new Set());
+        }
+
+        this.drag = {
+          type: 'marquee',
+          startWorld: world,
+          currentWorld: world,
+          base,
+          baseKnots: new Set(this.knotSelection),
+          mods,
+        };
+      }
+    }
   }
 
   /** `grabbed`: the node or reroute (knot id) under the pointer. */
@@ -488,7 +487,7 @@ export class GraphView extends GraphViewDocument {
         const hit = this.hitTest(world);
         const problem =
           hit?.type === 'pin' && !samePin(hit, drag.from)
-            ? this.moveProblem(drag, hit)
+            ? moveProblem(drag, hit)
             : null;
         drag.target =
           hit?.type === 'pin' && !samePin(hit, drag.from) && !problem
@@ -505,7 +504,7 @@ export class GraphView extends GraphViewDocument {
         const hit = this.hitTest(world);
         const problem =
           hit?.type === 'pin' && !samePin(hit, drag.from)
-            ? this.connectProblem(drag.from, hit)
+            ? connectProblem(drag.from, hit, this.conversions())
             : null;
         drag.target =
           hit?.type === 'pin' && !samePin(hit, drag.from) && !problem
@@ -534,7 +533,7 @@ export class GraphView extends GraphViewDocument {
         // A frame or comment box title counts as empty space too.
         drag.empty = (hit?.type ?? 'frame') === 'frame';
         drag.convert = drag.target
-          ? (this.conversionOf(drag.from, drag.target) ?? null)
+          ? (conversionOf(drag.from, drag.target, this.conversions()) ?? null)
           : null;
         this.requestRender();
       }
