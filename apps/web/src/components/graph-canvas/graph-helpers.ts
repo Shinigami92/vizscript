@@ -452,3 +452,30 @@ export function continuation(node: GraphNode): PinRef | undefined {
     );
   return out ? { node: node.id, pin: out.id } : undefined;
 }
+
+/** The name of a dragged value: a Get's variable, a function's input. */
+export function valueName(node: GraphNode, pin: Pin): string | undefined {
+  if (node.kind === 'getVar') {
+    return node.title;
+  }
+
+  return node.kind === 'entry' ? pin.name : undefined;
+}
+
+/**
+ * The method `callee` is of the dragged value, if it is one: functions of
+ * the object itself (`console` → `console.log`, an input `items` →
+ * `items.push`) are its methods, `.log()` on it, not `console.log(console)`.
+ */
+export function ownMethodName(
+  node: GraphNode,
+  pin: Pin,
+  callee: string
+): string | undefined {
+  const owner = valueName(node, pin);
+  const name =
+    owner && callee.startsWith(`${owner}.`)
+      ? callee.slice(owner.length + 1)
+      : '';
+  return /^[A-Za-z_$][\w$]*$/.test(name) ? name : undefined;
+}

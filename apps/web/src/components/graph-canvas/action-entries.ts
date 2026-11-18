@@ -17,8 +17,10 @@ import {
   fillTemplate,
   fitsType,
   globalObjects,
+  ownMethodName,
   scopeVariables,
   typeDefault,
+  valueName,
   variablesNear,
   withImport,
 } from './graph-helpers';
@@ -581,14 +583,8 @@ export function createActionEntries(
     if (pin.direction === 'out') {
       const named = node.kind === 'setVar' || node.kind === 'entry';
       const members = memberEntries(pin, source, state);
-      // Functions of the dragged object itself (`console` → `console.log`)
-      // are its methods: `.log()` on it, not `console.log(console)`.
-      const owner = node.kind === 'getVar' ? `${node.title}.` : undefined;
-      const ownMethod = (callee: string): string | undefined => {
-        const name =
-          owner && callee.startsWith(owner) ? callee.slice(owner.length) : '';
-        return /^[A-Za-z_$][\w$]*$/.test(name) ? name : undefined;
-      };
+      const ownMethod = (callee: string): string | undefined =>
+        ownMethodName(node, pin, callee);
       const methods = callables.value.flatMap((callee): ActionEntry[] => {
         const name = ownMethod(callee);
         const label = `.${name}()`;
@@ -597,7 +593,7 @@ export function createActionEntries(
           : [
               {
                 label,
-                category: `Members of ${node.title}`,
+                category: `Members of ${valueName(node, pin) ?? node.title}`,
                 icon: ICON_CALL,
                 detail: signatureOf(callee).detail,
                 keywords: callee,
