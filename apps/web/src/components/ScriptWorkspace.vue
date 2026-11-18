@@ -10,7 +10,6 @@ import type {
 import {
   applyOverlay,
   boxColorEntries,
-  callViewKey,
   diffEdits,
   findDefinition,
   findNode,
@@ -84,6 +83,7 @@ import { useLayoutHistory } from './script-workspace/use-layout-history';
 import { useOpRunner } from './script-workspace/use-op-runner';
 import { provideParseValue } from './script-workspace/use-parse-value';
 import { usePinnedLayout } from './script-workspace/use-pinned-layout';
+import { usePlacedLayout } from './script-workspace/use-placed-layout';
 import { useProblems } from './script-workspace/use-problems';
 import { useTypeLibs } from './script-workspace/use-type-libs';
 import { useViaWires } from './script-workspace/use-via-wires';
@@ -234,6 +234,7 @@ const {
   setOverlay: (overlay) => setOverlay(overlay),
   show,
 });
+const placedLayout = usePlacedLayout({ pinned, recordCodeLayout });
 
 const {
   overlay,
@@ -297,29 +298,10 @@ const {
     containerOps: () => typeSystem.value?.containerOps,
     placed: (ids) => {
       placedNodes(ids);
-      // The written nodes take the places of their floating nodes, in the
-      // undo step that wrote them: undo shows the floating ones where they
-      // were (their own entries are kept for that).
-      const moved: Positions = {};
-      for (const [from, to] of Object.entries(ids)) {
-        const p = pinned.value[from];
-        if (p) {
-          moved[to] = p;
-          moved[from] = p;
-        }
-
-        // Shown as its call while floating: also once it is code.
-        const view = pinned.value[callViewKey(from)];
-        if (view) {
-          moved[callViewKey(to)] = view;
-        }
-      }
-
-      if (Object.keys(moved).length > 0) {
-        recordCodeLayout(moved);
-      }
+      placedLayout.placed(ids);
     },
     writing: (written, wrote) => {
+      placedLayout.writing(wrote);
       const kept = keepWired(written, wrote);
       if (Object.keys(kept).length > 0) {
         recordCodeLayout(kept);
@@ -728,6 +710,8 @@ async function reparse(): Promise<void> {
       void persist(followed);
     }
   }
+
+  placedLayout.afterParse(written !== null);
   if (role !== 'earlier') {
     // Wired from a SET's output: the new Get is drawn as that wire (UE).
     const vias = afterParse(previous ?? undefined, shown, change);
