@@ -332,6 +332,18 @@ export function promote(
     ]);
   }
 
+  // An unused value (`items[0];`) becomes the variable's value in place.
+  const own = getMeta<StatementMeta>(node);
+  if (own.unused && own.stmt) {
+    return succeeded([
+      {
+        start: own.stmt.start,
+        end: own.stmt.start,
+        text: syntax.declarePrefix(variable),
+      },
+    ]);
+  }
+
   const scope = meta.scope;
   if (!meta.sourceText || !scope || node.purity !== 'pure') {
     return failed('This value cannot be stored in a variable.');

@@ -221,6 +221,19 @@ describe('wire dropped on empty space', () => {
     ).toBe('const items = fetchAll();\n');
   });
 
+  it('stores an unused value statement in a variable', () => {
+    const code = 'function f(items: string[]) {\n  items[0];\n}\n';
+    const doc = parseTypeScript(code);
+    const get = node(doc, (n) => n.kind === 'getProperty');
+    expect(
+      apply(code, {
+        type: 'promote',
+        pin: { node: get.id, pin: 'value' },
+        name: 'first',
+      })
+    ).toBe('function f(items: string[]) {\n  const first = items[0];\n}\n');
+  });
+
   it('extracts an input of a nested pure expression', () => {
     const doc = parseTypeScript(text);
     const plus = node(doc, (n) => n.title === '+');
