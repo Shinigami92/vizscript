@@ -39,6 +39,7 @@ import {
 } from './menu-data';
 import type { NodeCommands } from './node-commands';
 import type { CanvasContext, MenuState } from './types';
+import { variableReadEntries } from './variable-entries';
 
 export interface ActionEntryDeps {
   commands: NodeCommands;
@@ -688,97 +689,23 @@ export function createActionEntries(
     const extract = commands.extractEntry(source, pin, state.world);
     const near = variablesNear(index.value, node.id);
     return [
-      ...near.map((variable): ActionEntry => ({
-        label: variable.name,
-        category: 'Variables',
-        icon: ICON_VARIABLE,
-        hint: variable.type,
-        keywords: 'get',
-        fits: isTypeCompatible(variable.type, pin.type),
-        action: () =>
-          emitOp({ type: 'setInput', pin: source, expression: variable.name }),
-      })),
-      // Fields and module variables too (the near ones come first).
-      ...scopeVariables(props.doc, index.value.nodes.get(node.id)?.fn.id)
-        .filter(
-          (variable) =>
-            !near.some((other) => other.name === variable.expression)
-        )
-        .map((variable): ActionEntry => ({
-          label: variable.expression,
-          category: 'Variables',
-          icon: ICON_VARIABLE,
-          hint: variable.type,
-          keywords: 'get',
-          fits: isTypeCompatible(variable.dataType, pin.type),
-          action: () =>
-            emitOp({
-              type: 'setInput',
-              pin: source,
-              expression: variable.expression,
-            }),
-        })),
-      // Global objects (`console` for a `log` node's `this`).
-      ...globalObjects(props.doc, props.types).map((global): ActionEntry => ({
-        label: global.name,
-        category: 'Globals',
-        icon: ICON_VARIABLE,
-        hint: global.hint,
-        keywords: 'get',
-        action: () =>
-          emitOp({ type: 'setInput', pin: source, expression: global.name }),
-      })),
-      ...callables.value.map((callee): ActionEntry => ({
-        label: `${callee}()`,
-        category: 'Call function',
-        icon: ICON_CALL,
-        detail: signatureOf(callee).detail,
-        keywords: callee,
-        fits: fitsType(signatureOf(callee).returns, pin.type),
-        action: () =>
-          emitOp({ type: 'setInput', pin: source, expression: `${callee}()` }),
-      })),
-      // UE's "Create Event" for a delegate pin: an empty callback here,
-      // with a graph of its own.
-      ...(props.types?.callback
-        ? [
-            {
-              label: 'Create callback',
-              category: 'Function',
-              icon: 'i-mdi-function-variant text-sky-400',
-              hint: props.types.callback,
-              keywords: 'callback lambda arrow closure function handler event',
-              fits: pin.type === 'function' ? true : undefined,
-              action: () =>
-                emitOp({
-                  type: 'setInput',
-                  pin: source,
-                  expression: props.types?.callback ?? '',
-                }),
-            } satisfies ActionEntry,
-          ]
-        : []),
-      ...constructable().map(({ name, global }): ActionEntry => ({
-        label: `new ${name}()`,
-        category: 'Construct',
-        icon: ICON_CALL,
-        ...(global ? { hint: 'global' } : {}),
-        fits: fitsType(name, pin.type),
-        keywords: `${name} new construct create`,
-        action: () =>
-          emitOp({
-            type: 'setInput',
-            pin: source,
-            expression: `new ${name}()`,
-          }),
-      })),
+      ...variableReadEntries(
+        near,
+        scopeVariables(props.doc, index.value.nodes.get(node.id)?.fn.id),
+        pin.type,
+        (expression) => emitOp({ type: 'setInput', pin: source, expression })
+      ),
       ...externalNames.value.map((external): ActionEntry => {
         const expression =
           external.kind === 'function'
             ? `${external.callee}()`
             : external.expression;
         return {
-          label: expression,
+          // Imported variables like the file's own: UE's "Get <name>".
+          label:
+            external.kind === 'function' || external.kind === 'class'
+              ? expression
+              : `Get ${expression}`,
           category:
             external.kind === 'function'
               ? 'Call function'
