@@ -10,6 +10,7 @@ import {
   noReroutesKey,
   pinKey,
   pinLabel,
+  reroutePatch,
   wiredNodes,
   withImplicitSelf,
 } from '@vizscript/core';
@@ -17,12 +18,15 @@ import type {
   GraphDocument,
   GraphEdge,
   GraphNode,
+  LayoutPatch,
   MeasureText,
   NodeGeometry,
   PinGeometry,
   Point,
   Positions,
 } from '@vizscript/core';
+import type { AlignNode } from './align';
+import { levelEdge } from './align';
 import { distanceToShape, reroutedShapes, wireShape } from './bezier';
 import type { WireShape } from './bezier';
 import { BUBBLE_GAP, bubbleText, layoutBubble } from './bubble';
@@ -36,6 +40,7 @@ import {
   COMMENT_PADDING,
   FRAME_HEADER,
   FRAME_PADDING,
+  parseKnotId,
 } from './graph-view-constants';
 import type {
   FrameState,
@@ -238,6 +243,94 @@ export class Scene {
     const shown = this.nodeGeometry(ns.full);
     ns.node = shown.node;
     ns.geom = shown.geom;
+  }
+
+  /** Where each node goes (a sliding node's target). */
+  public positions(): Positions {
+    const result: Positions = {};
+    for (const [id, ns] of this.nodes) {
+      result[id] = ns.tween ? { ...ns.tween.to } : { x: ns.x, y: ns.y };
+    }
+
+    return result;
+  }
+
+  /** A copy of a wire's reroute points. */
+  public reroutesOf(edgeId: string): Point[] {
+    return (this.reroutes.get(edgeId) ?? []).map((p) => ({ ...p }));
+  }
+
+  /** A wire's reroute points with one more at `world`, on its segment. */
+  public withReroute(edgeId: string, world: Point): Point[] {
+    const segment = this.hitWire(world, Number.POSITIVE_INFINITY, edgeId);
+    const points = this.reroutesOf(edgeId);
+    points.splice(segment?.segment ?? points.length, 0, {
+      x: Math.round(world.x),
+      y: Math.round(world.y),
+    });
+    return points;
+  }
+
+  /** Sets a wire's reroute points; returns the change of the layout. */
+  public setReroutes(
+    edgeId: string,
+    points: ReadonlyArray<Point>
+  ): LayoutPatch {
+    const before = this.reroutesOf(edgeId);
+    if (points.length > 0) {
+      this.reroutes.set(
+        edgeId,
+        points.map((p) => ({ ...p }))
+      );
+    } else {
+      this.reroutes.delete(edgeId);
+    }
+
+    return reroutePatch(edgeId, before, points);
+  }
+
+  /** Removes reroute points (`knotId`s); returns the change of the layout. */
+  public removeKnots(ids: Iterable<string>): LayoutPatch {
+    const byEdge = new Map<string, Set<number>>();
+    for (const id of ids) {
+      const { edgeId, index } = parseKnotId(id);
+      const set = byEdge.get(edgeId) ?? new Set();
+      set.add(index);
+      byEdge.set(edgeId, set);
+    }
+
+    const patch: LayoutPatch = {};
+    for (const [edgeId, indices] of byEdge) {
+      const after = this.reroutesOf(edgeId).filter((_, i) => !indices.has(i));
+      Object.assign(patch, this.setReroutes(edgeId, after));
+    }
+
+    return patch;
+  }
+
+  /** The wire Straighten levels for a node, as `alignNodes` takes it. */
+  public levelOf(ns: NodeState): Pick<AlignNode, 'level'> {
+    const fn = this.doc?.functions.find((f) => f.id === ns.fnId);
+    const edge = levelEdge(fn?.edges ?? [], ns.node.id);
+    if (!edge) {
+      return {};
+    }
+
+    const [mine, other] =
+      edge.to.node === ns.node.id ? [edge.to, edge.from] : [edge.from, edge.to];
+    const otherNs = this.nodes.get(other.node);
+    const otherPg = otherNs?.geom.pins.get(other.pin);
+    const minePg = ns.geom.pins.get(mine.pin);
+    return otherNs && otherPg && minePg
+      ? {
+          level: {
+            pinY: minePg.y,
+            other: other.node,
+            otherY: otherNs.y,
+            otherPinY: otherPg.y,
+          },
+        }
+      : {};
   }
 
   /** Rendered size of a node; use it for layout so both agree. */

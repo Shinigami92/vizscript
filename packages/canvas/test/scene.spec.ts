@@ -15,6 +15,7 @@ import {
   BANNER_HEIGHT,
   COMMENT_HEADER,
   COMMENT_PADDING,
+  knotId,
 } from '../src/graph-view-constants';
 import { Scene } from '../src/scene';
 
@@ -285,5 +286,78 @@ describe('Scene queries', () => {
     const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
     expect(scene.hitWire(mid, 8)?.edge.id).toBe('e1');
     expect(scene.hitWire({ x: mid.x, y: mid.y + 500 }, 8)).toBeNull();
+  });
+});
+
+describe('Scene layout edits', () => {
+  it('gives sliding nodes their target as position', () => {
+    const scene = loaded();
+    const a = scene.nodes.get('a');
+    if (a) {
+      a.tween = { from: { x: 0, y: 0 }, to: { x: 480, y: 16 }, start: 0 };
+    }
+
+    expect(scene.positions()).toMatchObject({
+      a: { x: 480, y: 16 },
+      b: { x: 0, y: 200 },
+    });
+  });
+
+  it('adds a reroute point on the segment nearest to it', () => {
+    const scene = loaded({
+      ...POSITIONS,
+      [noReroutesKey('e2')]: { x: 0, y: 0 },
+    });
+    const one = scene.withReroute('e2', { x: 200.4, y: 100.6 });
+    expect(one).toEqual([{ x: 200, y: 101 }]);
+    expect(scene.setReroutes('e2', one)).toEqual({
+      [rerouteKey('e2', 0)]: { x: 200, y: 101 },
+      // The wire has points again (no longer marked as having none).
+      [noReroutesKey('e2')]: null,
+    });
+
+    // Near the output, before the existing point.
+    const a = scene.nodes.get('a');
+    const out = a?.geom.pins.get('then');
+    const start = a && out ? scene.pinWorld(a, out) : { x: 0, y: 0 };
+    const two = scene.withReroute('e2', { x: start.x + 20, y: start.y + 10 });
+    expect(two[1]).toEqual({ x: 200, y: 101 });
+  });
+
+  it('removes selected reroute points and reports the layout change', () => {
+    const scene = loaded({
+      ...POSITIONS,
+      [rerouteKey('e2', 0)]: { x: 10, y: 10 },
+      [rerouteKey('e2', 1)]: { x: 20, y: 20 },
+    });
+    const patch = scene.removeKnots([knotId('e2', 0)]);
+    expect(scene.reroutes.get('e2')).toEqual([{ x: 20, y: 20 }]);
+    expect(patch).toEqual({
+      [rerouteKey('e2', 0)]: { x: 20, y: 20 },
+      [rerouteKey('e2', 1)]: null,
+      [noReroutesKey('e2')]: null,
+    });
+
+    scene.removeKnots([knotId('e2', 0)]);
+    expect(scene.reroutes.has('e2')).toBe(false);
+  });
+
+  it('levels a node with the exec wire into it (Straighten)', () => {
+    const scene = loaded();
+    const b = scene.nodes.get('b');
+    if (!b) {
+      throw new Error('b');
+    }
+
+    expect(scene.levelOf(b)).toEqual({
+      level: {
+        pinY: b.geom.pins.get('exec')?.y,
+        other: 'a',
+        otherY: 0,
+        otherPinY: scene.nodes.get('a')?.geom.pins.get('then')?.y,
+      },
+    });
+    const loose = scene.nodes.get('loose');
+    expect(loose && scene.levelOf(loose)).toEqual({});
   });
 });
