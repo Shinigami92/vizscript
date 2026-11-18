@@ -69,7 +69,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
           x: p.x,
           y: p.y,
           bubble: bubbleText(node.comment)
-            ? layoutBubble(bubbleText(node.comment), this.measure)
+            ? layoutBubble(bubbleText(node.comment), this.metrics.measure)
             : null,
         };
         this.continueMove(previous.get(node.id), ns, now);
@@ -222,7 +222,9 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
   /** Room a node needs above it (its comment bubble); use it for layout. */
   public readonly spaceAbove = (node: GraphNode): number => {
     const text = bubbleText(node.comment);
-    return text ? layoutBubble(text, this.measure).height + BUBBLE_GAP : 0;
+    return text
+      ? layoutBubble(text, this.metrics.measure).height + BUBBLE_GAP
+      : 0;
   };
 
   /** Shows or hides the advanced pins of a node (UE's ▼ / ▲). */

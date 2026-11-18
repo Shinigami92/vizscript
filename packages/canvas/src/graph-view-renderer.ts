@@ -29,6 +29,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
   /** Switches colors, e.g. between `DARK_THEME` and `LIGHT_THEME`. */
   public setTheme(theme: Theme): void {
     this.theme = theme;
+    this.metrics.setTheme(theme);
     this.requestRender();
   }
 

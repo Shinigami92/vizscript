@@ -56,7 +56,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     return {
       ctx: this.ctx,
       theme: this.theme,
-      font: (style) => this.font(style),
+      font: (style) => this.metrics.font(style),
       scale: this.camera.zoom * this.dpr,
     };
   }
@@ -264,7 +264,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     // Title
     ctx.textBaseline = 'middle';
     if (compact) {
-      ctx.font = this.font('compact');
+      ctx.font = this.metrics.font('compact');
       ctx.fillStyle = theme.nodeText;
       ctx.textAlign = 'center';
       const left =
@@ -293,7 +293,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         }
 
         // UE's big faded glyph or word, behind the pins and values.
-        ctx.font = this.font('glyph');
+        ctx.font = this.metrics.font('glyph');
         ctx.fillStyle = theme.operatorGlyph;
       }
 
@@ -321,7 +321,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       }
 
       if (sub && !setter) {
-        ctx.font = this.font('subtitle');
+        ctx.font = this.metrics.font('subtitle');
         ctx.fillStyle = theme.compactSubtext;
         ctx.fillText(sub, centerX, centerY + 14);
       }
@@ -347,7 +347,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         );
       }
 
-      ctx.font = this.font('title');
+      ctx.font = this.metrics.font('title');
       ctx.fillStyle = theme.nodeTitle;
       ctx.textAlign = 'left';
       ctx.save();
@@ -365,7 +365,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       );
       ctx.restore();
       if (node.subtitle && !lod) {
-        ctx.font = this.font('subtitle');
+        ctx.font = this.metrics.font('subtitle');
         ctx.fillStyle = theme.nodeSubtext;
         ctx.fillText(
           node.subtitle,
@@ -399,7 +399,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     const color = hovered ? theme.nodeText : theme.pinLabel;
     const x = ns.x + button.x;
     const y = ns.y + button.y;
-    ctx.font = this.font('label');
+    ctx.font = this.metrics.font('label');
     ctx.fillStyle = color;
     ctx.globalAlpha = hovered ? 1 : 0.75;
     ctx.textAlign = 'left';
@@ -518,7 +518,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         : p.x - NODE_METRICS.pinRadius - NODE_METRICS.pinLabelGap;
     const label = pinLabel(ns.node, pin);
     if (label) {
-      ctx.font = this.font('label');
+      ctx.font = this.metrics.font('label');
       ctx.fillStyle = theme.pinLabel;
       ctx.textAlign = pg.side === 'left' ? 'left' : 'right';
       ctx.textBaseline = 'middle';
@@ -541,7 +541,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       ctx.beginPath();
       ctx.rect(lr.x + 4, lr.y, lr.width - 8, lr.height);
       ctx.clip();
-      ctx.font = this.font('literal');
+      ctx.font = this.metrics.font('literal');
       ctx.fillStyle =
         pin.literal.kind === 'string' || pin.literal.kind === 'template'
           ? theme.literalString
@@ -633,7 +633,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     }
 
     ctx.fillStyle = theme.bubbleText;
-    ctx.font = this.font('label');
+    ctx.font = this.metrics.font('label');
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     bubble.lines.forEach((line, i) => {

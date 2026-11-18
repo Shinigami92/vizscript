@@ -12,11 +12,9 @@ import type {
   GraphDocument,
   GraphEdge,
   GraphNode,
-  MeasureText,
   NodeGeometry,
   PinGeometry,
   Point,
-  TextStyle,
 } from '@vizscript/core';
 import { distanceToShape, reroutedShapes, wireShape } from './bezier';
 import type { WireShape } from './bezier';
@@ -24,6 +22,7 @@ import { BUBBLE_GAP } from './bubble';
 import { screenToWorld, unionRect } from './camera';
 import type { Camera, Rect } from './camera';
 import { Emitter } from './emitter';
+import { FontMetrics } from './font-metrics';
 import {
   ADVANCED_ROW,
   BANNER_GAP,
@@ -50,9 +49,8 @@ import type { Theme } from './theme';
 /** State of a `GraphView` and the geometry all its parts share. */
 export abstract class GraphViewBase {
   protected readonly ctx: CanvasRenderingContext2D;
-  private readonly measureCtx: CanvasRenderingContext2D;
   protected readonly emitter = new Emitter<GraphViewEvents>();
-  private readonly textCache = new Map<string, number>();
+  protected readonly metrics: FontMetrics;
   protected readonly index = new SpatialIndex<string>(256);
 
   protected theme: Theme;
@@ -114,8 +112,8 @@ export abstract class GraphViewBase {
     }
 
     this.ctx = ctx;
-    this.measureCtx = measureCtx;
     this.theme = options.theme ?? DARK_THEME;
+    this.metrics = new FontMetrics(measureCtx, this.theme);
     this.editable = options.editable ?? true;
     this.motion = options.motion ?? false;
     this.conversions = options.conversions ?? ((): undefined => undefined);
@@ -151,47 +149,6 @@ export abstract class GraphViewBase {
     }
   }
 
-  protected font(style: TextStyle): string {
-    const family = this.theme.fontFamily;
-    switch (style) {
-      case 'title': {
-        return `600 13px ${family}`;
-      }
-
-      case 'subtitle': {
-        return `italic 11px ${family}`;
-      }
-
-      case 'label': {
-        return `12px ${family}`;
-      }
-
-      case 'literal': {
-        return `12px ${this.theme.monoFontFamily}`;
-      }
-
-      case 'compact': {
-        return `600 14px ${family}`;
-      }
-
-      case 'glyph': {
-        return `700 26px ${family}`;
-      }
-    }
-  }
-
-  protected readonly measure: MeasureText = (text, style) => {
-    const key = `${style}\u0000${text}`;
-    let width = this.textCache.get(key);
-    if (width === undefined) {
-      this.measureCtx.font = this.font(style);
-      width = this.measureCtx.measureText(text).width;
-      this.textCache.set(key, width);
-    }
-
-    return width;
-  };
-
   /**
    * A node as drawn: advanced pins (arguments left at their default) fold
    * behind a ▼ row like UE's, unless the node was expanded.
@@ -206,7 +163,7 @@ export abstract class GraphViewBase {
       advanced === 0 || this.expandedNodes.has(node.id)
         ? node
         : { ...node, pins: node.pins.filter((p) => !isAdvancedPin(p)) };
-    let geom = computeNodeGeometry(shown, this.measure);
+    let geom = computeNodeGeometry(shown, this.metrics.measure);
     // UE's ERROR! / WARNING! band sits under the header: the rows move down.
     if (this.problems.has(node.id) && !isCompact(shown)) {
       geom = {
@@ -361,7 +318,7 @@ export abstract class GraphViewBase {
     }
 
     const text = pinLabel(ns.node, pin);
-    const label = text ? this.measure(text, 'label') : 0;
+    const label = text ? this.metrics.measure(text, 'label') : 0;
     const x =
       ns.x +
       pg.x +
@@ -369,7 +326,7 @@ export abstract class GraphViewBase {
       NODE_METRICS.pinLabelGap +
       label +
       (label ? 6 : 0);
-    const width = literalWidth(pin, this.measure);
+    const width = literalWidth(pin, this.metrics.measure);
     return {
       x,
       y: ns.y + pg.y - NODE_METRICS.literalHeight / 2,
