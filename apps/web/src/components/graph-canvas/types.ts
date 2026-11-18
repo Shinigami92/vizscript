@@ -22,6 +22,11 @@ export interface GraphCanvasProps {
   editable: boolean;
   text: string;
   initialCamera?: Camera | null;
+  /**
+   * CSS pixels at the canvas's top covered by notices: fitting and
+   * revealing keep nodes below them.
+   */
+  topInset?: number;
   /** Describes where "Go to definition" of a node leads, if anywhere. */
   definitionOf?: (nodeId: string) => string | undefined;
   /**

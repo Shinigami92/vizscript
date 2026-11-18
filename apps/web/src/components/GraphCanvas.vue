@@ -469,6 +469,7 @@ onMounted(() => {
     conversions: () => props.types?.conversions,
   });
   view.value = v;
+  v.setTopInset(props.topInset ?? 0);
   if (props.initialCamera) {
     v.setCamera(props.initialCamera);
     zoom.value = props.initialCamera.zoom;
@@ -572,6 +573,10 @@ const severities = computed(() => {
 watch(severities, (value) => view.value?.setProblems(value));
 watch(canvasTheme, (value) => view.value?.setTheme(value));
 watch(motion, (value) => view.value?.setMotion(value));
+watch(
+  () => props.topInset ?? 0,
+  (top) => view.value?.setTopInset(top)
+);
 
 onBeforeUnmount(() => {
   clearTimeout(tooltipTimer);

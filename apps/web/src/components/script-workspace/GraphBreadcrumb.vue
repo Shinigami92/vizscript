@@ -24,7 +24,7 @@ const emit = defineEmits<{
   <!-- UE's breadcrumb: back / forward and the shown function. -->
   <div
     data-ui="graph-breadcrumb"
-    class="absolute left-2 top-2 z-10 flex max-w-[calc(100%-1rem)] items-center gap-0.5 rounded-md border border-zinc-800 bg-zinc-950/90 px-1 py-0.5 text-xs shadow"
+    class="pointer-events-auto flex max-w-full items-center gap-0.5 rounded-md border border-zinc-800 bg-zinc-950/90 px-1 py-0.5 text-xs shadow"
   >
     <button
       type="button"

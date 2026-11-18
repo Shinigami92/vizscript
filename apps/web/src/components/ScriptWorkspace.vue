@@ -20,7 +20,7 @@ import {
   rerouteEntries,
   withCallViews,
 } from '@vizscript/core';
-import { useDebounceFn, useMediaQuery } from '@vueuse/core';
+import { useDebounceFn, useElementSize, useMediaQuery } from '@vueuse/core';
 import {
   computed,
   defineAsyncComponent,
@@ -420,6 +420,14 @@ const breadcrumbVisible = computed(
     focusedFunction.value !== undefined ||
     focusBack.value.length > 0 ||
     focusAhead.value.length > 0
+);
+/**
+ * How far the notices (breadcrumb, syntax errors, out-of-sync banner) reach
+ * into the canvas: their column's top offset, height and a gap.
+ */
+const { height: noticesHeight } = useElementSize(useTemplateRef('notices'));
+const noticesInset = computed(() =>
+  noticesHeight.value > 0 ? noticesHeight.value + 16 : 0
 );
 
 // ---------------------------------------------------- go to definition
@@ -1005,17 +1013,6 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
 
     <WorkbenchView v-if="visualizable" id="graph">
       <div class="relative h-full w-full">
-        <GraphBreadcrumb
-          v-if="breadcrumbVisible"
-          :path="path"
-          :focused="focusedFunction?.name"
-          :parents="parentGraphs(doc, focusedFunction?.id)"
-          :can-back="focusBack.length > 0"
-          :can-forward="focusAhead.length > 0"
-          @navigate="navigateFocus"
-          @show-all="focusFunction(null)"
-          @open="focusFunction"
-        />
         <GraphCanvas
           ref="canvas"
           :doc="canvasDoc"
@@ -1023,6 +1020,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           :positions="positions"
           :editable="editable"
           :initial-camera="initialCamera"
+          :top-inset="noticesInset"
           :definition-of="describeDefinition"
           :usages-of="usagesOf"
           :problems="viaProblems(nodeProblems)"
@@ -1045,60 +1043,68 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
           @undo="undo"
           @redo="redo"
         />
-        <button
-          v-if="diagnostics.length > 0"
-          type="button"
-          class="absolute left-3 max-w-md rounded-md border border-red-900 bg-red-950/90 px-3 py-1.5 text-left text-xs text-red-200 hover:bg-red-950"
-          :class="breadcrumbVisible ? 'top-12' : 'top-3'"
-          @click="workbench.show('problems')"
-        >
-          {{ diagnostics.length }} syntax error{{
-            diagnostics.length === 1 ? '' : 's'
-          }}
-          — the graph may be incomplete.
-          <span class="text-red-300/80">{{ diagnostics[0]?.message }}</span>
-        </button>
+        <!-- Notices over the canvas's top; framing keeps nodes below them. -->
         <div
-          v-if="outOfSync"
-          data-ui="graph-sync-warning"
-          role="status"
-          class="absolute left-3 flex max-w-lg items-start gap-2 rounded-md border border-amber-800 bg-amber-950/90 px-3 py-1.5 text-xs text-amber-100"
-          :class="
-            diagnostics.length > 0
-              ? breadcrumbVisible
-                ? 'top-22'
-                : 'top-13'
-              : breadcrumbVisible
-                ? 'top-12'
-                : 'top-3'
-          "
+          ref="notices"
+          data-ui="graph-notices"
+          class="pointer-events-none absolute top-2 left-2 z-10 flex max-w-[calc(100%-1rem)] flex-col items-start gap-2"
         >
-          <span class="i-mdi-sync-alert mt-0.5 shrink-0 text-amber-400" />
-          <span class="min-w-0">
-            Graph not in sync with the code —
-            {{ overlay.edits.length }} graph-only change{{
-              overlay.edits.length === 1 ? '' : 's'
-            }}. Saving is blocked until the graph is valid.
-            <span v-if="syncIssues[0]" class="block text-amber-300/80">{{
-              syncIssues[0].message
-            }}</span>
-          </span>
+          <GraphBreadcrumb
+            v-if="breadcrumbVisible"
+            :path="path"
+            :focused="focusedFunction?.name"
+            :parents="parentGraphs(doc, focusedFunction?.id)"
+            :can-back="focusBack.length > 0"
+            :can-forward="focusAhead.length > 0"
+            @navigate="navigateFocus"
+            @show-all="focusFunction(null)"
+            @open="focusFunction"
+          />
           <button
-            v-if="syncNodes.size > 0"
+            v-if="diagnostics.length > 0"
             type="button"
-            class="btn-ghost shrink-0 px-1.5 py-0 text-amber-200"
-            @click="selectNodes([...syncNodes])"
+            class="pointer-events-auto max-w-md rounded-md border border-red-900 bg-red-950/90 px-3 py-1.5 text-left text-xs text-red-200 hover:bg-red-950"
+            @click="workbench.show('problems')"
           >
-            Show
+            {{ diagnostics.length }} syntax error{{
+              diagnostics.length === 1 ? '' : 's'
+            }}
+            — the graph may be incomplete.
+            <span class="text-red-300/80">{{ diagnostics[0]?.message }}</span>
           </button>
-          <button
-            type="button"
-            class="btn-ghost shrink-0 px-1.5 py-0 text-amber-200"
-            title="Drop the graph-only changes; the graph shows the code again"
-            @click="discardGraphChanges"
+          <div
+            v-if="outOfSync"
+            data-ui="graph-sync-warning"
+            role="status"
+            class="pointer-events-auto flex max-w-lg items-start gap-2 rounded-md border border-amber-800 bg-amber-950/90 px-3 py-1.5 text-xs text-amber-100"
           >
-            Discard
-          </button>
+            <span class="i-mdi-sync-alert mt-0.5 shrink-0 text-amber-400" />
+            <span class="min-w-0">
+              Graph not in sync with the code —
+              {{ overlay.edits.length }} graph-only change{{
+                overlay.edits.length === 1 ? '' : 's'
+              }}. Saving is blocked until the graph is valid.
+              <span v-if="syncIssues[0]" class="block text-amber-300/80">{{
+                syncIssues[0].message
+              }}</span>
+            </span>
+            <button
+              v-if="syncNodes.size > 0"
+              type="button"
+              class="btn-ghost shrink-0 px-1.5 py-0 text-amber-200"
+              @click="selectNodes([...syncNodes])"
+            >
+              Show
+            </button>
+            <button
+              type="button"
+              class="btn-ghost shrink-0 px-1.5 py-0 text-amber-200"
+              title="Drop the graph-only changes; the graph shows the code again"
+              @click="discardGraphChanges"
+            >
+              Discard
+            </button>
+          </div>
         </div>
         <div
           v-if="selection.length > 1"
