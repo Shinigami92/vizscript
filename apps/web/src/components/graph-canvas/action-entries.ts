@@ -13,6 +13,7 @@ import { containerEntries, methodCallExpression } from './container-entries';
 import { engineMembers, scriptBaseClass } from './engine-entries';
 import {
   callSignature,
+  codeOffset,
   emptyInput,
   fillTemplate,
   fitsType,
@@ -691,7 +692,11 @@ export function createActionEntries(
     return [
       ...variableReadEntries(
         near,
-        scopeVariables(props.doc, index.value.nodes.get(node.id)?.fn.id),
+        scopeVariables(
+          props.doc,
+          index.value.nodes.get(node.id)?.fn.id,
+          codeOffset(index.value, node.id)
+        ),
         pin.type,
         (expression) => emitOp({ type: 'setInput', pin: source, expression })
       ),

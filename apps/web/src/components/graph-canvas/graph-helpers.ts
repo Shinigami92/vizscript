@@ -129,11 +129,14 @@ export function withImport(external: ExternalName, op: GraphOp): GraphOp {
 
 /**
  * Variables of a function: its parameters and locals, the fields of its
- * class and the module's variables.
+ * class and the module's variables. With `at` (an offset in the code),
+ * only locals declared before it, and in the file's top-level code only
+ * module variables declared before it.
  */
 export function scopeVariables(
   doc: GraphDocument | null,
-  fnId: string | undefined
+  fnId: string | undefined,
+  at?: number
 ): ScopeVariable[] {
   if (!doc || !fnId) {
     return [];
@@ -165,6 +168,11 @@ export function scopeVariables(
   for (const symbol of symbols) {
     const local = symbol.kind === 'local' && symbol.scope === scope;
     if (!local && symbol.kind !== 'variable' && symbol.kind !== 'constant') {
+      continue;
+    }
+
+    const ordered = local || (!owner && symbol.scope === '');
+    if (ordered && at !== undefined && symbol.range.end > at) {
       continue;
     }
 
@@ -276,9 +284,57 @@ export function fitsType(
     : isTypeCompatible(from, to);
 }
 
-/** Variables that can be read in the function of `nodeId`, with types. */
+/**
+ * Where the code of `nodeId` starts, for the variables declared before it;
+ * `undefined` for a node not in the code yet (it can go anywhere).
+ */
+export function codeOffset(
+  index: DocIndex,
+  nodeId: string
+): number | undefined {
+  const node = index.nodes.get(nodeId)?.node;
+  return !node || node.graphOnly || node.floating
+    ? undefined
+    : node.range.start;
+}
+
+/**
+ * Whether the names `declarer` binds can be read by `target`: declared
+ * before it, or a loop's variable inside that loop.
+ */
+function readableAt(
+  declarer: GraphNode,
+  target: GraphNode | undefined
+): boolean {
+  if (
+    !target ||
+    target.graphOnly ||
+    target.floating ||
+    declarer.graphOnly ||
+    declarer.floating ||
+    declarer.kind === 'entry'
+  ) {
+    return true;
+  }
+
+  if (declarer.kind === 'forEach') {
+    return (
+      declarer !== target &&
+      declarer.range.start <= target.range.start &&
+      target.range.end <= declarer.range.end
+    );
+  }
+
+  return declarer.range.end <= target.range.start;
+}
+
+/**
+ * Variables that can be read at the node `nodeId` (declared before it in
+ * its function), with types.
+ */
 export function variablesNear(index: DocIndex, nodeId: string): Variable[] {
-  const fn = index.nodes.get(nodeId)?.fn;
+  const entry = index.nodes.get(nodeId);
+  const fn = entry?.fn;
   const found = new Map<string, string>();
   const add = (name: string, type: string): void => {
     if (/^[A-Za-z_$][\w$]*$/.test(name) && !found.has(name)) {
@@ -287,6 +343,10 @@ export function variablesNear(index: DocIndex, nodeId: string): Variable[] {
   };
 
   for (const node of fn?.nodes ?? []) {
+    if (!readableAt(node, entry?.node)) {
+      continue;
+    }
+
     const out = node.pins.find(
       (p) => p.kind === 'data' && p.direction === 'out'
     );
