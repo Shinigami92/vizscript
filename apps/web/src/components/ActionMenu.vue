@@ -32,6 +32,7 @@ export interface ActionEntry {
 import {
   onClickOutside,
   useElementBounding,
+  useEventListener,
   useStorage,
   useWindowSize,
 } from '@vueuse/core';
@@ -276,6 +277,31 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+/**
+ * Clicks in the menu keep the search field focused, so its keys (Ctrl+A,
+ * arrows, Enter) keep working.
+ */
+function keepFocus(event: MouseEvent): void {
+  if (event.target !== input.value) {
+    event.preventDefault();
+  }
+}
+
+// Ctrl+A selects the search text, never the page behind the menu.
+useEventListener(document, 'keydown', (event: KeyboardEvent) => {
+  const command = event.ctrlKey || event.metaKey;
+  if (
+    command &&
+    !event.altKey &&
+    event.key.toLowerCase() === 'a' &&
+    event.target !== input.value
+  ) {
+    event.preventDefault();
+    input.value?.focus({ preventScroll: true });
+    input.value?.select();
+  }
+});
+
 // A menu opened on pointer release (a dropped wire) would see that same
 // release as an outside click: arm after it.
 let armed = false;
@@ -304,6 +330,7 @@ onMounted(async () => {
     class="motion-pop fixed z-40 flex max-h-[min(480px,80vh)] w-80 flex-col rounded-lg border border-zinc-700 bg-zinc-900/98 text-sm shadow-2xl backdrop-blur"
     :style="position"
     @keydown="onKeydown"
+    @mousedown="keepFocus"
   >
     <div
       class="flex items-center gap-2 border-b border-zinc-800 px-2.5 pt-2 pb-1.5"
