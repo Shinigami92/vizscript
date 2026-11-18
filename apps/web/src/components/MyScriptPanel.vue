@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {
+  FunctionGraph,
   GraphDocument,
   GraphOp,
   ScriptSymbol,
@@ -249,9 +250,14 @@ const sections = computed<Section[]>(() => {
 });
 
 const graph = computed(() => topLevelGraph(props.doc, props.text));
-/** Line of an offset, to tell callbacks of the same name apart. */
-function lineOf(offset: number): number {
-  return props.text.slice(0, offset).split('\n').length;
+/** Selects the graph's own node (its entry), like a function's. */
+function selectGraph(fn: FunctionGraph): void {
+  const entry = fn.nodes.find((n) => n.kind === 'entry');
+  if (entry) {
+    emit('select', [entry.id]);
+  } else {
+    emit('selectFunction', fn.id);
+  }
 }
 
 /** Functions written as arguments (`on('x', (e) => …)`), with their graphs. */
@@ -634,7 +640,7 @@ function addLabel(kind: AddKind, owner: string): string {
             type="button"
             class="row pl-6"
             title="Show this graph"
-            @click="emit('selectFunction', graph.id)"
+            @click="selectGraph(graph)"
           >
             <span class="i-mdi-graph-outline text-red-400" />
             <span class="truncate">{{ graph.name }}</span>
@@ -660,9 +666,6 @@ function addLabel(kind: AddKind, owner: string): string {
             >
               <span class="i-mdi-function-variant text-sky-400" />
               <span class="truncate">{{ callbackSymbol.name }}</span>
-              <span class="ml-auto shrink-0 font-mono text-[10px] text-zinc-500"
-                >line {{ lineOf(callbackSymbol.range.start) }}</span
-              >
             </button>
           </div>
         </CollapseTransition>
