@@ -124,4 +124,20 @@ export const RUST_CONTAINER_OPS: ReadonlyArray<ContainerOp> = [
     name: 'clear',
     mutates: true,
   },
+  // `&a | &b` of `HashSet`s is a new set; `a.union(&b)` is an iterator
+  // and stays a call.
+  ...(
+    [
+      ['UNION', '|'],
+      ['INTERSECTION', '&'],
+      ['DIFFERENCE', '-'],
+    ] as const
+  ).map(([word, name]): ContainerOp => ({
+    word,
+    on: ['set'],
+    form: 'operator',
+    name,
+    result: 'container',
+    byReference: true,
+  })),
 ];

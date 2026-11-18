@@ -51,6 +51,13 @@ describe('container nodes in the action menu', () => {
     expect(entries).toContain('Find: $value.get(&0)');
   });
 
+  it("writes Rust's set operators on references", () => {
+    const entries = offered(rustBackend.typeSystem, output('Set<number>'));
+    const placeholder = rustBackend.typeSystem?.placeholder ?? '';
+    expect(entries).toContain(`Union: &$value | &${placeholder}`);
+    expect(entries).toContain(`Difference: &$value - &${placeholder}`);
+  });
+
   it("offers TypeScript's Map methods on a Map, an index on a Record", () => {
     const types = typescriptBackend.typeSystem;
     const map = output('Map<string, number>', 'Map<string, number>');

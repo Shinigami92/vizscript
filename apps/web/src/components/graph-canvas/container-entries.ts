@@ -86,10 +86,12 @@ function opExpression(
     }
 
     case 'operator': {
-      const other = values[0] ?? types.placeholder ?? 'undefined';
+      // Rust's `&a | &b`: both sides by reference.
+      const ref = op.byReference ? (types.keyReference ?? '') : '';
+      const other = values[0] ?? `${ref}${types.placeholder ?? 'undefined'}`;
       return op.containerLast
-        ? `${other} ${op.name} $value`
-        : `$value ${op.name} ${other}`;
+        ? `${other} ${op.name} ${ref}$value`
+        : `${ref}$value ${op.name} ${other}`;
     }
   }
 }

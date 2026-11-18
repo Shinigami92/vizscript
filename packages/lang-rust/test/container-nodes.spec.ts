@@ -38,4 +38,28 @@ fn f(mut items: Vec<String>, m: HashMap<String, i32>) {
       'CONTAINS (Map<string, number>, string) -> bool',
     ]);
   });
+
+  it('draws set operators on references as UNION, INTERSECTION, DIFFERENCE', () => {
+    const doc = parseRustDocument(
+      `use std::collections::HashSet;
+fn f(a: HashSet<u32>, b: HashSet<u32>) {
+    let all = &a | &b;
+    let both = &a & &b;
+    let only = &a - &b;
+    let lazy = a.union(&b);
+}
+`,
+      't.rs'
+    );
+    expect(
+      doc.functions
+        .flatMap((f) => f.nodes)
+        .filter((n) => isContainerNode(n))
+        .map(describeNode)
+    ).toEqual([
+      'UNION (Set<number>, Set<number>) -> Set<number>',
+      'INTERSECTION (Set<number>, Set<number>) -> Set<number>',
+      'DIFFERENCE (Set<number>, Set<number>) -> Set<number>',
+    ]);
+  });
 });

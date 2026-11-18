@@ -4,12 +4,15 @@ import {
   CHAIN_OPERATORS,
   chainPinId,
   elementAccess,
+  findContainerOperator,
   flattenChain,
   isArrayType,
+  styleContainerValue,
   truncate,
 } from '@vizscript/core';
 import type { Expr } from './ast';
 import { CallLowering } from './call-lowering';
+import { RUST_CONTAINER_OPS } from './container-ops';
 import { dataTypeOf } from './data-type';
 import { only, rangeOf, unwrap } from './lower-utils';
 
@@ -481,7 +484,7 @@ export abstract class ExpressionLowering extends CallLowering {
         values[0]?.type ?? 'any'
       );
 
-    return this.pureNode({
+    const value = this.pureNode({
       kind: 'operator',
       title: expr.op,
       range: rangeOf(expr),
@@ -493,6 +496,21 @@ export abstract class ExpressionLowering extends CallLowering {
       outType: type,
       compact: true,
     });
+    // UE's container nodes: `&a | &b` of sets is UNION.
+    const found = findContainerOperator(
+      RUST_CONTAINER_OPS,
+      expr.op,
+      values.map((v) => v.type)
+    );
+    return found
+      ? styleContainerValue(
+          this.nodes,
+          value,
+          found.op,
+          values[found.index]?.type ?? 'any',
+          chainPinId(found.index)
+        )
+      : value;
   }
 
   protected lowerAwait(
