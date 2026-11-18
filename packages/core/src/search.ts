@@ -1,3 +1,4 @@
+import { containerWord } from './container-ops';
 import type { FunctionGraph, GraphDocument, GraphNode } from './ir';
 
 export interface SearchMatch {
@@ -9,8 +10,9 @@ export interface SearchMatch {
 }
 
 /**
- * Finds nodes by title, subtitle, comment, pin name, inline value or function name
- * (case-insensitive substring). Results keep document order, with title
+ * Finds nodes by title (or a container node's word, ADD), subtitle,
+ * comment, pin name, inline value or function name (case-insensitive
+ * substring). Results keep document order, with title
  * matches of a node preferred over the other fields.
  */
 export function searchNodes(
@@ -30,8 +32,12 @@ export function searchNodes(
   for (const fn of doc.functions) {
     for (const node of fn.nodes) {
       let match: SearchMatch | undefined;
+      // A container node by its word too (`push` is ADD).
+      const word = containerWord(node);
       if (hit(node.title)) {
         match = { node, fn, field: 'title', text: node.title };
+      } else if (hit(word)) {
+        match = { node, fn, field: 'title', text: word };
       } else if (hit(node.subtitle)) {
         match = { node, fn, field: 'subtitle', text: node.subtitle };
       } else if (node.kind === 'entry' && hit(fn.name)) {

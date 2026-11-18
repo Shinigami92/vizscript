@@ -1,5 +1,5 @@
 import type { GraphNode } from '@vizscript/core';
-import { compactTitle, isContainerNode } from '@vizscript/core';
+import { compactTitle, isContainerNode, searchNodes } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { parsePythonDocument } from '../src';
 
@@ -39,5 +39,33 @@ describe('container operations (UE container nodes)', () => {
       'FIND (Map<string, number>, string) -> number',
       'UNION (Set<string>, Set<string>) -> Set<string>',
     ]);
+  });
+
+  it('reads strings, removals by index and appends too', () => {
+    const doc = parsePythonDocument(
+      'def f(name: str, items: list[str], more: list[str], s: set[str]):\n    n = len(name)\n    last = items.pop(0)\n    items.extend(more)\n    s.update(s)\n',
+      't.py'
+    );
+    expect(
+      doc.functions
+        .flatMap((f) => f.nodes)
+        .filter((n) => isContainerNode(n))
+        .map(describeNode)
+    ).toEqual([
+      'LENGTH (string) -> number',
+      'REMOVE INDEX [exec] (string[], number) -> string',
+      'APPEND [exec] (string[], string[])',
+      'ADD ITEMS [exec] (Set<string>, Set<string>)',
+    ]);
+  });
+
+  it('finds container nodes by their word', () => {
+    const doc = parsePythonDocument(
+      'def f(items: list[str]):\n    items.append("x")\n',
+      't.py'
+    );
+    expect(
+      searchNodes(doc, 'add').map((m) => `${m.node.title} ${m.text}`)
+    ).toEqual(['append ADD']);
   });
 });
