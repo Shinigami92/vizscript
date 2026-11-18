@@ -15,13 +15,20 @@ import { lineAwareRange } from './text-utils';
 /**
  * Replaces the expression of an input. Object properties keep their key:
  * `{ length }` → `{ length: value }`, and `{ length: length }` → `{ length }`.
+ * A pin with `wrap` takes the value inside it (`not $value`).
  */
 export function inputEdit(
   pin: Pin,
   range: SourceRange,
-  value: string
+  written: string
 ): TextEdit {
-  const { propertyKey: key, property, shorthand } = getMeta<InputPinMeta>(pin);
+  const {
+    propertyKey: key,
+    property,
+    shorthand,
+    wrap,
+  } = getMeta<InputPinMeta>(pin);
+  const value = wrap ? wrap.replaceAll('$value', written) : written;
   if (key && shorthand && value !== key) {
     return { start: range.start, end: range.end, text: `${key}: ${value}` };
   }

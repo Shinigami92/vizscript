@@ -96,6 +96,12 @@ export interface InputPinMeta {
    * with `{0}`, `{1}` … for the values; editing it writes `setFormat`.
    */
   format?: boolean;
+  /**
+   * How a value is written into the pin, `$value` standing for it: the
+   * NOT of Python's `x not in items` takes `not $value`, as its range is
+   * the whole expression (`x in items` has no code of its own there).
+   */
+  wrap?: string;
 }
 
 export interface ExecOutPinMeta {
