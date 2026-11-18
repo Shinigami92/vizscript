@@ -13,6 +13,7 @@ import type {
   SourceRange,
 } from './ir';
 import type { NodeTemplate, TextEdit } from './ops';
+import { findNode } from './reconcile';
 import type { StatementSyntax } from './text-ops';
 import { lineIndent } from './text-utils';
 import { lineAwareRange } from './text-utils';
@@ -43,6 +44,69 @@ export function inputEdit(
   }
 
   return { start: range.start, end: range.end, text: value };
+}
+
+/** The input whose whole expression is this node, if any. */
+export function consumerInput(
+  doc: GraphDocument,
+  node: GraphNode
+): Pin | undefined {
+  for (const edge of functionEdgesOf(doc, node.id)) {
+    if (edge.from.node !== node.id) {
+      continue;
+    }
+
+    const pin = findPin(findNode(doc, edge.to.node), edge.to.pin);
+    if (
+      pin?.range &&
+      pin.range.start === node.range.start &&
+      pin.range.end === node.range.end
+    ) {
+      return pin;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * The edit that writes `value` where a value node stands: through the
+ * input it fills (its wrap, its property key), else over its range.
+ */
+export function valueEdit(
+  doc: GraphDocument,
+  node: GraphNode,
+  value: string
+): TextEdit {
+  const input = consumerInput(doc, node);
+  return input
+    ? inputEdit(input, node.range, value)
+    : { start: node.range.start, end: node.range.end, text: value };
+}
+
+/**
+ * The code of the value in an input: the text of its range, or, for an
+ * input that wraps its value (`not $value`), the own code of the node
+ * wired into it.
+ */
+export function inputCode(
+  text: string,
+  doc: GraphDocument,
+  node: GraphNode,
+  pin: Pin
+): string {
+  const range = pin.range ?? { start: 0, end: 0 };
+  if (getMeta<InputPinMeta>(pin).wrap) {
+    const edge = functionEdgesOf(doc, node.id).find(
+      (e) => e.to.node === node.id && e.to.pin === pin.id
+    );
+    const source = edge ? findNode(doc, edge.from.node) : undefined;
+    if (source) {
+      return nodeCode(text, source);
+    }
+  }
+
+  return text.slice(range.start, range.end);
 }
 
 /** A node's own code: `NodeCodeMeta.code`, else the text of its range. */

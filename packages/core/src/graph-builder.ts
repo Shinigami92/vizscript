@@ -1,7 +1,10 @@
+import type { ContainerOp } from './container-ops';
+import { findContainerOperator, styleContainerValue } from './container-ops';
 import type {
   ExecOutPinMeta,
   InputPinMeta,
   InsertPoint,
+  NodeCodeMeta,
   OutputPinMeta,
   StatementMeta,
 } from './edit-meta';
@@ -18,6 +21,7 @@ import type {
   PinRef,
   SourceRange,
 } from './ir';
+import { chainPinId } from './operator-chain';
 import { refinesType } from './types';
 
 /** A value feeding an input pin: either a wire or an inline literal. */
@@ -307,6 +311,79 @@ export abstract class GraphBuilderBase {
     });
     this.feedAll(node.id, options.inputs);
     return { pin: { node: node.id, pin: 'value' }, type: options.outType };
+  }
+
+  /**
+   * `x not in items` (Python, GDScript) as UE draws it: CONTAINS wired into
+   * NOT, like `not x in items`. Both cover the whole expression: `x in
+   * items` has no code of its own there, so CONTAINS keeps it as its own
+   * code (`NodeCodeMeta`, its value's `sourceText`) and NOT's input writes
+   * `not $value`. `undefined` when `items` is no container of `ops`.
+   */
+  protected notInValue(options: {
+    ops: ReadonlyArray<ContainerOp>;
+    range: SourceRange;
+    path: string;
+    /** `x` and `items`, in order. */
+    operands: ReadonlyArray<{ range: SourceRange; value: ValueSource }>;
+  }): ValueSource | undefined {
+    const { operands, range, path } = options;
+    const [element, container] = operands;
+    const found = findContainerOperator(
+      options.ops,
+      'in',
+      operands.map((o) => o.value.type)
+    );
+    if (!found || !element || !container || operands.length !== 2) {
+      return undefined;
+    }
+
+    const contains = styleContainerValue(
+      this.nodes,
+      this.pureNode({
+        kind: 'operator',
+        title: 'in',
+        range,
+        path: `${path}.in`,
+        inputs: operands.map((o, i) => ({
+          pin: this.dataIn(chainPinId(i), '', o.range),
+          value: o.value,
+        })),
+        outType: 'bool',
+        compact: true,
+      }),
+      found.op,
+      operands[found.index]?.value.type ?? 'any',
+      chainPinId(found.index)
+    );
+    const code = `${this.src(element.range)} in ${this.src(container.range)}`;
+    const node =
+      'pin' in contains
+        ? this.nodes.find((n) => n.id === contains.pin.node)
+        : undefined;
+    if (node) {
+      node.meta = { ...node.meta, code } satisfies NodeCodeMeta;
+      node.pins = node.pins.map((pin) =>
+        pin.direction === 'out' && pin.kind === 'data'
+          ? { ...pin, meta: { ...pin.meta, sourceText: code } }
+          : pin
+      );
+    }
+
+    return this.pureNode({
+      kind: 'operator',
+      title: 'not',
+      range,
+      path,
+      inputs: [
+        {
+          pin: this.dataIn('a', '', range, 'any', { wrap: 'not $value' }),
+          value: contains,
+        },
+      ],
+      outType: 'bool',
+      compact: true,
+    });
   }
 
   protected getVar(

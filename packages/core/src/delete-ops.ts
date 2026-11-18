@@ -2,7 +2,7 @@ import { isReceiver, RECEIVER_NEEDED } from './callee';
 import { deleteCommentBox } from './comment-ops';
 import type { StatementMeta } from './edit-meta';
 import { getMeta, owningStatement } from './edit-meta';
-import type { GraphDocument, GraphNode, Pin, SourceRange } from './ir';
+import type { GraphDocument, GraphNode, SourceRange } from './ir';
 import { failed, succeeded } from './op-result';
 import type { OpResult, TextEdit } from './ops';
 import { applyTextEdits } from './ops';
@@ -10,8 +10,8 @@ import { findNode } from './reconcile';
 import {
   asStatement,
   closingDirectiveEnd,
+  consumerInput,
   contains,
-  findPin,
   functionEdgesOf,
   inputEdit,
   removeStatement,
@@ -144,22 +144,6 @@ function keepPoint(
         : owner.stmt.start,
     indent,
   };
-}
-
-/** The input whose whole expression is this node, if any. */
-function consumerInput(doc: GraphDocument, node: GraphNode): Pin | undefined {
-  for (const edge of functionEdgesOf(doc, node.id)) {
-    if (edge.from.node !== node.id) {
-      continue;
-    }
-
-    const pin = findPin(findNode(doc, edge.to.node), edge.to.pin);
-    if (pin?.range && sameRange(pin.range, node.range)) {
-      return pin;
-    }
-  }
-
-  return undefined;
 }
 
 /**

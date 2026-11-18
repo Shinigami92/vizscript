@@ -21,6 +21,19 @@ function describeNode(node: GraphNode): string {
   return `${compactTitle(node)}${exec} (${types('in')})${out ? ` -> ${out}` : ''}`;
 }
 
+/** The data output of a node. */
+function outputOf(node: GraphNode | undefined): { node: string; pin: string } {
+  return {
+    node: node?.id ?? '',
+    pin: node?.pins.find((p) => p.direction === 'out')?.id ?? '',
+  };
+}
+
+/** The two lines of a function body after its `def`. */
+function line(code: string): string {
+  return code.split('\n').slice(1, 3).join('\n');
+}
+
 describe('container operations (UE container nodes)', () => {
   it('draws known operations on typed containers as UE nodes', () => {
     const doc = parsePythonDocument(
@@ -132,5 +145,111 @@ describe('container operations (UE container nodes)', () => {
         to: { node: print?.id ?? '', pin: 'arg0' },
       })
     ).toContain('print(len(items) - 1)');
+  });
+
+  describe('`x not in items` as CONTAINS wired into NOT', () => {
+    const text =
+      'def f(x: str, y: str, items: list[str], flag: bool):\n    ok = x not in items\n    print(ok)\n';
+    const nodes = parsePythonDocument(text, 't.py').functions.flatMap(
+      (f) => f.nodes
+    );
+    const contains = nodes.find((n) => compactTitle(n) === 'CONTAINS');
+    const not = nodes.find((n) => n.title === 'not');
+    const entry = nodes.find((n) => n.kind === 'entry' && n.title === 'f');
+    const print = nodes.find((n) => n.title === 'print');
+    const param = (name: string): { node: string; pin: string } => ({
+      node: entry?.id ?? '',
+      pin: entry?.pins.find((p) => p.name === name)?.id ?? '',
+    });
+    const apply = (op: GraphOp): string => {
+      const result = applyPythonOp(text, op, 't.py');
+      return result.ok ? applyTextEdits(text, result.edits) : result.error;
+    };
+
+    it('draws the same nodes as `not x in items`', () => {
+      expect(contains && describeNode(contains)).toBe(
+        'CONTAINS (string[], string) -> bool'
+      );
+      expect(
+        not?.pins.filter((p) => p.kind === 'data').map((p) => p.type)
+      ).toEqual(['bool', 'bool']);
+    });
+
+    it('rewires the element and the container', () => {
+      expect(
+        line(
+          apply({
+            type: 'connect',
+            from: param('y'),
+            to: { node: contains?.id ?? '', pin: 'a' },
+          })
+        )
+      ).toBe('    ok = y not in items\n    print(ok)');
+    });
+
+    it('writes a value wired into NOT after `not`', () => {
+      expect(
+        line(
+          apply({
+            type: 'connect',
+            from: param('flag'),
+            to: { node: not?.id ?? '', pin: 'a' },
+          })
+        )
+      ).toBe('    ok = not flag\n    print(ok)');
+      expect(
+        line(
+          apply({ type: 'disconnect', pin: { node: not?.id ?? '', pin: 'a' } })
+        )
+      ).toBe('    ok = not None\n    print(ok)');
+    });
+
+    it('deletes either node', () => {
+      expect(
+        line(apply({ type: 'deleteNodes', nodeIds: [contains?.id ?? ''] }))
+      ).toBe('    ok = not None\n    print(ok)');
+      expect(
+        line(apply({ type: 'deleteNodes', nodeIds: [not?.id ?? ''] }))
+      ).toBe('    ok = None\n    print(ok)');
+    });
+
+    it('copies `x in items` where CONTAINS is wired', () => {
+      expect(
+        line(
+          apply({
+            type: 'connect',
+            from: outputOf(contains),
+            to: { node: print?.id ?? '', pin: 'arg0' },
+          })
+        )
+      ).toBe('    ok = x not in items\n    print(x in items)');
+    });
+
+    it('stores CONTAINS in a variable, NOT keeps its `not`', () => {
+      const promoted = apply({
+        type: 'promote',
+        pin: outputOf(contains),
+        name: 'found',
+      });
+      expect(promoted).toContain(
+        '    found = x in items\n    ok = not found\n'
+      );
+      const extracted = apply({
+        type: 'extract',
+        pin: { node: not?.id ?? '', pin: 'a' },
+        name: 'found',
+      });
+      expect(extracted).toContain(
+        '    found = x in items\n    ok = not found\n'
+      );
+      const whole = apply({
+        type: 'promote',
+        pin: outputOf(not),
+        name: 'missing',
+      });
+      expect(whole).toContain(
+        '    missing = x not in items\n    ok = missing\n'
+      );
+    });
   });
 });

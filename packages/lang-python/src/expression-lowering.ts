@@ -680,6 +680,23 @@ export abstract class ExpressionLowering extends GraphBuilderBase {
         values[0]?.type ?? 'any'
       );
 
+    // UE draws `x not in items` as CONTAINS wired into NOT.
+    const notIn =
+      expr.op === 'not in'
+        ? this.notInValue({
+            ops: PYTHON_CONTAINER_OPS,
+            range: rangeOf(expr),
+            path,
+            operands: operands.map((operand, index) => ({
+              range: rangeOf(operand),
+              value: values[index] as ValueSource,
+            })),
+          })
+        : undefined;
+    if (notIn) {
+      return notIn;
+    }
+
     // UE's LAST INDEX: `len(items) - 1` is one node.
     const lastIndex = lastIndexValue(
       this.nodes,

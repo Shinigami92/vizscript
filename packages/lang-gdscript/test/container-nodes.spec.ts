@@ -1,7 +1,7 @@
-import type { GraphNode } from '@vizscript/core';
-import { compactTitle, isContainerNode } from '@vizscript/core';
+import type { GraphNode, GraphOp } from '@vizscript/core';
+import { applyTextEdits, compactTitle, isContainerNode } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { parseGDScriptDocument } from '../src';
+import { applyGDScriptOp, parseGDScriptDocument } from '../src';
 
 /** A container node: its word, exec pins, input and output types. */
 function describeNode(node: GraphNode): string {
@@ -48,5 +48,36 @@ describe('container operations (UE container nodes)', () => {
         .filter((n) => isContainerNode(n))
         .map(describeNode)
     ).toEqual(['LAST INDEX (string[]) -> number']);
+  });
+
+  it('draws `x not in items` as CONTAINS wired into NOT', () => {
+    const text =
+      'func f(x: String, items: Array[String], flag: bool):\n\tvar ok = x not in items\n';
+    const nodes = parseGDScriptDocument(text, 't.gd').functions.flatMap(
+      (f) => f.nodes
+    );
+    const contains = nodes.find((n) => compactTitle(n) === 'CONTAINS');
+    const not = nodes.find((n) => n.title === 'not');
+    const entry = nodes.find((n) => n.kind === 'entry' && n.title === 'f');
+    expect(contains && describeNode(contains)).toBe(
+      'CONTAINS (string[], string) -> bool'
+    );
+    const apply = (op: GraphOp): string => {
+      const result = applyGDScriptOp(text, op, 't.gd');
+      return result.ok ? applyTextEdits(text, result.edits) : result.error;
+    };
+    expect(
+      apply({ type: 'deleteNodes', nodeIds: [contains?.id ?? ''] })
+    ).toContain('\tvar ok = not null\n');
+    expect(
+      apply({
+        type: 'connect',
+        from: {
+          node: entry?.id ?? '',
+          pin: entry?.pins.find((p) => p.name === 'flag')?.id ?? '',
+        },
+        to: { node: not?.id ?? '', pin: 'a' },
+      })
+    ).toContain('\tvar ok = not flag\n');
   });
 });

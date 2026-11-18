@@ -20,10 +20,12 @@ import {
   detectIndentUnit,
   findPin,
   functionEdgesOf,
+  inputCode,
   inputEdit,
   insertText,
   nodeCode,
   templateSnippet,
+  valueEdit,
 } from './text-op-helpers';
 import type { StatementSyntax } from './text-ops';
 import { lineIndent, lineStart } from './text-utils';
@@ -341,7 +343,8 @@ export function promote(
       end: scope.start,
       text: `${syntax.declare(variable, meta.sourceText)}\n${lineIndent(text, scope.start)}`,
     },
-    { start: node.range.start, end: node.range.end, text: variable },
+    // Through the input it fills: `not var` for the CONTAINS of `not in`.
+    valueEdit(doc, node, variable),
   ]);
 }
 
@@ -387,7 +390,7 @@ export function extract(
   }
 
   return succeeded([
-    declaration(text.slice(pin.range.start, pin.range.end)),
+    declaration(inputCode(text, doc, node, pin)),
     inputEdit(pin, pin.range, variable),
   ]);
 }
