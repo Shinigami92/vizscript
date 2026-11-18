@@ -4,6 +4,7 @@ import {
   callViewKey,
   compactTitle,
   isExtraLayoutKey,
+  namedContainerNode,
   reconcileLayout,
   shownAsCall,
   styleContainerNode,
@@ -90,5 +91,59 @@ describe('withCallViews', () => {
     expect(
       reconcileLayout(styled, styled, { [key]: { x: 0, y: 0 } })
     ).toMatchObject({ [key]: { x: 0, y: 0 } });
+  });
+
+  it('shows the fixed values of an operation in its call', () => {
+    const INSERT: ContainerOp = {
+      word: 'INSERT',
+      on: ['array'],
+      form: 'method',
+      name: 'splice',
+      args: ['number', 'number', 'element'],
+      fixed: { 1: '0' },
+      result: 'container',
+      mutates: true,
+    };
+    const node: GraphNode = {
+      id: 'f/call:splice#0',
+      kind: 'call',
+      category: 'function',
+      purity: 'impure',
+      title: 'splice',
+      range: { start: 0, end: 24 },
+      path: 'f.0',
+      pins: [
+        pin('target', 'in', { range: { start: 0, end: 5 } }),
+        pin('arg0', 'in', { range: { start: 13, end: 14 } }),
+        pin('arg1', 'in', { range: { start: 16, end: 17 } }),
+        pin('arg2', 'in', { range: { start: 19, end: 22 } }),
+        pin('return', 'out'),
+      ],
+    };
+    styleContainerNode(node, INSERT, 'string[]', 'target');
+    // INSERT: no pin for the 0 it is written with.
+    expect(node.pins.map((p) => p.id)).toEqual([
+      'target',
+      'arg0',
+      'arg2',
+      'return',
+    ]);
+    // The signature names the values after the 0 by their own parameters.
+    const params = ['start', 'deleteCount', 'items'];
+    const named = namedContainerNode(node, node.pins, (all) =>
+      all.pins
+        .filter((p) => p.id.startsWith('arg'))
+        .map((p, i) => ({ ...p, name: params[i] ?? p.name }))
+    );
+    const shown = withCallViews(doc(named), {
+      [callViewKey(node.id)]: { x: 0, y: 0 },
+    }).functions[0]?.nodes[0];
+    expect(shown?.pins.map((p) => `${p.id}:${p.name}`)).toEqual([
+      'target:target',
+      'arg0:start',
+      'arg1:deleteCount',
+      'arg2:items',
+      'return:return',
+    ]);
   });
 });

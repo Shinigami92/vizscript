@@ -60,8 +60,25 @@ describe('container operations (UE container nodes)', () => {
         .map(describeNode)
     ).toEqual([
       'LENGTH (string) -> number',
-      'REMOVE INDEX [exec] (string[], number, number) -> string[]',
+      'REMOVE INDEX [exec] (string[], number) -> string[]',
       'UNION (Set<string>, Set<string>) -> Set<string>',
+    ]);
+  });
+
+  it('draws `splice(i, 0, x)` as INSERT, other splices as calls', () => {
+    const doc = parseTypeScript(
+      "function f(items: string[]) {\n  items.splice(1, 0, 'b');\n  items.splice(1, 0);\n  items.splice(1, 2);\n}\n",
+      't.ts'
+    );
+    expect(
+      doc.functions
+        .flatMap((f) => f.nodes)
+        .filter((n) => n.kind === 'call')
+        .map((n) => (isContainerNode(n) ? describeNode(n) : n.title))
+    ).toEqual([
+      'INSERT [exec] (string[], number, string) -> string[]',
+      'splice',
+      'splice',
     ]);
   });
 

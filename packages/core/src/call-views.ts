@@ -65,7 +65,9 @@ export function showAsCall(node: GraphNode): GraphNode {
   const { word, label } = meta.container;
   const shown: GraphNode = {
     ...node,
-    pins: node.pins.toSorted((a, b) => rank(a) - rank(b)),
+    pins: [...node.pins, ...(call.hidden ?? [])].toSorted(
+      (a, b) => rank(a) - rank(b)
+    ),
     meta: {
       ...rest,
       shownAsCall: { word, ...(label === undefined ? {} : { label }) },

@@ -206,7 +206,7 @@ export abstract class ExpressionLowering extends GraphBuilder {
           'method',
           title,
           container.value?.type,
-          expr.arguments.length
+          expr.arguments.map((a) => this.source(rangeOf(a)))
         )
       : undefined;
     const returnType: DataType =
@@ -263,6 +263,7 @@ export abstract class ExpressionLowering extends GraphBuilder {
         form: 'method',
         name: title,
         args: expr.arguments.length,
+        values: expr.arguments.map((a) => this.source(rangeOf(a))),
         pin: container.pin.id,
         statement: mode === 'statement',
         code: this.source(rangeOf(expr)),

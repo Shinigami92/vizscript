@@ -1,5 +1,9 @@
 import type { CallPinOptions } from './call-pins';
-import { namedPins, takesMoreArguments, withParamPins } from './call-pins';
+import {
+  namedContainerNode,
+  takesMoreArguments,
+  withParamPins,
+} from './call-pins';
 import type { ContainerOp } from './container-ops';
 import { isContainerNode, restyleContainerNodes } from './container-ops';
 import type {
@@ -203,22 +207,26 @@ function typedNode(
     changed = true;
   }
 
+  let meta = node.meta;
   if (calls && params && params.length > 0) {
-    const completed = withParamPins(
-      calls.text,
-      { ...node, pins },
-      params,
-      calls.options
-    );
-    pins = container ? namedPins(pins, completed) : completed;
+    const complete = (all: GraphNode): Pin[] =>
+      withParamPins(calls.text, all, params, calls.options);
+    if (container) {
+      const named = namedContainerNode(node, pins, complete);
+      pins = named.pins;
+      meta = named.meta;
+    } else {
+      pins = complete({ ...node, pins });
+    }
+
     changed = true;
   }
 
   if (addPin) {
-    return { ...node, pins, addPin };
+    return { ...node, pins, meta, addPin };
   }
 
-  return changed ? { ...node, pins } : node;
+  return changed ? { ...node, pins, meta } : node;
 }
 
 function typedFunction(

@@ -75,6 +75,13 @@ describe('container nodes in the action menu', () => {
     expect(offered(types, output('string[]'))).toContain(
       "Includes: $value.includes('')"
     );
+    // `splice` inserts when it removes 0 elements, removes with 1.
+    expect(offered(types, output('string[]'))).toEqual(
+      expect.arrayContaining([
+        "Insert: $value.splice(0, 0, '')",
+        'Remove Index: $value.splice(0, 1)',
+      ])
+    );
     expect(offered(types, record)).not.toContain("Find: $value.get('')");
     expect(offered(types, record, elementEntries)).toEqual([
       "Find: $value['']",

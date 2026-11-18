@@ -68,6 +68,13 @@ export interface ContainerOp {
   name: string;
   /** Types of the values after the container, in order. */
   args?: ReadonlyArray<ContainerPart>;
+  /**
+   * Values always written as this literal (their index in `args` → code):
+   * the call is this operation only when written so, and the node doesn't
+   * show their pins (TypeScript's `splice(i, 0, x)` is UE's INSERT,
+   * `splice(i, 1)` its REMOVE INDEX).
+   */
+  fixed?: Readonly<Record<number, string>>;
   /** Type of the result. */
   result?: ContainerPart;
   /**
@@ -107,16 +114,38 @@ export function containerKind(type: DataType): ContainerKind | undefined {
 }
 
 /**
+ * Whether a call with `args` values after the container (their number, or
+ * their code) fits `op`: as many as it takes, its `fixed` ones written so.
+ */
+export function argsFit(
+  op: ContainerOp,
+  args: number | ReadonlyArray<string>
+): boolean {
+  const count = typeof args === 'number' ? args : args.length;
+  if ((op.args?.length ?? 0) !== count) {
+    return false;
+  }
+
+  const fixed = Object.entries(op.fixed ?? {});
+  return (
+    fixed.length === 0 ||
+    (typeof args !== 'number' &&
+      fixed.every(([i, code]) => args[Number(i)]?.trim() === code))
+  );
+}
+
+/**
  * The operation a backend lists for a call, property or operator `name`
  * written as `form` on a container of type `container` with `args` values
- * after it (`undefined` for operators, which take any number).
+ * after it (their number or code; `undefined` for operators, which take
+ * any number).
  */
 export function findContainerOp(
   ops: ReadonlyArray<ContainerOp>,
   form: ContainerOp['form'],
   name: string,
   container: DataType | undefined,
-  args?: number
+  args?: number | ReadonlyArray<string>
 ): ContainerOp | undefined {
   const kind = container === undefined ? undefined : containerKind(container);
   if (!kind) {
@@ -128,7 +157,7 @@ export function findContainerOp(
       op.form === form &&
       op.name === name &&
       op.on.includes(kind) &&
-      (args === undefined || (op.args?.length ?? 0) === args)
+      (args === undefined || argsFit(op, args))
   );
 }
 
@@ -186,6 +215,8 @@ export function containerPartType(
 export interface CallLook {
   order: string[];
   compact: boolean;
+  /** Pins of the operation's `fixed` values: the call shows them. */
+  hidden?: Pin[];
 }
 
 /** What `styleContainerNode` keeps on a node. */
@@ -227,14 +258,23 @@ export function styleContainerNode(
   const outputs = node.pins.filter(
     (p) => p.direction === 'out' && p.kind === 'data'
   );
+  const fixed = new Set(Object.keys(op.fixed ?? {}).map(Number));
+  const shown = values
+    .map((pin, i) => typed(pin, op.args?.[i]))
+    .filter((_, i) => !fixed.has(i));
+  const hidden = values.filter((_, i) => fixed.has(i));
   const call: CallLook | undefined =
     node.kind === 'call' && op.form !== 'operator'
-      ? { order: node.pins.map((p) => p.id), compact: node.compact === true }
+      ? {
+          order: node.pins.map((p) => p.id),
+          compact: node.compact === true,
+          ...(hidden.length > 0 ? { hidden } : {}),
+        }
       : undefined;
   node.pins = [
     ...exec,
     { ...target, type: container },
-    ...values.map((pin, i) => typed(pin, op.args?.[i])),
+    ...shown,
     ...outputs.map((pin, i) => (i === 0 ? typed(pin, op.result) : pin)),
   ];
   node.compact = true;
@@ -496,6 +536,8 @@ export interface ContainerCandidate {
   name: string;
   /** Number of values after the container. */
   args: number;
+  /** Their code, for operations with `fixed` values. */
+  values?: ReadonlyArray<string>;
   /** The container pin (any value pin of an operator: it is found then). */
   pin: string;
   /** Written as a statement of its own: stays on the exec chain. */
@@ -585,7 +627,7 @@ export function restyleContainerNodes(
           o.form === candidate.form &&
           o.name === candidate.name &&
           o.on.includes(kind) &&
-          (o.args?.length ?? 0) === candidate.args &&
+          argsFit(o, candidate.values ?? candidate.args) &&
           (o.typeText === undefined ||
             (pin.typeText !== undefined &&
               new RegExp(o.typeText).test(pin.typeText)))

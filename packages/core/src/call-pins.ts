@@ -1,3 +1,4 @@
+import type { ContainerNodeMeta } from './container-ops';
 import { isContainerNode } from './container-ops';
 import type { InputPinMeta } from './edit-meta';
 import { getMeta } from './edit-meta';
@@ -480,6 +481,43 @@ export function namedPins(
 }
 
 /**
+ * A container node (with `pins`) named by the signature it calls (`named`
+ * completes a node's pins from it): the pins of its fixed values
+ * (`CallLook.hidden`, shown in its call view) take part, so the values
+ * after them get their own names.
+ */
+export function namedContainerNode(
+  node: GraphNode,
+  pins: ReadonlyArray<Pin>,
+  named: (all: GraphNode) => ReadonlyArray<Pin>
+): GraphNode {
+  const container = getMeta<ContainerNodeMeta>(node).container;
+  const call = container?.call;
+  const hidden = call?.hidden ?? [];
+  const order = new Map((call?.order ?? []).map((id, i) => [id, i]));
+  const rank = (pin: Pin): number => order.get(pin.id) ?? order.size;
+  const result = named({
+    ...node,
+    pins: [...pins, ...hidden].toSorted((a, b) => rank(a) - rank(b)),
+  });
+  return {
+    ...node,
+    pins: namedPins(pins, result),
+    ...(container && call && hidden.length > 0
+      ? {
+          meta: {
+            ...node.meta,
+            container: {
+              ...container,
+              call: { ...call, hidden: namedPins(hidden, result) },
+            },
+          } satisfies ContainerNodeMeta,
+        }
+      : {}),
+  };
+}
+
+/**
  * Completes the input pins of calls to functions of the same file, like
  * UE's call nodes: every parameter is a pin, named and typed like it.
  * Missing arguments become unconnected pins that insert the argument when
@@ -502,11 +540,13 @@ export function completeCallPins(
       if (isContainerNode(node)) {
         // Container nodes (LENGTH, ADD …) keep their pins and types: they
         // take the values they show. The signature names them.
-        if (symbol?.params) {
-          node.pins = namedPins(
-            node.pins,
-            withParamPins(text, node, symbol.params, options)
+        const params = symbol?.params;
+        if (params) {
+          const named = namedContainerNode(node, node.pins, (all) =>
+            withParamPins(text, all, params, options)
           );
+          node.pins = named.pins;
+          node.meta = named.meta;
         }
 
         continue;

@@ -62,7 +62,13 @@ function opExpression(
   op: ContainerOp,
   container: string
 ): string {
-  const values = (op.args ?? []).map((part) => {
+  const values = (op.args ?? []).map((part, i) => {
+    // `splice(0, 0, '')`: a value the operation is written with.
+    const fixed = op.fixed?.[i];
+    if (fixed !== undefined) {
+      return fixed;
+    }
+
     const value =
       part === 'container' || part === 'keys' || part === 'values'
         ? (types.placeholder ?? 'undefined')
