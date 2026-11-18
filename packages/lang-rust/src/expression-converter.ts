@@ -45,6 +45,32 @@ function castRightmost(value: Expr, target: Span, end: number): Expr {
   return { type: 'Cast', start: value.start, end, value, target };
 }
 
+/**
+ * `&a | &b` is `(&a) | (&b)`: a reference binds tighter than every binary
+ * operator and `as`, but `@lezer/rust` references the whole expression
+ * after it. The reference moves onto the leftmost operand (parenthesized
+ * operands stay `Paren`).
+ */
+function refLeftmost(argument: Expr, start: number, mutable: boolean): Expr {
+  if (argument.type === 'Binary') {
+    return {
+      ...argument,
+      start,
+      left: refLeftmost(argument.left, start, mutable),
+    };
+  }
+
+  if (argument.type === 'Cast') {
+    return {
+      ...argument,
+      start,
+      value: refLeftmost(argument.value, start, mutable),
+    };
+  }
+
+  return { type: 'Ref', start, end: argument.end, mutable, argument };
+}
+
 /** Turns Lezer's Rust syntax tree into the AST: expressions on top. */
 export class Converter extends StatementConverter {
   // ------------------------------------------------------------ expressions
@@ -191,12 +217,11 @@ export class Converter extends StatementConverter {
         const kids = children(node);
         const argument = kids.at(-1);
         return argument && isExpression(argument)
-          ? {
-              type: 'Ref',
-              ...span,
-              mutable: kids.some((k) => k.name === 'mut'),
-              argument: this.expr(argument),
-            }
+          ? refLeftmost(
+              this.expr(argument),
+              span.start,
+              kids.some((k) => k.name === 'mut')
+            )
           : this.opaque(node);
       }
 

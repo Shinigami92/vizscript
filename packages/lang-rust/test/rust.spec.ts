@@ -114,6 +114,26 @@ describe('parseRustDocument', () => {
     ).toBe(true);
   });
 
+  it('references the leftmost operand of a binary expression', () => {
+    const text = 'fn f(a: u32, b: u32) -> u32 {\n    &a + &b\n}\n';
+    const doc = parseRustDocument(text, 'main.rs');
+    const graph = fn(doc, 'f');
+    const plus = graph.nodes.find((n) => n.title === '+');
+    const refs = graph.nodes.filter((n) => n.title === '&');
+    const end = text.indexOf('\n}');
+    expect(plus?.range).toEqual({ start: text.indexOf('&a'), end });
+    expect(refs.map((n) => n.range)).toEqual([
+      { start: text.indexOf('&a'), end: text.indexOf('&a') + 2 },
+      { start: text.indexOf('&b'), end: text.indexOf('&b') + 2 },
+    ]);
+    // Both references feed the `+`, neither wraps it.
+    expect(
+      graph.edges.filter(
+        (e) => refs.some((r) => r.id === e.from.node) && e.to.node === plus?.id
+      )
+    ).toHaveLength(2);
+  });
+
   it('shows todo!() as an empty input, not a call', () => {
     const doc = parseRustDocument(
       'fn f() -> f64 {\n    todo!() * 2.0\n}\n',

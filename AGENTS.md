@@ -28,7 +28,7 @@ pnpm workspace with apps in `apps/*` and libraries in `packages/*`.
 - **File names:** kebab-case. Vue SFCs use PascalCase.
 - **Tests** live in `<package>/test/*.spec.ts`, not next to the source. Graph lowering uses readable snapshots (`summarizeGraph` from `@vizscript/core`).
 - **Corpus checks:** `GD_CORPUS=/path/to/godot/project pnpm exec vitest run packages/lang-gdscript` (and `PY_CORPUS=… packages/lang-python`, `RS_CORPUS=… packages/lang-rust`) parse every `.gd` / `.py` / `.rs` file of a real project and fail on any diagnostic. Run them after parser changes.
-- **Grammar gaps:** `@lezer/python` rejects a few valid constructs; `convert-utils.ts` works around them (`isKnownGap`, `maskForParser`, same-length rewrites so offsets stay valid). Add a test when you add a workaround. `@lezer/rust` fails on a reference right before a let chain (`= &x && let …`); `lang-rust`'s `maskForParser` blanks that `&`.
+- **Grammar gaps:** `@lezer/python` rejects a few valid constructs; `convert-utils.ts` works around them (`isKnownGap`, `maskForParser`, same-length rewrites so offsets stay valid). Add a test when you add a workaround. `@lezer/rust` fails on a reference right before a let chain (`= &x && let …`); `lang-rust`'s `maskForParser` blanks that `&`. It also references the whole binary expression or cast after a `&` (`&a | &b` as `&(a | &b)`); the converter moves the reference onto the leftmost operand (`refLeftmost`), like `castRightmost` moves `as` onto the rightmost.
 - **Commits:** conventional commits (`feat:`, `fix:`, `chore:` …). PR titles are validated.
 - **TypeScript:** stays on 6.x until `vue-tsc` and the browser tooling support the TS 7 native compiler.
 
