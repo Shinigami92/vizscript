@@ -13,8 +13,8 @@ import { alignNodes, levelEdge } from './align';
 import { BUBBLE_GAP } from './bubble';
 import { screenToWorld, worldToScreen } from './camera';
 import type { Rect } from './camera';
+import { GraphViewCamera } from './graph-view-camera';
 import { COMMENT_HEADER, knotId, parseKnotId } from './graph-view-constants';
-import { GraphViewRenderer } from './graph-view-renderer';
 import type {
   AlignMode,
   CommentTarget,
@@ -24,7 +24,7 @@ import type {
 import { resolvePin } from './pin-ref';
 
 /** The shown document, selection, reroute points, edits and alignment. */
-export abstract class GraphViewDocument extends GraphViewRenderer {
+export abstract class GraphViewDocument extends GraphViewCamera {
   // ------------------------------------------------------------ public API
 
   public setEditable(editable: boolean): void {

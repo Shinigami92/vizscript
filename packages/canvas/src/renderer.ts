@@ -14,61 +14,48 @@ import {
   worldToScreen,
 } from './camera';
 import type { Rect } from './camera';
+import type { FontMetrics } from './font-metrics';
 import {
   COMMENT_HEADER,
   FRAME_HEADER,
   KNOT_RADIUS,
   knotId,
 } from './graph-view-constants';
-import { GraphViewNodes } from './graph-view-nodes';
 import type { FrameState, NodeState } from './graph-view-types';
+import { NodeRenderer } from './node-renderer';
+import type { RenderFrame } from './render-frame';
+import type { Scene } from './scene';
 import type { Theme } from './theme';
+import type { Viewport } from './viewport';
 
 /** Draws a frame: grid, frames, comment boxes, wires, nodes, overlay. */
-export abstract class GraphViewRenderer extends GraphViewNodes {
-  /** Switches colors, e.g. between `DARK_THEME` and `LIGHT_THEME`. */
+export class Renderer {
+  private state!: RenderFrame;
+  private readonly nodes: NodeRenderer;
+
+  public constructor(
+    private readonly ctx: CanvasRenderingContext2D,
+    metrics: FontMetrics,
+    private readonly scene: Scene,
+    private readonly viewport: Viewport,
+    private theme: Theme
+  ) {
+    this.nodes = new NodeRenderer(ctx, metrics, scene, viewport, theme);
+  }
+
   public setTheme(theme: Theme): void {
     this.theme = theme;
-    this.metrics.setTheme(theme);
-    this.requestRender();
+    this.nodes.setTheme(theme);
   }
 
-  public resize(): void {
-    const rect = this.canvas.getBoundingClientRect();
-    this.viewport.dpr = window.devicePixelRatio || 1;
-    this.viewport.width = rect.width;
-    this.viewport.height = rect.height;
-    this.canvas.width = Math.max(1, Math.round(rect.width * this.viewport.dpr));
-    this.canvas.height = Math.max(
-      1,
-      Math.round(rect.height * this.viewport.dpr)
-    );
-    if (
-      !this.hasFramed &&
-      this.scene.nodes.size > 0 &&
-      this.viewport.width > 0
-    ) {
-      this.hasFramed = true;
-      this.initialView();
-    }
-
-    this.render();
-  }
-
-  // ------------------------------------------------------------- rendering
-
-  protected override render(): void {
-    this.frameTime = performance.now();
-    const moving = this.stepMotion(this.frameTime);
-    if (moving) {
-      this.requestRender();
-    }
-
+  /** Draws the scene as `state` shows it. */
+  public draw(state: RenderFrame): void {
+    this.state = state;
     const { ctx, theme } = this;
-    const { camera } = this.viewport;
-    ctx.setTransform(this.viewport.dpr, 0, 0, this.viewport.dpr, 0, 0);
+    const { camera, width, height, dpr } = this.viewport;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = theme.background;
-    ctx.fillRect(0, 0, this.viewport.width, this.viewport.height);
+    ctx.fillRect(0, 0, width, height);
     this.drawGrid();
 
     if (!this.scene.doc) {
@@ -76,40 +63,36 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     }
 
     ctx.setTransform(
-      this.viewport.dpr * camera.zoom,
+      dpr * camera.zoom,
       0,
       0,
-      this.viewport.dpr * camera.zoom,
-      -camera.x * camera.zoom * this.viewport.dpr,
-      -camera.y * camera.zoom * this.viewport.dpr
+      dpr * camera.zoom,
+      -camera.x * camera.zoom * dpr,
+      -camera.y * camera.zoom * dpr
     );
 
-    const view = visibleWorldRect(
-      camera,
-      this.viewport.width,
-      this.viewport.height
-    );
+    const view = visibleWorldRect(camera, width, height);
     this.scene.updateFrames();
     this.drawFrames(view);
     this.drawWires(view);
 
-    const visible = this.scene.index.query(view);
+    // Selected nodes are drawn last, on top.
     const selected: NodeState[] = [];
-    for (const id of visible) {
+    for (const id of this.scene.index.query(view)) {
       const ns = this.scene.nodes.get(id);
       if (!ns) {
         continue;
       }
 
-      if (this.selection.has(id)) {
+      if (state.selection.has(id)) {
         selected.push(ns);
       } else {
-        this.drawNodeAnimated(ns);
+        this.nodes.draw(ns, state);
       }
     }
 
     for (const ns of selected) {
-      this.drawNodeAnimated(ns);
+      this.nodes.draw(ns, state);
     }
 
     this.drawOverlay();
@@ -194,7 +177,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     const { ctx, theme } = this;
     const selected =
       frame.nodeIds.length > 0 &&
-      frame.nodeIds.every((id) => this.selection.has(id));
+      frame.nodeIds.every((id) => this.state.selection.has(id));
     // UE-like comment colors: a tinted body and a stronger header.
     const color = frame.boxId
       ? this.scene.boxColors.get(frame.boxId)
@@ -233,12 +216,12 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
   }
 
   private isEdgeHighlighted(edge: GraphEdge): boolean {
-    if (edge.id === this.hoverEdge) {
+    if (edge.id === this.state.hoverEdge) {
       return true;
     }
 
     for (const id of [edge.from.node, edge.to.node]) {
-      if (id === this.hoverNode || this.selection.has(id)) {
+      if (id === this.state.hoverNode || this.state.selection.has(id)) {
         return true;
       }
     }
@@ -287,7 +270,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
           continue;
         }
 
-        const selected = this.knotSelection.has(knotId(edgeId, index));
+        const selected = this.state.knotSelection.has(knotId(edgeId, index));
         ctx.beginPath();
         ctx.arc(p.x, p.y, KNOT_RADIUS, 0, Math.PI * 2);
         ctx.fillStyle = theme.nodeBody;
@@ -337,7 +320,9 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     const base = edge.kind === 'exec' ? 3 : 2.2;
     ctx.lineWidth = highlighted ? base + 1.5 : base;
     ctx.globalAlpha =
-      highlighted || (this.selection.size === 0 && !this.hoverNode) ? 1 : 0.6;
+      highlighted || (this.state.selection.size === 0 && !this.state.hoverNode)
+        ? 1
+        : 0.6;
     // A wire only the graph has (not in the code yet) is dashed.
     ctx.setLineDash(edge.graphOnly ? [8, 6] : []);
     ctx.stroke();
@@ -347,7 +332,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
 
   private drawOverlay(): void {
     const { ctx, theme } = this;
-    const drag = this.drag;
+    const drag = this.state.drag;
     if (drag?.type === 'marquee') {
       const rect = normalizeRect(drag.startWorld, drag.currentWorld);
       ctx.fillStyle = theme.marqueeFill;
@@ -410,8 +395,12 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       } else if (drag.empty) {
         this.drawWireMessage(drag.currentWorld, 'Place a new node.', 'place');
       }
-    } else if (this.pendingWire) {
-      this.drawLooseWire(this.pendingWire.from, this.pendingWire.world, false);
+    } else if (this.state.pendingWire) {
+      this.drawLooseWire(
+        this.state.pendingWire.from,
+        this.state.pendingWire.world,
+        false
+      );
     }
   }
 

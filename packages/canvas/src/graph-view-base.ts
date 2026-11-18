@@ -9,6 +9,7 @@ import type {
   Hit,
   NodeState,
 } from './graph-view-types';
+import { Renderer } from './renderer';
 import { Scene } from './scene';
 import { DARK_THEME } from './theme';
 import type { Theme } from './theme';
@@ -21,6 +22,7 @@ export abstract class GraphViewBase {
   protected readonly metrics: FontMetrics;
   protected readonly scene: Scene;
   protected readonly viewport = new Viewport();
+  protected readonly renderer: Renderer;
 
   protected theme: Theme;
   protected editable: boolean;
@@ -34,8 +36,6 @@ export abstract class GraphViewBase {
 
   protected motion: boolean;
   protected conversions: () => ReadonlyArray<Conversion> | undefined;
-  /** Time of the frame being drawn (for fades and pulses). */
-  protected frameTime = 0;
 
   protected selection = new Set<string>();
   protected highlight = new Set<string>();
@@ -63,6 +63,13 @@ export abstract class GraphViewBase {
     this.theme = options.theme ?? DARK_THEME;
     this.metrics = new FontMetrics(measureCtx, this.theme);
     this.scene = new Scene(this.metrics.measure);
+    this.renderer = new Renderer(
+      ctx,
+      this.metrics,
+      this.scene,
+      this.viewport,
+      this.theme
+    );
     this.editable = options.editable ?? true;
     this.motion = options.motion ?? false;
     this.conversions = options.conversions ?? ((): undefined => undefined);

@@ -10,6 +10,7 @@ import {
   stepNodes,
   stopMotion,
 } from './node-motion';
+import type { Theme } from './theme';
 import {
   fitAll,
   fitSelection,
@@ -18,8 +19,55 @@ import {
   revealCamera,
 } from './viewport';
 
-/** Camera moves and the eased motion of the camera and nodes. */
+/** Drawing frames, camera moves and the eased motion of camera and nodes. */
 export abstract class GraphViewCamera extends GraphViewBase {
+  /** Switches colors, e.g. between `DARK_THEME` and `LIGHT_THEME`. */
+  public setTheme(theme: Theme): void {
+    this.theme = theme;
+    this.metrics.setTheme(theme);
+    this.renderer.setTheme(theme);
+    this.requestRender();
+  }
+
+  /** Follows the canvas's size and the pixel ratio. */
+  public resize(): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    this.viewport.dpr = dpr;
+    this.viewport.width = rect.width;
+    this.viewport.height = rect.height;
+    this.canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    this.canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    if (!this.hasFramed && this.scene.nodes.size > 0 && rect.width > 0) {
+      this.hasFramed = true;
+      this.initialView();
+    }
+
+    this.render();
+  }
+
+  /** Advances eased moves, then draws. */
+  protected override render(): void {
+    const time = performance.now();
+    if (this.stepMotion(time)) {
+      this.requestRender();
+    }
+
+    this.renderer.draw({
+      time,
+      editable: this.editable,
+      selection: this.selection,
+      knotSelection: this.knotSelection,
+      highlight: this.highlight,
+      hoverNode: this.hoverNode,
+      hoverPin: this.hoverPin,
+      hoverAddPin: this.hoverAddPin,
+      hoverEdge: this.hoverEdge,
+      drag: this.drag,
+      pendingWire: this.pendingWire,
+    });
+  }
+
   /** Turns eased camera and node moves on or off (reduced motion). */
   public setMotion(motion: boolean): void {
     this.motion = motion;

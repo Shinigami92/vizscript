@@ -27,7 +27,7 @@ import {
   drawContainerPin,
   drawContainerSymbol,
 } from './container-shapes';
-import { GraphViewCamera } from './graph-view-camera';
+import type { FontMetrics } from './font-metrics';
 import {
   ADVANCED_ROW,
   BANNER_GAP,
@@ -47,10 +47,27 @@ import {
   drawSetGlow,
   drawSetTitle,
 } from './node-decor';
+import type { RenderFrame } from './render-frame';
+import type { Scene } from './scene';
+import type { Theme } from './theme';
+import type { Viewport } from './viewport';
 
 /** Drawing of nodes: body, header, pins, values, bubbles, banners. */
-export abstract class GraphViewNodes extends GraphViewCamera {
-  /** A node, faded and grown in while it appears, then its pulse. */
+export class NodeRenderer {
+  private state!: RenderFrame;
+
+  public constructor(
+    private readonly ctx: CanvasRenderingContext2D,
+    private readonly metrics: FontMetrics,
+    private readonly scene: Scene,
+    private readonly viewport: Viewport,
+    private theme: Theme
+  ) {}
+
+  public setTheme(theme: Theme): void {
+    this.theme = theme;
+  }
+
   /** What the node drawing helpers of `node-decor.ts` draw with. */
   private painter(): NodePainter {
     return {
@@ -61,12 +78,14 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     };
   }
 
-  protected drawNodeAnimated(ns: NodeState): void {
+  /** A node, faded and grown in while it appears, then its pulse. */
+  public draw(ns: NodeState, state: RenderFrame): void {
+    this.state = state;
     const { ctx } = this;
     if (ns.appear === undefined) {
       this.drawNode(ns);
     } else {
-      const k = easeOut((this.frameTime - ns.appear) / NODE_APPEAR_MS);
+      const k = easeOut((this.state.time - ns.appear) / NODE_APPEAR_MS);
       const cx = ns.x + ns.geom.width / 2;
       const cy = ns.y + ns.geom.height / 2;
       const scale = 0.94 + 0.06 * k;
@@ -80,7 +99,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     }
 
     if (ns.pulse !== undefined) {
-      const k = easeOut((this.frameTime - ns.pulse) / NODE_PULSE_MS);
+      const k = easeOut((this.state.time - ns.pulse) / NODE_PULSE_MS);
       const grow = 4 + 14 * k;
       ctx.save();
       ctx.globalAlpha = 1 - k;
@@ -233,9 +252,9 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     }
 
     // Outline
-    const selected = this.selection.has(id);
-    const highlighted = this.highlight.has(id);
-    const hovered = this.hoverNode === id;
+    const selected = this.state.selection.has(id);
+    const highlighted = this.state.highlight.has(id);
+    const hovered = this.state.hoverNode === id;
     ctx.beginPath();
     ctx.roundRect(ns.x, ns.y, geom.width, geom.height, r);
     if (selected || highlighted || hovered) {
@@ -384,7 +403,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       this.drawAdvancedToggle(ns);
     }
 
-    if (ns.geom.addPin && this.editable && !lod) {
+    if (ns.geom.addPin && this.state.editable && !lod) {
       this.drawAddPin(ns, ns.geom.addPin);
     }
   }
@@ -395,7 +414,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     button: { x: number; y: number; width: number }
   ): void {
     const { ctx, theme } = this;
-    const hovered = this.hoverAddPin === ns.node.id;
+    const hovered = this.state.hoverAddPin === ns.node.id;
     const color = hovered ? theme.nodeText : theme.pinLabel;
     const x = ns.x + button.x;
     const y = ns.y + button.y;
@@ -426,7 +445,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     const x = ns.x + ns.geom.width / 2;
     const y = ns.y + ns.geom.height - ADVANCED_ROW / 2 - 1;
     const open = this.scene.expandedNodes.has(ns.full.id);
-    const hovered = this.hoverNode === ns.node.id;
+    const hovered = this.state.hoverNode === ns.node.id;
     ctx.beginPath();
     if (open) {
       ctx.moveTo(x - 5, y + 2.5);
@@ -452,7 +471,8 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     const connected = this.scene.connectedPins.has(
       pinKey({ node: ns.node.id, pin: pin.id })
     );
-    const hovered = this.hoverNode === ns.node.id && this.hoverPin === pin.id;
+    const hovered =
+      this.state.hoverNode === ns.node.id && this.state.hoverPin === pin.id;
     const r = NODE_METRICS.pinRadius + (hovered ? 1.5 : 0);
 
     if (pin.kind === 'exec') {
