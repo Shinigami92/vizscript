@@ -1,15 +1,9 @@
-import { NODE_METRICS } from '@vizscript/core';
 import type { PinGeometry, Point } from '@vizscript/core';
-import { rectContains, rectsIntersect, screenToWorld } from './camera';
+import { rectContains, screenToWorld } from './camera';
 import { GraphViewBase } from './graph-view-base';
-import {
-  ADVANCED_ROW,
-  COMMENT_HEADER,
-  FRAME_HEADER,
-  KNOT_RADIUS,
-  PIN_MENU_ZOOM,
-} from './graph-view-constants';
+import { PIN_MENU_ZOOM } from './graph-view-constants';
 import type { ContextTarget, Hit, NodeState } from './graph-view-types';
+import { hitTest, topFirst } from './hit-test';
 
 /** What is under a point: pins, nodes, reroute points, frames, wires. */
 export abstract class GraphViewHitTest extends GraphViewBase {
@@ -47,128 +41,25 @@ export abstract class GraphViewHitTest extends GraphViewBase {
       )[0]?.fnId;
   }
 
-  private orderedCandidates(world: Point, pad: number): NodeState[] {
-    const ids = this.index.query({
-      x: world.x - pad,
-      y: world.y - pad,
-      width: pad * 2,
-      height: pad * 2,
-    });
-    // Top first: the reverse of the drawing order, and selected nodes,
-    // which are drawn last, before the others.
-    const states = ids
-      .toReversed()
-      .map((id) => this.nodes.get(id))
-      .filter((ns): ns is NodeState => ns !== undefined);
-    return states.toSorted(
-      (a, b) =>
-        Number(this.selection.has(b.node.id)) -
-        Number(this.selection.has(a.node.id))
-    );
-  }
-
-  /** Whether `world` is on the node's "Add pin +" button (its row). */
-  private onAddPin(ns: NodeState, world: Point): boolean {
-    const button = ns.geom.addPin;
-    if (!button) {
-      return false;
-    }
-
-    const x = world.x - ns.x - button.x;
-    const y = world.y - ns.y - button.y;
-    return (
-      x >= -2 &&
-      x <= button.width + 2 &&
-      Math.abs(y) <= NODE_METRICS.rowHeight / 2
-    );
-  }
-
+  /** What is under a world point (`hitTest` of `hit-test.ts`). */
   protected hitTest(world: Point): Hit | null {
-    const pinRadius = Math.max(9, 7 / this.camera.zoom);
-    const candidates = this.orderedCandidates(world, pinRadius);
-
-    for (const ns of candidates) {
-      for (const pg of ns.geom.pins.values()) {
-        const p = this.pinWorld(ns, pg);
-        if (Math.hypot(p.x - world.x, p.y - world.y) <= pinRadius) {
-          return { type: 'pin', ns, pg };
-        }
-      }
-    }
-
-    for (const ns of candidates) {
-      if (
-        !rectsIntersect(this.nodeRect(ns), {
-          x: world.x,
-          y: world.y,
-          width: 0.01,
-          height: 0.01,
-        })
-      ) {
-        continue;
-      }
-
-      for (const pg of ns.geom.pins.values()) {
-        const r = this.literalRect(ns, pg);
-        if (
-          r &&
-          world.x >= r.x &&
-          world.x <= r.x + r.width &&
-          world.y >= r.y &&
-          world.y <= r.y + r.height
-        ) {
-          return { type: 'literal', ns, pg };
-        }
-      }
-
-      if (this.editable && this.onAddPin(ns, world)) {
-        return { type: 'node', ns, addPin: true };
-      }
-
-      const advanced =
-        ns.advanced > 0 && world.y >= ns.y + ns.geom.height - ADVANCED_ROW;
-      return advanced ? { type: 'node', ns, advanced } : { type: 'node', ns };
-    }
-
-    // Reroute knots lie on wires, which are drawn under the nodes.
-    const knotRadius = Math.max(KNOT_RADIUS + 3, 8 / this.camera.zoom);
-    for (const [edgeId, points] of this.reroutes) {
-      for (const [index, p] of points.entries()) {
-        if (Math.hypot(p.x - world.x, p.y - world.y) <= knotRadius) {
-          return { type: 'knot', edgeId, index };
-        }
-      }
-    }
-
-    for (const ns of this.nodes.values()) {
-      const r = this.bubbleRect(ns);
-      if (r && rectContains(r, world)) {
-        return { type: 'bubble', ns };
-      }
-    }
-
     this.updateFrames();
-    // Inner comment boxes first, function frames last.
-    const frames = this.frames.toSorted(
-      (a, b) =>
-        Number(a.kind === 'function') - Number(b.kind === 'function') ||
-        a.nodeIds.length - b.nodeIds.length
+    return hitTest(
+      {
+        zoom: this.camera.zoom,
+        editable: this.editable,
+        nodesAt: (rect) =>
+          topFirst(this.index.query(rect), this.selection)
+            .map((id) => this.nodes.get(id))
+            .filter((ns): ns is NodeState => ns !== undefined),
+        nodes: this.nodes.values(),
+        reroutes: this.reroutes,
+        frames: this.frames,
+        literalRect: (ns, pg) => this.literalRect(ns, pg),
+        bubbleRect: (ns) => this.bubbleRect(ns),
+      },
+      world
     );
-    for (const frame of frames) {
-      const b = frame.bounds;
-      const header = frame.kind === 'comment' ? COMMENT_HEADER : FRAME_HEADER;
-      if (
-        b &&
-        world.x >= b.x &&
-        world.x <= b.x + b.width &&
-        world.y >= b.y &&
-        world.y <= b.y + header
-      ) {
-        return { type: 'frame', frame };
-      }
-    }
-
-    return null;
   }
 
   /** The pins at the other end of a pin's wires. */
