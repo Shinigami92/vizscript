@@ -8,15 +8,18 @@ argument-hint: <url | path | sample name>
 
 Checks that Undo brings the graph back exactly as it was, for every wire and node of a file. The user watches the browser. The scripts in this folder do the work; run them with `browser_run_code_unsafe` and its `filename` parameter, from the repository root:
 
-| Script       | Does                                                                               |
-| ------------ | ---------------------------------------------------------------------------------- |
-| `helper.js`  | Injected into the page: reads the graph view's state (`window.__undoCheck`).       |
-| `setup.js`   | Lists every wire and every node but the entry nodes, and keeps the starting state. |
-| `run.js`     | Removes, undoes and compares the next batch (40 by default).                       |
-| `summary.js` | Totals, the differing items, and whether the graph at the end equals the start.    |
-| `repro.js`   | Looks at one item again and saves before / removed / undone screenshots.           |
+| Script       | Does                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------- |
+| `helper.js`  | Injected into the page (`window.__undoCheck`): all the logic below; the other scripts only call it.     |
+| `setup.js`   | Hands the helper Playwright's mouse, keys and screenshots; lists every wire and every node but entries. |
+| `run.js`     | Removes, undoes and compares the next batch (40 by default).                                            |
+| `summary.js` | Totals, the differing items, and whether the graph at the end equals the start.                         |
+| `repro.js`   | Looks at one item again and saves before / removed / undone screenshots.                                |
 
-The helper reads the canvas through Vue's dev handle (`__vueParentComponent`), so this works with the dev server only, not with a production build.
+- **State** (positions, wires, frames …) is read through Vue's dev handle (`__vueParentComponent`), so the check works with the dev server only.
+- **Click targets** come from the canvas's accessible DOM (`[data-ui=graph-a11y]`, see `viz-user-test`); an item whose point is covered by a banner or panel is skipped with `covered by <data-ui>`, not misclicked.
+- **No fixed sleeps:** after a removal or an undo the helper waits until the scene was replaced by the parse, stayed so for 150 ms, and no motion frame is pending (`settled()`, at most 2 s; a timeout shows up as `slow`).
+- **Short calls:** `run.js` and the others are one-liners, so a batch costs little context. After editing `helper.js`, inject it again (`addInitScript` reads the file once).
 
 ## 1. Resolve the target
 
@@ -64,15 +67,15 @@ Same rules as `viz-user-test`:
    ```
 
    - It must return `object`.
-   - `addInitScript` adds the helper again on every call. Add it once per browser session; after that, `goto` alone is enough.
+   - `addInitScript` adds the helper again on every call (the last one wins). Add it once per browser session, or again after editing `helper.js`; otherwise `goto` alone is enough.
 
-4. **Switch to the graph alone.** Click **Viz** in the editor bar if it isn't active, so the graph has the whole width. Check that the zoom is at least 50 % (`view.setCamera({ ...view.getCamera(), zoom: 0.7 })` otherwise): zoomed out, pins' hit areas grow and cover the header point the run clicks, so the click starts a wire instead of selecting the node, and the item shows as not removed.
+4. **Switch to the graph alone:** `await page.getByRole('tab', { name: 'viz' }).click()` (the editor bar's Code / Split / Viz are tabs with `aria-selected`), so the graph has the whole width. Check that the zoom is at least 50 % (`view.setCamera({ ...view.getCamera(), zoom: 0.7 })` otherwise): zoomed out, pins' hit areas grow and cover the header point the run clicks, so the click starts a wire instead of selecting the node, and the item shows as not removed. Check that the zoom is at least 50 % (`view.setCamera({ ...view.getCamera(), zoom: 0.7 })` otherwise): zoomed out, pins' hit areas grow and cover the header point the run clicks, so the click starts a wire instead of selecting the node, and the item shows as not removed.
 5. **List the items:** run `setup.js`. It returns the number of wires and nodes.
 
 ## 3. Run
 
 - **Batches:** run `run.js` again and again until `next` equals `total`.
-  - Each batch takes about 2–3 minutes and may move to the background; wait for its notification.
+  - A batch takes about 1 s per item. Raise `window.__run.batch` for small files (weather.py: 116 items in 97 s in one call).
   - Progress is saved after every item, so after an error just run it again.
 - **What it does per item:**
   1. Centers the item and clears the selection.
@@ -84,7 +87,8 @@ Same rules as `viz-user-test`:
   - `problems`: what differs after the undo;
   - `pixels`: the bounding box of changed canvas pixels, toasts and zoom controls left out;
   - `selectedAfterUndo`;
-  - items that weren't removed or were skipped.
+  - `slow`: the parse didn't settle within 2 s (after the removal or the undo);
+  - items that weren't removed or were skipped (also `covered by …`).
 
 After the last batch, run `summary.js`.
 

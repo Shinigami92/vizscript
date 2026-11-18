@@ -57,7 +57,20 @@ Don't start a second copy.
 
 - First remember the current viewport size, to restore it at the end: `async (page) => page.viewportSize() ?? { width: await page.evaluate(() => window.innerWidth), height: await page.evaluate(() => window.innerHeight) }` (`browser_run_code_unsafe`).
 - Viewport **1733×1009** (`browser_resize`): the user's real Chrome size. Dark theme, the app's default.
-- Open the target URL. On the playground, click **Reset** in the top bar to start from the original sample (`[data-ui=playground-reset]`; it is only shown when the sample, its graph-only edits or its layout differ from the original). Reset keeps the camera.
+- Inject `helper.js` from this folder, then open the target URL (`addInitScript` reads the file once: inject it again after editing it; the last one wins):
+
+  ```js
+  async (page) => {
+    await page.addInitScript({
+      path: '<repo>/.claude/skills/viz-user-test/helper.js',
+    });
+    await page.goto('http://localhost:5173/playground?sample=<name>');
+    await page.waitForTimeout(1500);
+    return page.evaluate(() => typeof window.__viz); // 'object'
+  };
+  ```
+
+- On the playground, click **Reset** in the top bar to start from the original sample (`[data-ui=playground-reset]`; it is only shown when the sample, its graph-only edits or its layout differ from the original). Reset keeps the camera.
 - Click the "fit all" button in the zoom controls (bottom right of the graph) so the whole graph is visible.
 
 ## 3. Phase 1: rebuild the script by hand
@@ -123,21 +136,32 @@ Then summarize the most important findings for the user and ask whether to fix t
 
 **Motion:** camera moves (fit all, zoom to selection, reveal, zoom buttons) ease over 250 ms moved nodes slide for 200 ms, new nodes fade in for 180 ms, and menus pop in for 120 ms. Wait about 300 ms before a screenshot or before reading the zoom. Animations follow `prefers-reduced-motion`; `page.emulateMedia({ reducedMotion: 'reduce' })` turns them off.
 
-**Find nodes and pins:** the canvas mirrors its scene as invisible DOM (`[data-ui=graph-a11y]`): nodes are `[data-node-id="…"]` (`role=group`, named by title), pins `[data-pin="…"]`, inline values `[data-literal="…"]` and Add pin `[data-add-pin]` (all `role=button`, e.g. "items, string[], output", "Value of arg0: 2"). Take a target's `boundingBox()` and use its middle for `page.mouse`; the layer takes no pointer events. Before a click, check that `document.elementFromPoint(x, y)` is the canvas, not a banner, menu or zoom control on top of it. Small pins at low zoom: zoom in first.
+**Find nodes and pins (`helper.js`, `window.__viz`):** the canvas mirrors its scene as invisible DOM (`[data-ui=graph-a11y]`, see CONTRIBUTING). Never guess positions from a screenshot.
 
-**Read the code panel:**
+- `__viz.nodes()` lists the nodes on screen: label, client position, id, then their parts. Labels tell equal-looking nodes apart: `SET (Set user)`, `greeter, entry` next to the call `greeter`, `+`'s inputs `a` / `b`, `Value of a: Hello, `, `Add pin`, `…, wired`. `nodes({ parts: false })` for an overview, `{ offscreen: true }` for all.
+- `__viz.at(node, part?)` gives the client point of a node's header or one part. `node`: an exact label or an id; `part`: an exact label, the start of one (`'person'` for "person, string, output, wired") or a RegExp (`/^Value of a/`). It throws on no or several matches, listing the candidates. `covered` names what's on top of the point (`graph-sync-warning`, `zoom-controls` …): pan or zoom first if it isn't null.
+- Small pins at low zoom: zoom in first (below 50 % pin hit areas overlap the header).
 
 ```js
-async (page) =>
-  await page.locator('.view-line').evaluateAll((els) =>
-    els
-      .map((e) => [parseFloat(e.style.top), e.textContent])
-      .sort((a, b) => a[0] - b[0])
-      .map((x) => x[1])
-  );
+async (page) => {
+  const at = (n, p) => page.evaluate(([n, p]) => window.__viz.at(n, p), [n, p]);
+  const from = await at('greeter, entry', 'person');
+  const to = await at('+', 'a');
+  await page.mouse.move(from.x, from.y, { steps: 10 });
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 20 });
+  await page.mouse.up();
+  return page.evaluate(() => window.__viz.code());
+};
 ```
 
-Monaco renders only the visible lines; scroll the code panel for long files.
+**Read the code:** `__viz.code()` returns the whole file, also in Viz mode (Monaco renders only the visible lines, so `.view-line` misses the rest).
+
+**View mode:** Code / Split / Viz are tabs: `page.getByRole('tab', { name: 'viz' })`.
+
+**Buttons:** a click on a disabled button waits 30 s; pass `{ timeout: 2000 }` (Undo after a reload: a reload clears the undo history).
+
+**Action menu entries:** `getByRole('option', { name: /^Length/ })`; an entry's name is its label plus its hint (`Length ….length`).
 
 **Screenshots:** `browser_take_screenshot` with a relative path may not land in the repo. Use `browser_run_code_unsafe` with `page.screenshot({ path: '<repo>/tmp/<name>.png', clip: … })` and read the file afterwards.
 
