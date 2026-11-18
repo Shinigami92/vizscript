@@ -14,7 +14,7 @@ import {
   pinKey,
   pinLabel,
 } from '@vizscript/core';
-import type { HeaderIcon, Pin, PinGeometry } from '@vizscript/core';
+import type { Pin, PinGeometry } from '@vizscript/core';
 import {
   BUBBLE_GAP,
   BUBBLE_LINE_HEIGHT,
@@ -22,7 +22,6 @@ import {
   BUBBLE_PADDING_Y,
 } from './bubble';
 import { easeOut } from './camera';
-import type { Rect } from './camera';
 import {
   containerShape,
   drawContainerPin,
@@ -38,10 +37,30 @@ import {
   NODE_PULSE_MS,
 } from './graph-view-constants';
 import type { NodeState } from './graph-view-types';
+import type { NodePainter } from './node-decor';
+import {
+  drawCheckbox,
+  drawClock,
+  drawHeaderIcon,
+  drawPillGlow,
+  drawRim,
+  drawSetGlow,
+  drawSetTitle,
+} from './node-decor';
 
 /** Drawing of nodes: body, header, pins, values, bubbles, banners. */
 export abstract class GraphViewNodes extends GraphViewCamera {
   /** A node, faded and grown in while it appears, then its pulse. */
+  /** What the node drawing helpers of `node-decor.ts` draw with. */
+  private painter(): NodePainter {
+    return {
+      ctx: this.ctx,
+      theme: this.theme,
+      font: (style) => this.font(style),
+      scale: this.camera.zoom * this.dpr,
+    };
+  }
+
   protected drawNodeAnimated(ns: NodeState): void {
     const { ctx } = this;
     if (ns.appear === undefined) {
@@ -78,180 +97,6 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       ctx.stroke();
       ctx.restore();
     }
-  }
-
-  /**
-   * The glow of a Get pill: its type's color around the middle right,
-   * fading out to the edges, and a gloss over the top half (UE).
-   */
-  private drawPillGlow(ns: NodeState, radius: number): void {
-    const { ctx, theme } = this;
-    const { node, geom } = ns;
-    const out = node.pins.find(
-      (p) => p.direction === 'out' && p.kind === 'data'
-    );
-    if (!out) {
-      return;
-    }
-
-    const color = pinColor(out.type, theme.scheme);
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(ns.x, ns.y, geom.width, geom.height, radius);
-    ctx.clip();
-    ctx.save();
-    // An ellipse: as wide as the pill, a little taller than it.
-    ctx.translate(ns.x + geom.width * 0.64, ns.y + geom.height * 0.55);
-    ctx.scale(1, Math.min(1, (geom.height * 1.5) / geom.width));
-    const reach = geom.width * 0.62;
-    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, reach);
-    glow.addColorStop(0, `${color}${theme.pillTint}`);
-    glow.addColorStop(0.5, `${color}${theme.pillTintMid}`);
-    glow.addColorStop(1, `${color}00`);
-    ctx.fillStyle = glow;
-    ctx.fillRect(-reach, -reach, reach * 2, reach * 2);
-    ctx.restore();
-    const shine = ctx.createLinearGradient(
-      ns.x,
-      ns.y,
-      ns.x,
-      ns.y + geom.height
-    );
-    shine.addColorStop(0, theme.pillShine);
-    shine.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = shine;
-    ctx.fillRect(ns.x, ns.y, geom.width, geom.height);
-    ctx.restore();
-  }
-
-  /**
-   * UE's light rim inside the outline: along the top of every node, fading
-   * downward, and as a glare on the top left of Get pills.
-   */
-  private drawRim(ns: NodeState, radius: number, pill: boolean): void {
-    const { ctx, theme } = this;
-    const { geom } = ns;
-    const inset = 1.25;
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(
-      ns.x + inset,
-      ns.y + inset,
-      geom.width - inset * 2,
-      geom.height - inset * 2,
-      Math.max(0, radius - inset)
-    );
-    // The faint rim along the top, fading downward.
-    const rim = ctx.createLinearGradient(
-      ns.x,
-      ns.y,
-      ns.x,
-      ns.y + Math.min(geom.height, 14)
-    );
-    rim.addColorStop(0, theme.rimLight);
-    rim.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.strokeStyle = rim;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    if (pill) {
-      // A short glare around the top-left corner, fading smoothly into the
-      // top edge and down the left side.
-      const corner = Math.max(radius, 6);
-      const cx = ns.x + corner * 0.9;
-      const cy = ns.y + corner * 0.4;
-      const glare = ctx.createRadialGradient(cx, cy, 0, cx, cy, corner * 1.6);
-      glare.addColorStop(0, theme.pillGlare);
-      glare.addColorStop(0.3, theme.pillGlare);
-      glare.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.strokeStyle = glare;
-      ctx.lineWidth = 1.3;
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
-
-  /** Y of the exec row of a SET node (its first row). */
-  private execRowY(ns: NodeState): number {
-    for (const pg of ns.geom.pins.values()) {
-      if (pg.pin.kind === 'exec') {
-        return ns.y + pg.y;
-      }
-    }
-
-    return ns.y + NODE_METRICS.rowHeight / 2;
-  }
-
-  /** `SET` centered in the exec row, how it declares (`const`) beside it. */
-  private drawSetTitle(ns: NodeState, sub: string): void {
-    const { ctx, theme } = this;
-    const y = this.execRowY(ns);
-    ctx.save();
-    ctx.font = this.font('compact');
-    const title = compactTitle(ns.node);
-    const titleWidth = ctx.measureText(title).width;
-    ctx.font = this.font('subtitle');
-    const subWidth = sub ? ctx.measureText(sub).width + 6 : 0;
-    const left = ns.x + (ns.geom.width - titleWidth - subWidth) / 2;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.font = this.font('compact');
-    ctx.fillStyle = theme.nodeText;
-    if (theme.scheme === 'dark') {
-      const scale = this.camera.zoom * this.dpr;
-      ctx.shadowColor = theme.titleShadow;
-      ctx.shadowBlur = 2 * scale;
-      ctx.shadowOffsetY = 1 * scale;
-    }
-
-    ctx.fillText(title, left, y);
-    if (sub) {
-      ctx.shadowColor = 'transparent';
-      ctx.font = this.font('subtitle');
-      ctx.fillStyle = theme.compactSubtext;
-      ctx.fillText(sub, left + titleWidth + 6, y + 1);
-    }
-
-    ctx.restore();
-  }
-
-  /**
-   * UE's SET node: a haze of the value's type color along the top, and a
-   * gloss over the exec row.
-   */
-  private drawSetGlow(ns: NodeState, radius: number): void {
-    const { ctx, theme } = this;
-    const { node, geom } = ns;
-    const value = node.pins.find(
-      (p) => p.direction === 'in' && p.kind === 'data'
-    );
-    if (!value) {
-      return;
-    }
-
-    const color = pinColor(value.type, theme.scheme);
-    const rowY = this.execRowY(ns);
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(ns.x, ns.y, geom.width, geom.height, radius);
-    ctx.clip();
-    ctx.save();
-    const reach = geom.width * 0.6;
-    ctx.translate(ns.x + geom.width / 2, rowY - 2);
-    ctx.scale(1, Math.min(1, (NODE_METRICS.rowHeight * 1.3) / reach));
-    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, reach);
-    glow.addColorStop(0, `${color}${theme.pillTint}`);
-    glow.addColorStop(0.5, `${color}${theme.pillTintMid}`);
-    glow.addColorStop(1, `${color}00`);
-    ctx.fillStyle = glow;
-    ctx.fillRect(-reach, -reach, reach * 2, reach * 2);
-    ctx.restore();
-    const shine = ctx.createLinearGradient(ns.x, ns.y, ns.x, rowY + 8);
-    shine.addColorStop(0, theme.pillShine);
-    shine.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = shine;
-    ctx.fillRect(ns.x, ns.y, geom.width, rowY + 8 - ns.y);
-    ctx.restore();
   }
 
   private drawNode(ns: NodeState): void {
@@ -338,9 +183,9 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     ctx.restore();
 
     if (getPill && !lod) {
-      this.drawPillGlow(ns, r);
+      drawPillGlow(this.painter(), ns, r);
     } else if (setter && !lod) {
-      this.drawSetGlow(ns, r);
+      drawSetGlow(this.painter(), ns, r);
     }
 
     // Header
@@ -413,7 +258,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     ctx.stroke();
     ctx.setLineDash([]);
     if (!lod && !selected && !highlighted) {
-      this.drawRim(ns, r, getPill);
+      drawRim(this.painter(), ns, r, getPill);
     }
 
     // Title
@@ -454,7 +299,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
 
       if (setter) {
         // UE's SET node: the title centered in the exec row.
-        this.drawSetTitle(ns, sub);
+        drawSetTitle(this.painter(), ns, sub);
       } else if (getPill) {
         // The name sits next to the pin, with a shadow like UE's.
         ctx.save();
@@ -484,7 +329,8 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       const icon = lod ? undefined : headerIcon(node);
       const titleY = ns.y + NODE_METRICS.headerHeight / 2 + 1;
       if (icon) {
-        this.drawHeaderIcon(
+        drawHeaderIcon(
+          this.painter(),
           icon,
           ns.x + NODE_METRICS.paddingX + 6,
           titleY,
@@ -493,7 +339,8 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       }
 
       if (isLatent(node) && !lod) {
-        this.drawClock(
+        drawClock(
+          this.painter(),
           ns.x + geom.width - NODE_METRICS.paddingX - 6,
           titleY,
           theme.nodeTitle
@@ -598,92 +445,6 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     ctx.globalAlpha = 1;
   }
 
-  /**
-   * Header icons like UE's: ƒ for functions, a diamond for events, a fork
-   * for branches, a circular arrow for loops (12 px, centered on `x`, `y`).
-   */
-  private drawHeaderIcon(
-    icon: HeaderIcon,
-    x: number,
-    y: number,
-    color: string
-  ): void {
-    const { ctx } = this;
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = 1.6;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    switch (icon) {
-      case 'function':
-      case 'unknown': {
-        ctx.font = `italic 600 15px Georgia, "Times New Roman", serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(icon === 'function' ? 'ƒ' : '?', x, y + 1);
-        break;
-      }
-
-      case 'event': {
-        ctx.beginPath();
-        ctx.moveTo(x, y - 6);
-        ctx.lineTo(x + 6, y);
-        ctx.lineTo(x, y + 6);
-        ctx.lineTo(x - 6, y);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(x, y, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      }
-
-      case 'branch': {
-        ctx.beginPath();
-        ctx.moveTo(x - 6, y);
-        ctx.lineTo(x - 1, y);
-        ctx.moveTo(x - 1, y);
-        ctx.lineTo(x + 5, y - 5);
-        ctx.moveTo(x - 1, y);
-        ctx.lineTo(x + 5, y + 5);
-        ctx.stroke();
-        break;
-      }
-
-      case 'loop': {
-        ctx.beginPath();
-        ctx.arc(x, y, 5, Math.PI * 0.15, Math.PI * 1.75);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(x + 5.5, y - 5);
-        ctx.lineTo(x + 5, y - 1);
-        ctx.lineTo(x + 1.5, y - 2.5);
-        ctx.stroke();
-        break;
-      }
-    }
-
-    ctx.restore();
-  }
-
-  /** UE's clock on latent nodes (`await`). */
-  private drawClock(x: number, y: number, color: string): void {
-    const { ctx } = this;
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.arc(x, y, 6, 0, Math.PI * 2);
-    ctx.moveTo(x, y);
-    ctx.lineTo(x, y - 3.5);
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + 2.5, y + 1.5);
-    ctx.stroke();
-    ctx.restore();
-  }
-
   private drawPin(ns: NodeState, pg: PinGeometry, lod: boolean): void {
     const { ctx, theme } = this;
     const pin: Pin = pg.pin;
@@ -766,7 +527,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
 
     const lr = this.literalRect(ns, pg);
     if (lr && pin.literal?.kind === 'boolean') {
-      this.drawCheckbox(lr, isChecked(pin.literal.value));
+      drawCheckbox(this.painter(), lr, isChecked(pin.literal.value));
     } else if (lr && pin.literal) {
       // UE's value box: dark, nearly square, with a thin light border.
       ctx.beginPath();
@@ -796,36 +557,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     }
   }
 
-  /** UE's checkbox for boolean values. */
-  private drawCheckbox(rect: Rect, checked: boolean): void {
-    const { ctx, theme } = this;
-    const size = NODE_METRICS.checkboxSize;
-    const x = rect.x;
-    const y = rect.y + (rect.height - size) / 2;
-    ctx.beginPath();
-    ctx.roundRect(x, y, size, size, 3);
-    ctx.fillStyle = theme.literalBackground;
-    ctx.fill();
-    ctx.strokeStyle = theme.pinLabel;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    if (checked) {
-      ctx.beginPath();
-      ctx.moveTo(x + 3, y + size / 2);
-      ctx.lineTo(x + size / 2 - 1, y + size - 4);
-      ctx.lineTo(x + size - 3, y + 3.5);
-      ctx.strokeStyle = theme.literalText;
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-    }
-  }
-
-  /**
-   * Blueprint array pin: a 3×3 grid of squares in the element color,
-   * filled when connected and outlined when not.
-   */
+  /** UE's ERROR / WARNING / NOT IN CODE banner under a node. */
   private drawProblemBanner(ns: NodeState, lod: boolean): void {
     const severity = this.problems.get(ns.node.id);
     if (!severity) {
