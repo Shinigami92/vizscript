@@ -35,12 +35,19 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
 
   public resize(): void {
     const rect = this.canvas.getBoundingClientRect();
-    this.dpr = window.devicePixelRatio || 1;
-    this.width = rect.width;
-    this.height = rect.height;
-    this.canvas.width = Math.max(1, Math.round(rect.width * this.dpr));
-    this.canvas.height = Math.max(1, Math.round(rect.height * this.dpr));
-    if (!this.hasFramed && this.scene.nodes.size > 0 && this.width > 0) {
+    this.viewport.dpr = window.devicePixelRatio || 1;
+    this.viewport.width = rect.width;
+    this.viewport.height = rect.height;
+    this.canvas.width = Math.max(1, Math.round(rect.width * this.viewport.dpr));
+    this.canvas.height = Math.max(
+      1,
+      Math.round(rect.height * this.viewport.dpr)
+    );
+    if (
+      !this.hasFramed &&
+      this.scene.nodes.size > 0 &&
+      this.viewport.width > 0
+    ) {
       this.hasFramed = true;
       this.initialView();
     }
@@ -57,10 +64,11 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       this.requestRender();
     }
 
-    const { ctx, camera, theme } = this;
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    const { ctx, theme } = this;
+    const { camera } = this.viewport;
+    ctx.setTransform(this.viewport.dpr, 0, 0, this.viewport.dpr, 0, 0);
     ctx.fillStyle = theme.background;
-    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.fillRect(0, 0, this.viewport.width, this.viewport.height);
     this.drawGrid();
 
     if (!this.scene.doc) {
@@ -68,15 +76,19 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     }
 
     ctx.setTransform(
-      this.dpr * camera.zoom,
+      this.viewport.dpr * camera.zoom,
       0,
       0,
-      this.dpr * camera.zoom,
-      -camera.x * camera.zoom * this.dpr,
-      -camera.y * camera.zoom * this.dpr
+      this.viewport.dpr * camera.zoom,
+      -camera.x * camera.zoom * this.viewport.dpr,
+      -camera.y * camera.zoom * this.viewport.dpr
     );
 
-    const view = visibleWorldRect(camera, this.width, this.height);
+    const view = visibleWorldRect(
+      camera,
+      this.viewport.width,
+      this.viewport.height
+    );
     this.scene.updateFrames();
     this.drawFrames(view);
     this.drawWires(view);
@@ -104,7 +116,8 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
   }
 
   private drawGrid(): void {
-    const { ctx, camera, theme } = this;
+    const { ctx, theme } = this;
+    const { camera } = this.viewport;
     const minor = GRID_SIZE;
     const major = GRID_MAJOR;
 
@@ -121,14 +134,14 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       ctx.beginPath();
       const startX = -((camera.x * camera.zoom) % step);
       const startY = -((camera.y * camera.zoom) % step);
-      for (let x = startX; x < this.width; x += step) {
+      for (let x = startX; x < this.viewport.width; x += step) {
         ctx.moveTo(Math.round(x) + 0.5, 0);
-        ctx.lineTo(Math.round(x) + 0.5, this.height);
+        ctx.lineTo(Math.round(x) + 0.5, this.viewport.height);
       }
 
-      for (let y = startY; y < this.height; y += step) {
+      for (let y = startY; y < this.viewport.height; y += step) {
         ctx.moveTo(0, Math.round(y) + 0.5);
-        ctx.lineTo(this.width, Math.round(y) + 0.5);
+        ctx.lineTo(this.viewport.width, Math.round(y) + 0.5);
       }
 
       ctx.strokeStyle = color;
@@ -167,7 +180,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      if (this.camera.zoom > 0.15) {
+      if (this.viewport.camera.zoom > 0.15) {
         ctx.fillStyle = theme.frameTitle;
         ctx.font = `600 18px ${theme.fontFamily}`;
         ctx.textBaseline = 'middle';
@@ -203,7 +216,7 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     ctx.lineWidth = selected ? 2 : 1;
     ctx.stroke();
 
-    if (this.camera.zoom > 0.15) {
+    if (this.viewport.camera.zoom > 0.15) {
       ctx.fillStyle = theme.commentTitle;
       ctx.font = `600 14px ${theme.fontFamily}`;
       ctx.textBaseline = 'middle';
@@ -340,8 +353,11 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
       ctx.fillStyle = theme.marqueeFill;
       ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
       ctx.strokeStyle = theme.marqueeBorder;
-      ctx.lineWidth = 1 / this.camera.zoom;
-      ctx.setLineDash([6 / this.camera.zoom, 4 / this.camera.zoom]);
+      ctx.lineWidth = 1 / this.viewport.camera.zoom;
+      ctx.setLineDash([
+        6 / this.viewport.camera.zoom,
+        4 / this.viewport.camera.zoom,
+      ]);
       ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
       ctx.setLineDash([]);
     }
@@ -411,13 +427,13 @@ export abstract class GraphViewRenderer extends GraphViewNodes {
     kind: 'ok' | 'error' | 'place' | 'convert'
   ): void {
     const { ctx, theme } = this;
-    const at = worldToScreen(this.camera, world);
+    const at = worldToScreen(this.viewport.camera, world);
     ctx.save();
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.setTransform(this.viewport.dpr, 0, 0, this.viewport.dpr, 0, 0);
     ctx.font = `12px ${theme.fontFamily}`;
     const icon = 14;
     const width = text ? ctx.measureText(text).width + icon + 22 : icon + 14;
-    const x = Math.min(at.x + 16, this.width - width - 4);
+    const x = Math.min(at.x + 16, this.viewport.width - width - 4);
     const y = at.y + 18;
     ctx.beginPath();
     ctx.roundRect(x, y, width, 24, 4);

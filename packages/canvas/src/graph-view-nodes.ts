@@ -57,7 +57,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       ctx: this.ctx,
       theme: this.theme,
       font: (style) => this.metrics.font(style),
-      scale: this.camera.zoom * this.dpr,
+      scale: this.viewport.camera.zoom * this.viewport.dpr,
     };
   }
 
@@ -93,7 +93,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         NODE_METRICS.cornerRadius + grow
       );
       ctx.strokeStyle = this.theme.selection;
-      ctx.lineWidth = 2.5 / Math.max(this.camera.zoom, 0.4);
+      ctx.lineWidth = 2.5 / Math.max(this.viewport.camera.zoom, 0.4);
       ctx.stroke();
       ctx.restore();
     }
@@ -102,7 +102,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
   private drawNode(ns: NodeState): void {
     const { ctx, theme } = this;
     const { node, geom } = ns;
-    const lod = this.camera.zoom < 0.4;
+    const lod = this.viewport.camera.zoom < 0.4;
     const compact = isCompact(node);
     const math = isMathNode(node);
     // UE's Get pill: a dark capsule lit by its type's color.
@@ -131,7 +131,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
     // A soft drop shadow like UE's (not at overview zoom), only outside the
     // node: the body is see-through and must not darken over it.
     if (!lod) {
-      const scale = this.camera.zoom * this.dpr;
+      const scale = this.viewport.camera.zoom * this.viewport.dpr;
       const margin = 40;
       ctx.save();
       ctx.beginPath();
@@ -308,7 +308,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
         ctx.font = `500 13px ${theme.fontFamily}`;
         // Light text on the dark pill; dark text needs no shadow.
         if (!lod && theme.scheme === 'dark') {
-          const scale = this.camera.zoom * this.dpr;
+          const scale = this.viewport.camera.zoom * this.viewport.dpr;
           ctx.shadowColor = theme.titleShadow;
           ctx.shadowBlur = 2 * scale;
           ctx.shadowOffsetY = 1 * scale;
@@ -352,7 +352,7 @@ export abstract class GraphViewNodes extends GraphViewCamera {
       ctx.textAlign = 'left';
       ctx.save();
       if (!lod) {
-        const scale = this.camera.zoom * this.dpr;
+        const scale = this.viewport.camera.zoom * this.viewport.dpr;
         ctx.shadowColor = theme.titleShadow;
         ctx.shadowBlur = 2 * scale;
         ctx.shadowOffsetY = 1 * scale;

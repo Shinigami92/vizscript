@@ -1,6 +1,5 @@
 import type { Conversion, PinGeometry, Point } from '@vizscript/core';
 import { screenToWorld } from './camera';
-import type { Camera } from './camera';
 import { Emitter } from './emitter';
 import { FontMetrics } from './font-metrics';
 import type {
@@ -9,11 +8,11 @@ import type {
   GraphViewOptions,
   Hit,
   NodeState,
-  Tween,
 } from './graph-view-types';
 import { Scene } from './scene';
 import { DARK_THEME } from './theme';
 import type { Theme } from './theme';
+import { Viewport } from './viewport';
 
 /** State of a `GraphView` and the geometry all its parts share. */
 export abstract class GraphViewBase {
@@ -21,6 +20,7 @@ export abstract class GraphViewBase {
   protected readonly emitter = new Emitter<GraphViewEvents>();
   protected readonly metrics: FontMetrics;
   protected readonly scene: Scene;
+  protected readonly viewport = new Viewport();
 
   protected theme: Theme;
   protected editable: boolean;
@@ -32,15 +32,10 @@ export abstract class GraphViewBase {
     world: Point;
   } | null = null;
 
-  protected camera: Camera = { x: -40, y: -40, zoom: 1 };
   protected motion: boolean;
   protected conversions: () => ReadonlyArray<Conversion> | undefined;
-  protected cameraTween: Tween<Camera> | null = null;
   /** Time of the frame being drawn (for fades and pulses). */
   protected frameTime = 0;
-  protected width = 0;
-  protected height = 0;
-  protected dpr = 1;
 
   protected selection = new Set<string>();
   protected highlight = new Set<string>();
@@ -106,14 +101,14 @@ export abstract class GraphViewBase {
   /** What is under a world point (`Scene.hitTest`). */
   protected hitTest(world: Point): Hit | null {
     return this.scene.hitTest(world, {
-      zoom: this.camera.zoom,
+      zoom: this.viewport.camera.zoom,
       editable: this.editable,
       selection: this.selection,
     });
   }
 
   protected wireTolerance(): number {
-    return 8 / this.camera.zoom;
+    return 8 / this.viewport.camera.zoom;
   }
 
   protected setSelectionInternal(selection: Set<string>): void {
@@ -165,6 +160,6 @@ export abstract class GraphViewBase {
   }
 
   protected toWorld(e: MouseEvent): Point {
-    return screenToWorld(this.camera, this.clientPoint(e));
+    return screenToWorld(this.viewport.camera, this.clientPoint(e));
   }
 }

@@ -142,7 +142,7 @@ export class GraphView extends GraphViewDocument {
   }
 
   private onPointerDown(e: PointerEvent): void {
-    this.cameraTween = null;
+    this.viewport.tween = null;
     this.finishNodeMoves();
     this.canvas.focus({ preventScroll: true });
     this.canvas.setPointerCapture(e.pointerId);
@@ -155,7 +155,7 @@ export class GraphView extends GraphViewDocument {
         type: 'pinch',
         startDistance: Math.hypot(a.x - b.x, a.y - b.y),
         startMid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-        startCamera: { ...this.camera },
+        startCamera: { ...this.viewport.camera },
       };
       return;
     }
@@ -200,7 +200,7 @@ export class GraphView extends GraphViewDocument {
         this.drag = {
           type: 'pan',
           startClient: client,
-          startCamera: { ...this.camera },
+          startCamera: { ...this.viewport.camera },
           moved: false,
           button: e.button,
           tapNode: intent.tapNode,
@@ -351,7 +351,7 @@ export class GraphView extends GraphViewDocument {
     // Zoomed out, pins are too small to aim at: the node's menu instead.
     const pinTarget =
       (hit?.type === 'pin' || hit?.type === 'literal') &&
-      this.camera.zoom >= PIN_MENU_ZOOM;
+      this.viewport.camera.zoom >= PIN_MENU_ZOOM;
     switch (hit?.type) {
       case 'pin':
       case 'literal':
@@ -476,7 +476,7 @@ export class GraphView extends GraphViewDocument {
         const world = this.toWorld(e);
         const dx = world.x - drag.startWorld.x;
         const dy = world.y - drag.startWorld.y;
-        const zoom = this.camera.zoom;
+        const zoom = this.viewport.camera.zoom;
         if (!drag.moved && !pastThreshold(dx * zoom, dy * zoom)) {
           return;
         }
@@ -783,7 +783,8 @@ export class GraphView extends GraphViewDocument {
   private onWheel(e: WheelEvent): void {
     e.preventDefault();
     const anchor = this.clientPoint(e);
-    const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.height : 1;
+    const scale =
+      e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.viewport.height : 1;
     const dx = e.deltaX * scale;
     const dy = e.deltaY * scale;
     // Pinch on trackpads arrives as ctrl+wheel; classic mouse wheels send
@@ -791,14 +792,14 @@ export class GraphView extends GraphViewDocument {
     const isMouseWheel = dx === 0 && Math.abs(dy) >= 50 && Number.isInteger(dy);
     if (e.ctrlKey || e.metaKey || isMouseWheel) {
       const factor = Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0015));
-      this.setCameraInternal(zoomAt(this.camera, anchor, factor));
+      this.setCameraInternal(zoomAt(this.viewport.camera, anchor, factor));
       return;
     }
 
     this.setCameraInternal({
-      ...this.camera,
-      x: this.camera.x + dx / this.camera.zoom,
-      y: this.camera.y + dy / this.camera.zoom,
+      ...this.viewport.camera,
+      x: this.viewport.camera.x + dx / this.viewport.camera.zoom,
+      y: this.viewport.camera.y + dy / this.viewport.camera.zoom,
     });
   }
 

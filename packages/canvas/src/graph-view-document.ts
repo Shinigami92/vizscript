@@ -34,11 +34,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
   public setDocument(source: GraphDocument, positions: Positions): void {
     const now = performance.now();
     const previous = this.scene.load(source, positions);
-    for (const [id, ns] of this.scene.nodes) {
-      const before = previous.get(id);
-      this.continueMove(before, ns, now);
-      ns.appear = before?.appear;
-    }
+    this.animateLoad(previous, now);
 
     this.selection = new Set(
       [...this.selection].filter((id) => this.scene.nodes.has(id))
@@ -62,9 +58,12 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
     }
 
     this.resolveDragPins();
-    this.fadeInNewNodes(previous, now);
     this.scene.rebuildIndex();
-    if (!this.hasFramed && this.scene.nodes.size > 0 && this.width > 0) {
+    if (
+      !this.hasFramed &&
+      this.scene.nodes.size > 0 &&
+      this.viewport.width > 0
+    ) {
       this.hasFramed = true;
       this.initialView();
     }
@@ -121,7 +120,7 @@ export abstract class GraphViewDocument extends GraphViewRenderer {
   /** World point under a client (viewport) position, e.g. of a drop. */
   public worldAt(clientX: number, clientY: number): Point {
     const rect = this.canvas.getBoundingClientRect();
-    return screenToWorld(this.camera, {
+    return screenToWorld(this.viewport.camera, {
       x: clientX - rect.left,
       y: clientY - rect.top,
     });
