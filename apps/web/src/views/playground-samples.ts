@@ -249,6 +249,278 @@ fn main() {
 `,
   },
   {
+    name: 'containers.ts',
+    text: `// Every container node of TypeScript: arrays, sets, maps, records, objects.
+interface Product {
+  name: string;
+  price: number;
+  tags: string[];
+}
+
+function arrays(items: string[]): number {
+  items.push('cherry');
+  items.push('abc', ...['def', 'ghi']);
+  items.splice(1, 0, 'blueberry');
+  const first = items[0];
+  const third = items[2];
+  items[3] = 'date';
+  const second = items.at(1);
+  const lastOne = items.at(-1);
+  const count = items.length;
+  const last = items.length - 1;
+  const where = items.indexOf('banana');
+  const has = items.includes('apple');
+  items.splice(where, 1);
+  console.log(first, second, third, lastOne, items[last], has);
+
+  // #region The other array methods
+  const popped = items.pop();
+  const shifted = items.shift();
+  items.unshift('avocado');
+  const joined = items.concat(['grape']);
+  const part = items.slice(1, 3);
+  const text = items.join(', ');
+  items.reverse();
+  items.sort();
+  const sorted = items.toSorted();
+  const reversed = items.toReversed();
+  const spliced = items.toSpliced(0, 1);
+  const replaced = items.with(0, 'kiwi');
+  items.fill('x', 5);
+  items.copyWithin(0, 2);
+  const lastWhere = items.lastIndexOf('banana');
+  const found = items.find((item) => item.startsWith('a'));
+  const foundAt = items.findIndex((item) => item.startsWith('b'));
+  const foundLast = items.findLast((item) => item.length > 3);
+  const foundLastAt = items.findLastIndex((item) => item.length > 3);
+  const short = items.filter((item) => item.length < 5);
+  const lengths = items.map((item) => item.length);
+  const letters = items.flatMap((item) => item.split(''));
+  const nested = [items, ['lime']].flat();
+  items.forEach((item) => console.log(item));
+  const some = items.some((item) => item === 'apple');
+  const every = items.every((item) => item.length > 0);
+  const total = items.reduce((sum, item) => sum + item.length, 0);
+  const backwards = items.reduceRight((all, item) => all + item, '');
+  const pairs = [...items.entries()];
+  const indexes = [...items.keys()];
+  const values = [...items.values()];
+  const listed = items.toString();
+  const local = items.toLocaleString();
+  const isList = Array.isArray(items);
+  const copy = Array.from(items);
+  const made = Array.of('a', 'b');
+  console.log(popped, shifted, joined, part, text, sorted, reversed);
+  console.log(spliced, replaced, lastWhere, found, foundAt, foundLast);
+  console.log(foundLastAt, short, lengths, letters, nested, some, every);
+  console.log(total, backwards, pairs, indexes, values, listed, local);
+  console.log(isList, copy, made);
+  // #endregion
+  return count;
+}
+
+function sets(seen: Set<string>): number {
+  seen.add('apple');
+  const has = seen.has('banana');
+  seen.delete('apple');
+  const size = seen.size;
+  console.log(has);
+  seen.clear();
+  return size;
+}
+
+function maps(stock: Map<string, number>): number {
+  stock.set('apple', 3);
+  const has = stock.has('banana');
+  const apples = stock.get('apple');
+  const names = stock.keys();
+  const amounts = stock.values();
+  stock.delete('banana');
+  console.log(has, names, amounts);
+  stock.clear();
+  return apples ?? 0;
+}
+
+function records(prices: Record<string, number>): number {
+  const apple = prices['apple'];
+  return apple * 2;
+}
+
+function objects(product: Product): string {
+  const firstTag = product.tags[0];
+  return \`\${product.name}: \${product.price} (\${firstTag})\`;
+}
+
+// Typed by the checker only: \`map\` returns a \`string[]\`.
+function typedLater(products: Product[]): boolean {
+  const names = products.map((product) => product.name);
+  return names.includes('apple') && names.length > 1;
+}
+`,
+  },
+  {
+    name: 'containers.py',
+    text: `"""Every container node of Python: lists, sets, dicts, objects."""
+from dataclasses import dataclass
+
+
+@dataclass
+class Product:
+    name: str
+    price: float
+
+
+def lists(items: list[str]) -> int:
+    items.append("cherry")
+    items.insert(0, "apricot")
+    first = items[0]
+    count = len(items)
+    last = len(items) - 1
+    where = items.index("banana")
+    has = "apple" in items
+    missing = "kiwi" not in items
+    items.remove("apple")
+    items.pop(0)
+    items.extend(["fig"])
+    print(first, items[last], has, missing, where)
+    items.clear()
+    return count
+
+
+def sets(seen: set[str], other: set[str]) -> set[str]:
+    seen.add("apple")
+    seen.discard("banana")
+    seen.update(other)
+    has = "apple" in seen
+    both = seen & other
+    only = seen.difference(other)
+    print(has, both, only)
+    return seen | other
+
+
+def dicts(stock: dict[str, int]) -> int:
+    stock["apple"] = 3
+    has = "banana" in stock
+    apples = stock.get("apple")
+    pears = stock["pear"]
+    names = stock.keys()
+    amounts = stock.values()
+    stock.pop("banana")
+    print(has, pears, names, amounts)
+    return apples or 0
+
+
+def objects(product: Product) -> str:
+    return f"{product.name}: {product.price}"
+
+
+def typed_later() -> int:
+    # Typed after lowering: \`sorted\` returns a list.
+    names = sorted(["b", "a"])
+    return len(names)
+`,
+  },
+  {
+    name: 'containers.gd',
+    text: `# Every container node of GDScript: arrays, dictionaries, objects.
+# Godot has no set type.
+extends Node
+
+
+func arrays(items: Array[String]) -> int:
+	items.append("cherry")
+	items.insert(0, "apricot")
+	var first = items[0]
+	var count = items.size()
+	var last = items.size() - 1
+	var where = items.find("banana")
+	var has = items.has("apple")
+	var missing = "kiwi" not in items
+	items.erase("apple")
+	items.remove_at(0)
+	items.append_array(["fig"])
+	print(first, items[last], has, missing, where)
+	items.clear()
+	return count
+
+
+func dictionaries(stock: Dictionary[String, int]) -> int:
+	stock["apple"] = 3
+	var has = stock.has("banana")
+	var listed = "pear" in stock
+	var apples = stock.get("apple")
+	var pears = stock["pear"]
+	var names = stock.keys()
+	var amounts = stock.values()
+	stock.erase("banana")
+	print(has, listed, pears, names, amounts)
+	return apples
+
+
+func objects() -> String:
+	var product = {"name": "apple", "price": 1.5}
+	return "%s: %s" % [product.name, product.price]
+`,
+  },
+  {
+    name: 'containers.rs',
+    text: `// Every container node of Rust: vectors, sets, maps, structs.
+use std::collections::{HashMap, HashSet};
+
+struct Product {
+    name: String,
+    price: f64,
+}
+
+fn vectors(mut items: Vec<String>) -> usize {
+    items.push(String::from("cherry"));
+    items.insert(0, String::from("apricot"));
+    let first = &items[0];
+    let count = items.len();
+    let last = items.len() - 1;
+    let has = items.contains(&String::from("apple"));
+    println!("{} {} {}", first, items[last], has);
+    items.remove(0);
+    items.extend(vec![String::from("fig")]);
+    items.clear();
+    count
+}
+
+fn sets(mut seen: HashSet<u32>, other: HashSet<u32>) -> usize {
+    seen.insert(1);
+    seen.remove(&2);
+    let has = seen.contains(&1);
+    let both = &seen & &other;
+    let only = &seen - &other;
+    println!("{} {:?} {:?}", has, both, only);
+    let either = &seen | &other;
+    seen.clear();
+    either.len()
+}
+
+fn maps(mut stock: HashMap<String, u32>) -> u32 {
+    stock.insert(String::from("apple"), 3);
+    let has = stock.contains_key("banana");
+    let apples = stock.get("apple").copied().unwrap_or(0);
+    let pears = stock["pear"];
+    let names: Vec<&String> = stock.keys().collect();
+    let total: u32 = stock.values().sum();
+    println!("{} {} {:?} {}", has, pears, names, total);
+    stock.remove("banana");
+    apples
+}
+
+fn objects(product: &Product) -> String {
+    format!("{}: {}", product.name, product.price)
+}
+
+fn main() {
+    let product = Product { name: String::from("apple"), price: 1.5 };
+    println!("{}", objects(&product));
+}
+`,
+  },
+  {
     name: 'notes.md',
     text: `# Release notes
 
