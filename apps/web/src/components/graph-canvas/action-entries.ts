@@ -700,6 +700,25 @@ export function createActionEntries(
         pin.type,
         (expression) => emitOp({ type: 'setInput', pin: source, expression })
       ),
+      // The file's own functions give their result; Context Sensitive hides
+      // only those that say they return nothing or another type.
+      ...callables.value.map((callee): ActionEntry => {
+        const signature = signatureOf(callee);
+        return {
+          label: `${callee}()`,
+          category: 'Call function',
+          icon: ICON_CALL,
+          detail: signature.detail,
+          fits: fitsType(signature.returns, pin.type),
+          keywords: callee,
+          action: () =>
+            emitOp({
+              type: 'setInput',
+              pin: source,
+              expression: `${callee}()`,
+            }),
+        };
+      }),
       ...externalNames.value.map((external): ActionEntry => {
         const expression =
           external.kind === 'function'
