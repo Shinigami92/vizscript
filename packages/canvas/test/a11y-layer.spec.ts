@@ -121,6 +121,11 @@ function scene(count: number): Scene {
 
 const camera = { x: 0, y: 0, zoom: 1 };
 
+/** A call changed by `extra` (another kind, title, pins). */
+function node(extra: Partial<GraphNode>): GraphNode {
+  return { ...call('f/x'), ...extra };
+}
+
 describe('the graph as DOM', () => {
   it('names nodes, pins and inline values at their places', () => {
     const s = scene(1);
@@ -142,6 +147,66 @@ describe('the graph as DOM', () => {
     const arg = ns.geom.pins.get('arg0');
     const target = info.parts.find((p) => p.data.pin === 'arg0');
     expect(target && arg && target.x + target.width / 2).toBe(arg?.x);
+  });
+
+  it('tells equal-looking nodes and unnamed pins apart', () => {
+    const s = scene(0);
+    const label = (n: GraphNode): string[] => {
+      s.load(
+        {
+          language: 'typescript',
+          diagnostics: [],
+          functions: [
+            { id: 'f', name: 'f', range: n.range, nodes: [n], edges: [] },
+          ],
+        },
+        { [n.id]: { x: 0, y: 0 } }
+      );
+      const ns = s.nodes.get(n.id);
+      if (!ns) {
+        throw new Error('no node');
+      }
+
+      const info = describeNode(s, ns);
+      return [info.label, ...info.parts.map((p) => p.label)];
+    };
+
+    // UE's SET: the variable's name on the node and its value pin.
+    expect(
+      label(
+        node({
+          kind: 'setVar',
+          title: 'Set user',
+          pins: [pin('value', 'in'), pin('out', 'out')],
+        })
+      )
+    ).toEqual([
+      'SET (Set user)',
+      'user, number, input',
+      'result, number, output',
+    ]);
+    // `+` has no pin names: its inputs go by their ids.
+    expect(
+      label(
+        node({
+          kind: 'operator',
+          category: 'pure',
+          compact: true,
+          title: '+',
+          pins: [pin('a', 'in'), pin('b', 'in'), pin('value', 'out')],
+        })
+      )
+    ).toEqual([
+      '+',
+      'a, number, input',
+      'b, number, input',
+      'result, number, output',
+    ]);
+    expect(
+      label(
+        node({ kind: 'entry', category: 'entry', title: 'greet', pins: [] })
+      )
+    ).toEqual(['greet, entry']);
   });
 
   it('writes the nodes once, then nothing while nothing changes', () => {

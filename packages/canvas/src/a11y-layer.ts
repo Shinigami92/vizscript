@@ -1,10 +1,5 @@
 import type { GraphNode, Pin, PinGeometry } from '@vizscript/core';
-import {
-  compactTitle,
-  NODE_METRICS,
-  pinKey,
-  spreadName,
-} from '@vizscript/core';
+import { compactTitle, NODE_METRICS, pinKey, pinLabel } from '@vizscript/core';
 import type { Camera } from './camera';
 import type { NodeState } from './graph-view-types';
 import type { Scene } from './scene';
@@ -58,18 +53,37 @@ const PIN_TARGET = (NODE_METRICS.pinRadius + 3) * 2;
 /** Height of the "Add pin ⊕" button's row. */
 const ADD_PIN_HEIGHT = 16;
 
+/**
+ * The title the canvas draws, with the full one when that's a word for it
+ * (SET (Set user), ADD (push)), so equal-looking nodes can be told apart.
+ */
+function nodeTitle(node: GraphNode): string {
+  const compact = compactTitle(node);
+  if (!compact) {
+    return node.title || node.kind;
+  }
+
+  return compact !== node.title && /\w/.test(compact) && node.title
+    ? `${compact} (${node.title})`
+    : compact;
+}
+
 function nodeLabel(scene: Scene, ns: NodeState): string {
   const node = ns.node;
-  const title = compactTitle(node) || node.title || node.kind;
   const notes = [
+    node.kind === 'entry' ? 'entry' : '',
     ns.full.graphOnly ? 'not in code' : '',
     scene.problems.get(node.id) ?? '',
   ].filter(Boolean);
-  return [title, ...notes].join(', ');
+  return [nodeTitle(node), ...notes].join(', ');
 }
 
-function pinName(pin: Pin): string {
-  const name = spreadName(pin);
+/**
+ * The pin's label on the canvas; unnamed pins (compact nodes) by their id,
+ * so the two inputs of `+` are `a` and `b`.
+ */
+function pinName(node: GraphNode, pin: Pin): string {
+  const name = pinLabel(node, pin);
   if (name) {
     return name;
   }
@@ -78,13 +92,13 @@ function pinName(pin: Pin): string {
     return pin.direction === 'in' ? 'exec' : 'then';
   }
 
-  return pin.direction === 'in' ? 'value' : 'result';
+  return pin.direction === 'in' ? pin.id : 'result';
 }
 
-function pinLabel(node: GraphNode, pin: Pin, wired: boolean): string {
+function partLabel(node: GraphNode, pin: Pin, wired: boolean): string {
   const type = pin.kind === 'exec' ? 'exec' : String(pin.type);
   const side = pin.direction === 'in' ? 'input' : 'output';
-  return `${pinName(pin)}, ${type}, ${side}${wired ? ', wired' : ''}`;
+  return `${pinName(node, pin)}, ${type}, ${side}${wired ? ', wired' : ''}`;
 }
 
 /** What a node is, for the layer (world units; parts relative to it). */
@@ -123,7 +137,7 @@ function pinParts(scene: Scene, ns: NodeState, pg: PinGeometry): A11yPart[] {
   );
   const parts: A11yPart[] = [
     {
-      label: pinLabel(ns.node, pin, wired),
+      label: partLabel(ns.node, pin, wired),
       x: pg.x - PIN_TARGET / 2,
       y: pg.y - PIN_TARGET / 2,
       width: PIN_TARGET,
@@ -134,7 +148,7 @@ function pinParts(scene: Scene, ns: NodeState, pg: PinGeometry): A11yPart[] {
   const literal = scene.literalRect(ns, pg);
   if (literal && pin.literal) {
     parts.push({
-      label: `Value of ${pinName(pin)}: ${pin.literal.value}`,
+      label: `Value of ${pinName(ns.node, pin)}: ${pin.literal.value}`,
       x: literal.x - ns.x,
       y: literal.y - ns.y,
       width: literal.width,
