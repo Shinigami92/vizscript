@@ -641,6 +641,61 @@ describe('nodes made from a dragged value', () => {
     );
   });
 
+  it('writes two floating statements wired one after the other', () => {
+    const code =
+      'function f(items: string[]): number {\n  const a = 1;\n  return 0;\n}\n';
+    const made = (expression: string, name: string, group: string) => {
+      const result = floatingNodes(
+        code,
+        { type: 'setVar', name, declaration: 'const', value: expression },
+        'fn:f',
+        group,
+        backend
+      );
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+
+      return result.edit;
+    };
+    const count = made('items.length', 'count', 'g1');
+    const last = made('items.length - 1', 'last', 'g2');
+    const set = (group: typeof count, name: string): string =>
+      group.nodes.find((n) => n.title === `Set ${name}`)?.id ?? '';
+    const parsed = parseTypeScript(code).functions.flatMap((f) => f.nodes);
+    const setA = parsed.find((n) => n.title === 'Set a')?.id ?? '';
+    const ret = parsed.find((n) => n.kind === 'return')?.id ?? '';
+    // Wired like a user does, each wire replacing the one it takes over.
+    const connect = (o: GraphOverlay, from: PinRef, to: PinRef): GraphOverlay =>
+      edit(code, o, { type: 'connect', from, to });
+    let overlay: GraphOverlay = { edits: [count] };
+    overlay = connect(
+      overlay,
+      { node: set(count, 'count'), pin: 'then' },
+      { node: ret, pin: 'exec' }
+    );
+    overlay = { edits: [...overlay.edits, last] };
+    overlay = connect(
+      overlay,
+      { node: set(count, 'count'), pin: 'then' },
+      { node: set(last, 'last'), pin: 'exec' }
+    );
+    overlay = connect(
+      overlay,
+      { node: set(last, 'last'), pin: 'then' },
+      { node: ret, pin: 'exec' }
+    );
+    overlay = connect(
+      overlay,
+      { node: setA, pin: 'then' },
+      { node: set(count, 'count'), pin: 'exec' }
+    );
+    const result = resolveOverlay(code, overlay, backend);
+    expect(result.status === 'synced' && result.text).toBe(
+      'function f(items: string[]): number {\n  const a = 1;\n  const count = items.length;\n  const last = items.length - 1;\n  return 0;\n}\n'
+    );
+  });
+
   it('types floating nodes in the copy they were made in', () => {
     const floating = floatingNodes(
       source,

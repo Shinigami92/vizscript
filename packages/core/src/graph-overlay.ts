@@ -102,23 +102,26 @@ function edgeKey(e: { from: PinRef; to: PinRef }): string {
 }
 
 /**
- * Drops floating nodes that were deleted again, with every edit of them:
- * they never reach the code.
+ * Drops floating nodes that were deleted again, with every edit of them
+ * (they never reach the code), and wires a later wire took the place of
+ * (an exec output or an input takes one wire, like `applyOverlay` draws
+ * them): once the later one is written, the earlier would cut it again.
  */
 export function compactOverlay(overlay: GraphOverlay): GraphOverlay {
+  const kept = withoutReplacedWires(overlay);
   const removed = new Set(
-    overlay.edits.flatMap((e) =>
+    kept.edits.flatMap((e) =>
       e.type === 'removeNode' ? [floatingGroup(e.node)] : []
     )
   );
   removed.delete(undefined);
   if (removed.size === 0) {
-    return overlay;
+    return kept;
   }
 
   const gone = (id: string): boolean => removed.has(floatingGroup(id));
   return {
-    edits: overlay.edits.filter((e) => {
+    edits: kept.edits.filter((e) => {
       switch (e.type) {
         case 'addNodes': {
           return !removed.has(e.id);
@@ -134,6 +137,21 @@ export function compactOverlay(overlay: GraphOverlay): GraphOverlay {
       }
     }),
   };
+}
+
+/** The overlay without wires a later wire replaces (the same overlay if none). */
+function withoutReplacedWires(overlay: GraphOverlay): GraphOverlay {
+  const replaced = (edit: GraphEdit, i: number): boolean =>
+    edit.type === 'addEdge' &&
+    overlay.edits.some(
+      (later, j) =>
+        j > i &&
+        later.type === 'addEdge' &&
+        ((later.kind === 'exec' && sameRef(edit.from, later.from)) ||
+          sameRef(edit.to, later.to))
+    );
+  const edits = overlay.edits.filter((e, i) => !replaced(e, i));
+  return edits.length === overlay.edits.length ? overlay : { edits };
 }
 
 /** Whether the overlay changes nothing. */
