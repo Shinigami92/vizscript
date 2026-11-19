@@ -11,6 +11,8 @@ import {
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
+import { rustDependencies } from '../../graph/cargo-project';
+import { crateModule, crateStubs } from '../../graph/crate-types';
 import type { GraphClient } from '../../graph/graph-client';
 import { languageOf } from '../../graph/languages';
 import { packageVersion } from '../../graph/npm-project';
@@ -368,8 +370,48 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
   }
 
   /**
+   * Exports of a module of a Rust crate (`nom::bytes::complete`): the
+   * crate's API as Rust declarations (from docs.rs through the server), in
+   * the version of `Cargo.lock`, parsed like a file. The crate is found by
+   * the name the code uses (a renamed dependency's `alias`).
+   */
+  async function rustExports(module: string): Promise<ScriptSymbol[]> {
+    const found = crateModule(module);
+    if (!found) {
+      return [];
+    }
+
+    const dependency = (
+      await rustDependencies(props.files, props.readFile, props.path)
+    ).find((d) => (d.alias ?? d.name).replaceAll('-', '_') === found.crate);
+    if (!dependency || dependency.local) {
+      return [];
+    }
+
+    const version =
+      dependency.version ??
+      (/^[\w.^~<>=*, -]+$/.test(dependency.range)
+        ? dependency.range
+        : 'latest');
+    const stubs = await crateStubs(dependency.name, version);
+    const declarations = stubs?.modules[found.path];
+    if (!declarations) {
+      return [];
+    }
+
+    const parsed = await client.parse(
+      declarations,
+      `${found.crate}.rs`,
+      undefined,
+      { background: true }
+    );
+    return exportedSymbols(parsed, declarations);
+  }
+
+  /**
    * Exports of a library module: Python's standard library (typeshed and
-   * the backend's stubs), npm packages (`.d.ts` files from jsDelivr).
+   * the backend's stubs), npm packages (`.d.ts` files from jsDelivr), Rust
+   * crates (docs.rs through the server).
    */
   function libraryExports(module: string): Promise<ScriptSymbol[]> {
     // Stubs differ between Python versions.
@@ -380,6 +422,10 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
         const language = languageOf(props.path);
         if (language === 'python' && !module.startsWith('.')) {
           return pythonExports(module);
+        }
+
+        if (language === 'rust') {
+          return rustExports(module);
         }
 
         const name = packageName(module);
