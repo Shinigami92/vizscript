@@ -5,7 +5,10 @@ import {
   Inject,
   Injectable,
 } from '@nestjs/common';
-import type { TypeCacheStats } from '@vizscript/api-contract';
+import type {
+  PackageSearchResult,
+  TypeCacheStats,
+} from '@vizscript/api-contract';
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { promisify } from 'node:util';
@@ -14,6 +17,8 @@ import type { AppConfig } from '../config/config';
 import { APP_CONFIG } from '../config/config';
 import { DB } from '../database/database.module';
 import type { Database } from '../database/schema';
+import type { Ecosystem } from './package-search';
+import { searchResults, searchUrl } from './package-search';
 import { rustdocStubs } from './rustdoc';
 import type { TypeSource } from './type-sources';
 import { pickWheel, wheelTypes } from './wheel';
@@ -49,6 +54,8 @@ const EVICT_EVERY_MS = 30_000;
  */
 export const MISS_LIMIT = 5000;
 const MISS_WINDOW_MS = 10 * 60 * 1000;
+/** A registry search is asked again after this long. */
+const SEARCH_TTL_MS = 10 * 60 * 1000;
 
 /**
  * The type registry's cache: library type files and listings fetched once
@@ -61,6 +68,10 @@ const MISS_WINDOW_MS = 10 * 60 * 1000;
 export class TypeCacheService {
   private readonly inFlight = new Map<string, Promise<CachedType>>();
   private readonly misses = new Map<string, { count: number; since: number }>();
+  private readonly searches = new Map<
+    string,
+    { at: number; results: PackageSearchResult[] }
+  >();
   private lastEviction = 0;
   private hits = 0;
   private fetches = 0;
@@ -104,6 +115,55 @@ export class TypeCacheService {
     }
 
     return pending;
+  }
+
+  /**
+   * Libraries matching `query` in a registry (cached in memory for 10
+   * minutes; a search counts like a file fetch for the per-client limit).
+   */
+  public async search(
+    ecosystem: Ecosystem,
+    query: string,
+    client: string
+  ): Promise<PackageSearchResult[]> {
+    const url = searchUrl(ecosystem, query, this.config.typeUpstream);
+    if (!url) {
+      return [];
+    }
+
+    const now = Date.now();
+    const cached = this.searches.get(url);
+    if (cached && now - cached.at < SEARCH_TTL_MS) {
+      return cached.results;
+    }
+
+    this.countMiss(client, now);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        // crates.io asks every client to name itself.
+        headers: { 'user-agent': 'vizscript (library type registry)' },
+      });
+    } catch {
+      throw new BadGatewayException('The registry is not reachable');
+    }
+
+    if (!response.ok && response.status !== 404) {
+      await response.body?.cancel();
+      throw new BadGatewayException(`The registry answered ${response.status}`);
+    }
+
+    const results =
+      response.status === 404
+        ? []
+        : searchResults(ecosystem, await response.json());
+    if (this.searches.size > 500) {
+      this.searches.clear();
+    }
+
+    this.searches.set(url, { at: now, results });
+    return results;
   }
 
   /** How full the cache is, and how often it answered since the start. */

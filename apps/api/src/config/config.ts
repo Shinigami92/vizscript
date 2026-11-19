@@ -28,6 +28,8 @@ export interface AppConfig {
     docs: string;
     pypi: string;
     pypiFiles: string;
+    npmRegistry: string;
+    crates: string;
   };
 }
 
@@ -119,6 +121,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       pypiFiles: `${withoutSlash(
         env.TYPE_PYPI_FILES_URL ?? 'https://files.pythonhosted.org'
       )}/`,
+      npmRegistry: `${withoutSlash(
+        env.TYPE_NPM_REGISTRY_URL ?? 'https://registry.npmjs.org'
+      )}/`,
+      crates: `${withoutSlash(env.TYPE_CRATES_URL ?? 'https://crates.io')}/`,
     },
   };
 }

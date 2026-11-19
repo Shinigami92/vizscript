@@ -58,6 +58,16 @@ const pypiFiles: Record<string, Buffer> = {
   }),
 };
 
+/** The registries' search answers. */
+const searchFiles: Record<string, string> = {
+  [`/npm-registry/-/v1/search?text=${pkg}&size=20`]: JSON.stringify({
+    objects: [{ package: { name: pkg, version: '2.0.0' } }],
+  }),
+  [`/crates-io/api/v1/crates?q=${pkg}&per_page=20`]: JSON.stringify({
+    crates: [{ name: pkg, max_stable_version: '0.3.0' }],
+  }),
+};
+
 /** docs.rs serves rustdoc JSON compressed with zstd. */
 const crateFiles: Record<string, Buffer> = {
   [`/docs/crate/${pkg}/1.2.3/json`]: zstdCompressSync(
@@ -90,6 +100,7 @@ describe.skipIf(!databaseUrl)('type registry (e2e)', () => {
         );
       const body =
         upstreamFiles[url] ??
+        searchFiles[url] ??
         crateFiles[url] ??
         (url.endsWith('.whl')
           ? pypiFiles[url]
@@ -119,6 +130,8 @@ describe.skipIf(!databaseUrl)('type registry (e2e)', () => {
         docs: `${base}/docs/`,
         pypi: `${base}/pypi-api/`,
         pypiFiles: `${base}/pypi-files/`,
+        npmRegistry: `${base}/npm-registry/`,
+        crates: `${base}/crates-io/`,
       },
     };
     app = await createApp(config, { logger: false });
@@ -227,6 +240,30 @@ describe.skipIf(!databaseUrl)('type registry (e2e)', () => {
     expect(
       (await get(app, `/api/types/pypi?name=${pkg}&version=0.1.0`)).statusCode
     ).toBe(404);
+  });
+
+  it('searches the registries for libraries to add', async () => {
+    const npm = await get(app, `/api/types/search?ecosystem=npm&q=${pkg}`);
+    expect(npm.json()).toEqual([{ name: pkg, version: '2.0.0' }]);
+    const crates = await get(
+      app,
+      `/api/types/search?ecosystem=crates&q=${pkg}`
+    );
+    expect(crates.json()).toEqual([{ name: pkg, version: '0.3.0' }]);
+    // Asked once: the second search comes from memory.
+    await get(app, `/api/types/search?ecosystem=npm&q=${pkg}`);
+    expect(
+      upstreamRequests.get(`/npm-registry/-/v1/search?text=${pkg}&size=20`)
+    ).toBe(1);
+    // PyPI by exact name; an unknown one finds nothing.
+    const pypi = await get(
+      app,
+      `/api/types/search?ecosystem=pypi&q=${pkg}-nope`
+    );
+    expect(pypi.json()).toEqual([]);
+    expect(
+      (await get(app, '/api/types/search?ecosystem=maven&q=x')).statusCode
+    ).toBe(400);
   });
 
   it('reports how full the cache is', async () => {

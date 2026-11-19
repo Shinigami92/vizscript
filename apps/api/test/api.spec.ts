@@ -146,6 +146,8 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
         docs: 'http://127.0.0.1:9/',
         pypi: 'http://127.0.0.1:9/',
         pypiFiles: 'http://127.0.0.1:9/',
+        npmRegistry: 'http://127.0.0.1:9/',
+        crates: 'http://127.0.0.1:9/',
       },
     };
     app = await createApp(config, {

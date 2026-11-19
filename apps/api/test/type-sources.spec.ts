@@ -13,6 +13,8 @@ const UPSTREAM = {
   docs: 'https://docs.rs/',
   pypi: 'https://pypi.org/',
   pypiFiles: 'https://files.pythonhosted.org/',
+  npmRegistry: 'https://registry.npmjs.org/',
+  crates: 'https://crates.io/',
 };
 const COMMIT = 'f0512c2d5d5d319570d2517d74419633c0174ec2';
 

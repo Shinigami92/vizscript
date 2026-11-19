@@ -8,10 +8,15 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import type { TypeCacheStats } from '@vizscript/api-contract';
+import type {
+  PackageSearchResult,
+  TypeCacheStats,
+} from '@vizscript/api-contract';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppConfig } from '../config/config';
 import { APP_CONFIG } from '../config/config';
+import type { Ecosystem } from './package-search';
+import { ECOSYSTEMS } from './package-search';
 import type { CachedType } from './type-cache.service';
 import { TypeCacheService } from './type-cache.service';
 import type { TypeSource } from './type-sources';
@@ -85,6 +90,20 @@ export class TypesController {
       this.config.typeUpstream
     );
     return this.serve(source, request, reply, 'application/json');
+  }
+
+  /** Libraries to add: `?ecosystem=npm|crates|pypi&q=…`. */
+  @Get('search')
+  public search(
+    @Query('ecosystem') ecosystem: string | undefined,
+    @Query('q') query: string | undefined,
+    @Req() request: FastifyRequest
+  ): Promise<PackageSearchResult[]> {
+    if (!ECOSYSTEMS.includes(ecosystem as Ecosystem)) {
+      throw new BadRequestException('Unknown ecosystem');
+    }
+
+    return this.cache.search(ecosystem as Ecosystem, query ?? '', request.ip);
   }
 
   @Get('stats')

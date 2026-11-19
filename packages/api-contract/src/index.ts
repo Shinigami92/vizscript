@@ -161,3 +161,10 @@ export interface ApiError {
   /** Set on 401 answers. */
   code?: AuthErrorCode;
 }
+
+/** A library found by `GET /api/types/search` (latest stable version). */
+export interface PackageSearchResult {
+  name: string;
+  version: string;
+  description?: string;
+}
