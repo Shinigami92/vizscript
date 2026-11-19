@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TreeEntry } from '@vizscript/api-contract';
 import { useEventListener } from '@vueuse/core';
-import { computed, ref, shallowRef, watch } from 'vue';
+import { computed, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
@@ -256,6 +256,9 @@ async function save(): Promise<void> {
   }
 }
 
+const workspace =
+  useTemplateRef<InstanceType<typeof ScriptWorkspace>>('workspace');
+
 function discard(): void {
   // Drops every unsaved change of the file at once: ask first.
   if (
@@ -264,6 +267,7 @@ function discard(): void {
       `Discard all changes to ${shown.value ?? 'this file'}? This can't be undone.`
     )
   ) {
+    workspace.value?.discardLayout();
     discardChanges();
   }
 }
@@ -487,6 +491,7 @@ function dropOutdatedEdits(): void {
     </Teleport>
 
     <ScriptWorkspace
+      ref="workspace"
       v-if="project && shown !== null && saved !== null"
       :key="`${id}:${shown}:${version}`"
       v-model:text="text"

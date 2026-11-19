@@ -73,6 +73,7 @@ import type {
 import { useCheckerTypes } from './script-workspace/use-checker-types';
 import { useCodeGraphSync } from './script-workspace/use-code-graph-sync';
 import { useDefinitions } from './script-workspace/use-definitions';
+import { useDraftLayout } from './script-workspace/use-draft-layout';
 import { useFocusMode } from './script-workspace/use-focus-mode';
 import { useGraphOverlay } from './script-workspace/use-graph-overlay';
 import { useImports } from './script-workspace/use-imports';
@@ -349,6 +350,17 @@ const {
   },
   props.overlay
 );
+
+const layoutLoaded = ref(false);
+const draftLayout = useDraftLayout({
+  key: () => props.stateKey,
+  baseText: () => props.baseText,
+  text: () => text.value,
+  hasOverlay: () => overlay.value.edits.length > 0,
+  pinned,
+  loaded: () => layoutLoaded.value,
+  applyLayoutPatch,
+});
 
 const { movePinned, freezeLayout } = usePinnedLayout({
   pinned,
@@ -648,6 +660,8 @@ async function reparse(): Promise<void> {
     }
   }
 
+  draftLayout.afterParse();
+
   placedLayout.afterParse(written !== null);
   if (role !== 'earlier') {
     // Wired from a SET's output: the new Get is drawn as that wire (UE).
@@ -873,11 +887,17 @@ onMounted(async () => {
     }
   }
 
+  layoutLoaded.value = true;
+
   await reparse();
   await restoreLoose();
 });
 
-defineExpose({ frameAll: () => canvas.value?.frameAll() });
+defineExpose({
+  frameAll: () => canvas.value?.frameAll(),
+  /** The draft is being discarded: its layout goes with it. */
+  discardLayout: () => draftLayout.discard(),
+});
 </script>
 
 <template>

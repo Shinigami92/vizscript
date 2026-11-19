@@ -127,6 +127,7 @@ const DAY = 24 * 60 * 60 * 1000;
 /** How long entries of each kind are kept after they were last written. */
 const KEEP: ReadonlyArray<{ prefix: string; days: number }> = [
   { prefix: 'vizscript:draft:', days: 90 },
+  { prefix: 'vizscript:draft-layout:', days: 90 },
   { prefix: 'vizscript:tree:', days: 90 },
   { prefix: 'vizscript:layout:', days: 180 },
   { prefix: 'vizscript:camera:', days: 60 },
@@ -134,7 +135,11 @@ const KEEP: ReadonlyArray<{ prefix: string; days: number }> = [
 ];
 
 /** Entries holding unsaved work. */
-const UNSAVED = new Set(['vizscript:draft:', 'vizscript:tree:']);
+const UNSAVED = new Set([
+  'vizscript:draft:',
+  'vizscript:draft-layout:',
+  'vizscript:tree:',
+]);
 
 /**
  * Removes per-file entries not written for a long time (`aggressive`: a

@@ -5,7 +5,7 @@ import type {
   TreeResponse,
 } from '@vizscript/api-contract';
 import { until, useDebounceFn } from '@vueuse/core';
-import { computed, ref, shallowRef, watch } from 'vue';
+import { computed, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '../api/client';
 import { repoSource } from '../api/repo-source';
@@ -460,6 +460,9 @@ const remember = useDebounceFn(() => {
 }, 600);
 watch([() => tree.value, path], () => void remember(), { immediate: true });
 
+const workspace =
+  useTemplateRef<InstanceType<typeof ScriptWorkspace>>('workspace');
+
 function discard(): void {
   // Drops every local change of the file at once: ask first.
   if (
@@ -468,6 +471,7 @@ function discard(): void {
       `Discard all changes to ${file.value.path}? This can't be undone.`
     )
   ) {
+    workspace.value?.discardLayout();
     discardChanges();
   }
 }
@@ -617,6 +621,7 @@ function dropOutdatedEdits(): void {
     </Teleport>
 
     <ScriptWorkspace
+      ref="workspace"
       v-if="file"
       :key="`${ref_}:${file.path}:${file.version}`"
       v-model:text="text"
