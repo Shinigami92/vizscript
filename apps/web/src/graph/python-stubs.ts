@@ -94,6 +94,53 @@ export function typeshedPaths(
   );
 }
 
+/**
+ * Where stub files come from: typeshed (by default), or the typed files of
+ * one package's wheel (`packageSource`).
+ */
+export interface StubSource {
+  /** All files there are, if known. */
+  files: () => Promise<ReadonlySet<string> | undefined>;
+  text: (path: string) => Promise<string | undefined>;
+  /** Files that may hold `module`, in the order to try them. */
+  paths: (module: string, files: ReadonlySet<string> | undefined) => string[];
+  /** Endings of a module's file, in order (`.pyi`, `/__init__.pyi`). */
+  endings: ReadonlyArray<string>;
+  /** Folder the files are parsed as being in (for their names). */
+  prefix: string;
+}
+
+const STUB_ENDINGS = ['.pyi', '/__init__.pyi'];
+
+const TYPESHED_SOURCE: StubSource = {
+  files: () => typeshedFiles(),
+  text: (path) => fetchText(`${TYPESHED}${path}`),
+  paths: typeshedPaths,
+  endings: STUB_ENDINGS,
+  prefix: 'typeshed/',
+};
+
+/**
+ * A package's own typed files (PEP 561: `.pyi` before `.py`), by their path
+ * in its wheel (`httpx/_client.py`).
+ */
+export function packageSource(
+  files: Readonly<Record<string, string>>
+): StubSource {
+  const endings = [...STUB_ENDINGS, '.py', '/__init__.py'];
+  const names = new Set(Object.keys(files));
+  return {
+    files: () => Promise.resolve(names),
+    text: (path) => Promise.resolve(files[path]),
+    paths: (module) =>
+      endings
+        .map((ending) => `${module.replaceAll('.', '/')}${ending}`)
+        .filter((path) => names.has(path)),
+    endings,
+    prefix: 'site-packages/',
+  };
+}
+
 /** The module a relative import of the stub at `path` names (`.api`). */
 export function relativeModule(path: string, module: string): string {
   const dots = module.match(/^\.+/)?.[0].length ?? 0;
@@ -153,16 +200,17 @@ export class TypeshedStubs {
     private readonly parse: (
       text: string,
       fileName: string
-    ) => Promise<GraphDocument>
+    ) => Promise<GraphDocument>,
+    private readonly source: StubSource = TYPESHED_SOURCE
   ) {}
 
   /** Exports of `module`; none when typeshed has no stub of it. */
   public async exportsOf(module: string): Promise<ScriptSymbol[]> {
     const files = await this.listing();
-    for (const path of typeshedPaths(module, files)) {
+    for (const path of this.source.paths(module, files)) {
       const loaded = await this.loadAll(path, files);
       if (loaded.has(path)) {
-        return resolve(path, loaded, files, []);
+        return resolve(path, loaded, files, [], this.source.endings);
       }
     }
 
@@ -171,7 +219,7 @@ export class TypeshedStubs {
 
   /** All files of typeshed (`stdlib/json/__init__.pyi`), if listed. */
   private listing(): Promise<ReadonlySet<string> | undefined> {
-    this.files ??= typeshedFiles();
+    this.files ??= this.source.files();
     return this.files;
   }
 
@@ -193,7 +241,12 @@ export class TypeshedStubs {
 
         loaded.set(at, stub);
         for (const { module } of stub.imports) {
-          for (const file of candidates(at, module, files)) {
+          for (const file of candidates(
+            at,
+            module,
+            files,
+            this.source.endings
+          )) {
             if (!loaded.has(file)) {
               next.add(file);
             }
@@ -219,7 +272,7 @@ export class TypeshedStubs {
   }
 
   private async read(path: string): Promise<StubFile | undefined> {
-    const raw = await fetchText(`${TYPESHED}${path}`);
+    const raw = await this.source.text(path);
     if (raw === undefined) {
       return undefined;
     }
@@ -228,7 +281,7 @@ export class TypeshedStubs {
     // Parsed as Python (`.pyi` files aren't opened like code).
     const doc = await this.parse(
       text,
-      `typeshed/${path.replace(/\.pyi$/, '.py')}`
+      `${this.source.prefix}${path.replace(/\.pyi$/, '.py')}`
     );
     return { own: exportedSymbols(doc, text), imports: reexports(doc, text) };
   }
@@ -238,12 +291,13 @@ export class TypeshedStubs {
 function candidates(
   path: string,
   module: string,
-  files: ReadonlySet<string> | undefined
+  files: ReadonlySet<string> | undefined,
+  endings: ReadonlyArray<string>
 ): string[] {
   const target = relativeModule(path, module);
-  return [`${target}.pyi`, `${target}/__init__.pyi`].filter(
-    (file) => file !== path && (!files || files.has(file))
-  );
+  return endings
+    .map((ending) => `${target}${ending}`)
+    .filter((file) => file !== path && (!files || files.has(file)));
 }
 
 /** Exports of a loaded stub with its re-exports; `chain` breaks cycles. */
@@ -251,7 +305,8 @@ function resolve(
   path: string,
   loaded: ReadonlyMap<string, StubFile>,
   files: ReadonlySet<string> | undefined,
-  chain: ReadonlyArray<string>
+  chain: ReadonlyArray<string>,
+  endings: ReadonlyArray<string>
 ): ScriptSymbol[] {
   const stub = loaded.get(path);
   if (!stub) {
@@ -261,10 +316,12 @@ function resolve(
   const result = [...stub.own];
   const names = new Set(result.map((s) => s.name));
   for (const { module, imported } of stub.imports) {
-    const file = candidates(path, module, files).find(
+    const file = candidates(path, module, files, endings).find(
       (f) => loaded.has(f) && !chain.includes(f)
     );
-    const from = file ? resolve(file, loaded, files, [...chain, path]) : [];
+    const from = file
+      ? resolve(file, loaded, files, [...chain, path], endings)
+      : [];
     for (const s of from) {
       if ((imported === '*' || s.name === imported) && !names.has(s.name)) {
         names.add(s.name);
