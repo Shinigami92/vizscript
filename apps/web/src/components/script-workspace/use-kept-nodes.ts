@@ -16,6 +16,7 @@ import {
   floatingPrefix,
   looseCode,
   renamedNodes,
+  withImplicitSelf,
 } from '@vizscript/core';
 import type { Ref } from 'vue';
 import type { GraphClient } from '../../graph/graph-client';
@@ -113,8 +114,14 @@ export function useKeptNodes(deps: {
       return;
     }
 
+    // Drawn as the canvas draws them: `this` Gets of an implicit `self`
+    // (a Target box) are no nodes to select, so not left behind either.
     const drawn = new Set(
-      deps.drawnDoc()?.functions.flatMap((f) => f.nodes.map((n) => n.id)) ?? []
+      deps
+        .drawnDoc()
+        ?.functions.flatMap((f) =>
+          withImplicitSelf(f).nodes.map((n) => n.id)
+        ) ?? []
     );
     const all = previous.functions.flatMap((f) => f.nodes);
     const places: Record<string, Point> = {};

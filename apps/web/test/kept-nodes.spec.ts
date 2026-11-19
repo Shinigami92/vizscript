@@ -97,6 +97,21 @@ const LOG =
   'declare function log(v: unknown): void;\nfunction f() {\n  log([{ a: 1 }, { b: 2 }]);\n}\n';
 
 describe('nodes an edit leaves behind', () => {
+  it('leaves no `this` behind when every drawn node is deleted', async () => {
+    const { run } = setup(
+      'class A {\n  b(n: number): number {\n    return n;\n  }\n  c(): number {\n    return this.b(1);\n  }\n}\n'
+    );
+    // Select all: `this` of `this.b` is drawn as `b`'s Target box.
+    const kept = await run((doc) => ({
+      type: 'deleteNodes',
+      nodeIds: doc.functions
+        .flatMap((f) => f.nodes)
+        .filter((n) => n.kind !== 'entry' && n.title !== 'this')
+        .map((n) => n.id),
+    }));
+    expect(kept).toBeUndefined();
+  });
+
   it('keeps the body of a deleted loop as loose nodes at their places', async () => {
     const { run, places } = setup(
       'declare function g(n: number): void;\nfunction f(items: number[]) {\n  for (const item of items) {\n    if (item > 0) {\n      g(item);\n    }\n  }\n}\n'
@@ -151,6 +166,14 @@ describe('nodes an edit leaves behind', () => {
         .filter((n) => n.title === 'g')
         .map((n) => n.id),
     }));
+    console.log(
+      'KEPT',
+      JSON.stringify(
+        kept?.after.edits.map((e) =>
+          e.type === 'addNodes' ? [e.code, e.fnId] : e.type
+        )
+      )
+    );
     expect(kept).toBeUndefined();
   });
 
