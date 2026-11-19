@@ -68,6 +68,7 @@ export function declarations(
     setTypeParams,
     identifier: /^[A-Za-z_$][\w$]*$/,
     keywords: KEYWORDS,
+    keywordMembers: true,
     defaultIndent: '  ',
     blankLines: 1,
     bracedClasses: true,

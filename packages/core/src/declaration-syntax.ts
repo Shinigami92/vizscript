@@ -13,6 +13,11 @@ export interface DeclarationSyntax {
   identifier: RegExp;
   /** Reserved words that cannot be names. */
   keywords: ReadonlySet<string>;
+  /**
+   * Members of classes and interfaces may be named like reserved words
+   * (`repo.private` in TypeScript).
+   */
+  keywordMembers?: boolean;
   /** Indentation of a new file (`'    '` in Python). */
   defaultIndent: string;
   /** Blank lines around functions (2 in Python and GDScript). */

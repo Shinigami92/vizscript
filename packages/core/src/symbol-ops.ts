@@ -8,6 +8,25 @@ import type { ScriptSymbol } from './symbols';
 import { holdsFields, qualifiedName } from './symbols';
 import { lineIndent, lineStart } from './text-utils';
 
+/**
+ * Whether a name in `scope` is a member of a class or interface, not a
+ * binding: parameter properties (`constructor(private x)`) are bindings too.
+ */
+function isMember(
+  doc: GraphDocument,
+  scope: string,
+  symbol: ScriptSymbol | undefined
+): boolean {
+  return (
+    scope !== '' &&
+    !symbol?.modifiers.includes('constructor') &&
+    (doc.symbols ?? []).some(
+      (s) =>
+        (s.kind === 'class' || s.kind === 'type') && qualifiedName(s) === scope
+    )
+  );
+}
+
 /** Checks a new name: valid, not reserved, not taken in its scope. */
 export function checkName(
   doc: GraphDocument,
@@ -20,7 +39,10 @@ export function checkName(
     return `"${name}" is not a valid name.`;
   }
 
-  if (syntax.keywords.has(name)) {
+  if (
+    syntax.keywords.has(name) &&
+    !(syntax.keywordMembers && isMember(doc, scope, except))
+  ) {
     return `"${name}" is a reserved word.`;
   }
 

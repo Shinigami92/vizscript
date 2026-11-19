@@ -47,6 +47,23 @@ describe('typescript rename', () => {
     );
   });
 
+  it('allows reserved words as member names, not as bindings', () => {
+    const text =
+      'interface R {\n  flag: boolean;\n}\nclass C {\n  constructor(private readonly x: number) {}\n  y = 1;\n}\nconst r: R = { flag: true };\nr.flag;\n';
+    expect(rename('a.ts', text, 'variable', 'flag', 'private', 'R')).toContain(
+      '  private: boolean;\n'
+    );
+    expect(rename('a.ts', text, 'variable', 'y', 'class', 'C')).toContain(
+      '  class = 1;\n'
+    );
+    expect(() => rename('a.ts', text, 'variable', 'x', 'class', 'C')).toThrow(
+      '"class" is a reserved word.'
+    );
+    expect(() => rename('a.ts', text, 'constant', 'r', 'class')).toThrow(
+      '"class" is a reserved word.'
+    );
+  });
+
   it('renames components in JSX tags', () => {
     expect(
       rename(
