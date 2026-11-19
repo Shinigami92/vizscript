@@ -12,8 +12,13 @@ import {
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
-import { rustDependencies } from '../../graph/cargo-project';
-import { crateModule, crateStubs, usePath } from '../../graph/crate-types';
+import { ownLibrary, rustDependencies } from '../../graph/cargo-project';
+import {
+  crateModule,
+  crateStubs,
+  moduleFiles,
+  usePath,
+} from '../../graph/crate-types';
 import type { GraphClient } from '../../graph/graph-client';
 import { languageOf } from '../../graph/languages';
 import { pythonDistribution } from '../../graph/module-info';
@@ -479,6 +484,16 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     const found = crateModule(module);
     if (!found) {
       return [];
+    }
+
+    // The crate's own library, as its binaries and tests name it
+    // (`hsml::parser`): a file of the repository.
+    const own = await ownLibrary(props.files, props.readFile, props.path);
+    if (own?.name === found.crate) {
+      const file = moduleFiles(own.root, found.path).find((f) =>
+        props.files?.has(f)
+      );
+      return file ? exportsOf(file) : [];
     }
 
     const dependency = (

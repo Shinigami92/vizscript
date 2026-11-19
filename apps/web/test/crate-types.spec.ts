@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { crateModule, usePath } from '../src/graph/crate-types';
+import { crateModule, moduleFiles, usePath } from '../src/graph/crate-types';
 
 describe('crateModule', () => {
   it('splits a use path into the crate and the module inside it', () => {
@@ -42,5 +42,15 @@ describe('usePath', () => {
   it('keeps paths whose head is no use', () => {
     expect(usePath('serde_json::Value', uses)).toBe('serde_json::Value');
     expect(usePath('overrides', uses)).toBe('overrides');
+  });
+});
+
+describe('moduleFiles', () => {
+  it('finds a module next to the crate root', () => {
+    expect(moduleFiles('src/lib.rs', 'parser::tag')).toEqual([
+      'src/parser/tag.rs',
+      'src/parser/tag/mod.rs',
+    ]);
+    expect(moduleFiles('src/lib.rs', '')).toEqual(['src/lib.rs']);
   });
 });

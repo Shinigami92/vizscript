@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cargoDependencies,
   cargoLockVersions,
+  ownLibrary,
   rustDependencies,
 } from '../src/graph/cargo-project';
 
@@ -100,5 +101,53 @@ describe('Cargo manifests', () => {
       ['serde_json', '1', '1.0.128'],
       ['shared', '*', undefined],
     ]);
+  });
+});
+
+function library(
+  files: Record<string, string>,
+  path: string
+): ReturnType<typeof ownLibrary> {
+  return ownLibrary(
+    new Set(Object.keys(files)),
+    async (p) => files[p] ?? '',
+    path
+  );
+}
+
+describe('ownLibrary', () => {
+  it('names the library by the package, with _ for -', async () => {
+    expect(
+      await library(
+        {
+          'Cargo.toml': '[package]\nname = "my-tool"\n',
+          'src/lib.rs': '',
+          'src/main.rs': '',
+        },
+        'src/cli/run.rs'
+      )
+    ).toEqual({ name: 'my_tool', root: 'src/lib.rs' });
+  });
+
+  it('follows [lib] name and path', async () => {
+    expect(
+      await library(
+        {
+          'crates/x/Cargo.toml':
+            '[package]\nname = "x"\n\n[lib]\nname = "xlib"\npath = "src/x.rs"\n',
+          'crates/x/src/x.rs': '',
+        },
+        'crates/x/src/main.rs'
+      )
+    ).toEqual({ name: 'xlib', root: 'crates/x/src/x.rs' });
+  });
+
+  it('is undefined for a crate without a library', async () => {
+    expect(
+      await library(
+        { 'Cargo.toml': '[package]\nname = "app"\n', 'src/main.rs': '' },
+        'src/main.rs'
+      )
+    ).toBeUndefined();
   });
 });

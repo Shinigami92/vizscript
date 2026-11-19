@@ -215,3 +215,52 @@ export async function rustDependencies(
   projects.set(manifest, { key, dependencies });
   return dependencies;
 }
+
+/** The library target of a crate, as code of its binaries names it. */
+export interface OwnLibrary {
+  /** `[lib] name`, else the package's name with `_` for `-`. */
+  name: string;
+  /** Its root file (`[lib] path`, else `src/lib.rs`). */
+  root: string;
+}
+
+/**
+ * The library of the crate a file belongs to (the nearest `Cargo.toml`),
+ * when the repository has its root file: binaries and tests name it by
+ * its crate name (`hsml::parser::parse`).
+ */
+export async function ownLibrary(
+  files: ReadonlySet<string> | undefined,
+  read: ((path: string) => Promise<string>) | undefined,
+  path: string
+): Promise<OwnLibrary | undefined> {
+  const manifest = files
+    ? nearest(files, folderOf(path), ['Cargo.toml'])
+    : undefined;
+  if (!files || !read || !manifest) {
+    return undefined;
+  }
+
+  let toml: Table;
+  try {
+    toml = parse(await read(manifest));
+  } catch {
+    return undefined;
+  }
+
+  const lib = table(toml.lib);
+  const pkg = table(toml.package);
+  const name =
+    typeof lib?.name === 'string'
+      ? lib.name
+      : typeof pkg?.name === 'string'
+        ? pkg.name.replaceAll('-', '_')
+        : undefined;
+  const root = [
+    ...folderOf(manifest),
+    ...(typeof lib?.path === 'string' ? lib.path : 'src/lib.rs')
+      .replace(/^\.\//, '')
+      .split('/'),
+  ].join('/');
+  return name && files.has(root) ? { name, root } : undefined;
+}

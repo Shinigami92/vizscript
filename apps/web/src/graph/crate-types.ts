@@ -89,3 +89,18 @@ export function usePath(
       : use.module;
   return [module, ...rest].join('::');
 }
+
+/**
+ * Files of a module of a crate whose root file is `root` (`lib.rs`):
+ * `parser::tag` is `parser/tag.rs` or `parser/tag/mod.rs` next to it, the
+ * crate itself its root.
+ */
+export function moduleFiles(root: string, path: string): string[] {
+  if (path === '') {
+    return [root];
+  }
+
+  const dir = root.split('/').slice(0, -1);
+  const module = [...dir, ...path.split('::')].join('/');
+  return [`${module}.rs`, `${module}/mod.rs`];
+}
