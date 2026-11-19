@@ -62,6 +62,8 @@ const props = defineProps<{
    * ones are remembered.
    */
   foldByDefault?: boolean;
+  /** Its bottom stays above this y (a status-bar item it opens from). */
+  bottom?: number;
 }>();
 
 const emit = defineEmits<{ close: [] }>();
@@ -133,7 +135,7 @@ function toggleCategory(category: string): void {
 
 const position = computed(() => ({
   left: `${Math.max(4, Math.min(props.x, viewport.width.value - width.value - 4))}px`,
-  top: `${Math.max(4, Math.min(props.y, viewport.height.value - height.value - 4))}px`,
+  top: `${Math.max(4, Math.min(props.y, (props.bottom ?? viewport.height.value) - height.value - 4))}px`,
 }));
 
 /** Matching actions, grouped by category, best groups first. */

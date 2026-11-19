@@ -9,6 +9,7 @@ import { computed, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '../api/client';
 import { repoSource } from '../api/repo-source';
+import BranchStatus from '../components/BranchStatus.vue';
 import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
 import GithubLimitStatus from '../components/GithubLimitStatus.vue';
@@ -241,8 +242,8 @@ function selectFile(next: string, symbol?: string): void {
   });
 }
 
-function switchBranch(event: Event): void {
-  const next = (event.target as HTMLSelectElement).value;
+/** Another branch (or tag, commit): the URL's file stays open. */
+function switchBranch(next: string): void {
   void router.push({ name: 'repo', params: { ...route.params, ref: next } });
 }
 
@@ -261,30 +262,15 @@ function dropOutdatedEdits(): void {
 <template>
   <Workbench>
     <GithubLimitStatus v-if="!session.me" />
+    <!-- Before the workspace: the branch comes first in the status bar. -->
+    <BranchStatus
+      :current="ref_"
+      :branches="branches"
+      :unsaved="dirtyTabs.size"
+      @switch="switchBranch"
+    />
     <WorkbenchView id="explorer">
       <div data-ui="explorer" class="flex h-full min-h-0 flex-col">
-        <div
-          class="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-3 py-2"
-        >
-          <span class="i-mdi-source-branch text-zinc-500" />
-          <select
-            class="min-w-0 flex-1 truncate bg-transparent text-sm text-zinc-200 outline-none"
-            aria-label="Branch"
-            :value="ref_"
-            @change="switchBranch"
-          >
-            <option v-if="!branches.some((b) => b.name === ref_)" :value="ref_">
-              {{ ref_ }}
-            </option>
-            <option
-              v-for="branch in branches"
-              :key="branch.name"
-              :value="branch.name"
-            >
-              {{ branch.name }}
-            </option>
-          </select>
-        </div>
         <div v-if="loadingTree" class="p-4 text-sm text-zinc-500">
           <span class="i-mdi-loading animate-spin" /> Loading…
         </div>
