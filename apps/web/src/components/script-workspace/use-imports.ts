@@ -643,14 +643,30 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
   }
 
   /**
-   * An item of a library the code names by its path without importing it
-   * (Rust's `serde_json::to_string`, also through a `use` of its module:
-   * `overrides::OverrideBuilder`), as an import named by the path.
+   * An item the code names by its path without importing it, as an import
+   * named by the path: of a module of the crate, a file of the repository
+   * the backend found (`crate::parser::parse`, `parser::parse` after `use
+   * crate::parser;`), else of a library (Rust's `serde_json::to_string`,
+   * also through a `use` of its module: `overrides::OverrideBuilder`).
    */
   async function pathDeclaration(
     path: string,
     uses: ReadonlyArray<ScriptSymbol>
   ): Promise<ImportedDeclaration | undefined> {
+    const end = path.lastIndexOf('::');
+    const module = path.slice(0, end);
+    const reference = references.value.find(
+      (r) => !r.symbol && r.specifier === module
+    );
+    const target = reference ? resolveReference(reference) : undefined;
+    if (end !== -1 && target) {
+      return namedDeclaration(
+        await exportsOf(target.path),
+        path.slice(end + 2),
+        path
+      );
+    }
+
     const full = usePath(path, uses);
     const at = full.lastIndexOf('::');
     return at === -1

@@ -160,7 +160,7 @@ const BY_PATH = `fn run(text: &str) {
 `;
 
 describe('crate items named by their path', () => {
-  it('lists the items a file names by a path, not std or its own', () => {
+  it('lists the items a file names by a path, of crates and modules, not std', () => {
     const doc = parseRustDocument(
       `use nom::IResult;
 use std::fmt;
@@ -177,8 +177,10 @@ fn f(v: serde_json::Value, r: std::io::Result<()>) -> crate::Item {
     );
     expect(doc.libraryPaths).toEqual([
       'serde_json::Value',
+      'crate::Item',
       'ignore::overrides::OverrideBuilder',
       'serde_json::to_string',
+      'super::helper',
     ]);
   });
 

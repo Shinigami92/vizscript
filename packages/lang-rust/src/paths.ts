@@ -1,15 +1,7 @@
 import { parseRustTree } from './convert';
 
-/** Paths that never name an item of a crate the file depends on. */
-const LOCAL_HEADS = new Set([
-  'std',
-  'core',
-  'alloc',
-  'crate',
-  'self',
-  'super',
-  'Self',
-]);
+/** Paths of Rust itself (the hand-written stubs know them). */
+const STD_HEADS = new Set(['std', 'core', 'alloc', 'Self']);
 
 const SEGMENT = /^[A-Za-z_]\w*$/;
 
@@ -26,7 +18,7 @@ export function itemPath(path: string): string | undefined {
   }
 
   const [head] = parts;
-  if (!head || LOCAL_HEADS.has(head) || /^[A-Z]/.test(head)) {
+  if (!head || STD_HEADS.has(head) || /^[A-Z]/.test(head)) {
     return undefined;
   }
 
@@ -35,9 +27,10 @@ export function itemPath(path: string): string | undefined {
 }
 
 /**
- * Items of other crates the file names by their path, without a `use`
- * (`serde_json::to_string(&x)`, `x: serde_json::Value`): the web app
- * supplies their declarations as imports named by the path.
+ * Items of other crates and modules the file names by their path, without
+ * a `use` (`serde_json::to_string(&x)`, `x: serde_json::Value`,
+ * `crate::parser::parse(text)`): the web app supplies their declarations
+ * as imports named by the path.
  */
 export function rustPaths(text: string): string[] {
   const { tree, text: masked } = parseRustTree(text);
