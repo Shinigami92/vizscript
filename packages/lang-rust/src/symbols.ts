@@ -148,11 +148,27 @@ class SymbolCollector {
       type?: Span;
       value?: Expr;
       modifiers?: string[];
+      /** The block it lives in (`locals`). */
+      visibleIn?: SourceRange;
     },
     owner: string | undefined
   ): void {
     for (const binding of pattern.bindings) {
-      if (known.has(binding.name) || binding.name === '_') {
+      if (binding.name === '_') {
+        continue;
+      }
+
+      if (known.has(binding.name)) {
+        // Declared again in another block: readable wherever one of them
+        // is (one symbol per name and function).
+        const existing = this.symbols.find(
+          (s) =>
+            s.kind === 'local' && s.scope === scope && s.name === binding.name
+        );
+        if (existing) {
+          delete existing.visibleIn;
+        }
+
         continue;
       }
 
@@ -175,6 +191,7 @@ class SymbolCollector {
           ? { defaultRange: spanRange(decl.value) }
           : {}),
         modifiers: decl.modifiers ?? [],
+        ...(decl.visibleIn ? { visibleIn: decl.visibleIn } : {}),
       });
     }
   }
@@ -188,15 +205,23 @@ class SymbolCollector {
   ): void {
     const visitExpr = (expr: Expr | undefined): void => {
       if (expr?.type === 'If') {
-        visit([expr.stmt]);
+        visit([expr.stmt], undefined);
       } else if (expr?.type === 'Match') {
-        visit([expr.stmt]);
+        visit([expr.stmt], undefined);
       } else if (expr?.type === 'Block') {
-        visit(expr.block.body);
+        visitBlock(expr.block);
       }
     };
 
-    const visit = (stmts: ReadonlyArray<Stmt>): void => {
+    // Names of an inner block (a loop's variable too) live in it only.
+    const visitBlock = (inner: Block): void => {
+      visit(inner.body, spanRange(inner));
+    };
+
+    const visit = (
+      stmts: ReadonlyArray<Stmt>,
+      within: SourceRange | undefined
+    ): void => {
       for (const stmt of stmts) {
         switch (stmt.type) {
           case 'Let': {
@@ -209,12 +234,13 @@ class SymbolCollector {
                 ...(stmt.valueType ? { type: stmt.valueType } : {}),
                 ...(stmt.value ? { value: stmt.value } : {}),
                 modifiers: stmt.mutable ? ['let', 'mut'] : ['let'],
+                ...(within ? { visibleIn: within } : {}),
               },
               owner
             );
             visitExpr(stmt.value);
             if (stmt.orelse) {
-              visit(stmt.orelse.body);
+              visitBlock(stmt.orelse);
             }
 
             break;
@@ -225,33 +251,36 @@ class SymbolCollector {
               stmt.pattern,
               scope,
               known,
-              { range: spanRange(stmt) },
+              { range: spanRange(stmt), visibleIn: spanRange(stmt) },
               owner
             );
-            visit(stmt.body.body);
+            visitBlock(stmt.body);
             break;
           }
 
           case 'While':
           case 'Loop': {
-            visit(stmt.body.body);
+            visitBlock(stmt.body);
             break;
           }
 
           case 'If': {
-            visit(stmt.body.body);
+            visitBlock(stmt.body);
             for (const elif of stmt.elifs) {
-              visit(elif.body.body);
+              visitBlock(elif.body);
             }
 
-            visit(stmt.orelse?.body ?? []);
+            if (stmt.orelse) {
+              visitBlock(stmt.orelse);
+            }
+
             break;
           }
 
           case 'Match': {
             for (const arm of stmt.arms) {
               if ('body' in arm.body && !('type' in arm.body)) {
-                visit(arm.body.body);
+                visitBlock(arm.body);
               }
             }
 
@@ -259,7 +288,7 @@ class SymbolCollector {
           }
 
           case 'BlockStmt': {
-            visit(stmt.block.body);
+            visitBlock(stmt.block);
             break;
           }
 
@@ -275,7 +304,7 @@ class SymbolCollector {
       }
     };
 
-    visit(block.body);
+    visit(block.body, undefined);
   }
 
   public items(items: ReadonlyArray<Item>, scope: string): void {

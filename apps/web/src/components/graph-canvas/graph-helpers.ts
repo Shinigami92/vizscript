@@ -171,8 +171,24 @@ export function scopeVariables(
       continue;
     }
 
+    // A loop's variable (whose range is the loop) is there from its name.
+    const within = symbol.visibleIn;
+    const declared =
+      within && symbol.range.end >= within.end
+        ? symbol.nameRange.end
+        : symbol.range.end;
     const ordered = local || (!owner && symbol.scope === '');
-    if (ordered && at !== undefined && symbol.range.end > at) {
+    if (ordered && at !== undefined && declared > at) {
+      continue;
+    }
+
+    // A loop's variable after the loop, a block's `let` outside it.
+    if (
+      local &&
+      at !== undefined &&
+      within &&
+      (at < within.start || at > within.end)
+    ) {
       continue;
     }
 

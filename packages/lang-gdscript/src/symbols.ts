@@ -111,7 +111,11 @@ class SymbolCollector {
     symbol: Omit<ScriptSymbol, 'id' | 'modifiers'> & { modifiers?: string[] }
   ): void {
     const id = symbolId(symbol.kind, symbol.scope, symbol.name);
-    if (!this.symbols.some((s) => s.id === id)) {
+    const existing = this.symbols.find((s) => s.id === id);
+    if (existing) {
+      // Declared again in another block: readable wherever one of them is.
+      delete existing.visibleIn;
+    } else {
       this.symbols.push({ ...symbol, id, modifiers: symbol.modifiers ?? [] });
     }
   }
@@ -212,12 +216,25 @@ class SymbolCollector {
     this.locals(decl.body.body, scope ? `${scope}.${decl.name}` : decl.name);
   }
 
-  /** `var` / `const` and loop variables inside a function body. */
-  private locals(stmts: ReadonlyArray<Stmt>, scope: string): void {
+  /**
+   * `var` / `const` and loop variables inside a function body; those of an
+   * inner block (a loop's variable too) are visible in it only.
+   */
+  private locals(
+    stmts: ReadonlyArray<Stmt>,
+    scope: string,
+    within?: SourceRange
+  ): void {
     for (const stmt of stmts) {
       switch (stmt.type) {
         case 'Var': {
+          const before = this.symbols.length;
           this.variable(stmt, scope, true);
+          const added = this.symbols[before];
+          if (within && added) {
+            added.visibleIn = within;
+          }
+
           break;
         }
 
@@ -231,29 +248,33 @@ class SymbolCollector {
             nameRange: spanRange(stmt.variableSpan),
             ...(type ? { type } : {}),
             dataType: type ? dataTypeOf(stmt.variableType) : 'any',
+            visibleIn: spanRange(stmt),
           });
-          this.locals(stmt.body.body, scope);
+          this.locals(stmt.body.body, scope, spanRange(stmt.body));
           break;
         }
 
         case 'If': {
-          this.locals(stmt.body.body, scope);
+          this.locals(stmt.body.body, scope, spanRange(stmt.body));
           for (const elif of stmt.elifs) {
-            this.locals(elif.body.body, scope);
+            this.locals(elif.body.body, scope, spanRange(elif.body));
           }
 
-          this.locals(stmt.orelse?.body ?? [], scope);
+          if (stmt.orelse) {
+            this.locals(stmt.orelse.body, scope, spanRange(stmt.orelse));
+          }
+
           break;
         }
 
         case 'While': {
-          this.locals(stmt.body.body, scope);
+          this.locals(stmt.body.body, scope, spanRange(stmt.body));
           break;
         }
 
         case 'Match': {
           for (const branch of stmt.branches) {
-            this.locals(branch.body.body, scope);
+            this.locals(branch.body.body, scope, spanRange(branch.body));
           }
 
           break;

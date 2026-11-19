@@ -73,6 +73,12 @@ export interface ScriptSymbol {
   /** Initial or default value expression. */
   defaultRange?: SourceRange;
   /**
+   * Where a local can be read, when that is less than the rest of its
+   * function: the loop of a loop variable, the block of a block-scoped
+   * `let` (TypeScript, Rust, GDScript; Python's names outlive their block).
+   */
+  visibleIn?: SourceRange;
+  /**
    * Keywords and annotations as written, e.g. `export`, `const`, `let`,
    * `static`, `async`, `private`, `@export`, `@onready`.
    */

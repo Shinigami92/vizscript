@@ -108,6 +108,16 @@ const SCOPE_BOUNDARIES = new Set([
   'ClassExpression',
 ]);
 
+/** Nodes that end the life of a `let` / `const` declared inside them. */
+const BLOCKS: ReadonlySet<string> = new Set([
+  'BlockStatement',
+  'ForStatement',
+  'ForInStatement',
+  'ForOfStatement',
+  'SwitchStatement',
+  'CatchClause',
+]);
+
 /** Child nodes of a Babel node (skips comments and location data). */
 function children(node: t.Node): t.Node[] {
   const result: t.Node[] = [];
@@ -157,7 +167,10 @@ class SymbolCollector {
     symbol: Omit<ScriptSymbol, 'id' | 'modifiers'> & { modifiers?: string[] }
   ): void {
     const id = symbolId(symbol.kind, symbol.scope, symbol.name);
-    if (this.symbols.some((s) => s.id === id)) {
+    const existing = this.symbols.find((s) => s.id === id);
+    if (existing) {
+      // Declared again in another block: readable wherever one of them is.
+      delete existing.visibleIn;
       return;
     }
 
@@ -302,24 +315,35 @@ class SymbolCollector {
     }
   }
 
-  /** `const`/`let`/`var` declarations inside a function body. */
+  /**
+   * `const`/`let`/`var` declarations inside a function body; a `let` or
+   * `const` of an inner block (a loop's head too) is visible in it only.
+   */
   private locals(body: t.Node, scope: string): void {
-    const visit = (node: t.Node): void => {
+    const visit = (node: t.Node, block: SourceRange | undefined): void => {
       if (SCOPE_BOUNDARIES.has(node.type)) {
         return;
       }
 
       if (node.type === 'VariableDeclaration') {
-        this.variables(node, scope, true, []);
+        this.variables(
+          node,
+          scope,
+          true,
+          [],
+          rangeOf(node),
+          node.kind === 'var' ? undefined : block
+        );
       }
 
+      const inner = BLOCKS.has(node.type) ? rangeOf(node) : block;
       for (const child of children(node)) {
-        visit(child);
+        visit(child, inner);
       }
     };
 
     for (const child of children(body)) {
-      visit(child);
+      visit(child, undefined);
     }
   }
 
@@ -328,7 +352,8 @@ class SymbolCollector {
     scope: string,
     local: boolean,
     modifiers: string[],
-    statement: SourceRange = rangeOf(decl)
+    statement: SourceRange = rangeOf(decl),
+    visibleIn?: SourceRange
   ): void {
     for (const declarator of decl.declarations) {
       if (declarator.id.type !== 'Identifier') {
@@ -365,6 +390,7 @@ class SymbolCollector {
         ...(init ? { defaultRange: rangeOf(init) } : {}),
         declarationRange: statement,
         modifiers: [...modifiers, decl.kind],
+        ...(visibleIn ? { visibleIn } : {}),
       });
     }
   }

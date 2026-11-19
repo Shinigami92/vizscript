@@ -101,6 +101,7 @@ function portable(symbol: ScriptSymbol, text: string): ScriptSymbol {
     declarationRange: _declarationRange,
     graphStart: _graphStart,
     fnId: _fnId,
+    visibleIn: _visibleIn,
     type,
     returns,
     params,
