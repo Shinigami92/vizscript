@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import type { ViewId } from '../src';
 import {
   defaultLayout,
+  isViewCollapsed,
   isViewVisible,
   matchingPreset,
   moveView,
   normalizeLayout,
   PRESETS,
+  setViewCollapsed,
   setViewHidden,
   setZoneSize,
+  setZoneSplit,
   shownViews,
   VIEW_IDS,
   ZONE_IDS,
@@ -108,6 +111,28 @@ describe('layout operations', () => {
     l = moveView(l, 'explorer', 'left', 0);
     expect(shownViews(l, 'left', noExplorer)).toEqual(['details']);
     expect(isViewVisible(l, 'details', noExplorer)).toBe(true);
+  });
+
+  it('folds stacked views only', () => {
+    let l = setViewCollapsed(defaultLayout(), 'script', true);
+    expect(isViewCollapsed(l, 'script', all)).toBe(true);
+    expect(isViewVisible(l, 'script', all)).toBe(false);
+    expect(isViewVisible(l, 'explorer', all)).toBe(true);
+    // Folding is no layout of its own.
+    expect(matchingPreset(l)).toBe('default');
+    // Alone in its zone, or as a tab, it is shown in full.
+    expect(isViewCollapsed(l, 'script', new Set<ViewId>(['script']))).toBe(
+      false
+    );
+    l = setZoneSplit(l, 'left', false);
+    expect(isViewCollapsed(l, 'script', all)).toBe(false);
+    // Stored layouts keep it; older ones have none.
+    expect(normalizeLayout(JSON.parse(JSON.stringify(l))).collapsed).toEqual([
+      'script',
+    ]);
+    expect(normalizeLayout({ collapsed: ['nope', 'code'] }).collapsed).toEqual([
+      'code',
+    ]);
   });
 
   it('clamps zone sizes', () => {

@@ -67,7 +67,7 @@ packages/
   lang-python/      Python backend: Lezer syntax tree → graph
   lang-rust/        Rust backend: Lezer syntax tree → graph
   canvas/           Framework-agnostic Canvas2D renderer and interaction controller
-  workbench/        Workbench layout model: views, zones, presets, validation
+  workbench/        Workbench layout model: views, zones, folds, presets, validation
   api-contract/     Types shared by web and api
 ```
 

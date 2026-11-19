@@ -39,6 +39,17 @@ const stacked = computed(() => props.zone !== 'center');
 // ------------------------------------------------------------ dragging
 
 const dropHover = ref(false);
+/** Where a dragged view would land: a line between tabs or views. */
+const dropLine = ref<{
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+} | null>(null);
+/** The dragged view comes from another zone (else it is reordered). */
+const fromElsewhere = computed(
+  () => store.dragging !== null && !props.views.includes(store.dragging)
+);
 
 function onDragStart(event: DragEvent, view: ViewId): void {
   event.dataTransfer?.setData(DRAG_MIME, view);
@@ -56,6 +67,64 @@ function onDragStart(event: DragEvent, view: ViewId): void {
 function onDragEnd(): void {
   store.dragging = null;
   dropHover.value = false;
+  dropLine.value = null;
+}
+
+/** A drop line's place, inside the zone also at its edges. */
+function inside(value: number, size: number): number {
+  return Math.min(Math.max(value, 0), size - 2);
+}
+
+/** The tabs or views a dragged one goes between (not itself). */
+function dropTargets(dragged: ViewId): HTMLElement[] {
+  return [
+    ...(root.value?.querySelectorAll<HTMLElement>('[data-view-tab]') ?? []),
+  ]
+    .filter((item) => item.dataset.viewTab !== dragged)
+    .map((item) =>
+      split.value ? (item.closest<HTMLElement>('[data-cell]') ?? item) : item
+    );
+}
+
+function onDragOver(event: DragEvent): void {
+  const view = store.dragging;
+  const box = root.value?.getBoundingClientRect();
+  if (!view || !box) {
+    return;
+  }
+
+  const items = dropTargets(view);
+  const index = dropIndex(event, view);
+  const target = items[Math.min(index, items.length - 1)];
+  if (!target) {
+    dropLine.value = null;
+    return;
+  }
+
+  const rect = target.getBoundingClientRect();
+  const after = index >= items.length;
+  // Views stacked in a column get a line across, tabs and views in a row
+  // one from top to bottom.
+  dropLine.value =
+    split.value && stacked.value
+      ? {
+          left: 0,
+          top: inside(
+            (after ? rect.bottom : rect.top) - box.top - 1,
+            box.height
+          ),
+          width: box.width,
+          height: 2,
+        }
+      : {
+          left: inside(
+            (after ? rect.right : rect.left) - box.left - 1,
+            box.width
+          ),
+          top: rect.top - box.top,
+          width: 2,
+          height: split.value ? box.height : rect.height,
+        };
 }
 
 /** Insert position from the pointer, relative to the tabs / split cells. */
@@ -82,6 +151,7 @@ function dropIndex(event: DragEvent, dragged: ViewId): number {
 
 function onDrop(event: DragEvent): void {
   dropHover.value = false;
+  dropLine.value = null;
   const view = store.dragging;
   store.dragging = null;
   if (!view) {
@@ -94,6 +164,23 @@ function onDrop(event: DragEvent): void {
   const anchor = props.views.filter((v) => v !== view)[index];
   const all = state.value.views.filter((v) => v !== view);
   store.move(view, props.zone, anchor ? all.indexOf(anchor) : all.length);
+}
+
+function onDragLeave(event: DragEvent): void {
+  // Leaving for a child of the drop target is no leaving.
+  if (
+    !(event.currentTarget as HTMLElement).contains(
+      event.relatedTarget as Node | null
+    )
+  ) {
+    dropHover.value = false;
+    dropLine.value = null;
+  }
+}
+
+/** Folded to its header (stacked views only). */
+function isFolded(view: ViewId | undefined): boolean {
+  return view !== undefined && stacked.value && store.isCollapsed(view);
 }
 
 // ------------------------------------------------------------ split sizes
@@ -214,7 +301,7 @@ function resizeCells(index: number, delta: number): void {
     >
       <template v-for="(view, i) in views" :key="view">
         <WorkbenchSash
-          v-if="i > 0"
+          v-if="i > 0 && !isFolded(view) && !isFolded(views[i - 1])"
           :direction="stacked ? 'row' : 'col'"
           :label="`Resize ${VIEW_TITLES[views[i - 1] ?? view]} and ${VIEW_TITLES[view]}`"
           @start="startResize(i - 1)"
@@ -223,16 +310,26 @@ function resizeCells(index: number, delta: number): void {
         <div
           data-cell
           class="flex min-h-0 min-w-0 flex-col"
-          :style="{ flex: `${weightOf(view)} 1 0` }"
+          :style="{
+            flex: isFolded(view) ? '0 0 auto' : `${weightOf(view)} 1 0`,
+          }"
         >
           <div
             :data-view-tab="view"
             draggable="true"
-            class="group flex h-7 shrink-0 cursor-grab items-center gap-1.5 border-b border-zinc-800 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 select-none"
+            class="group flex h-7 shrink-0 cursor-grab items-center gap-1.5 border-b border-zinc-800 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 select-none"
+            :class="stacked ? 'pl-1 pr-2.5' : 'px-2.5'"
             :title="`${VIEW_TITLES[view]} – drag to move`"
+            :aria-expanded="stacked ? !isFolded(view) : undefined"
+            @click="stacked && store.toggleCollapsed(view)"
             @dragstart="onDragStart($event, view)"
             @dragend="onDragEnd"
           >
+            <span
+              v-if="stacked"
+              class="i-mdi-chevron-down motion-rotate text-sm"
+              :class="isFolded(view) ? '-rotate-90' : ''"
+            />
             <span :class="VIEW_ICONS[view]" class="text-sm" />
             {{ VIEW_TITLES[view] }}
             <span class="ml-auto flex items-center gap-0.5">
@@ -242,7 +339,7 @@ function resizeCells(index: number, delta: number): void {
                 class="rounded p-0.5 opacity-0 hover:bg-zinc-800 hover:text-zinc-200 group-hover:opacity-100 focus:opacity-100"
                 title="Show as tabs"
                 aria-label="Show as tabs"
-                @click="store.setSplit(zone, false)"
+                @click.stop="store.setSplit(zone, false)"
               >
                 <span class="i-mdi-tab block" />
               </button>
@@ -250,13 +347,13 @@ function resizeCells(index: number, delta: number): void {
                 type="button"
                 class="rounded p-0.5 opacity-0 hover:bg-zinc-800 hover:text-zinc-200 group-hover:opacity-100 focus:opacity-100"
                 :aria-label="`Hide ${VIEW_TITLES[view]}`"
-                @click="store.hide(view)"
+                @click.stop="store.hide(view)"
               >
                 <span class="i-mdi-close block" />
               </button>
             </span>
           </div>
-          <div class="relative min-h-0 flex-1">
+          <div v-show="!isFolded(view)" class="relative min-h-0 flex-1">
             <div :ref="context?.placeRef(view)" class="absolute inset-0" />
           </div>
         </div>
@@ -268,17 +365,27 @@ function resizeCells(index: number, delta: number): void {
       v-if="store.dragging"
       class="absolute inset-0 z-40 border-2 border-dashed transition-colors"
       :class="
-        dropHover
+        dropHover && fromElsewhere
           ? 'border-amber-500 bg-amber-500/10'
           : 'border-transparent bg-transparent'
       "
       @dragenter.prevent="dropHover = true"
-      @dragover.prevent
-      @dragleave="dropHover = false"
+      @dragover.prevent="onDragOver"
+      @dragleave="onDragLeave"
       @drop="onDrop"
     >
+      <div
+        v-if="dropHover && dropLine"
+        class="pointer-events-none absolute rounded-full bg-amber-500"
+        :style="{
+          left: `${dropLine.left}px`,
+          top: `${dropLine.top}px`,
+          width: `${dropLine.width}px`,
+          height: `${dropLine.height}px`,
+        }"
+      />
       <span
-        v-if="dropHover"
+        v-if="dropHover && fromElsewhere"
         class="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded bg-zinc-900/90 px-2 py-1 text-xs text-amber-200"
       >
         Move to {{ ZONE_LABELS[zone] }}

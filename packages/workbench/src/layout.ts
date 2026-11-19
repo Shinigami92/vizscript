@@ -42,6 +42,11 @@ export interface WorkbenchLayout {
   zones: Record<ZoneId, ZoneState>;
   /** Hidden views keep their zone, so showing them restores the place. */
   hidden: ViewId[];
+  /**
+   * Stacked views folded to their header, like VS Code's sidebar sections
+   * (only in sidebars and the bottom panel shown stacked).
+   */
+  collapsed: ViewId[];
 }
 
 export const VIEW_TITLES: Record<ViewId, string> = {
@@ -105,6 +110,7 @@ function layout(
       ...hidden,
       ...HIDDEN_BY_DEFAULT.filter((v) => !hidden.includes(v)),
     ],
+    collapsed: [],
   });
 }
 
@@ -231,7 +237,7 @@ export function presetLayout(id: string): WorkbenchLayout | undefined {
   return PRESETS.find((p) => p.id === id)?.create();
 }
 
-/** Id of the preset equal to `layout` (ignoring sizes), if any. */
+/** Id of the preset equal to `layout` (ignoring sizes and folds), if any. */
 export function matchingPreset(current: WorkbenchLayout): string | undefined {
   const shape = (l: WorkbenchLayout): string =>
     JSON.stringify({
@@ -340,7 +346,10 @@ export function normalizeLayout(input: unknown): WorkbenchLayout {
     }
   }
 
-  return { version: 1, zones, hidden };
+  const collapsed = (
+    Array.isArray(source.collapsed) ? source.collapsed : []
+  ).filter((v, i, all): v is ViewId => isViewId(v) && all.indexOf(v) === i);
+  return { version: 1, zones, hidden, collapsed };
 }
 
 function clone(l: WorkbenchLayout): WorkbenchLayout {
@@ -388,6 +397,39 @@ export function setViewHidden(
   }
 
   return next;
+}
+
+/** Folds a stacked view to its header, or unfolds it. */
+export function setViewCollapsed(
+  l: WorkbenchLayout,
+  view: ViewId,
+  collapsed: boolean
+): WorkbenchLayout {
+  const next = clone(l);
+  next.collapsed = next.collapsed.filter((v) => v !== view);
+  if (collapsed) {
+    next.collapsed.push(view);
+  }
+
+  return next;
+}
+
+/**
+ * Whether a view is folded to its header: only stacked views can be (a
+ * sidebar or the bottom panel showing its views at once).
+ */
+export function isViewCollapsed(
+  l: WorkbenchLayout,
+  view: ViewId,
+  available: ReadonlySet<ViewId>
+): boolean {
+  const zoneId = zoneOf(l, view);
+  return (
+    l.collapsed.includes(view) &&
+    zoneId !== 'center' &&
+    l.zones[zoneId].split &&
+    shownViews(l, zoneId, available).length > 1
+  );
 }
 
 export function setActiveView(
@@ -466,7 +508,11 @@ export function isViewVisible(
   view: ViewId,
   available: ReadonlySet<ViewId>
 ): boolean {
-  if (!available.has(view) || l.hidden.includes(view)) {
+  if (
+    !available.has(view) ||
+    l.hidden.includes(view) ||
+    isViewCollapsed(l, view, available)
+  ) {
     return false;
   }
 

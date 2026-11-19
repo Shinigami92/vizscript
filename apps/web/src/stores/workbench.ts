@@ -1,12 +1,14 @@
 import type { ViewId, WorkbenchLayout, ZoneId } from '@vizscript/workbench';
 import {
   defaultLayout,
+  isViewCollapsed,
   isViewVisible,
   matchingPreset,
   moveView,
   normalizeLayout,
   presetLayout,
   setActiveView,
+  setViewCollapsed,
   setViewHidden,
   setWeights,
   setZoneSize,
@@ -179,7 +181,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return;
     }
 
-    commit(setViewHidden(layout.value, view, false));
+    // Shown means unfolded too.
+    commit(
+      setViewCollapsed(setViewHidden(layout.value, view, false), view, false)
+    );
   }
 
   function hide(view: ViewId): void {
@@ -216,6 +221,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     next = setViewHidden(next, 'graph', mode === 'code');
     next = setViewHidden(next, 'preview', mode === 'code');
     commit(next);
+  }
+
+  /** Whether a stacked view is folded to its header. */
+  function isCollapsed(view: ViewId): boolean {
+    return (
+      !isMobile.value && isViewCollapsed(layout.value, view, available.value)
+    );
+  }
+
+  function toggleCollapsed(view: ViewId): void {
+    commit(setViewCollapsed(layout.value, view, !isCollapsed(view)));
   }
 
   function move(view: ViewId, zone: ZoneId, index?: number): void {
@@ -274,6 +290,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     mobileDetails,
     presetId,
     isVisible,
+    isCollapsed,
+    toggleCollapsed,
     setAvailable,
     show: show_,
     hide,
