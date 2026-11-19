@@ -1,5 +1,6 @@
 import type { GraphDocument, ScriptSymbol } from '@vizscript/core';
 import { exportedSymbols, withReexports } from '@vizscript/core';
+import { MissingUrls } from './missing-urls';
 
 /**
  * Declarations of npm packages, read from their `.d.ts` files on jsDelivr
@@ -11,16 +12,25 @@ export const CDN = 'https://cdn.jsdelivr.net/npm/';
 /** Files read during one session, by URL (shared by all workspaces). */
 const texts = new Map<string, Promise<string | undefined>>();
 
+/** Files that answered 404, also in earlier visits. */
+const missing = new MissingUrls();
+
 /** A request to jsDelivr gives up after this long. */
 const FETCH_TIMEOUT_MS = 15_000;
 
 /**
  * Text of a file, `undefined` when it can't be read. A missing file (404)
- * stays missing for the session; other failures (network errors, timeouts,
- * rate limits) are tried again on the next request.
+ * stays missing for the session and is remembered for later visits
+ * (`MissingUrls`); other failures (network errors, timeouts, rate limits)
+ * are tried again on the next request.
  */
 export function fetchText(url: string): Promise<string | undefined> {
   let text = texts.get(url);
+  if (!text && missing.has(url)) {
+    text = Promise.resolve(undefined);
+    texts.set(url, text);
+  }
+
   if (!text) {
     const forget = (): undefined => {
       texts.delete(url);
@@ -32,7 +42,12 @@ export function fetchText(url: string): Promise<string | undefined> {
           return response.text();
         }
 
-        return response.status === 404 ? undefined : forget();
+        if (response.status === 404) {
+          missing.add(url);
+          return undefined;
+        }
+
+        return forget();
       })
       .catch(forget);
     texts.set(url, text);
