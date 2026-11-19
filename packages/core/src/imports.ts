@@ -252,7 +252,18 @@ export async function withReexports(
           add(symbol, symbol.name, symbol.scope);
         }
       }
-    } else if (reexport.imported !== '*') {
+    } else if (reexport.imported === '*') {
+      // `export * as ns`: the module as one name, its exports its members
+      // (`ns.fn()`). A default export needs a name of its own.
+      if (reexport.name !== 'default') {
+        add(namespaceSymbol(reexport.name), reexport.name);
+        for (const symbol of from) {
+          if (symbol.scope === '') {
+            add(symbol, symbol.name, reexport.name);
+          }
+        }
+      }
+    } else {
       const symbol =
         reexport.imported === 'default'
           ? defaultExport(from)
@@ -275,6 +286,20 @@ export async function withReexports(
   }
 
   return result;
+}
+
+/** A module re-exported as one name (`export * as z`). */
+function namespaceSymbol(name: string): ScriptSymbol {
+  return {
+    id: `constant:${name}`,
+    kind: 'constant',
+    name,
+    scope: '',
+    range: NOWHERE,
+    nameRange: NOWHERE,
+    dataType: 'object',
+    modifiers: ['export', 'namespace'],
+  };
 }
 
 /** The default export (`export default function …`). */

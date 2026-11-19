@@ -43,6 +43,20 @@ export function isTypeImport(symbol: ScriptSymbol): boolean {
   );
 }
 
+/**
+ * An import with nothing to call: a type, or a value its module declares
+ * as a plain object (a namespace like zod's `z`, a config object).
+ */
+export function isUncallableImport(symbol: ScriptSymbol): boolean {
+  return (
+    isTypeImport(symbol) ||
+    (symbol.kind === 'import' &&
+      (symbol.importedKind === 'constant' ||
+        symbol.importedKind === 'variable') &&
+      symbol.dataType === 'object')
+  );
+}
+
 /** "Function", or "Imported function" once the import's file was read. */
 export function symbolLabel(symbol: ScriptSymbol): string {
   if (symbol.modifiers.includes('callback')) {

@@ -279,4 +279,39 @@ describe('re-exports', () => {
       )
     ).toEqual(['own(x)', 'a(name)', 'bee()', 'c()', 'alias(x)']);
   });
+
+  it('offers a module re-exported as one name', async () => {
+    const files: Record<string, string> = {
+      // zod's index, and the other way to write it.
+      'index.d.ts': [
+        "import * as z from './external';",
+        "export * from './external';",
+        'export { z, z as default };',
+        "export * as schemas from './external';",
+        '',
+      ].join('\n'),
+      'external.d.ts':
+        'export declare function string(): Schema;\nexport interface Schema {}\n',
+    };
+    const read = async (path: string): Promise<ScriptSymbol[]> => {
+      const text = files[path] ?? '';
+      const doc = parseTypeScript(text, path);
+      return withReexports(
+        exportedSymbols(doc, text),
+        doc.reexports ?? [],
+        (module) => read(`${module.slice(2)}.d.ts`)
+      );
+    };
+    const exports = await read('index.d.ts');
+    expect(exports.map((s) => `${s.scope}.${s.name}:${s.kind}`)).toEqual([
+      '.string:function',
+      '.Schema:type',
+      '.z:constant',
+      'z.string:function',
+      'z.Schema:type',
+      '.schemas:constant',
+      'schemas.string:function',
+      'schemas.Schema:type',
+    ]);
+  });
 });

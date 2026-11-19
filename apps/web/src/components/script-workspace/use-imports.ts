@@ -39,7 +39,7 @@ import {
   stubVersion,
   TypeshedStubs,
 } from '../../graph/python-stubs';
-import { isTypeImport } from '../../graph/symbols';
+import { isUncallableImport } from '../../graph/symbols';
 import type { FileLinkSource } from '../../monaco/file-links';
 import type { ResolveReference } from './symbol-lookup';
 import type { ScriptWorkspaceProps } from './types';
@@ -160,9 +160,9 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
   const references = shallowRef<ModuleReference[]>([]);
 
   const importedNames = computed(() => {
-    // A type alias or interface has no value to call.
+    // A type alias or interface has no value to call, nor has a namespace.
     const types = new Set(
-      (doc.value?.symbols ?? []).filter(isTypeImport).map((s) => s.name)
+      (doc.value?.symbols ?? []).filter(isUncallableImport).map((s) => s.name)
     );
     return [
       ...new Set(

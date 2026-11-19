@@ -1,3 +1,4 @@
+import { isUncallableImport } from '../../graph/symbols';
 import type { ActionEntry } from '../ActionMenu.vue';
 import { methodCallExpression } from './container-entries';
 import { scopeVariables } from './graph-helpers';
@@ -33,7 +34,14 @@ export function suggestEntries(
     !wantsCall &&
     (ctx.callables.value.includes(query) ||
       ctx.externalNames.value.some((e) => e.callee === query));
-  const callable = IDENTIFIER_PATH.test(query) && !reserved && !known;
+  // An import with nothing to call (a type, a namespace like zod's `z`).
+  const uncallable =
+    !wantsCall &&
+    (props.doc?.symbols ?? []).some(
+      (s) => s.name === query && isUncallableImport(s)
+    );
+  const callable =
+    IDENTIFIER_PATH.test(query) && !reserved && !known && !uncallable;
   const declarable =
     !wantsCall && /^[A-Za-z_$][\w$]*$/.test(query) && !reserved;
   if (!props.editable) {

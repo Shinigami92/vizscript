@@ -725,8 +725,38 @@ function exportName(node: t.Identifier | t.StringLiteral): string {
  * Re-exports of a module: `export { a as b } from './x'`, `export * from
  * './x'`, `export * as ns from './x'` and local aliases `export { a as b }`.
  */
+/**
+ * Imported names by their local name: what an `export { z }` without a
+ * module re-exports (`import * as z from './x'` is `*` of `./x`).
+ */
+function importBindings(
+  program: t.Program
+): Map<string, { module: string; imported: string }> {
+  const bindings = new Map<string, { module: string; imported: string }>();
+  for (const stmt of program.body) {
+    if (stmt.type !== 'ImportDeclaration') {
+      continue;
+    }
+
+    for (const specifier of stmt.specifiers) {
+      bindings.set(specifier.local.name, {
+        module: stmt.source.value,
+        imported:
+          specifier.type === 'ImportNamespaceSpecifier'
+            ? '*'
+            : specifier.type === 'ImportDefaultSpecifier'
+              ? 'default'
+              : exportName(specifier.imported),
+      });
+    }
+  }
+
+  return bindings;
+}
+
 export function typeScriptReexports(program: t.Program): Reexport[] {
   const result: Reexport[] = [];
+  const bindings = importBindings(program);
   for (const stmt of program.body) {
     if (stmt.type === 'ExportAllDeclaration') {
       result.push({ module: stmt.source.value, imported: '*', name: '*' });
@@ -745,9 +775,14 @@ export function typeScriptReexports(program: t.Program): Reexport[] {
           name: exportName(specifier.exported),
         });
       } else if (specifier.type === 'ExportSpecifier') {
+        // An imported name passed on: zod's `import * as z …; export { z }`.
+        const binding = stmt.source
+          ? undefined
+          : bindings.get(exportName(specifier.local));
         result.push({
           ...(stmt.source ? { module: stmt.source.value } : {}),
           imported: exportName(specifier.local),
+          ...binding,
           name: exportName(specifier.exported),
         });
       }

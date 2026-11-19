@@ -215,6 +215,11 @@ async function add(imported: string | undefined): Promise<void> {
   );
 }
 
+/** A module re-exported as one name (`export * as z`). */
+function isNamespace(symbol: ScriptSymbol): boolean {
+  return symbol.modifiers.includes('namespace');
+}
+
 const SHOWN_KINDS = new Set([
   'function',
   'class',
@@ -306,13 +311,17 @@ const entries = computed((): ActionEntry[] => {
           },
         ]
       : []),
+    // Namespaces first (zod's `z`); their members are reached through them.
     ...chosen.exports
-      .filter((symbol) => SHOWN_KINDS.has(symbol.kind))
+      .filter((symbol) => symbol.scope === '' && SHOWN_KINDS.has(symbol.kind))
+      .toSorted((a, b) => Number(isNamespace(b)) - Number(isNamespace(a)))
       .map((symbol): ActionEntry => ({
         label: symbol.name,
         category: 'Import',
-        icon: SYMBOL_ICONS[symbol.kind],
-        hint: symbol.kind,
+        icon: isNamespace(symbol)
+          ? 'i-mdi-file-import-outline'
+          : SYMBOL_ICONS[symbol.kind],
+        hint: isNamespace(symbol) ? 'namespace' : symbol.kind,
         action: () => void add(symbol.name),
       })),
   ];
