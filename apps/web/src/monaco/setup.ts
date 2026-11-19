@@ -21,9 +21,9 @@ self.MonacoEnvironment = {
 };
 
 /**
- * Node.js globals in short (`@types/node` is not loaded in the browser):
- * known names, so callbacks like `process.on('exit', (code) => …)` don't
- * report implicit `any` parameters.
+ * Node.js globals in short, for Node.js code without `@types/node`: known
+ * names, so callbacks like `process.on('exit', (code) => …)` don't report
+ * implicit `any` parameters.
  */
 const NODE_GLOBALS = `
 interface VizNodeProcess {
@@ -49,28 +49,73 @@ const ts = monaco.typescript;
 /** TypeScript's `ModuleResolutionKind.Bundler`. */
 const BUNDLER = 100;
 const MODULE_RESOLUTION: string = 'moduleResolution';
-for (const defaults of [ts.typescriptDefaults, ts.javascriptDefaults]) {
-  defaults.addExtraLib(NODE_GLOBALS, 'file:///vizscript/node-globals.d.ts');
-  defaults.setCompilerOptions({
-    target: ts.ScriptTarget.ESNext,
-    module: ts.ModuleKind.ESNext,
-    // Bundler: `exports` maps of npm packages and `.js` imports of `.ts`
-    // files, like Vite and tsdown. Monaco's enum stops at NodeJs.
-    [MODULE_RESOLUTION]: BUNDLER,
-    allowNonTsExtensions: true,
-    allowJs: true,
-    strict: true,
-    jsx: ts.JsxEmit.Preserve,
-    esModuleInterop: true,
-  });
+const COMPILER_OPTIONS: monaco.typescript.CompilerOptions = {
+  target: ts.ScriptTarget.ESNext,
+  module: ts.ModuleKind.ESNext,
+  // Bundler: `exports` maps of npm packages and `.js` imports of `.ts`
+  // files, like Vite and tsdown. Monaco's enum stops at NodeJs.
+  [MODULE_RESOLUTION]: BUNDLER,
+  allowNonTsExtensions: true,
+  allowJs: true,
+  strict: true,
+  jsx: ts.JsxEmit.Preserve,
+  esModuleInterop: true,
+};
+const DEFAULTS = [ts.typescriptDefaults, ts.javascriptDefaults];
+for (const defaults of DEFAULTS) {
+  defaults.setCompilerOptions(COMPILER_OPTIONS);
   defaults.setDiagnosticsOptions({
     noSemanticValidation: false,
     noSyntaxValidation: false,
     // Imports of other repository files cannot be resolved in the browser,
-    // and type definitions of Node.js and test runners are not loaded.
+    // and type definitions of test runners are not loaded.
     diagnosticCodesToIgnore: [2307, 2580, 2582, 2591, 2592, 2593, 2792, 7016],
   });
 }
+
+let nodeStub: monaco.IDisposable[] = [];
+let environmentKey = '';
+
+/**
+ * The environment of the TypeScript file on screen (one for all models, as
+ * Monaco's checker has one set of options): `dom` keeps TypeScript's
+ * default libraries (with the DOM), else only ECMAScript's; `nodeStub`
+ * adds the short Node.js globals above, for Node.js code whose
+ * `@types/node` couldn't be loaded (the real ones would clash with it).
+ */
+export function setTsEnvironment(environment: {
+  dom: boolean;
+  nodeStub: boolean;
+}): void {
+  const key = `${environment.dom}:${environment.nodeStub}`;
+  if (key === environmentKey) {
+    return;
+  }
+
+  environmentKey = key;
+  for (const defaults of DEFAULTS) {
+    defaults.setCompilerOptions(
+      environment.dom
+        ? COMPILER_OPTIONS
+        : { ...COMPILER_OPTIONS, lib: ['lib.esnext.d.ts'] }
+    );
+  }
+
+  if (environment.nodeStub && nodeStub.length === 0) {
+    nodeStub = DEFAULTS.map((defaults) =>
+      defaults.addExtraLib(NODE_GLOBALS, 'file:///vizscript/node-globals.d.ts')
+    );
+  } else if (!environment.nodeStub) {
+    for (const disposable of nodeStub) {
+      disposable.dispose();
+    }
+
+    nodeStub = [];
+  }
+}
+
+// Until a file says otherwise: the DOM and Node.js's globals, as before.
+setTsEnvironment({ dom: true, nodeStub: true });
 
 registerGDScript(monaco);
 

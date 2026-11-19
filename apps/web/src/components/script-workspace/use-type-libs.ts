@@ -6,11 +6,14 @@ import type { GraphClient } from '../../graph/graph-client';
 import { languageOf } from '../../graph/languages';
 import {
   declarationSpecifiers,
+  NODE_BUILTINS,
   npmDeclarations,
 } from '../../graph/npm-declarations';
 import { packageVersion } from '../../graph/npm-project';
 import { packageName } from '../../graph/npm-types';
+import { tsEnvironment } from '../../graph/ts-environment';
 import { clearProjectLibs, setProjectLibs } from '../../monaco/project-libs';
+import { setTsEnvironment } from '../../monaco/setup';
 import type { ScriptWorkspaceProps } from './types';
 
 /** Repository files read for the checker, at most (nearest imports first). */
@@ -144,9 +147,26 @@ export function useTypeLibs(deps: TypeLibDeps): void {
           ] as const
       )
     );
-    const declarations = await npmDeclarations(
-      roots.filter(([, range]) => range !== '')
+
+    // DOM and / or Node.js, as the file's tsconfig says; Node.js code gets
+    // `@types/node` in the project's version.
+    const nodeTypes = await packageVersion(
+      props.files,
+      props.readFile,
+      path,
+      '@types/node'
     );
+    const environment = await tsEnvironment(props.files, props.readFile, path, {
+      text: deps.text.value,
+      hasNodeTypes: nodeTypes !== 'latest' && nodeTypes !== '',
+      builtins: NODE_BUILTINS,
+    });
+    const declarations = await npmDeclarations([
+      ...roots.filter(([, range]) => range !== ''),
+      ...(environment.node
+        ? [['@types/node', nodeTypes || 'latest'] as const]
+        : []),
+    ]);
     if (current !== seq) {
       return;
     }
@@ -155,6 +175,13 @@ export function useTypeLibs(deps: TypeLibDeps): void {
       files.set(file.path, file.text);
     }
 
+    const nodeLoaded = declarations.some((file) =>
+      file.path.startsWith('node_modules/@types/node/')
+    );
+    setTsEnvironment({
+      dom: environment.dom,
+      nodeStub: environment.node && !nodeLoaded,
+    });
     setProjectLibs(owner, files);
   }
 
