@@ -313,3 +313,88 @@ export function newFunctionAnchor(
       at.range.end <= s.range.end
   )?.id;
 }
+
+function isCallback(symbol: ScriptSymbol): boolean {
+  return symbol.modifiers.includes('callback');
+}
+
+/** A callback in My Script's Graphs: nested in the one it is written in. */
+export interface CallbackRow {
+  symbol: ScriptSymbol;
+  /** Callbacks it is written in, within its owner (0: directly). */
+  depth: number;
+  /** Line of the callback (1-based), telling equal names apart. */
+  line: number;
+}
+
+/** The callbacks of a function or method, or of the module (`owner` none). */
+export interface CallbackGroup {
+  owner?: ScriptSymbol;
+  rows: CallbackRow[];
+}
+
+/**
+ * Callbacks grouped by the function they are written in, like an outline:
+ * the module's first, then each function's, nested callbacks below the one
+ * holding them, in code order. `shown` limits the rows (a search).
+ */
+export function callbackGroups(
+  doc: GraphDocument | null,
+  text: string,
+  shown: ReadonlyArray<ScriptSymbol>
+): CallbackGroup[] {
+  const graphs = new Map((doc?.functions ?? []).map((f) => [f.id, f]));
+  const withGraph = (doc?.symbols ?? []).flatMap((symbol) => {
+    const graph = symbol.fnId ? graphs.get(symbol.fnId) : undefined;
+    return graph &&
+      (symbol.kind === 'function' || symbol.kind === 'method') &&
+      graph.range.start > 0
+      ? [{ symbol, range: graph.range }]
+      : [];
+  });
+  // Innermost first: the nearest one holding a callback is its parent.
+  const holders = withGraph.toSorted(
+    (a, b) => a.range.end - a.range.start - (b.range.end - b.range.start)
+  );
+  const shownIds = new Set(shown.map((s) => s.id));
+  const groups = new Map<string, CallbackGroup>();
+  const callbacks = withGraph
+    .filter((entry) => isCallback(entry.symbol))
+    .toSorted((a, b) => a.range.start - b.range.start);
+  for (const { symbol, range } of callbacks) {
+    if (!shownIds.has(symbol.id)) {
+      continue;
+    }
+
+    let depth = 0;
+    let owner: ScriptSymbol | undefined;
+    for (const holder of holders) {
+      if (
+        holder.symbol !== symbol &&
+        holder.range.start <= range.start &&
+        holder.range.end >= range.end
+      ) {
+        if (isCallback(holder.symbol)) {
+          depth++;
+        } else {
+          owner = holder.symbol;
+          break;
+        }
+      }
+    }
+
+    const key = owner?.id ?? '';
+    const group = groups.get(key) ?? { ...(owner ? { owner } : {}), rows: [] };
+    groups.set(key, group);
+    group.rows.push({
+      symbol,
+      depth,
+      line: text.slice(0, range.start).split('\n').length,
+    });
+  }
+
+  // The module's callbacks first, then by the owner's place in the code.
+  return [...groups.values()].toSorted(
+    (a, b) => (a.owner?.range.start ?? -1) - (b.owner?.range.start ?? -1)
+  );
+}

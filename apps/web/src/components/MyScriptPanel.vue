@@ -19,6 +19,7 @@ import {
 import { usesSnakeCase } from '../graph/languages';
 import type { ModuleInfo } from '../graph/module-info';
 import {
+  callbackGroups,
   countedUses,
   DRAGGABLE_KINDS,
   isTypeImport,
@@ -303,11 +304,12 @@ function selectGraph(fn: FunctionGraph): void {
   }
 }
 
-/** Functions written as arguments (`on('x', (e) => …)`), with their graphs. */
+/**
+ * Functions written as arguments (`on('x', (e) => …)`), with their graphs,
+ * by the function they are written in.
+ */
 const callbacks = computed(() =>
-  symbols.value.filter(
-    (s) => s.modifiers.includes('callback') && s.fnId !== undefined
-  )
+  callbackGroups(props.doc, props.text, symbols.value)
 );
 
 const commentBoxes = computed(() =>
@@ -707,25 +709,43 @@ function addLabel(kind: AddKind, owner: string): string {
         </CollapseTransition>
         <CollapseTransition>
           <div v-if="!collapsed.graphs && callbacks.length > 0">
-            <button
-              v-for="callbackSymbol in callbacks"
-              :key="callbackSymbol.id"
-              type="button"
-              role="treeitem"
-              class="row pl-6"
-              :class="
-                callbackSymbol.id === selectedSymbol
-                  ? 'bg-amber-500/15 text-zinc-50'
-                  : ''
-              "
-              :aria-selected="callbackSymbol.id === selectedSymbol"
-              :title="`${callbackSymbol.name} — a function given as an argument; double-click to show it in the graph`"
-              @click="emit('selectSymbol', callbackSymbol.id)"
-              @dblclick="emit('selectFunction', callbackSymbol.fnId ?? '')"
-            >
-              <span class="i-mdi-function-variant text-sky-400" />
-              <span class="truncate">{{ callbackSymbol.name }}</span>
-            </button>
+            <template v-for="group in callbacks" :key="group.owner?.id ?? ''">
+              <!-- The module's callbacks go below "Module". -->
+              <button
+                v-if="group.owner"
+                type="button"
+                class="flex w-full items-center gap-1.5 pt-1 pr-2 pl-6 text-left text-xs text-zinc-500 hover:text-zinc-300"
+                :title="`Callbacks written in ${group.owner.name}`"
+                @click="emit('selectSymbol', group.owner.id)"
+              >
+                <span class="i-mdi-function" />
+                <span class="truncate">{{ group.owner.name }}</span>
+              </button>
+              <button
+                v-for="{ symbol: callbackSymbol, depth, line } in group.rows"
+                :key="callbackSymbol.id"
+                type="button"
+                role="treeitem"
+                class="row"
+                :class="
+                  callbackSymbol.id === selectedSymbol
+                    ? 'bg-amber-500/15 text-zinc-50'
+                    : ''
+                "
+                :style="{ paddingLeft: `${36 + depth * 12}px` }"
+                :aria-selected="callbackSymbol.id === selectedSymbol"
+                :title="`${callbackSymbol.name} (line ${line}) — a function given as an argument; double-click to show it in the graph`"
+                @click="emit('selectSymbol', callbackSymbol.id)"
+                @dblclick="emit('selectFunction', callbackSymbol.fnId ?? '')"
+              >
+                <span class="i-mdi-function-variant text-sky-400" />
+                <span class="truncate">{{ callbackSymbol.name }}</span>
+                <span
+                  class="ml-auto shrink-0 pl-2 font-mono text-[11px] text-zinc-500"
+                  >:{{ line }}</span
+                >
+              </button>
+            </template>
           </div>
         </CollapseTransition>
       </section>
