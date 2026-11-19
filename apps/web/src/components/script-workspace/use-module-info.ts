@@ -1,6 +1,6 @@
 import type { GraphDocument, LanguageVersion } from '@vizscript/core';
 import type { Ref, ShallowRef } from 'vue';
-import { shallowRef, watch } from 'vue';
+import { ref, shallowRef, watch } from 'vue';
 import { languageOf } from '../../graph/languages';
 import type { ModuleInfo } from '../../graph/module-info';
 import { moduleInfo } from '../../graph/module-info';
@@ -24,9 +24,14 @@ export function useModuleInfo(deps: {
   props: Readonly<ScriptWorkspaceProps>;
   doc: ShallowRef<GraphDocument | null>;
   version: Ref<LanguageVersion | null>;
-}): ShallowRef<ReadonlyMap<string, ModuleInfo>> {
+}): {
+  infos: ShallowRef<ReadonlyMap<string, ModuleInfo>>;
+  /** Reads the manifests again (one was changed here, like by "+"). */
+  refresh: () => void;
+} {
   const { props } = deps;
   const infos = shallowRef<ReadonlyMap<string, ModuleInfo>>(new Map());
+  const revision = ref(0);
   let seq = 0;
 
   async function update(modules: ReadonlyArray<string>): Promise<void> {
@@ -84,10 +89,16 @@ export function useModuleInfo(deps: {
         props.path,
         props.files,
         deps.version.value?.text,
+        revision.value,
       ] as const,
     ([modules]) => void update(modules ? modules.split('\n') : []),
     { immediate: true }
   );
 
-  return infos;
+  return {
+    infos,
+    refresh: () => {
+      revision.value++;
+    },
+  };
 }

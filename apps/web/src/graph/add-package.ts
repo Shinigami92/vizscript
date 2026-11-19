@@ -40,6 +40,27 @@ const MANIFESTS: Readonly<Record<Ecosystem, ReadonlyArray<string>>> = {
   crates: ['Cargo.toml'],
 };
 
+/**
+ * Whether two names mean one library: npm's names are exact; PyPI and
+ * crates.io treat `-`, `_` (and PyPI `.`) and case alike (`PyYAML`,
+ * `serde-json`).
+ */
+export function sameLibrary(
+  ecosystem: Ecosystem,
+  a: string,
+  b: string
+): boolean {
+  if (ecosystem === 'npm') {
+    return a === b;
+  }
+
+  return plainName(a) === plainName(b);
+}
+
+function plainName(name: string): string {
+  return name.toLowerCase().replaceAll(/[-_.]+/g, '-');
+}
+
 /** The manifest a new dependency of the file at `path` goes into. */
 export function manifestFor(
   files: ReadonlySet<string> | undefined,

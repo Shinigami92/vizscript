@@ -65,8 +65,11 @@ const emit = defineEmits<{
   select: [ids: string[]];
   reveal: [id: string];
   op: [op: GraphOp];
-  /** "+" on Imports, at the client point of the button. */
-  addPackage: [at: { x: number; y: number }];
+  /**
+   * "+" on Imports, at the client point of the button; `library`: only
+   * list that one (an import's "not listed" warning).
+   */
+  addPackage: [at: { x: number; y: number; library?: string }];
 }>();
 
 const query = ref('');
@@ -125,6 +128,16 @@ const canAddPackage = computed(
 function addPackage(event: MouseEvent): void {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
   emit('addPackage', { x: rect.left, y: rect.bottom + 4 });
+}
+
+/** An import's warning: add its library to the manifest. */
+function listLibrary(event: MouseEvent, library: string | undefined): void {
+  if (!library) {
+    return;
+  }
+
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  emit('addPackage', { x: rect.left, y: rect.bottom + 4, library });
 }
 
 function infoOf(group: Group): ModuleInfo | undefined {
@@ -803,8 +816,17 @@ function addLabel(kind: AddKind, owner: string): string {
                     :title="infoOf(group)?.title"
                     >{{ infoOf(group)?.label }}</span
                   >
+                  <button
+                    v-if="infoOf(group)?.warning && canAddPackage"
+                    type="button"
+                    data-ui="import-warning"
+                    class="i-mdi-alert-outline shrink-0 text-amber-400 hover:text-amber-300"
+                    :aria-label="`${infoOf(group)?.warning} Add it`"
+                    :title="`${infoOf(group)?.warning} Click to add it.`"
+                    @click="listLibrary($event, infoOf(group)?.library)"
+                  />
                   <span
-                    v-if="infoOf(group)?.warning"
+                    v-else-if="infoOf(group)?.warning"
                     data-ui="import-warning"
                     class="i-mdi-alert-outline shrink-0 text-amber-400"
                     role="img"

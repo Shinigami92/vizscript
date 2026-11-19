@@ -2,7 +2,7 @@
 import type { PackageSearchResult } from '@vizscript/api-contract';
 import type { DependencyKind, GraphOp, ScriptSymbol } from '@vizscript/core';
 import { useDebounceFn } from '@vueuse/core';
-import { computed, ref, shallowRef } from 'vue';
+import { computed, onMounted, ref, shallowRef } from 'vue';
 import { useToasts } from '../../composables/use-toasts';
 import {
   defaultKind,
@@ -13,6 +13,7 @@ import {
   libraryImport,
   manifestEdit,
   manifestFor,
+  sameLibrary,
 } from '../../graph/add-package';
 import { SYMBOL_ICONS } from '../../graph/symbols';
 import type { ActionEntry } from '../ActionMenu.vue';
@@ -39,6 +40,11 @@ const props = defineProps<{
    * unmounts) while the manifest is still being changed.
    */
   apply: (op: GraphOp) => void;
+  /**
+   * Only list this library in the manifest (an import's "not listed"
+   * warning: the import is there already).
+   */
+  listOnly?: string;
 }>();
 
 const emit = defineEmits<{ close: [] }>();
@@ -117,6 +123,11 @@ function guessModule(name: string): string {
 async function pick(result: PackageSearchResult): Promise<void> {
   reopen = true;
   kind.value = defaultKind(props.path, result.name);
+  if (props.listOnly) {
+    picked.value = { result, module: '', exports: [], reading: false };
+    return;
+  }
+
   const current = {
     result,
     module: guessModule(result.name),
@@ -130,6 +141,47 @@ async function pick(result: PackageSearchResult): Promise<void> {
   if (picked.value === current) {
     picked.value = { result, ...offer, reading: false };
   }
+}
+
+/** List-only: the library looked up by its exact name, picked when found. */
+async function lookUp(name: string): Promise<void> {
+  query.value = name;
+  searching.value = true;
+  await search(name);
+  const exact = results.value.find(
+    (r) => ecosystem.value && sameLibrary(ecosystem.value, r.name, name)
+  );
+  if (exact) {
+    kind.value = defaultKind(props.path, exact.name);
+    picked.value = { result: exact, module: '', exports: [], reading: false };
+  }
+}
+
+onMounted(() => {
+  if (props.listOnly) {
+    void lookUp(props.listOnly);
+  }
+});
+
+/** Writes the dependency into the manifest only. */
+async function list(as: DependencyKind): Promise<void> {
+  const chosen = picked.value;
+  const target = manifest.value;
+  if (!chosen || !target) {
+    return;
+  }
+
+  const { name, version } = chosen.result;
+  try {
+    await props.editFile(target, manifestEdit(target, name, version, as));
+  } catch {
+    toasts.show(`${manifestName.value} could not be read.`, 'error');
+    return;
+  }
+
+  toasts.show(
+    `Added ${name} ${version} to ${target} (unsaved). Run \`${installCommand(props.files, target)}\` to update the lockfile.`
+  );
 }
 
 async function add(imported: string | undefined): Promise<void> {
@@ -213,6 +265,22 @@ const entries = computed((): ActionEntry[] => {
   }
 
   const target = ecosystem.value;
+  if (props.listOnly && target) {
+    // Suggested kind first; one click writes it.
+    return kindsOf(target)
+      .toSorted((a, b) => Number(b === kind.value) - Number(a === kind.value))
+      .map((option) => ({
+        label: kindLabel(target, option),
+        category: `Add ${chosen.result.name} ${chosen.result.version} to ${manifestName.value} as`,
+        icon:
+          option === kind.value
+            ? 'i-mdi-plus text-amber-400'
+            : 'i-mdi-plus text-zinc-500',
+        ...(option === kind.value ? { hint: 'suggested' } : {}),
+        action: () => void list(option),
+      }));
+  }
+
   const imports: ActionEntry[] = [
     {
       label: chosen.module,
@@ -263,6 +331,10 @@ const entries = computed((): ActionEntry[] => {
 
 const title = computed(() => {
   const chosen = picked.value;
+  if (props.listOnly) {
+    return `Add ${props.listOnly} to ${manifestName.value}`;
+  }
+
   return chosen
     ? `Add ${chosen.result.name} ${chosen.result.version}`
     : 'Add a library';

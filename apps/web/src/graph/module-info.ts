@@ -17,6 +17,8 @@ export interface ModuleInfo {
   title: string;
   /** Something to fix (shown with a warning icon). */
   warning?: string;
+  /** With a warning: the library to add to the manifest (`lodash`, `pyyaml`). */
+  library?: string;
 }
 
 /** Import names of well-known Python distributions with another name. */
@@ -175,6 +177,7 @@ export function moduleInfo(
     return {
       title: `${found.name} is in no ${MANIFESTS[language] ?? 'manifest'} of the project`,
       warning: `${found.name} is not listed as a dependency in ${MANIFESTS[language] ?? 'the manifest'}: it may only work because another package brings it along.`,
+      library: found.name,
     };
   }
 

@@ -170,10 +170,25 @@ const { version: languageVersion, versionFiles } = useLanguageVersion({
   readFile: () => props.readFile,
 });
 /** Versions and dependency kinds of the imported modules (My Script). */
-const moduleInfos = useModuleInfo({ props, doc, version: languageVersion });
+const { infos: moduleInfos, refresh: refreshModuleInfos } = useModuleInfo({
+  props,
+  doc,
+  version: languageVersion,
+});
+
+/** Changes another file; the imports' library info follows (a manifest). */
+async function editOtherFile(
+  path: string,
+  edit: (text: string) => string
+): Promise<void> {
+  await props.editFile?.(path, edit);
+  refreshModuleInfos();
+}
 
 /** "+" in Imports: where its menu opens, while it is open. */
-const addingPackage = ref<{ x: number; y: number } | null>(null);
+const addingPackage = ref<{ x: number; y: number; library?: string } | null>(
+  null
+);
 const registryReady = ref(false);
 void typeRegistryAvailable().then((ready) => (registryReady.value = ready));
 const canAddPackage = computed(
@@ -1181,9 +1196,10 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :at="addingPackage"
         :path="path"
         :files="files"
-        :edit-file="editFile"
+        :edit-file="editOtherFile"
         :offer="packageOffer"
         :apply="onScriptOp"
+        :list-only="addingPackage.library"
         @close="addingPackage = null"
       />
     </WorkbenchView>

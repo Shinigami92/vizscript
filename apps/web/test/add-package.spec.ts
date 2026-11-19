@@ -6,6 +6,7 @@ import {
   libraryImport,
   manifestEdit,
   manifestFor,
+  sameLibrary,
 } from '../src/graph/add-package';
 
 describe('adding a library', () => {
@@ -72,5 +73,11 @@ describe('adding a library', () => {
     expect(installCommand(files, 'tools/pyproject.toml')).toBe('uv sync');
     expect(installCommand(files, 'crates/app/Cargo.toml')).toBe('cargo build');
     expect(installCommand(new Set(), 'package.json')).toBe('npm install');
+  });
+
+  it('matches names the way each registry does', () => {
+    expect(sameLibrary('pypi', 'PyYAML', 'pyyaml')).toBe(true);
+    expect(sameLibrary('crates', 'serde-json', 'serde_json')).toBe(true);
+    expect(sameLibrary('npm', 'Vue', 'vue')).toBe(false);
   });
 });
