@@ -1,6 +1,7 @@
 import type { GraphDocument, ScriptSymbol } from '@vizscript/core';
 import { exportedSymbols, withReexports } from '@vizscript/core';
 import { MissingUrls } from './missing-urls';
+import { registryUrl, typeRegistryAvailable } from './type-registry';
 
 /**
  * Declarations of npm packages, read from their `.d.ts` files on jsDelivr
@@ -19,6 +20,38 @@ const missing = new MissingUrls();
 const FETCH_TIMEOUT_MS = 15_000;
 
 /**
+ * One request: the text, `null` for a 404, `undefined` for anything that
+ * may work later (network errors, timeouts, rate limits).
+ */
+async function request(url: string): Promise<string | null | undefined> {
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (response.ok) {
+      return await response.text();
+    }
+
+    return response.status === 404 ? null : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The file from the server's type registry when it has one (`/api/types`,
+ * cached there for every user), else from jsDelivr; jsDelivr too when the
+ * registry refuses or fails.
+ */
+async function load(url: string): Promise<string | null | undefined> {
+  const proxied = (await typeRegistryAvailable())
+    ? registryUrl(url)
+    : undefined;
+  const viaRegistry = proxied ? await request(proxied) : undefined;
+  return viaRegistry ?? request(url);
+}
+
+/**
  * Text of a file, `undefined` when it can't be read. A missing file (404)
  * stays missing for the session and is remembered for later visits
  * (`MissingUrls`); other failures (network errors, timeouts, rate limits)
@@ -32,24 +65,18 @@ export function fetchText(url: string): Promise<string | undefined> {
   }
 
   if (!text) {
-    const forget = (): undefined => {
-      texts.delete(url);
-      return undefined;
-    };
-    text = fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
-      .then((response) => {
-        if (response.ok) {
-          return response.text();
-        }
+    text = load(url).then((result) => {
+      if (result === null) {
+        missing.add(url);
+        return undefined;
+      }
 
-        if (response.status === 404) {
-          missing.add(url);
-          return undefined;
-        }
+      if (result === undefined) {
+        texts.delete(url);
+      }
 
-        return forget();
-      })
-      .catch(forget);
+      return result;
+    });
     texts.set(url, text);
   }
 
