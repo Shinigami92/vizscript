@@ -56,6 +56,52 @@ export function fetchText(url: string): Promise<string | undefined> {
   return text;
 }
 
+const LISTING = 'https://data.jsdelivr.com/v1/packages/npm/';
+
+const listings = new Map<string, Promise<ReadonlySet<string> | undefined>>();
+
+/**
+ * The files of an exact package version (paths inside it, no leading `/`),
+ * from jsDelivr's listing: a file is only read when it exists, instead of
+ * guessing `index.d.ts`, `x.d.ts` or `x/index.d.ts`. `undefined` when the
+ * listing can't be read (then the files are guessed as before).
+ */
+export function packageFiles(
+  name: string,
+  version: string
+): Promise<ReadonlySet<string> | undefined> {
+  const key = `${name}@${version}`;
+  let files = listings.get(key);
+  if (!files) {
+    files = fetchText(`${LISTING}${key}?structure=flat`).then((text) => {
+      if (text === undefined) {
+        listings.delete(key);
+        return undefined;
+      }
+
+      try {
+        const json = JSON.parse(text) as { files?: Array<{ name?: unknown }> };
+        return new Set(
+          (json.files ?? [])
+            .map((file) => file.name)
+            .filter((path): path is string => typeof path === 'string')
+            .map((path) => path.replace(/^\//, ''))
+        );
+      } catch {
+        return undefined;
+      }
+    });
+    listings.set(key, files);
+  }
+
+  return files;
+}
+
+/** Whether a listing names any declaration file. */
+export function hasDeclarations(files: ReadonlySet<string>): boolean {
+  return [...files].some((path) => /\.d\.[cm]?ts$/.test(path));
+}
+
 /** `@scope/pkg/sub` → `@scope/pkg`; relative, absolute and `node:` → none. */
 export function packageName(specifier: string): string | undefined {
   if (/^(?:\.|\/|[a-z]+:)/.test(specifier)) {
@@ -120,6 +166,8 @@ interface Manifest {
   /** Path of the types entry inside it. */
   types: string | undefined;
   dependencies: Record<string, string>;
+  /** The files of the version (`packageFiles`), if listed. */
+  files: ReadonlySet<string> | undefined;
 }
 
 export function typesOfExports(exports: unknown): string | undefined {
@@ -188,31 +236,33 @@ export class NpmTypes {
     if (!manifest) {
       manifest = fetchText(
         `${CDN}${name}@${encodeURIComponent(range)}/package.json`
-      ).then((text) => {
+      ).then(async (text) => {
         if (!text) {
           this.manifests.delete(key);
           return undefined;
         }
 
+        let json: Record<string, unknown>;
         try {
-          const json = JSON.parse(text) as Record<string, unknown>;
-          const version =
-            typeof json.version === 'string' ? json.version : range;
-          const types =
-            (typeof json.types === 'string' ? json.types : undefined) ??
-            (typeof json.typings === 'string' ? json.typings : undefined) ??
-            typesOfExports(json.exports);
-          return {
-            base: `${CDN}${name}@${version}/`,
-            types: types?.replace(/^\.\//, ''),
-            dependencies: {
-              ...(json.peerDependencies as Record<string, string> | undefined),
-              ...(json.dependencies as Record<string, string> | undefined),
-            },
-          };
+          json = JSON.parse(text) as Record<string, unknown>;
         } catch {
           return undefined;
         }
+
+        const version = typeof json.version === 'string' ? json.version : range;
+        const types =
+          (typeof json.types === 'string' ? json.types : undefined) ??
+          (typeof json.typings === 'string' ? json.typings : undefined) ??
+          typesOfExports(json.exports);
+        return {
+          base: `${CDN}${name}@${version}/`,
+          types: types?.replace(/^\.\//, ''),
+          dependencies: {
+            ...(json.peerDependencies as Record<string, string> | undefined),
+            ...(json.dependencies as Record<string, string> | undefined),
+          },
+          files: await packageFiles(name, version),
+        };
       });
       this.manifests.set(key, manifest);
     }
@@ -241,13 +291,12 @@ export class NpmTypes {
     walk: Walk
   ): Promise<ScriptSymbol[]> {
     const manifest = await this.manifest(name, range);
-    if (manifest?.types) {
-      return this.fileExports(
-        manifest.base + manifest.types,
-        manifest,
-        0,
-        walk
-      );
+    // Without a types entry, TypeScript reads `index.d.ts` when there is one.
+    const entry =
+      manifest?.types ??
+      (manifest?.files?.has('index.d.ts') ? 'index.d.ts' : undefined);
+    if (manifest && entry) {
+      return this.fileExports(manifest.base + entry, manifest, 0, walk);
     }
 
     // No types of its own: DefinitelyTyped.
@@ -336,7 +385,10 @@ export class NpmTypes {
         }
 
         for (const candidate of declarationFiles(url, specifier)) {
-          if ((await fetchText(candidate)) !== undefined) {
+          const listed =
+            !manifest.files ||
+            manifest.files.has(candidate.slice(manifest.base.length));
+          if (listed && (await fetchText(candidate)) !== undefined) {
             return this.fileExports(candidate, manifest, depth + 1, walk);
           }
         }

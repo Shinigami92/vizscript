@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   candidates,
   declarationSpecifiers,
+  npmDeclarations,
 } from '../src/graph/npm-declarations';
+import { CDN } from '../src/graph/npm-types';
 
 describe('declarationSpecifiers', () => {
   it('ignores imports in comments and text that is no module', () => {
@@ -69,5 +71,111 @@ describe('candidates', () => {
     expect(candidates('index.d.ts', '.')).toEqual(['index.d.ts']);
     expect(candidates('lib/x.d.ts', '..')).toEqual(['index.d.ts']);
     expect(candidates('lib/x.d.ts', './sub/')).toEqual(['lib/sub/index.d.ts']);
+  });
+});
+
+function serve(files: Record<string, string>): string[] {
+  const requests: string[] = [];
+  vi.stubGlobal('fetch', async (url: string) => {
+    requests.push(url);
+    const body = files[url];
+    return {
+      ok: body !== undefined,
+      status: body === undefined ? 404 : 200,
+      text: async () => body,
+    };
+  });
+  return requests;
+}
+
+const listing = (key: string, files: string[]): Record<string, string> => ({
+  [`https://data.jsdelivr.com/v1/packages/npm/${key}?structure=flat`]:
+    JSON.stringify({ files: files.map((f) => ({ name: `/${f}` })) }),
+});
+
+describe('npmDeclarations', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('goes to @types without guessing files a listing lacks', async () => {
+    const requests = serve({
+      [`${CDN}untyped@latest/package.json`]: JSON.stringify({
+        version: '2.0.0',
+      }),
+      ...listing('untyped@2.0.0', ['package.json', 'index.js']),
+      [`${CDN}@types/untyped@latest/package.json`]: JSON.stringify({
+        version: '2.0.1',
+        types: 'index.d.ts',
+      }),
+      ...listing('@types/untyped@2.0.1', ['package.json', 'index.d.ts']),
+      [`${CDN}@types/untyped@2.0.1/index.d.ts`]: 'export declare const u: 1;',
+    });
+    const files = await npmDeclarations([['untyped', 'latest']]);
+    expect(files.map((f) => f.path)).toContain(
+      'node_modules/@types/untyped/index.d.ts'
+    );
+    expect(requests).not.toContain(`${CDN}untyped@2.0.0/index.d.ts`);
+  });
+
+  it('reads `/// <reference types>` from @types first', async () => {
+    const requests = serve({
+      [`${CDN}bundler@latest/package.json`]: JSON.stringify({
+        version: '1.0.0',
+        types: 'index.d.ts',
+      }),
+      ...listing('bundler@1.0.0', ['package.json', 'index.d.ts']),
+      [`${CDN}bundler@1.0.0/index.d.ts`]:
+        '/// <reference types="estreeish" />\n/// <reference types="node" />\nexport {};',
+      [`${CDN}@types/estreeish@latest/package.json`]: JSON.stringify({
+        version: '1.0.6',
+        types: 'index.d.ts',
+      }),
+      ...listing('@types/estreeish@1.0.6', ['package.json', 'index.d.ts']),
+      [`${CDN}@types/estreeish@1.0.6/index.d.ts`]: 'export type Node = {};',
+    });
+    const files = await npmDeclarations([['bundler', 'latest']]);
+    expect(files.map((f) => f.path)).toContain(
+      'node_modules/@types/estreeish/index.d.ts'
+    );
+    // Neither the bare name nor Node.js's types are asked for.
+    expect(requests).not.toContain(`${CDN}estreeish@latest/package.json`);
+    expect(requests.some((url) => url.includes('/node@'))).toBe(false);
+  });
+
+  it('reads what the package depends on, bare name or @types', async () => {
+    const requests = serve({
+      [`${CDN}rollupish@latest/package.json`]: JSON.stringify({
+        version: '1.0.0',
+        types: 'index.d.ts',
+        dependencies: { '@types/treeish': '1.0.8', 'bunish-types': '1.4.4' },
+      }),
+      ...listing('rollupish@1.0.0', ['package.json', 'index.d.ts']),
+      [`${CDN}rollupish@1.0.0/index.d.ts`]:
+        '/// <reference types="bunish-types" />\nimport type * as t from "treeish";',
+      [`${CDN}@types/treeish@1.0.8/package.json`]: JSON.stringify({
+        version: '1.0.8',
+        types: 'index.d.ts',
+      }),
+      ...listing('@types/treeish@1.0.8', ['package.json', 'index.d.ts']),
+      [`${CDN}@types/treeish@1.0.8/index.d.ts`]: 'export type T = 1;',
+      [`${CDN}bunish-types@1.4.4/package.json`]: JSON.stringify({
+        version: '1.4.4',
+        types: 'index.d.ts',
+      }),
+      ...listing('bunish-types@1.4.4', ['package.json', 'index.d.ts']),
+      [`${CDN}bunish-types@1.4.4/index.d.ts`]: 'export type B = 1;',
+    });
+    const files = await npmDeclarations([['rollupish', 'latest']]);
+    expect(files.map((f) => f.path)).toEqual(
+      expect.arrayContaining([
+        'node_modules/@types/treeish/index.d.ts',
+        'node_modules/bunish-types/index.d.ts',
+      ])
+    );
+    expect(requests).not.toContain(`${CDN}treeish@latest/package.json`);
+    expect(requests).not.toContain(
+      `${CDN}@types/bunish-types@1.4.4/package.json`
+    );
   });
 });

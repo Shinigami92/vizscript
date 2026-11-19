@@ -1,6 +1,8 @@
 import {
   CDN,
   fetchText,
+  hasDeclarations,
+  packageFiles,
   packageName,
   typesOfExports,
   typesPackage,
@@ -22,40 +24,52 @@ export interface LibFile {
 const PACKAGE_LIMIT = 250;
 
 /**
- * Node.js modules: not on npm (or placeholder packages there), and
- * `@types/node` is large, so they stay unresolved.
+ * Node.js modules (as Node's `builtinModules` lists them): not on npm, or
+ * placeholder packages there, and `@types/node` is large, so they stay
+ * unresolved.
  */
 const SKIPPED = new Set([
   'node',
   'assert',
+  'async_hooks',
   'buffer',
   'child_process',
   'cluster',
+  'console',
+  'constants',
   'crypto',
   'dgram',
+  'diagnostics_channel',
   'dns',
+  'domain',
   'events',
   'fs',
   'http',
   'http2',
   'https',
+  'inspector',
   'module',
   'net',
   'os',
   'path',
   'perf_hooks',
   'process',
+  'punycode',
   'querystring',
   'readline',
+  'repl',
   'stream',
   'string_decoder',
+  'sys',
   'timers',
   'tls',
+  'trace_events',
   'tty',
   'url',
   'util',
   'v8',
   'vm',
+  'wasi',
   'worker_threads',
   'zlib',
 ]);
@@ -188,10 +202,18 @@ function exportedTypes(exports: unknown, into: Set<string>): void {
   }
 }
 
+/**
+ * A package to read: the first option that has declarations (`x` or its
+ * DefinitelyTyped `@types/x`, in the order TypeScript would find them).
+ */
+interface Dependency {
+  options: Array<{ name: string; range: string }>;
+}
+
 interface PackageResult {
   files: LibFile[];
   /** Packages its declarations import, with their version ranges. */
-  dependencies: Array<[name: string, range: string]>;
+  dependencies: Dependency[];
 }
 
 /** Packages read during one session, by `name@range`. */
@@ -224,12 +246,39 @@ async function readPackage(
   const files: LibFile[] = [
     { path: `node_modules/${name}/package.json`, text: manifestText },
   ];
-  const dependencies = new Map<string, string>();
-  const depend = (specifier: string): void => {
+  // Only files that exist are read (unless the listing is unavailable).
+  const listing = await packageFiles(name, version);
+  const exists = (path: string): boolean => !listing || listing.has(path);
+  const dependencies = new Map<string, Dependency>();
+  const depend = (specifier: string, typesFirst = false): void => {
     const dependency = packageName(specifier);
-    if (dependency && dependency !== name && !SKIPPED.has(dependency)) {
-      dependencies.set(dependency, ranges[dependency] ?? 'latest');
+    if (
+      !dependency ||
+      dependency === name ||
+      SKIPPED.has(dependency) ||
+      dependencies.has(dependency)
+    ) {
+      return;
     }
+
+    const types = typesPackage(dependency);
+    // What the package depends on says which one exists (`rollup` depends
+    // on `@types/estree`, `@types/bun` on `bun-types`); else `@types/x`
+    // first for `/// <reference types>`, the package itself for imports.
+    const order =
+      dependency.startsWith('@types/') || ranges[dependency]
+        ? [dependency]
+        : ranges[types]
+          ? [types]
+          : typesFirst
+            ? [types, dependency]
+            : [dependency, types];
+    dependencies.set(dependency, {
+      options: order.map((option) => ({
+        name: option,
+        range: ranges[option] ?? 'latest',
+      })),
+    });
   };
 
   const entries = new Set<string>();
@@ -242,12 +291,16 @@ async function readPackage(
   }
 
   exportedTypes(json.exports, entries);
-  if (entries.size === 0) {
+  if (entries.size === 0 && exists('index.d.ts')) {
     entries.add('index.d.ts');
   }
 
   const read = new Set<string>();
-  const queue = [...entries].map((path) => [path]);
+  // A listing without declarations: straight to `@types`.
+  const queue =
+    listing && !hasDeclarations(listing)
+      ? []
+      : [...entries].map((path) => [path]);
   let found = 0;
   while (queue.length > 0 && read.size < PACKAGE_LIMIT) {
     const options = queue.shift() ?? [];
@@ -256,6 +309,10 @@ async function readPackage(
     for (const option of options) {
       if (read.has(option)) {
         break;
+      }
+
+      if (!exists(option)) {
+        continue;
       }
 
       text = await fetchText(base + option);
@@ -286,19 +343,21 @@ async function readPackage(
     }
 
     for (const reference of refs.types) {
-      depend(reference);
+      depend(reference, true);
     }
   }
 
   // No declarations of its own: TypeScript looks in `@types`.
   if (found === 0 && !name.startsWith('@types/')) {
-    dependencies.set(typesPackage(name), 'latest');
+    dependencies.set(typesPackage(name), {
+      options: [{ name: typesPackage(name), range: 'latest' }],
+    });
   }
 
-  return { files, dependencies: [...dependencies] };
+  return { files, dependencies: [...dependencies.values()] };
 }
 
-function packageFiles(name: string, range: string): Promise<PackageResult> {
+function packageResult(name: string, range: string): Promise<PackageResult> {
   const key = `${name}@${range}`;
   let result = packages.get(key);
   if (!result) {
@@ -322,15 +381,29 @@ export async function npmDeclarations(
 ): Promise<LibFile[]> {
   const seen = new Set<string>();
   const files: LibFile[] = [];
-  let level = roots.filter(([name]) => !SKIPPED.has(name));
+  let level: Dependency[] = roots
+    .filter(([name]) => !SKIPPED.has(name))
+    .map(([name, range]) => ({ options: [{ name, range }] }));
   while (level.length > 0 && files.length < limit) {
-    const next = level.filter(([name]) => !seen.has(name));
-    for (const [name] of next) {
-      seen.add(name);
+    const key = (dependency: Dependency): string =>
+      dependency.options[0]?.name ?? '';
+    const next = level.filter((dependency) => !seen.has(key(dependency)));
+    for (const dependency of next) {
+      seen.add(key(dependency));
     }
 
     const results = await Promise.all(
-      next.map(([name, range]) => packageFiles(name, range))
+      next.map(async ({ options }) => {
+        // The first option with declarations (beyond its `package.json`).
+        for (const [index, { name, range }] of options.entries()) {
+          const result = await packageResult(name, range);
+          if (result.files.length > 1 || index === options.length - 1) {
+            return result;
+          }
+        }
+
+        return { files: [], dependencies: [] };
+      })
     );
     level = [];
     for (const result of results) {

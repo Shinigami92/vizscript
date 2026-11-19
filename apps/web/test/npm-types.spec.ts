@@ -114,6 +114,35 @@ describe('NpmTypes', () => {
   });
 });
 
+/** jsDelivr's file listing of `name@1.0.0`. */
+const listing = (name: string, files: string[]): Record<string, string> => ({
+  [`https://data.jsdelivr.com/v1/packages/npm/${name}@1.0.0?structure=flat`]:
+    JSON.stringify({ files: files.map((f) => ({ name: `/${f}` })) }),
+});
+
+describe('NpmTypes with a file listing', () => {
+  it('reads only files the listing names', async () => {
+    const requests = serve({
+      ...manifest('listed', 'index.d.ts'),
+      ...listing('listed', ['package.json', 'index.d.ts', 'lib/index.d.ts']),
+      [`${CDN}listed@1.0.0/index.d.ts`]: 'exports a; from ./lib',
+      [`${CDN}listed@1.0.0/lib/index.d.ts`]: 'exports b',
+    });
+    expect(names(await npmTypes().exportsOf('listed'))).toEqual(['a', 'b']);
+    // `./lib` could be `lib.d.ts`: not listed, so not asked for.
+    expect(requests.has(`${CDN}listed@1.0.0/lib.d.ts`)).toBe(false);
+  });
+
+  it('reads index.d.ts of a package without a types entry', async () => {
+    serve({
+      [`${CDN}plain@latest/package.json`]: JSON.stringify({ version: '1.0.0' }),
+      ...listing('plain', ['package.json', 'index.d.ts']),
+      [`${CDN}plain@1.0.0/index.d.ts`]: 'exports p',
+    });
+    expect(names(await npmTypes().exportsOf('plain'))).toEqual(['p']);
+  });
+});
+
 describe('fetchText', () => {
   it('tries again after a network error, not after a 404', async () => {
     let fail = true;
