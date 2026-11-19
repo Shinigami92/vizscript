@@ -7,11 +7,16 @@ import { folderOf, nearest } from './project-files';
  * library types are read in the version the project installs.
  */
 
+/**
+ * Sections in the order that names a package listed twice: a library's
+ * peer dependency is often a devDependency too (for its own tests), and the
+ * peer is what its users need.
+ */
 const SECTIONS: ReadonlyArray<readonly [string, DependencyKind]> = [
   ['dependencies', 'runtime'],
-  ['devDependencies', 'dev'],
   ['peerDependencies', 'peer'],
   ['optionalDependencies', 'optional'],
+  ['devDependencies', 'dev'],
 ];
 
 const LOCKFILES = ['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock'];
@@ -311,6 +316,45 @@ export async function npmDependencies(
 }
 
 /**
+ * The dependencies of every `package.json` from the nearest one above
+ * `path` up to the repository's root (a monorepo's root has the tools),
+ * nearest first; a package listed twice counts where it is nearest.
+ */
+export async function npmDependencyChain(
+  files: ReadonlySet<string> | undefined,
+  read: ((path: string) => Promise<string>) | undefined,
+  path: string
+): Promise<ProjectDependency[]> {
+  if (!files || !read) {
+    return [];
+  }
+
+  const found = new Map<string, ProjectDependency>();
+  let from = path;
+  for (;;) {
+    const manifest = await nearestManifest(files, read, from);
+    if (!manifest) {
+      break;
+    }
+
+    for (const dependency of await dependenciesOf(files, read, manifest)) {
+      if (!found.has(dependency.name)) {
+        found.set(dependency.name, dependency);
+      }
+    }
+
+    const dir = folderOf(manifest.path);
+    if (dir.length === 0) {
+      break;
+    }
+
+    from = [...dir.slice(0, -1), 'package.json'].join('/');
+  }
+
+  return [...found.values()];
+}
+
+/**
  * The version to read a package's types in: the lockfile's exact version,
  * else the manifest's range, `latest` when no manifest lists it, `''` for
  * packages of the repository (nothing to fetch).
@@ -321,30 +365,9 @@ export async function packageVersion(
   path: string,
   name: string
 ): Promise<string> {
-  if (!files || !read) {
-    return 'latest';
-  }
-
-  // The nearest manifest that lists it (a monorepo's root has the tools).
-  let dependency: ProjectDependency | undefined;
-  let from = path;
-  while (!dependency) {
-    const manifest = await nearestManifest(files, read, from);
-    if (!manifest) {
-      return 'latest';
-    }
-
-    dependency = (await dependenciesOf(files, read, manifest)).find(
-      (d) => d.name === name
-    );
-    const dir = folderOf(manifest.path);
-    if (dir.length === 0) {
-      break;
-    }
-
-    from = [...dir.slice(0, -1), 'package.json'].join('/');
-  }
-
+  const dependency = (await npmDependencyChain(files, read, path)).find(
+    (d) => d.name === name
+  );
   if (!dependency) {
     return 'latest';
   }

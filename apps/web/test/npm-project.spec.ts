@@ -50,18 +50,20 @@ describe('manifestDependencies', () => {
     const deps = manifestDependencies(
       JSON.stringify({
         dependencies: { vue: '^3.5.0', '@app/core': 'workspace:*' },
-        devDependencies: { vitest: '^4.0.0', vue: '^3.4.0' },
-        peerDependencies: { react: '>=18' },
+        devDependencies: { vitest: '^4.0.0', vue: '^3.4.0', pg: '^8.0.0' },
+        peerDependencies: { react: '>=18', pg: '>=8' },
         optionalDependencies: { fsevents: '^2.3.0' },
       }),
       'package.json'
     );
+    // A peer that is a devDependency too (for the library's tests) is a peer.
     expect(deps.map((d) => [d.name, d.range, d.kind, d.local])).toEqual([
       ['vue', '^3.5.0', 'runtime', undefined],
       ['@app/core', 'workspace:*', 'runtime', true],
-      ['vitest', '^4.0.0', 'dev', undefined],
       ['react', '>=18', 'peer', undefined],
+      ['pg', '>=8', 'peer', undefined],
       ['fsevents', '^2.3.0', 'optional', undefined],
+      ['vitest', '^4.0.0', 'dev', undefined],
     ]);
     expect(manifestDependencies('not json', 'package.json')).toEqual([]);
   });

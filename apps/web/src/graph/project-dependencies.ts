@@ -1,13 +1,14 @@
 import type { ProjectDependency } from '@vizscript/core';
 import { rustDependencies } from './cargo-project';
 import { languageOf } from './languages';
-import { npmDependencies } from './npm-project';
+import { npmDependencyChain } from './npm-project';
 import { pythonDependencies } from './python-project';
 
 /**
  * The dependencies of the project a file belongs to, read from its
- * ecosystem's manifest and lockfile (none for GDScript: addons are files of
- * the project).
+ * ecosystem's manifest and lockfile (npm: also the manifests above it, up
+ * to a monorepo's root; none for GDScript: addons are files of the
+ * project).
  */
 export function projectDependencies(
   files: ReadonlySet<string> | undefined,
@@ -16,7 +17,7 @@ export function projectDependencies(
 ): Promise<ProjectDependency[]> {
   switch (languageOf(path)) {
     case 'typescript': {
-      return npmDependencies(files, read, path);
+      return npmDependencyChain(files, read, path);
     }
 
     case 'python': {
