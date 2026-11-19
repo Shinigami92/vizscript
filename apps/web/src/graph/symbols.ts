@@ -269,3 +269,36 @@ export const DRAGGABLE_KINDS: ReadonlySet<SymbolKind> = new Set([
   'signal',
   'import',
 ]);
+
+/**
+ * Where a new function of `scope` goes: after the function, method or
+ * class of that scope the user is working in (the symbol selected in My
+ * Script, else the function shown or selected in the graph), as the
+ * `after` of an `addFunction` op. `undefined`: the default place.
+ */
+export function newFunctionAnchor(
+  doc: GraphDocument | null,
+  scope: string,
+  selectedSymbol: string | null,
+  currentFunction: string | null
+): string | undefined {
+  const symbols = doc?.symbols ?? [];
+  const at =
+    symbols.find((s) => s.id === selectedSymbol && s.kind !== 'import') ??
+    symbols.find(
+      (s) =>
+        (s.kind === 'function' || s.kind === 'method') &&
+        qualifiedName(s) === currentFunction
+    );
+  if (!at) {
+    return undefined;
+  }
+
+  return symbols.find(
+    (s) =>
+      s.scope === scope &&
+      (s.kind === 'function' || s.kind === 'method' || s.kind === 'class') &&
+      s.range.start <= at.range.start &&
+      at.range.end <= s.range.end
+  )?.id;
+}

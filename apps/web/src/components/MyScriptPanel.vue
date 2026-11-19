@@ -20,6 +20,7 @@ import { usesSnakeCase } from '../graph/languages';
 import {
   countedUses,
   DRAGGABLE_KINDS,
+  newFunctionAnchor,
   SYMBOL_DRAG_MIME,
   SYMBOL_ICONS,
   symbolLabel,
@@ -362,8 +363,11 @@ function badges(symbol: ScriptSymbol): string {
 const editing = ref<string | null>(null);
 const draft = ref('');
 const field = useTemplateRef<HTMLInputElement[]>('field');
-/** A symbol just added: its name is edited as soon as it exists. */
-let pending: { scope: string; name: string } | null = null;
+/**
+ * A symbol just added: its name is edited as soon as it exists, a
+ * function's graph is shown.
+ */
+let pending: { scope: string; name: string; kind: AddKind } | null = null;
 
 async function startRename(symbol: ScriptSymbol): Promise<void> {
   if (!props.editable || symbol.kind === 'import') {
@@ -423,12 +427,17 @@ watch(
       return;
     }
 
-    const { scope, name } = pending;
+    const { scope, name, kind } = pending;
     const added = list?.find((s) => s.scope === scope && s.name === name);
     if (added) {
       pending = null;
       emit('selectSymbol', added.id);
       void startRename(added);
+      // Like UE opening a new function's graph; once the canvas has it.
+      const fnId = added.fnId;
+      if (kind === 'function' && fnId) {
+        void nextTick(() => emit('selectFunction', fnId));
+      }
     }
   }
 );
@@ -442,10 +451,21 @@ function add(kind: AddKind, owner: string): void {
   const scope = kind === 'local' ? (props.currentFunction ?? '') : owner;
   const [camel, snakeCase] = BASE_NAMES[kind];
   const name = uniqueName(doc, scope, snake.value ? snakeCase : camel);
-  pending = { scope, name };
+  pending = { scope, name, kind };
   switch (kind) {
     case 'function': {
-      emit('op', { type: 'addFunction', scope, name });
+      const after = newFunctionAnchor(
+        doc,
+        scope,
+        props.selectedSymbol,
+        props.currentFunction
+      );
+      emit('op', {
+        type: 'addFunction',
+        scope,
+        name,
+        ...(after ? { after } : {}),
+      });
       break;
     }
 
