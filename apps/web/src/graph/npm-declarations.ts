@@ -296,55 +296,76 @@ async function readPackage(
   }
 
   const read = new Set<string>();
-  // A listing without declarations: straight to `@types`.
-  const queue =
-    listing && !hasDeclarations(listing)
-      ? []
-      : [...entries].map((path) => [path]);
-  let found = 0;
-  while (queue.length > 0 && read.size < PACKAGE_LIMIT) {
-    const options = queue.shift() ?? [];
-    let text: string | undefined;
-    let path: string | undefined;
+  /** The first of `options` that exists, or nothing new. */
+  const readFirst = async (
+    options: ReadonlyArray<string>
+  ): Promise<{ path: string; text: string } | undefined> => {
     for (const option of options) {
       if (read.has(option)) {
-        break;
+        return undefined;
       }
 
       if (!exists(option)) {
         continue;
       }
 
-      text = await fetchText(base + option);
+      const text = await fetchText(base + option);
       if (text !== undefined) {
-        path = option;
-        break;
+        return { path: option, text };
       }
     }
 
-    if (text === undefined || path === undefined) {
-      continue;
-    }
+    return undefined;
+  };
 
-    read.add(path);
-    found++;
-    files.push({ path: `node_modules/${name}/${path}`, text });
-    const refs = declarationSpecifiers(text);
-    for (const specifier of refs.modules) {
-      if (specifier.startsWith('.')) {
-        queue.push(candidates(path, specifier));
-      } else {
-        depend(specifier);
+  // Read in waves: the files one wave refers to are read side by side
+  // (a package like `@nestjs/common` has hundreds).
+  let wave: string[][] =
+    listing && !hasDeclarations(listing)
+      ? [] // A listing without declarations: straight to `@types`.
+      : [...entries].map((path) => [path]);
+  let found = 0;
+  while (wave.length > 0 && read.size < PACKAGE_LIMIT) {
+    const results = await Promise.all(wave.map(readFirst));
+    const next: string[][] = [];
+    for (const result of results) {
+      if (!result || read.has(result.path) || read.size >= PACKAGE_LIMIT) {
+        continue;
+      }
+
+      const { path, text } = result;
+      read.add(path);
+      found++;
+      files.push({ path: `node_modules/${name}/${path}`, text });
+      const refs = declarationSpecifiers(text);
+      for (const specifier of refs.modules) {
+        if (specifier.startsWith('.')) {
+          next.push(candidates(path, specifier));
+        } else {
+          depend(specifier);
+        }
+      }
+
+      for (const reference of refs.paths) {
+        next.push(candidates(path, reference));
+      }
+
+      for (const reference of refs.types) {
+        depend(reference, true);
       }
     }
 
-    for (const reference of refs.paths) {
-      queue.push(candidates(path, reference));
-    }
+    // Each file once per wave.
+    const queued = new Set<string>();
+    wave = next.filter((options) => {
+      const key = options.join('\0');
+      if (queued.has(key) || options.some((o) => read.has(o))) {
+        return false;
+      }
 
-    for (const reference of refs.types) {
-      depend(reference, true);
-    }
+      queued.add(key);
+      return true;
+    });
   }
 
   // No declarations of its own: TypeScript looks in `@types`.
