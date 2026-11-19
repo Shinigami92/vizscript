@@ -6,6 +6,7 @@ import type {
 } from '@vizscript/core';
 import { relativePath } from '@vizscript/core';
 import { languageOf } from './languages';
+import { nearest } from './project-files';
 import { typeParamsText } from './symbols';
 
 /** A name of another file the action menu offers; using it imports it. */
@@ -79,6 +80,11 @@ export function signature(
   };
 }
 
+/** Exports without the members of exported types. */
+export function topLevel(exports: ReadonlyArray<ScriptSymbol>): ScriptSymbol[] {
+  return exports.filter((s) => s.scope === '');
+}
+
 /** Folders whose files are never imported by hand. */
 const SKIPPED = /(?:^|\/)(?:node_modules|dist|build|vendor|\.[^/]+)\//;
 
@@ -93,20 +99,42 @@ function sharedPrefix(a: string, b: string): number {
   return count;
 }
 
+/** Files that make a folder a package or project of its own. */
+const MANIFESTS = [
+  'package.json',
+  'pyproject.toml',
+  'setup.py',
+  'Cargo.toml',
+  'project.godot',
+];
+
+/**
+ * The folder of the package or project `path` belongs to (of its nearest
+ * manifest), `''` for the repository.
+ */
+export function packageRoot(files: ReadonlySet<string>, path: string): string {
+  const manifest = nearest(files, path.split('/').slice(0, -1), MANIFESTS);
+  return manifest?.split('/').slice(0, -1).join('/') ?? '';
+}
+
 /**
  * Files of the same language that `current` may import, nearest folders
  * first (they are read one by one, so a limit keeps big repositories fast).
+ * Only files of its own package: another package of a monorepo is
+ * imported by its name, like a library.
  */
 export function candidateFiles(
-  files: Iterable<string>,
+  files: ReadonlySet<string>,
   current: string,
   limit: number
 ): string[] {
   const language = languageOf(current);
+  const root = packageRoot(files, current);
   return [...files]
     .filter(
       (path) =>
         path !== current &&
+        (root === '' || path.startsWith(`${root}/`)) &&
         language !== undefined &&
         languageOf(path) === language &&
         !SKIPPED.test(path) &&
@@ -278,4 +306,90 @@ export function libraryNames(
   }
 
   return result;
+}
+
+/** A type of another file or a library, for the type picker. */
+export interface ExternalType {
+  name: string;
+  /** Where it comes from, for the hint (`./types.ts`, `vue`). */
+  where: string;
+  request: ImportRequest;
+}
+
+const TYPE_KINDS: ReadonlySet<string> = new Set(['type', 'class', 'enum']);
+
+/** TypeScript imports what is used as a type only as `import type`. */
+function typeRequest(request: ImportRequest): ImportRequest {
+  return languageOf(request.from) === 'typescript'
+    ? { ...request, typeOnly: true }
+    : request;
+}
+
+/**
+ * Types other files export (classes, interfaces, aliases, enums), for the
+ * type picker; names this file declares or imports already are left out,
+ * GDScript's scripts are global classes already.
+ */
+export function externalTypes(
+  exports: ReadonlyMap<string, ReadonlyArray<ScriptSymbol>>,
+  doc: GraphDocument | null,
+  from: string,
+  root: string
+): ExternalType[] {
+  const taken = new Set(
+    (doc?.symbols ?? []).filter((s) => s.scope === '').map((s) => s.name)
+  );
+  const result: ExternalType[] = [];
+  for (const [path, symbols] of exports) {
+    if (languageOf(path) === 'gdscript') {
+      continue;
+    }
+
+    for (const symbol of symbols) {
+      if (!TYPE_KINDS.has(symbol.kind) || taken.has(symbol.name)) {
+        continue;
+      }
+
+      taken.add(symbol.name);
+      const imported = symbol.modifiers.includes('export default')
+        ? 'default'
+        : symbol.name;
+      result.push({
+        name: symbol.name,
+        where: relativePath(from, path),
+        request: typeRequest({
+          path,
+          from,
+          name: symbol.name,
+          imported,
+          root,
+        }),
+      });
+    }
+  }
+
+  return result.toSorted((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Types a library module exports (named imports), for the type picker. */
+export function libraryTypes(
+  module: string,
+  exports: ReadonlyArray<ScriptSymbol>,
+  from: string
+): ExternalType[] {
+  return exports
+    .filter(
+      (s) => TYPE_KINDS.has(s.kind) && !s.modifiers.includes('export default')
+    )
+    .map((s) => ({
+      name: s.name,
+      where: module,
+      request: typeRequest({
+        path: '',
+        from,
+        name: s.name,
+        imported: s.name,
+        module,
+      }),
+    }));
 }

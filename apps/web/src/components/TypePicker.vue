@@ -6,13 +6,16 @@ import {
   useElementBounding,
   useWindowSize,
 } from '@vueuse/core';
-import { computed, nextTick, ref, useTemplateRef } from 'vue';
+import { computed, inject, nextTick, ref, useTemplateRef } from 'vue';
 import PinIcon from './PinIcon.vue';
+import { TYPE_CHOICES } from './symbol-details/type-choices';
 
 /**
- * UE's pin type picker for language types: basic types and the file's own
- * types, a container (single, array, map, set), optional, or any type typed
- * by hand. The backend checks the result.
+ * UE's pin type picker for language types: basic types, the type
+ * parameters in scope, the file's own types and those of other files and
+ * libraries (picking one imports it), a container (single, array, map,
+ * set), optional, or any type typed by hand. The backend checks the
+ * result.
  */
 const props = defineProps<{
   /** Declared type, `null` when untyped. */
@@ -22,6 +25,8 @@ const props = defineProps<{
   types: TypeSystemInfo;
   /** Types declared in the file (classes, interfaces, enums). */
   declared: ReadonlyArray<string>;
+  /** Type parameters in scope (`T` of `call<T>`). */
+  typeParams?: ReadonlyArray<string>;
   editable: boolean;
   /** The language needs a type here: no "No type" choice. */
   required?: boolean;
@@ -104,6 +109,19 @@ const basic = computed(() =>
   props.types.primitives.filter((p) => matches(p.name))
 );
 const own = computed(() => props.declared.filter((name) => matches(name)));
+const params = computed(() =>
+  (props.typeParams ?? []).filter((name) => matches(name))
+);
+
+const choices = inject(TYPE_CHOICES, null);
+/** Most shown of other files' and libraries' types (search for more). */
+const PROJECT_SHOWN = 50;
+const project = computed(() => {
+  const declared = new Set(props.declared);
+  return (choices?.types.value ?? [])
+    .filter((t) => !declared.has(t.name) && matches(t.name))
+    .slice(0, PROJECT_SHOWN);
+});
 /** Classes the language knows (Godot's `Node2D`), not global objects. */
 const known = computed(() =>
   (props.types.classes ?? [])
@@ -123,7 +141,11 @@ const firstMatch = computed<{ name: string; option?: TypeOption } | null>(
       return { name: option.name, option };
     }
 
-    const name = own.value[0] ?? known.value[0];
+    const name =
+      params.value[0] ??
+      own.value[0] ??
+      project.value[0]?.name ??
+      known.value[0];
     return name === undefined ? null : { name };
   }
 );
@@ -244,6 +266,7 @@ async function toggle(): Promise<void> {
 
   open.value = !open.value;
   if (open.value) {
+    choices?.load();
     query.value = '';
     custom.value = props.value ?? '';
     await nextTick();
@@ -407,6 +430,22 @@ function shown(dataType: DataType): DataType {
             />
             <span class="font-mono">{{ compose(option.name) }}</span>
           </button>
+          <template v-if="params.length > 0">
+            <p class="group-title">Type parameters</p>
+            <button
+              v-for="name in params"
+              :key="name"
+              type="button"
+              class="option"
+              :class="{
+                'bg-zinc-800': !firstMatch?.option && firstMatch?.name === name,
+              }"
+              @click="pick(name)"
+            >
+              <PinIcon :pin="{ kind: 'data', type: shown('any') }" :size="8" />
+              <span class="font-mono">{{ compose(name) }}</span>
+            </button>
+          </template>
           <template v-if="own.length > 0">
             <p class="group-title">In this file</p>
             <button
@@ -421,6 +460,32 @@ function shown(dataType: DataType): DataType {
             >
               <PinIcon :pin="{ kind: 'data', type: shown(name) }" :size="8" />
               <span class="font-mono">{{ compose(name) }}</span>
+            </button>
+          </template>
+          <template v-if="project.length > 0">
+            <p class="group-title">In the project</p>
+            <button
+              v-for="type in project"
+              :key="`${type.where}:${type.name}`"
+              type="button"
+              class="option"
+              :class="{
+                'bg-zinc-800':
+                  !firstMatch?.option && firstMatch?.name === type.name,
+              }"
+              :title="`Imported from ${type.where}`"
+              @click="pick(type.name)"
+            >
+              <PinIcon
+                :pin="{ kind: 'data', type: shown(type.name) }"
+                :size="8"
+              />
+              <span class="min-w-0 truncate font-mono">{{
+                compose(type.name)
+              }}</span>
+              <span class="ml-auto shrink-0 truncate text-zinc-500">{{
+                type.where
+              }}</span>
             </button>
           </template>
           <template v-if="known.length > 0">

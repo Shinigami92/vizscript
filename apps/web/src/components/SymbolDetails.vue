@@ -11,6 +11,7 @@ import {
   declaringNode,
   holdsFields,
   qualifiedName,
+  typeParamName,
 } from '@vizscript/core';
 import { computed, ref, watch } from 'vue';
 import { lineColumn, snippet } from '../graph/source';
@@ -78,6 +79,16 @@ const props = defineProps<{
   operator?: string;
 }>();
 
+/** Type parameters of the class or type that holds it (`T` of `Box<T>`). */
+const scopeTypeParams = computed(() =>
+  (
+    props.symbols?.find(
+      (s) =>
+        (s.kind === 'class' || s.kind === 'type') &&
+        qualifiedName(s) === props.symbol.scope
+    )?.typeParams ?? []
+  ).map(typeParamName)
+);
 const emit = defineEmits<{
   reveal: [range: SourceRange];
   open: [];
@@ -500,6 +511,7 @@ function setModifier(modifier: string, enabled: boolean): void {
               :data-type="symbol.dataType"
               :types="types"
               :declared="declared"
+              :type-params="scopeTypeParams"
               :editable="editable"
               :required="typeRequired"
               :inferable="true"

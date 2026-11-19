@@ -8,7 +8,7 @@ import type {
   TypeSystemInfo,
   ValueKind,
 } from '@vizscript/core';
-import { fieldValue, isArrayType } from '@vizscript/core';
+import { fieldValue, isArrayType, typeParamName } from '@vizscript/core';
 import { computed, nextTick, ref, watch } from 'vue';
 import { usesSnakeCase } from '../../graph/languages';
 import { decoratable, parameterUses } from '../../graph/symbols';
@@ -35,6 +35,10 @@ const props = defineProps<{
   doc?: GraphDocument | null;
 }>();
 
+/** Its type parameters, offered by the type pickers. */
+const typeParams = computed(() =>
+  (props.symbol.typeParams ?? []).map(typeParamName)
+);
 const emit = defineEmits<{
   op: [op: GraphOp];
 }>();
@@ -312,6 +316,7 @@ function setReturnType(typeText: string | null): void {
             :data-type="param.dataType"
             :types="typeInfo"
             :declared="declared"
+            :type-params="typeParams"
             :editable="true"
             :required="typeInfo.requiredType !== undefined"
             @change="(typeText) => setParameterType(index, typeText)"
@@ -533,6 +538,7 @@ function setReturnType(typeText: string | null): void {
         :data-type="symbol.returnType ?? 'any'"
         :types="typeInfo"
         :declared="declared"
+        :type-params="typeParams"
         :editable="true"
         @change="setReturnType"
       />

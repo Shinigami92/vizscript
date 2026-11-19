@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { GraphOp, ScriptSymbol, TypeSystemInfo } from '@vizscript/core';
-import { holdsFields, qualifiedName } from '@vizscript/core';
+import { holdsFields, qualifiedName, typeParamName } from '@vizscript/core';
 import { computed, nextTick, ref, watch } from 'vue';
 import { usesSnakeCase } from '../../graph/languages';
 import DetailsSection from '../DetailsSection.vue';
@@ -21,6 +21,10 @@ const props = defineProps<{
   language: string;
 }>();
 
+/** The type's type parameters, offered by the type pickers. */
+const typeParams = computed(() =>
+  (props.symbol.typeParams ?? []).map(typeParamName)
+);
 const emit = defineEmits<{
   op: [op: GraphOp];
 }>();
@@ -157,6 +161,7 @@ function remove(field: ScriptSymbol): void {
           :data-type="field.dataType"
           :types="typeInfo"
           :declared="declared"
+          :type-params="typeParams"
           :editable="editable"
           :required="typeInfo.requiredType !== undefined"
           @change="(typeText) => setType(field, typeText)"

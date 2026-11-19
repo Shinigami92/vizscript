@@ -26,6 +26,7 @@ import {
   nextTick,
   onBeforeUnmount,
   onMounted,
+  provide,
   ref,
   shallowRef,
   useTemplateRef,
@@ -89,6 +90,7 @@ import { useProblems } from './script-workspace/use-problems';
 import { useTypeLibs } from './script-workspace/use-type-libs';
 import { useViaWires } from './script-workspace/use-via-wires';
 import WorkspaceStatus from './script-workspace/WorkspaceStatus.vue';
+import { TYPE_CHOICES } from './symbol-details/type-choices';
 
 export type { DefinitionTarget } from './script-workspace/symbol-lookup';
 export type { ViewMode } from './script-workspace/types';
@@ -193,6 +195,7 @@ const {
   updateImports,
   onActionMenu,
   externals,
+  externalTypes,
   declarations: importDeclarations,
   packageOffer,
   withNeededImport,
@@ -209,6 +212,9 @@ const {
   open: (path, symbol) => emit('open', path, symbol),
   version: () => languageVersion.value?.text,
 });
+
+// Type pickers of Details offer other files' and libraries' types.
+provide(TYPE_CHOICES, { types: externalTypes, load: onActionMenu });
 
 const { busy: typesBusy, forgetFiles: forgetTypeFiles } = useTypeLibs({
   props,

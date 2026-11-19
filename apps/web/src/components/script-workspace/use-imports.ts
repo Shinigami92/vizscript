@@ -2,7 +2,6 @@ import type {
   GraphDocument,
   GraphOp,
   ImportedDeclaration,
-  ImportRequest,
   ModuleReference,
   ScriptSymbol,
 } from '@vizscript/core';
@@ -28,13 +27,8 @@ import { languageOf } from '../../graph/languages';
 import { pythonDistribution } from '../../graph/module-info';
 import { packageVersion } from '../../graph/npm-project';
 import { NpmTypes, packageName } from '../../graph/npm-types';
-import type { ExternalName } from '../../graph/project-index';
-import {
-  candidateFiles,
-  externalNames,
-  godotRoot,
-  libraryNames,
-} from '../../graph/project-index';
+import type { ExternalName, ExternalType } from '../../graph/project-index';
+import { topLevel } from '../../graph/project-index';
 import { packageTypes, pythonPackageVersion } from '../../graph/pypi-types';
 import { normalizeName, pythonDependencies } from '../../graph/python-project';
 import {
@@ -46,9 +40,7 @@ import { isUncallableImport } from '../../graph/symbols';
 import type { FileLinkSource } from '../../monaco/file-links';
 import type { ResolveReference } from './symbol-lookup';
 import type { ScriptWorkspaceProps } from './types';
-
-/** Files read for the index: nearest folders first. */
-const INDEX_LIMIT = 150;
+import { useProjectIndex } from './use-project-index';
 
 /**
  * A parsed file's exports and, after them, the members of its exported
@@ -56,11 +48,6 @@ const INDEX_LIMIT = 150;
  */
 function withTypeMembers(doc: GraphDocument, text: string): ScriptSymbol[] {
   return [...exportedSymbols(doc, text), ...exportedTypeMembers(doc, text)];
-}
-
-/** Exports without the members of exported types. */
-function topLevel(exports: ReadonlyArray<ScriptSymbol>): ScriptSymbol[] {
-  return exports.filter((s) => s.scope === '');
 }
 
 /**
@@ -113,6 +100,11 @@ export interface WorkspaceImports {
   onActionMenu: () => void;
   /** Names of other files and libraries for the action menu. */
   externals: ComputedRef<ExternalName[]>;
+  /**
+   * Types of other files and of the libraries the file imports from, for
+   * the type picker (read once it opens, see `onActionMenu`).
+   */
+  externalTypes: ComputedRef<ExternalType[]>;
   /** The imports' declarations are still being read. */
   busy: ComputedRef<boolean>;
   /** Files read so far may have changed (a newer tree): read them again. */
@@ -120,8 +112,9 @@ export interface WorkspaceImports {
   /** Declarations of the imported names, sent along with every parse. */
   declarations: () => ImportedDeclaration[];
   /**
-   * The op with the import it needs: a decorator named by a library this
-   * file imports from or by another file (`@Header()`) gets its import.
+   * The op with the imports it needs: names in a decorator or type it
+   * writes (`@Header()`, `RepoSummary`) that a library this file imports
+   * from or another file exports get their imports.
    */
   withNeededImport: (op: GraphOp) => Promise<GraphOp>;
   /**
@@ -331,165 +324,18 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     }).catch(() => file.exports);
   }
 
-  // ----------------------------------------------------- project index
-
-  /** Exports of the repository's files of this language (action menu). */
-  const projectExports = shallowRef<ReadonlyMap<string, ScriptSymbol[]>>(
-    new Map()
-  );
-  let indexing = false;
-
-  /**
-   * Reads the exports of other files the first time the action menu opens,
-   * so it can offer their functions (using one adds the import).
-   */
-  async function indexProject(): Promise<void> {
-    const files = props.files;
-    if (indexing || !files || !props.readFile) {
-      return;
-    }
-
-    indexing = true;
-    const queue = candidateFiles(files, props.path, INDEX_LIMIT);
-    const found = new Map<string, ScriptSymbol[]>();
-    const worker = async (): Promise<void> => {
-      for (let path = queue.shift(); path; path = queue.shift()) {
-        const exports = topLevel(await exportsOf(path));
-        if (exports.length > 0) {
-          found.set(path, exports);
-          projectExports.value = new Map(found);
-        }
-      }
-    };
-    await Promise.all([worker(), worker(), worker(), worker()]);
-  }
-
-  /** Functions and values of libraries for the action menu. */
-  const libraryExternals = shallowRef<ExternalName[]>([]);
-  let librariesIndexed = false;
-
-  /**
-   * Python: the standard-library modules the backend knows. TypeScript: the
-   * packages this file imports from (their other exports).
-   */
-  async function indexLibraries(): Promise<void> {
-    if (librariesIndexed) {
-      return;
-    }
-
-    librariesIndexed = true;
-    const language = languageOf(props.path);
-    const modules =
-      language === 'python'
-        ? (await client.library(props.path)).modules
-        : (doc.value?.symbols ?? [])
-            .filter(
-              (s) =>
-                s.kind === 'import' &&
-                s.module !== undefined &&
-                packageName(s.module) === s.module
-            )
-            .map((s) => s.module ?? '');
-    const found: ExternalName[] = [];
-    for (const module of new Set(modules)) {
-      found.push(
-        ...libraryNames(
-          module,
-          topLevel(await libraryExports(module)),
-          language === 'python' ? 'module' : 'named',
-          props.path
-        )
-      );
-      libraryExternals.value = [...found];
-    }
-  }
-
-  function onActionMenu(): void {
-    void trackTask('Indexing project files', indexProject());
-    void indexLibraries();
-  }
-
-  const externals = computed(() => {
-    const taken = new Set(
-      (doc.value?.symbols ?? [])
-        .filter((s) => s.scope === '')
-        .map((s) => s.name)
-    );
-    return [
-      ...(props.files
-        ? externalNames(
-            projectExports.value,
-            doc.value,
-            props.path,
-            godotRoot(props.files, props.path)
-          )
-        : []),
-      // Library names the file declares itself are left out; its imports of
-      // a whole module (`import math`) are fine.
-      ...libraryExternals.value.filter(
-        (e) =>
-          !taken.has(e.name) ||
-          doc.value?.symbols?.some(
-            (s) =>
-              s.kind === 'import' &&
-              s.name === e.name &&
-              s.imported === '*' &&
-              e.request.imported === '*'
-          )
-      ),
-    ];
+  const {
+    onActionMenu,
+    externals,
+    externalTypes: projectTypes,
+    withNeededImport,
+  } = useProjectIndex({
+    props,
+    client,
+    doc,
+    exportsOf,
+    libraryExports: (module) => libraryExports(module),
   });
-
-  /**
-   * The import `name` needs, when the file neither declares nor imports
-   * it: from a library the file imports from (joined into that import;
-   * their exports are known from linking the imports), else from another
-   * file the action menu has indexed already.
-   */
-  async function importFor(name: string): Promise<ImportRequest | undefined> {
-    const symbols = doc.value?.symbols ?? [];
-    if (symbols.some((s) => s.scope === '' && s.name === name)) {
-      return undefined;
-    }
-
-    const modules = new Set(
-      symbols.flatMap((s) =>
-        s.kind === 'import' &&
-        s.module !== undefined &&
-        packageName(s.module) === s.module
-          ? [s.module]
-          : []
-      )
-    );
-    for (const module of modules) {
-      const exported = topLevel(await libraryExports(module)).some(
-        (s) => s.name === name
-      );
-      if (exported) {
-        return {
-          path: '',
-          from: props.path,
-          name,
-          imported: name,
-          module,
-        };
-      }
-    }
-
-    return externals.value.find(
-      (e) => e.name === name && e.request.imported !== '*'
-    )?.request;
-  }
-
-  async function withNeededImport(op: GraphOp): Promise<GraphOp> {
-    if (op.type !== 'setDecorator' || !op.text) {
-      return op;
-    }
-
-    const name = /^@?\s*([A-Za-z_$][\w$]*)/.exec(op.text.trim())?.[1];
-    const request = name ? await importFor(name) : undefined;
-    return request ? { type: 'withImport', import: request, op } : op;
-  }
 
   /** Declarations of the imported names, sent along with every parse. */
   let importDeclarations: ImportedDeclaration[] = [];
@@ -878,6 +724,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     onActionMenu,
     packageOffer,
     externals,
+    externalTypes: projectTypes,
     declarations: () => importDeclarations,
     withNeededImport,
     busy,
