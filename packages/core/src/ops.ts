@@ -210,8 +210,12 @@ export type GraphOp =
   | { type: 'renameCommentBox'; box: string; title: string }
   /** Removes the region markers; the code inside stays. */
   | { type: 'deleteCommentBox'; box: string }
-  /** Adds an empty function to the module (`scope: ''`) or a class. */
-  | { type: 'addFunction'; scope: string; name: string }
+  /**
+   * Adds an empty function to the module (`scope: ''`) or a class: after
+   * the declaration `after` (a symbol id of the same scope, e.g. the
+   * function being edited), else after the last function or class.
+   */
+  | { type: 'addFunction'; scope: string; name: string; after?: string }
   /**
    * Adds a variable to the module (`scope: ''`), a class, or (with
    * `local`) the function whose qualified name is `scope`.

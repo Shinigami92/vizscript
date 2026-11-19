@@ -67,6 +67,29 @@ describe('python symbol ops', () => {
     ).toContain('def price(value, tax=TAX):\n    rounded = None\n    total');
   });
 
+  it('adds a function or method after the given one', () => {
+    expect(
+      apply(SHOP, {
+        type: 'addFunction',
+        scope: '',
+        name: 'main',
+        after: 'class:Cart',
+      })
+    ).toContain(
+      '        return f"{self.owner}: {total}"\n\n\ndef main():\n    pass\n\n\ndef price('
+    );
+    expect(
+      apply(SHOP, {
+        type: 'addFunction',
+        scope: 'Cart',
+        name: 'clear',
+        after: 'method:Cart.__init__',
+      })
+    ).toContain(
+      '        self.owner = owner\n\n    def clear(self):\n        pass\n\n    def describe'
+    );
+  });
+
   it('keeps the module docstring first', () => {
     const doc = '"""Fetches a forecast\nand prints it."""\n';
     expect(apply(doc, { type: 'addVariable', scope: '', name: 'API' })).toBe(

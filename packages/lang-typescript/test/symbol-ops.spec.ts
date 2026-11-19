@@ -59,6 +59,59 @@ describe('adding symbols', () => {
     );
   });
 
+  it('adds a function after the given one', () => {
+    const text = [
+      'function a() {}',
+      '',
+      '/** Second. */',
+      'export function b() {}',
+      '',
+      'function c() {}',
+      '',
+    ].join('\n');
+    expect(
+      apply(text, {
+        type: 'addFunction',
+        scope: '',
+        name: 'f',
+        after: 'function:a',
+      })
+    ).toBe(
+      'function a() {}\n\nfunction f() {\n}\n\n/** Second. */\nexport function b() {}\n\nfunction c() {}\n'
+    );
+    expect(
+      apply(text, {
+        type: 'addFunction',
+        scope: '',
+        name: 'f',
+        after: 'function:b',
+      })
+    ).toContain('export function b() {}\n\nfunction f() {\n}\n\nfunction c');
+    // Not a declaration of the scope: after the last function, as before.
+    expect(
+      apply(text, {
+        type: 'addFunction',
+        scope: '',
+        name: 'f',
+        after: 'function:missing',
+      })
+    ).toBe(`${text}\nfunction f() {\n}\n`);
+  });
+
+  it('adds a method after the given one', () => {
+    const text = 'class Cart {\n  add() {}\n\n  remove() {}\n}\n';
+    expect(
+      apply(text, {
+        type: 'addFunction',
+        scope: 'Cart',
+        name: 'clear',
+        after: 'method:Cart.add',
+      })
+    ).toBe(
+      'class Cart {\n  add() {}\n\n  clear() {\n  }\n\n  remove() {}\n}\n'
+    );
+  });
+
   it('adds methods and fields to classes', () => {
     const text = 'class Cart {\n  items = [];\n\n  add() {}\n}\n';
     expect(

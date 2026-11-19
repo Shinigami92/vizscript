@@ -232,7 +232,15 @@ function applySymbolOp(
     : declarations.defaultIndent;
   switch (op.type) {
     case 'addFunction': {
-      return addFunction(text, doc, op.scope, op.name, unit, declarations);
+      return addFunction(
+        text,
+        doc,
+        op.scope,
+        op.name,
+        unit,
+        declarations,
+        op.after
+      );
     }
 
     case 'addVariable': {

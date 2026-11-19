@@ -1,6 +1,6 @@
 import type { DeclarationSyntax } from './declaration-syntax';
 import type { ImportRequest } from './imports';
-import type { GraphDocument } from './ir';
+import type { GraphDocument, SourceRange } from './ir';
 import { failed, succeeded } from './op-result';
 import type { OpResult, TextEdit } from './ops';
 import { isBlank, lineEndOf } from './symbol-helpers';
@@ -188,17 +188,58 @@ function runsCode(text: string, doc: GraphDocument, from: number): boolean {
     .some((line) => line !== '' && !/^(?:#|\/\/|\/\*|\*)/.test(line));
 }
 
+/**
+ * The code of the declaration `id` when a new function of `scope` can go
+ * right after it: a function, method or class of that scope that starts
+ * its own line.
+ */
+function afterDeclaration(
+  text: string,
+  doc: GraphDocument,
+  scope: string,
+  id: string | undefined
+): SourceRange | undefined {
+  const symbol =
+    id === undefined
+      ? undefined
+      : doc.symbols?.find(
+          (s) =>
+            s.id === id &&
+            s.scope === scope &&
+            (s.kind === 'function' || s.kind === 'method' || s.kind === 'class')
+        );
+  const range = symbol && (symbol.declarationRange ?? symbol.range);
+  return range &&
+    text.slice(lineStart(text, range.start), range.start).trim() === ''
+    ? range
+    : undefined;
+}
+
 export function addFunction(
   text: string,
   doc: GraphDocument,
   scope: string,
   name: string,
   unit: string,
-  syntax: DeclarationSyntax
+  syntax: DeclarationSyntax,
+  after?: string
 ): OpResult {
   const error = checkName(doc, syntax, scope, name);
   if (error) {
     return failed(error);
+  }
+
+  const anchor = afterDeclaration(text, doc, scope, after);
+  if (anchor) {
+    // Indented like the declaration it follows (a method like a method).
+    const indent = lineIndent(text, anchor.start);
+    const block = syntax
+      .fn(name, unit, scope !== '')
+      .split('\n')
+      .map((line) => (line === '' ? line : `${indent}${line}`))
+      .join('\n');
+    const blank = scope ? Math.min(syntax.blankLines, 1) : syntax.blankLines;
+    return succeeded([insertAfterLine(text, anchor.end - 1, block, blank)]);
   }
 
   if (scope) {
