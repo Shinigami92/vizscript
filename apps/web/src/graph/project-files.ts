@@ -27,3 +27,11 @@ export function nearest(
     up.pop();
   }
 }
+
+/**
+ * Whether a path names a file by its look: a last part with an extension
+ * (`main.ts`, not `src`, `.github` or `LICENSE`).
+ */
+export function looksLikeFile(path: string): boolean {
+  return /(?:^|\/)[^./][^/]*\.[^./]+$/.test(path);
+}

@@ -10,6 +10,7 @@ import {
   removeStored,
   writeStored,
 } from '../storage/browser-storage';
+import { trackTask } from './use-background-tasks';
 import type { FileTabs } from './use-file-tabs';
 import { useFileTabs } from './use-file-tabs';
 
@@ -311,7 +312,10 @@ export function useFileSession(options: FileSessionOptions): FileSession {
 
     loadingFile.value = true;
     try {
-      const loaded = await options.read(next);
+      const loaded = await trackTask(
+        `Opening ${next.split('/').at(-1) ?? next}`,
+        options.read(next)
+      );
       if (request !== fileRequest) {
         return;
       }

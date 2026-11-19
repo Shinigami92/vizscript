@@ -15,6 +15,7 @@ import {
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
+import { trackTask } from '../../composables/use-background-tasks';
 import { localLibraries, rustDependencies } from '../../graph/cargo-project';
 import {
   crateModule,
@@ -399,7 +400,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
   }
 
   function onActionMenu(): void {
-    void indexProject();
+    void trackTask('Indexing project files', indexProject());
     void indexLibraries();
   }
 
@@ -824,7 +825,11 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
         );
   }
 
-  async function updateImports(seq: number): Promise<void> {
+  function updateImports(seq: number): Promise<void> {
+    return trackTask('Reading imports', readImports(seq));
+  }
+
+  async function readImports(seq: number): Promise<void> {
     const imports = (doc.value?.symbols ?? []).filter(
       (s) => s.kind === 'import'
     );

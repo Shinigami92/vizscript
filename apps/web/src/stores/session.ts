@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { api, ApiError, setAuthErrorHandler } from '../api/client';
 import { useToasts } from '../composables/use-toasts';
+import { clearBlobs } from '../storage/blob-cache';
 
 export const useSessionStore = defineStore('session', () => {
   const me = ref<MeResponse | null>(null);
@@ -38,6 +39,8 @@ export const useSessionStore = defineStore('session', () => {
       await api.logout();
     } finally {
       me.value = null;
+      // Files of private repositories stay no longer in this browser.
+      void clearBlobs();
     }
   }
 

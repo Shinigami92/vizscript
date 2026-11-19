@@ -4,7 +4,7 @@ import type {
   ProviderId,
   TreeResponse,
 } from '@vizscript/api-contract';
-import { useDebounceFn } from '@vueuse/core';
+import { until, useDebounceFn } from '@vueuse/core';
 import { computed, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '../api/client';
@@ -16,12 +16,14 @@ import GithubLimitStatus from '../components/GithubLimitStatus.vue';
 import OutdatedDraftNotice from '../components/OutdatedDraftNotice.vue';
 import RepoAccessHint from '../components/RepoAccessHint.vue';
 import ScriptWorkspace from '../components/ScriptWorkspace.vue';
+import { trackTask } from '../composables/use-background-tasks';
 import { useFileSession } from '../composables/use-file-session';
 import { useTabActions } from '../composables/use-tab-actions';
 import { useToasts } from '../composables/use-toasts';
 import { useTreeChanges } from '../composables/use-tree-changes';
 import type { LayoutStore } from '../graph/layout-store';
 import { repoLayoutStore } from '../graph/layout-store';
+import { looksLikeFile } from '../graph/project-files';
 import {
   changedTree,
   createFile,
@@ -34,6 +36,8 @@ import {
   sourceOf,
 } from '../graph/tree-changes';
 import { disposeModel } from '../monaco/models';
+import type { BlobKey } from '../storage/blob-cache';
+import { cachedBlob, storeBlob } from '../storage/blob-cache';
 import { useRecentStore } from '../stores/recent';
 import { useSessionStore } from '../stores/session';
 import { useWorkbenchStore } from '../stores/workbench';
@@ -81,9 +85,23 @@ const files = computed(() =>
   currentFiles(tree.value?.entries ?? [], treeChanges.changes.value)
 );
 
-const isFile = computed(
-  () => path.value !== '' && tree.value !== null && files.value.has(path.value)
-);
+/**
+ * Whether the path is a file: as the tree says, or, while it loads (GitHub
+ * takes seconds for big trees), a name with an extension, so the file
+ * loads at the same time.
+ */
+const isFile = computed(() => {
+  if (path.value === '') {
+    return false;
+  }
+
+  return tree.value === null
+    ? loadingTree.value && looksLikeFile(path.value)
+    : files.value.has(path.value);
+});
+
+/** The files of the branch, once the tree is known. */
+const knownFiles = computed(() => (tree.value ? files.value : undefined));
 
 /** Reads a file of the branch: new ones are empty, moved ones read their original. */
 async function readRepoFile(
@@ -94,14 +112,39 @@ async function readRepoFile(
     return { path: filePath, content: '', version: 'new' };
   }
 
+  // The tree names the content: read before, it comes from the cache.
+  const stored = original ?? filePath;
+  const sha = shas.value.get(stored);
+  const key = (blob: string): BlobKey => ({
+    provider: provider.value,
+    owner: owner.value,
+    repo: repo.value,
+    sha: blob,
+  });
+  const cached = sha === undefined ? undefined : await cachedBlob(key(sha));
+  if (sha !== undefined && cached !== undefined) {
+    return { path: filePath, content: cached, version: sha };
+  }
+
   const loaded = await source.value.getFile(
     owner.value,
     repo.value,
     ref_.value,
-    original ?? filePath
+    stored
   );
+  void storeBlob(key(loaded.sha), loaded.content);
   return { path: filePath, content: loaded.content, version: loaded.sha };
 }
+
+/** Blob shas of the branch's files, by path. */
+const shas = computed(
+  () =>
+    new Map(
+      (tree.value?.entries ?? []).flatMap((e) =>
+        e.sha === undefined ? [] : [[e.path, e.sha] as const]
+      )
+    )
+);
 
 /** Open files of this branch: the one on screen, tabs and drafts. */
 const {
@@ -153,22 +196,37 @@ const layoutStore = computed<LayoutStore | null>(() =>
 
 let treeRequest = 0;
 
+async function loadBranches(request: number): Promise<void> {
+  try {
+    const list = await source.value.listBranches(owner.value, repo.value);
+    if (request === treeRequest) {
+      branches.value = list;
+    }
+  } catch {
+    // The picker shows the current branch only.
+    if (request === treeRequest) {
+      branches.value = [];
+    }
+  }
+}
+
 async function loadTree(): Promise<void> {
   // A newer branch or repository wins over a slow earlier one.
   const request = ++treeRequest;
   loadingTree.value = true;
   tree.value = null;
+  // The branch list is for the picker: nothing waits for it.
+  void loadBranches(request);
   try {
-    const [t, b] = await Promise.all([
-      source.value.getTree(owner.value, repo.value, ref_.value),
-      source.value.listBranches(owner.value, repo.value).catch(() => []),
-    ]);
+    const t = await trackTask(
+      'Loading the file list',
+      source.value.getTree(owner.value, repo.value, ref_.value)
+    );
     if (request !== treeRequest) {
       return;
     }
 
     tree.value = t;
-    branches.value = b;
     if (t.truncated) {
       show('This repository is large; the file list is truncated.');
     }
@@ -192,14 +250,16 @@ async function loadTree(): Promise<void> {
 const readCache = new Map<string, Promise<string>>();
 
 /** Text of another file: an open tab's current text, else the stored one. */
-function readFile(filePath: string): Promise<string> {
+async function readFile(filePath: string): Promise<string> {
   const open = openText(filePath);
   if (open !== undefined) {
-    return Promise.resolve(open);
+    return open;
   }
 
+  // Whether it exists is known with the tree.
+  await until(loadingTree).toBe(false);
   if (!files.value.has(filePath)) {
-    return Promise.reject(new Error(`${filePath} was deleted.`));
+    throw new Error(`${filePath} was deleted.`);
   }
 
   let read = readCache.get(filePath);
@@ -413,7 +473,7 @@ function dropOutdatedEdits(): void {
       :path="file.path"
       :layout-store="layoutStore"
       :state-key="`${provider}/${owner}/${repo}@${ref_}:${file.path}`"
-      :files="files"
+      :files="knownFiles"
       :read-file="readFile"
       :base-text="file.content"
       :editor-scope="scope"

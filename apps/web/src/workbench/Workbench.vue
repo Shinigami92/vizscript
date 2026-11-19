@@ -11,6 +11,7 @@ import {
   watchEffect,
 } from 'vue';
 import { useWorkbenchStore } from '../stores/workbench';
+import BackgroundStatus from './BackgroundStatus.vue';
 import type { WorkbenchContext } from './context';
 import { VIEW_ICONS, WORKBENCH } from './context';
 import WorkbenchSash from './WorkbenchSash.vue';
@@ -314,6 +315,7 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
         id="workbench-status"
         class="flex h-full min-w-0 flex-1 items-center gap-1"
       />
+      <BackgroundStatus />
       <div
         id="workbench-status-end"
         class="flex h-full shrink-0 items-center gap-1"

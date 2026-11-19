@@ -176,6 +176,7 @@ export class GitHubProvider implements ScmProvider {
           path: e.path,
           type: e.type === 'tree' ? ('dir' as const) : ('file' as const),
           ...(e.size === undefined ? {} : { size: e.size }),
+          ...(e.type === 'blob' && e.sha ? { sha: e.sha } : {}),
         })),
     };
   }

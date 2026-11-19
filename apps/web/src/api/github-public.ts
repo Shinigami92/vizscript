@@ -205,7 +205,12 @@ export const githubPublic = {
   ): Promise<TreeResponse> {
     const data = await getJson<{
       truncated: boolean;
-      tree: Array<{ path?: string; type?: string; size?: number }>;
+      tree: Array<{
+        path?: string;
+        type?: string;
+        size?: number;
+        sha?: string;
+      }>;
     }>(`${repoPath(owner, repo)}/git/trees/${enc(ref)}?recursive=1`);
     return {
       ref,
@@ -216,6 +221,7 @@ export const githubPublic = {
           path: e.path ?? '',
           type: e.type === 'tree' ? ('dir' as const) : ('file' as const),
           ...(e.size === undefined ? {} : { size: e.size }),
+          ...(e.type === 'blob' && e.sha ? { sha: e.sha } : {}),
         })),
     };
   },

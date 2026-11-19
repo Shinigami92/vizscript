@@ -2,6 +2,7 @@ import type { ModuleReference } from '@vizscript/core';
 import { resolveModuleReference } from '@vizscript/core';
 import type { Ref, ShallowRef } from 'vue';
 import { onBeforeUnmount, watch } from 'vue';
+import { trackTask } from '../../composables/use-background-tasks';
 import type { GraphClient } from '../../graph/graph-client';
 import { languageOf } from '../../graph/languages';
 import {
@@ -193,12 +194,14 @@ export function useTypeLibs(deps: TypeLibDeps): void {
     (references) => {
       const key = [
         props.path,
+        // Repository files can only be read once their list is known.
+        props.files ? 'files' : '',
         ...references.filter((r) => !r.symbol).map((r) => r.specifier),
         ...packagesOf(deps.text.value),
       ].join('\n');
       if (key !== lastKey) {
         lastKey = key;
-        void update();
+        void trackTask('Loading library types', update());
       }
     },
     { immediate: true }

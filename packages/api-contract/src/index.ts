@@ -48,6 +48,8 @@ export interface TreeEntry {
   path: string;
   type: 'file' | 'dir';
   size?: number;
+  /** A file's git blob sha: the id of its content. */
+  sha?: string;
 }
 
 export interface TreeResponse {

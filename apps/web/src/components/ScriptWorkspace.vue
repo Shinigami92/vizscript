@@ -830,6 +830,17 @@ const { onOp } = useOpRunner({
   show,
 });
 
+// The repository's file list can arrive after the file (it loads alongside
+// it): imports resolve to files then.
+watch(
+  () => props.files !== undefined,
+  (known, before) => {
+    if (known && before === false) {
+      void reparse();
+    }
+  }
+);
+
 onMounted(async () => {
   if (props.layoutStore) {
     try {
