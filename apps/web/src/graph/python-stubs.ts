@@ -20,6 +20,48 @@ function modulePaths(root: string, module: string): string[] {
   return [`${root}${path}.pyi`, `${root}${path}/__init__.pyi`];
 }
 
+let listed: Promise<ReadonlySet<string> | undefined> | undefined;
+
+/** All files of typeshed (`stdlib/json/__init__.pyi`), if listed. */
+export function typeshedFiles(): Promise<ReadonlySet<string> | undefined> {
+  listed ??= fetchText(LISTING)
+    .then((text) => {
+      if (text === undefined) {
+        listed = undefined;
+        return undefined;
+      }
+
+      const json = JSON.parse(text) as { files?: Array<{ name: string }> };
+      return new Set(
+        (json.files ?? []).map((file) => file.name.replace(/^\//, ''))
+      );
+    })
+    .catch(() => {
+      listed = undefined;
+      return undefined;
+    });
+  return listed;
+}
+
+/**
+ * The top-level modules of Python's standard library, as typeshed has
+ * stubs for them (`stdlib/json/`, `stdlib/re.pyi`, `stdlib/_typeshed/`);
+ * empty when the listing can't be read.
+ */
+export async function pythonStdlibModules(): Promise<ReadonlySet<string>> {
+  const files = await typeshedFiles();
+  const names = new Set<string>();
+  for (const path of files ?? []) {
+    // Private ones too: `_typeshed` is imported for type checking.
+    const match = path.match(/^stdlib\/([A-Za-z_]\w*)(?:\.pyi$|\/)/);
+    if (match?.[1]) {
+      names.add(match[1]);
+    }
+  }
+
+  return names;
+}
+
 /**
  * Files that may hold the stub of `module`: the standard library, then
  * the stubs of other distributions (`stubs/PyYAML/yaml/__init__.pyi`).
@@ -129,18 +171,7 @@ export class TypeshedStubs {
 
   /** All files of typeshed (`stdlib/json/__init__.pyi`), if listed. */
   private listing(): Promise<ReadonlySet<string> | undefined> {
-    this.files ??= fetchText(LISTING)
-      .then((text) => {
-        if (text === undefined) {
-          return undefined;
-        }
-
-        const json = JSON.parse(text) as { files?: Array<{ name: string }> };
-        return new Set(
-          (json.files ?? []).map((file) => file.name.replace(/^\//, ''))
-        );
-      })
-      .catch(() => undefined);
+    this.files ??= typeshedFiles();
     return this.files;
   }
 
