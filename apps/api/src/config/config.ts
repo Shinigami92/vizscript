@@ -22,7 +22,13 @@ export interface AppConfig {
   /** Size the type registry's cache may grow to, in bytes (1 GB default). */
   typeCacheMaxBytes: number;
   /** Where library types come from (jsDelivr, docs.rs; tests use a local server). */
-  typeUpstream: { cdn: string; listing: string; docs: string };
+  typeUpstream: {
+    cdn: string;
+    listing: string;
+    docs: string;
+    pypi: string;
+    pypiFiles: string;
+  };
 }
 
 /** 1 GB. */
@@ -109,6 +115,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         env.TYPE_LISTING_URL ?? 'https://data.jsdelivr.com/v1/packages'
       )}/`,
       docs: `${withoutSlash(env.TYPE_DOCS_URL ?? 'https://docs.rs')}/`,
+      pypi: `${withoutSlash(env.TYPE_PYPI_URL ?? 'https://pypi.org')}/`,
+      pypiFiles: `${withoutSlash(
+        env.TYPE_PYPI_FILES_URL ?? 'https://files.pythonhosted.org'
+      )}/`,
     },
   };
 }

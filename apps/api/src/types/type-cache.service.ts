@@ -16,6 +16,7 @@ import { DB } from '../database/database.module';
 import type { Database } from '../database/schema';
 import { rustdocStubs } from './rustdoc';
 import type { TypeSource } from './type-sources';
+import { pickWheel, wheelTypes } from './wheel';
 
 export interface CachedType {
   status: 200 | 404;
@@ -31,6 +32,8 @@ const MAX_RUSTDOC_JSON_BYTES = 256 * 1024 * 1024;
 /** zstd frames start with these bytes. */
 const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
 const zstdDecompress = promisify(zstdDecompressCallback);
+/** A Python wheel, at most (binary ones of big packages are large). */
+const MAX_WHEEL_BYTES = 48 * 1024 * 1024;
 /** Upstream requests give up after this long. */
 const FETCH_TIMEOUT_MS = 15_000;
 /** A version range (`latest`, `^3.5.0`) is resolved again after a day. */
@@ -149,7 +152,9 @@ export class TypeCacheService {
     const fetched =
       source.kind === 'crate'
         ? await this.fetchCrate(source)
-        : await this.fetchText(source);
+        : source.kind === 'pypi'
+          ? await this.fetchPypi(source)
+          : await this.fetchText(source);
     const size = Buffer.byteLength(fetched.body);
     const expires = fetched.immutable
       ? null
@@ -225,6 +230,47 @@ export class TypeCacheService {
     }
 
     return { status: 200, body: JSON.stringify(stubs), immutable };
+  }
+
+  /**
+   * A Python package's typed files from a wheel of its release on PyPI
+   * (none when it has no types: typeshed's stubs are used then).
+   */
+  private async fetchPypi(source: TypeSource): Promise<CachedType> {
+    const release = await this.fetchUpstream(source.url, MAX_FILE_BYTES);
+    if (release.status === 404 || !source.crate) {
+      return { status: 404, body: '', immutable: source.immutable };
+    }
+
+    let json: { info?: { version?: unknown }; urls?: unknown };
+    try {
+      json = JSON.parse(release.bytes.toString('utf8')) as typeof json;
+    } catch {
+      throw new BadGatewayException("PyPI's answer is unreadable");
+    }
+
+    const wheel = pickWheel(Array.isArray(json.urls) ? json.urls : []);
+    const version =
+      typeof json.info?.version === 'string'
+        ? json.info.version
+        : source.crate.version;
+    // Only files of PyPI's file host, whatever the answer names.
+    if (!wheel?.startsWith(this.config.typeUpstream.pypiFiles)) {
+      return { status: 404, body: '', immutable: source.immutable };
+    }
+
+    const fetched = await this.fetchUpstream(wheel, MAX_WHEEL_BYTES);
+    if (fetched.status === 404) {
+      return { status: 404, body: '', immutable: source.immutable };
+    }
+
+    return {
+      status: 200,
+      body: JSON.stringify(
+        wheelTypes(fetched.bytes, source.crate.name, version)
+      ),
+      immutable: source.immutable,
+    };
   }
 
   private async fetchUpstream(

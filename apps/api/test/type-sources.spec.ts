@@ -4,12 +4,15 @@ import {
   typeCrateSource,
   typeFileSource,
   typeListingSource,
+  typePypiSource,
 } from '../src/types/type-sources';
 
 const UPSTREAM = {
   cdn: 'https://cdn.jsdelivr.net/',
   listing: 'https://data.jsdelivr.com/v1/packages/',
   docs: 'https://docs.rs/',
+  pypi: 'https://pypi.org/',
+  pypiFiles: 'https://files.pythonhosted.org/',
 };
 const COMMIT = 'f0512c2d5d5d319570d2517d74419633c0174ec2';
 
@@ -102,6 +105,24 @@ describe('crate sources', () => {
     });
     expect(typeCrateSource('../evil', '1.0.0', UPSTREAM)).toBeUndefined();
     expect(typeCrateSource('nom', '1.0/../x', UPSTREAM)).toBeUndefined();
+  });
+});
+
+describe('PyPI sources', () => {
+  it('asks for an exact release, else the latest; names are normalized', () => {
+    expect(typePypiSource('Flask_SQLAlchemy', '3.1.1', UPSTREAM)).toEqual({
+      key: 'pypi:flask-sqlalchemy@3.1.1',
+      url: 'https://pypi.org/pypi/flask-sqlalchemy/3.1.1/json',
+      immutable: true,
+      kind: 'pypi',
+      crate: { name: 'flask-sqlalchemy', version: '3.1.1' },
+    });
+    expect(typePypiSource('httpx', '>=0.27', UPSTREAM)).toMatchObject({
+      key: 'pypi:httpx@latest',
+      url: 'https://pypi.org/pypi/httpx/json',
+      immutable: false,
+    });
+    expect(typePypiSource('../x', '1.0', UPSTREAM)).toBeUndefined();
   });
 });
 

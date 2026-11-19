@@ -144,6 +144,8 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
         cdn: 'http://127.0.0.1:9/',
         listing: 'http://127.0.0.1:9/',
         docs: 'http://127.0.0.1:9/',
+        pypi: 'http://127.0.0.1:9/',
+        pypiFiles: 'http://127.0.0.1:9/',
       },
     };
     app = await createApp(config, {

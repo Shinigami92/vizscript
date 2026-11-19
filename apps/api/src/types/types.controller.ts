@@ -19,6 +19,7 @@ import {
   typeCrateSource,
   typeFileSource,
   typeListingSource,
+  typePypiSource,
 } from './type-sources';
 
 /**
@@ -63,6 +64,22 @@ export class TypesController {
     @Res({ passthrough: true }) reply: FastifyReply
   ): Promise<string> {
     const source = typeCrateSource(
+      name ?? '',
+      version ?? 'latest',
+      this.config.typeUpstream
+    );
+    return this.serve(source, request, reply, 'application/json');
+  }
+
+  /** A Python package's typed files (`.pyi`, `py.typed` packages), JSON. */
+  @Get('pypi')
+  public async pypi(
+    @Query('name') name: string | undefined,
+    @Query('version') version: string | undefined,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply
+  ): Promise<string> {
+    const source = typePypiSource(
       name ?? '',
       version ?? 'latest',
       this.config.typeUpstream

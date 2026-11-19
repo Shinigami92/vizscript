@@ -10,6 +10,7 @@ import type { AppConfig } from '../src/config/config';
 import { createDatabase } from '../src/database/database.module';
 import { TypeCacheService } from '../src/types/type-cache.service';
 import { RUSTDOC } from './rustdoc-fixture';
+import { zip } from './zip';
 
 const databaseUrl = process.env.DATABASE_URL;
 const runId = Math.random().toString(36).slice(2, 8);
@@ -25,6 +26,37 @@ const upstreamFiles: Record<string, string> = {
     '{"files":[{"name":"/index.d.ts"}]}',
 };
 const upstreamRequests = new Map<string, number>();
+
+/** PyPI: a release, its wheel, and a release naming a foreign host. */
+const pypiFiles: Record<string, Buffer> = {
+  [`/pypi-api/pypi/${pkg}/0.27.0/json`]: Buffer.from(
+    JSON.stringify({
+      info: { version: '0.27.0' },
+      urls: [
+        { filename: `${pkg}-0.27.0.tar.gz`, url: 'x', size: 1 },
+        {
+          filename: `${pkg}-0.27.0-py3-none-any.whl`,
+          url: '{base}/pypi-files/a.whl',
+          size: 2,
+        },
+      ],
+    })
+  ),
+  [`/pypi-api/pypi/${pkg}/0.1.0/json`]: Buffer.from(
+    JSON.stringify({
+      urls: [
+        {
+          filename: `${pkg}-0.1.0-py3-none-any.whl`,
+          url: 'https://example.test/a.whl',
+        },
+      ],
+    })
+  ),
+  '/pypi-files/a.whl': zip({
+    'pkg/__init__.py': 'def get(url: str) -> int: ...\n',
+    'pkg/py.typed': '',
+  }),
+};
 
 /** docs.rs serves rustdoc JSON compressed with zstd. */
 const crateFiles: Record<string, Buffer> = {
@@ -50,7 +82,18 @@ describe.skipIf(!databaseUrl)('type registry (e2e)', () => {
     upstream = createServer((request, response) => {
       const url = request.url ?? '';
       upstreamRequests.set(url, (upstreamRequests.get(url) ?? 0) + 1);
-      const body = upstreamFiles[url] ?? crateFiles[url];
+      const pypi = pypiFiles[url]
+        ?.toString('latin1')
+        .replace(
+          '{base}',
+          `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`
+        );
+      const body =
+        upstreamFiles[url] ??
+        crateFiles[url] ??
+        (url.endsWith('.whl')
+          ? pypiFiles[url]
+          : pypi && Buffer.from(pypi, 'latin1'));
       response.statusCode = body === undefined ? 404 : 200;
       response.end(body ?? 'Not found');
     });
@@ -74,6 +117,8 @@ describe.skipIf(!databaseUrl)('type registry (e2e)', () => {
         cdn: `${base}/`,
         listing: `${base}/v1/packages/`,
         docs: `${base}/docs/`,
+        pypi: `${base}/pypi-api/`,
+        pypiFiles: `${base}/pypi-files/`,
       },
     };
     app = await createApp(config, { logger: false });
@@ -165,6 +210,23 @@ describe.skipIf(!databaseUrl)('type registry (e2e)', () => {
     expect(old.statusCode).toBe(200);
     expect(old.headers['cache-control']).toBe('public, max-age=3600');
     expect((await get(app, '/api/types/crate?name=../x')).statusCode).toBe(400);
+  });
+
+  it("serves a Python package's typed files from its wheel", async () => {
+    const response = await get(
+      app,
+      `/api/types/pypi?name=${pkg}&version=0.27.0`
+    );
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      name: pkg,
+      version: '0.27.0',
+      files: { 'pkg/__init__.py': 'def get(url: str) -> int: ...\n' },
+    });
+    // A wheel on another host than PyPI's files is never fetched.
+    expect(
+      (await get(app, `/api/types/pypi?name=${pkg}&version=0.1.0`)).statusCode
+    ).toBe(404);
   });
 
   it('reports how full the cache is', async () => {

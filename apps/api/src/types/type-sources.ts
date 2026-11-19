@@ -12,13 +12,13 @@ export interface TypeSource {
   url: string;
   /** An exact version or commit: its content never changes. */
   immutable: boolean;
-  kind: 'file' | 'listing' | 'crate';
+  kind: 'file' | 'listing' | 'crate' | 'pypi';
   /**
    * Asked when `url` answers 404 (docs.rs has no rustdoc JSON of older
    * versions: the newest compatible one instead); not immutable then.
    */
   fallback?: string;
-  /** A crate: its name and version as asked (`serde_json`, `1.0.150`). */
+  /** A crate or Python package: name and version as asked. */
   crate?: { name: string; version: string };
 }
 
@@ -29,6 +29,10 @@ export interface TypeUpstream {
   listing: string;
   /** docs.rs, ending with `/` (`https://docs.rs/`): crates' rustdoc JSON. */
   docs: string;
+  /** PyPI's JSON API, ending with `/` (`https://pypi.org/`). */
+  pypi: string;
+  /** Where PyPI's files are (`https://files.pythonhosted.org/`): only wheels from there are read. */
+  pypiFiles: string;
 }
 
 /** npm package names: `vue`, `@vue/runtime-dom`. */
@@ -167,5 +171,38 @@ export function typeCrateSource(
     kind: 'crate',
     ...(exact ? { fallback: url(`^${version}`) } : {}),
     crate: { name, version },
+  };
+}
+
+/** PyPI project names (`httpx`, `typing_extensions`, `Flask-SQLAlchemy`). */
+const PYPI = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
+/** An exact PEP 440 version (`2.32.3`, `1.0.0rc1`, `2.0.post1`). */
+const PYPI_EXACT =
+  /^\d+(?:\.\d+)*(?:(?:a|b|rc)\d+)?(?:\.post\d+)?(?:\.dev\d+)?$/;
+
+/**
+ * The typed files (`.pyi`, `.py` of `py.typed` packages) of a Python
+ * package's wheel on PyPI, in an exact version or the latest (ranges
+ * like `>=2.31` aren't resolved: the latest release then).
+ */
+export function typePypiSource(
+  name: string,
+  version: string,
+  upstream: TypeUpstream
+): TypeSource | undefined {
+  if (!PYPI.test(name)) {
+    return undefined;
+  }
+
+  const normalized = name.toLowerCase().replaceAll(/[-_.]+/g, '-');
+  const exact = PYPI_EXACT.test(version);
+  return {
+    key: `pypi:${normalized}@${exact ? version : 'latest'}`,
+    url: exact
+      ? `${upstream.pypi}pypi/${normalized}/${version}/json`
+      : `${upstream.pypi}pypi/${normalized}/json`,
+    immutable: exact,
+    kind: 'pypi',
+    crate: { name: normalized, version: exact ? version : 'latest' },
   };
 }
