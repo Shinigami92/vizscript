@@ -30,6 +30,7 @@ import DetailsHeader from './DetailsHeader.vue';
 import DetailsSection from './DetailsSection.vue';
 import PinIcon from './PinIcon.vue';
 import DecoratorList from './symbol-details/DecoratorList.vue';
+import HeritageRows from './symbol-details/HeritageRows.vue';
 import SymbolExportHint from './symbol-details/SymbolExportHint.vue';
 import SymbolFields from './symbol-details/SymbolFields.vue';
 import SymbolSignature from './symbol-details/SymbolSignature.vue';
@@ -769,10 +770,12 @@ function setModifier(modifier: string, enabled: boolean): void {
             </label>
           </dd>
         </template>
-        <template v-if="symbol.extends">
-          <dt class="text-zinc-500">Extends</dt>
-          <dd class="truncate font-mono text-zinc-200">{{ symbol.extends }}</dd>
-        </template>
+        <HeritageRows
+          :symbol="symbol"
+          :types="types"
+          :editable="editable"
+          @op="emit('op', $event)"
+        />
       </dl>
     </DetailsSection>
 

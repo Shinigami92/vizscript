@@ -7,8 +7,14 @@ export interface WrittenCode {
   asType: boolean;
 }
 
-/** The code an op writes that may need imports: types and decorators. */
-export function writtenCode(op: GraphOp): WrittenCode[] {
+/**
+ * The code an op writes that may need imports: types and decorators.
+ * `isClass` tells a class (whose `extends` names a value) from a type.
+ */
+export function writtenCode(
+  op: GraphOp,
+  isClass: (symbol: string) => boolean = () => false
+): WrittenCode[] {
   switch (op.type) {
     case 'setDecorator': {
       return op.text ? [{ text: op.text, asType: false }] : [];
@@ -26,6 +32,12 @@ export function writtenCode(op: GraphOp): WrittenCode[] {
 
     case 'setTypeParams': {
       return op.text ? [{ text: op.text, asType: true }] : [];
+    }
+
+    case 'setHeritage': {
+      // A base class is a value at run time; interfaces are types.
+      const asType = op.clause === 'implements' || !isClass(op.symbol);
+      return op.text ? [{ text: op.text, asType }] : [];
     }
 
     default: {

@@ -23,6 +23,11 @@ function symbol(
   } as ScriptSymbol;
 }
 
+/** Symbol `C` is a class, others are types. */
+function isClass(id: string): boolean {
+  return id === 'C';
+}
+
 describe('imports a written type or decorator needs', () => {
   it('finds the names code refers to', () => {
     expect(referencedNames('Map<Role, User[]> | null')).toEqual([
@@ -53,6 +58,25 @@ describe('imports a written type or decorator needs', () => {
       writtenCode({ type: 'setReturnType', symbol: 'f', typeText: null })
     ).toEqual([]);
     expect(writtenCode({ type: 'deleteSymbol', symbol: 'f' })).toEqual([]);
+    // A base class is a value; what a class implements is a type.
+    expect(
+      writtenCode(
+        { type: 'setHeritage', symbol: 'C', clause: 'extends', text: 'Base' },
+        isClass
+      )
+    ).toEqual([{ text: 'Base', asType: false }]);
+    expect(
+      writtenCode(
+        { type: 'setHeritage', symbol: 'C', clause: 'implements', text: 'I' },
+        isClass
+      )
+    ).toEqual([{ text: 'I', asType: true }]);
+    expect(
+      writtenCode(
+        { type: 'setHeritage', symbol: 'I', clause: 'extends', text: 'J' },
+        isClass
+      )
+    ).toEqual([{ text: 'J', asType: true }]);
   });
 
   it('wraps the op in its imports, the first written first', () => {

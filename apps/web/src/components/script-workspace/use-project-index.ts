@@ -252,9 +252,17 @@ export function useProjectIndex(deps: {
     return typeOnly ? type : plain;
   }
 
+  /** Whether a symbol of the file is a class (its `extends` is a value). */
+  function isClass(id: string): boolean {
+    return (
+      doc.value?.symbols?.some((s) => s.id === id && s.kind === 'class') ===
+      true
+    );
+  }
+
   async function withNeededImport(op: GraphOp): Promise<GraphOp> {
     const requests: ImportRequest[] = [];
-    for (const code of writtenCode(op)) {
+    for (const code of writtenCode(op, isClass)) {
       for (const name of referencedNames(code.text)) {
         if (requests.some((r) => r.name === name)) {
           continue;
