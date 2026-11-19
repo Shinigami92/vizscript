@@ -1,4 +1,8 @@
-import type { DependencyKind, ImportRequest } from '@vizscript/core';
+import type {
+  DependencyKind,
+  ImportRequest,
+  ProjectDependency,
+} from '@vizscript/core';
 import { languageOf } from './languages';
 import {
   addCargoDependency,
@@ -59,6 +63,19 @@ export function sameLibrary(
 
 function plainName(name: string): string {
   return name.toLowerCase().replaceAll(/[-_.]+/g, '-');
+}
+
+/**
+ * The version a project already uses of a listed library: the lockfile's,
+ * else the manifest's range (`undefined` for `workspace:`, `catalog:` …).
+ */
+export function listedVersion(
+  dependency: ProjectDependency
+): string | undefined {
+  return (
+    dependency.version ??
+    (/^[a-z]+:/.test(dependency.range) ? undefined : dependency.range)
+  );
 }
 
 /** The manifest a new dependency of the file at `path` goes into. */

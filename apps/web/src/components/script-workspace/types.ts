@@ -31,8 +31,9 @@ export interface ScriptWorkspaceProps {
   /**
    * Changes another file of the repository or folder (a manifest when a
    * library is added): it becomes an open tab with unsaved changes.
+   * Resolves whether it changed.
    */
-  editFile?: (path: string, edit: (text: string) => string) => Promise<void>;
+  editFile?: (path: string, edit: (text: string) => string) => Promise<boolean>;
   /** Graph-only edits of the file (from its draft), `v-model:overlay`. */
   overlay?: GraphOverlay;
 }

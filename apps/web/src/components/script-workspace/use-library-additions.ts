@@ -23,7 +23,7 @@ export interface LibraryAdditions {
     manifest: string,
     edit: (text: string) => string,
     op?: GraphOp
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   /** Undo and redo of a manifest change (`false`: it changed since). */
   restoreOtherFile: (
     path: string,
@@ -66,7 +66,7 @@ export function useLibraryAdditions(deps: {
     manifest: string,
     edit: (text: string) => string,
     op?: GraphOp
-  ): Promise<void> {
+  ): Promise<boolean> {
     const beforeVersion = deps.codeVersion();
     let before = '';
     let after = '';
@@ -81,9 +81,12 @@ export function useLibraryAdditions(deps: {
       await deps.apply(op);
     }
 
-    if (before !== after) {
-      deps.recordFileEdit({ path: manifest, before, after }, beforeVersion);
+    if (before === after) {
+      return false;
     }
+
+    deps.recordFileEdit({ path: manifest, before, after }, beforeVersion);
+    return true;
   }
 
   async function restoreOtherFile(

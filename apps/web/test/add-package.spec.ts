@@ -4,6 +4,7 @@ import {
   ecosystemOf,
   installCommand,
   libraryImport,
+  listedVersion,
   manifestEdit,
   manifestFor,
   sameLibrary,
@@ -79,5 +80,18 @@ describe('adding a library', () => {
     expect(sameLibrary('pypi', 'PyYAML', 'pyyaml')).toBe(true);
     expect(sameLibrary('crates', 'serde-json', 'serde_json')).toBe(true);
     expect(sameLibrary('npm', 'Vue', 'vue')).toBe(false);
+  });
+
+  it('imports a listed library in the version the project uses', () => {
+    const listed = {
+      name: 'vue',
+      kind: 'runtime',
+      manifest: 'package.json',
+    } as const;
+    expect(
+      listedVersion({ ...listed, range: '^3.5.0', version: '3.5.13' })
+    ).toBe('3.5.13');
+    expect(listedVersion({ ...listed, range: '~3.4.2' })).toBe('~3.4.2');
+    expect(listedVersion({ ...listed, range: 'catalog:' })).toBeUndefined();
   });
 });

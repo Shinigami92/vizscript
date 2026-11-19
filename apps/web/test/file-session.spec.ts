@@ -242,6 +242,17 @@ describe('file session', () => {
     );
   });
 
+  it('leaves another file alone when an edit changes nothing', async () => {
+    const s = setup({ 'a.py': 'a = 1\n', 'pyproject.toml': '[project]\n' });
+    await s.show('a.py');
+    expect(await s.session.editFile('pyproject.toml', (t) => t)).toBe(false);
+    expect(s.session.tabs.tabs.value.map((t) => t.path)).toEqual(['a.py']);
+    expect(s.session.dirtyTabs.value.has('pyproject.toml')).toBe(false);
+    expect(
+      await s.session.editFile('pyproject.toml', (t) => `${t}x = 1\n`)
+    ).toBe(true);
+  });
+
   it('keeps the newest file when an earlier read finishes late', async () => {
     const s = setup({ 'a.py': 'a = 1\n', 'b.py': 'b = 1\n' });
     s.path.value = 'a.py';

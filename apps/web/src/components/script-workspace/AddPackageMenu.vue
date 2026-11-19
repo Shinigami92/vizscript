@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { PackageSearchResult } from '@vizscript/api-contract';
-import type { DependencyKind, GraphOp, ScriptSymbol } from '@vizscript/core';
+import type {
+  DependencyKind,
+  GraphOp,
+  ProjectDependency,
+  ScriptSymbol,
+} from '@vizscript/core';
 import { useDebounceFn } from '@vueuse/core';
 import { computed, onMounted, ref, shallowRef } from 'vue';
 import { useToasts } from '../../composables/use-toasts';
@@ -11,10 +16,12 @@ import {
   kindLabel,
   kindsOf,
   libraryImport,
+  listedVersion,
   manifestEdit,
   manifestFor,
   sameLibrary,
 } from '../../graph/add-package';
+import { projectDependencies } from '../../graph/project-dependencies';
 import { SYMBOL_ICONS } from '../../graph/symbols';
 import type { ActionEntry } from '../ActionMenu.vue';
 import ActionMenu from '../ActionMenu.vue';
@@ -29,6 +36,8 @@ const props = defineProps<{
   at: { x: number; y: number };
   path: string;
   files: ReadonlySet<string> | undefined;
+  /** Reads a project file (the manifests that list the libraries). */
+  readFile?: (path: string) => Promise<string>;
   /**
    * Changes the manifest and writes the import (one undo step). A
    * function, not an event: the menu closes (and unmounts) while the
@@ -38,7 +47,7 @@ const props = defineProps<{
     manifest: string,
     edit: (text: string) => string,
     op?: GraphOp
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   /** A library's module as code names it and its exports. */
   offer: (
     name: string,
@@ -64,8 +73,12 @@ const query = ref('');
 const results = shallowRef<PackageSearchResult[]>([]);
 const searching = ref(false);
 const failed = ref(false);
+/** Libraries the project lists already (imported in their version). */
+const listed = shallowRef<ReadonlyArray<ProjectDependency>>([]);
 const picked = shallowRef<{
   result: PackageSearchResult;
+  /** The manifest lists it already: only the import is written. */
+  listed?: boolean;
   module: string;
   exports: ScriptSymbol[];
   /** Its exports are still being read (big type packages take a while). */
@@ -120,13 +133,29 @@ function guessModule(name: string): string {
     : name.toLowerCase().replaceAll('-', '_');
 }
 
+/** How the project lists a library from the registry, if it does. */
+function listing(name: string): ProjectDependency | undefined {
+  const target = ecosystem.value;
+  return target
+    ? listed.value.find((d) => !d.local && sameLibrary(target, d.name, name))
+    : undefined;
+}
+
+/** The version a listed library is used in, else the registry's latest. */
+function versionOf(result: PackageSearchResult): string {
+  const dependency = listing(result.name);
+  return (dependency && listedVersion(dependency)) ?? result.version;
+}
+
 /**
  * Shows the library's choices at once (the whole module, the kinds); its
  * named exports follow when read.
  */
-async function pick(result: PackageSearchResult): Promise<void> {
+async function pick(found: PackageSearchResult): Promise<void> {
   reopen = true;
-  kind.value = defaultKind(props.path, result.name);
+  const dependency = listing(found.name);
+  const result = { ...found, version: versionOf(found) };
+  kind.value = dependency?.kind ?? defaultKind(props.path, result.name);
   if (props.listOnly) {
     picked.value = { result, module: '', exports: [], reading: false };
     return;
@@ -134,6 +163,7 @@ async function pick(result: PackageSearchResult): Promise<void> {
 
   const current = {
     result,
+    ...(dependency ? { listed: true } : {}),
     module: guessModule(result.name),
     exports: [],
     reading: true,
@@ -143,7 +173,7 @@ async function pick(result: PackageSearchResult): Promise<void> {
     .offer(result.name, result.version)
     .catch(() => ({ module: current.module, exports: [] }));
   if (picked.value === current) {
-    picked.value = { result, ...offer, reading: false };
+    picked.value = { ...current, ...offer, reading: false };
   }
 }
 
@@ -161,7 +191,21 @@ async function lookUp(name: string): Promise<void> {
   }
 }
 
+/** Reads the libraries the project lists (none when it can't). */
+async function readListed(): Promise<void> {
+  try {
+    listed.value = await projectDependencies(
+      props.files,
+      props.readFile,
+      props.path
+    );
+  } catch {
+    listed.value = [];
+  }
+}
+
 onMounted(() => {
+  void readListed();
   if (props.listOnly) {
     void lookUp(props.listOnly);
   }
@@ -176,16 +220,26 @@ async function list(as: DependencyKind): Promise<void> {
   }
 
   const { name, version } = chosen.result;
+  let changed: boolean;
   try {
-    await props.addLibrary(target, manifestEdit(target, name, version, as));
+    changed = await props.addLibrary(
+      target,
+      manifestEdit(target, name, version, as)
+    );
   } catch {
     toasts.show(`${manifestName.value} could not be read.`, 'error');
     return;
   }
 
   toasts.show(
-    `Added ${name} ${version} to ${target} (unsaved). Run \`${installCommand(props.files, target)}\` to update the lockfile.`
+    changed
+      ? addedMessage(name, version, target)
+      : `${target} lists ${name} already.`
   );
+}
+
+function addedMessage(name: string, version: string, target: string): string {
+  return `Added ${name} ${version} to ${target} (unsaved). Run \`${installCommand(props.files, target)}\` to update the lockfile.`;
 }
 
 async function add(imported: string | undefined): Promise<void> {
@@ -196,8 +250,9 @@ async function add(imported: string | undefined): Promise<void> {
   }
 
   const { name, version } = chosen.result;
+  let changed: boolean;
   try {
-    await props.addLibrary(
+    changed = await props.addLibrary(
       target,
       manifestEdit(target, name, version, kind.value),
       {
@@ -210,9 +265,10 @@ async function add(imported: string | undefined): Promise<void> {
     return;
   }
 
-  toasts.show(
-    `Added ${name} ${version} to ${target} (unsaved). Run \`${installCommand(props.files, target)}\` to update the lockfile.`
-  );
+  // A library the manifest lists already only gets its import.
+  if (changed) {
+    toasts.show(addedMessage(name, version, target));
+  }
 }
 
 /** A module re-exported as one name (`export * as z`). */
@@ -265,7 +321,9 @@ const entries = computed((): ActionEntry[] => {
       label: result.name,
       category: 'Libraries',
       icon: 'i-mdi-package-variant-closed text-amber-400',
-      hint: result.version,
+      hint: listing(result.name)
+        ? `${versionOf(result)} · listed`
+        : result.version,
       // Found by the registry, so always kept by the menu's own search.
       keywords: query.value,
       ...(result.description ? { detail: result.description } : {}),
@@ -325,20 +383,21 @@ const entries = computed((): ActionEntry[] => {
         action: () => void add(symbol.name),
       })),
   ];
-  const kinds: ActionEntry[] = target
-    ? kindsOf(target).map((option) => ({
-        label: kindLabel(target, option),
-        category: `List in ${manifestName.value} as`,
-        icon:
-          option === kind.value
-            ? 'i-mdi-check text-amber-400'
-            : 'i-mdi-circle-small text-zinc-500',
-        action: () => {
-          kind.value = option;
-          reopen = true;
-        },
-      }))
-    : [];
+  const kinds: ActionEntry[] =
+    target && !chosen.listed
+      ? kindsOf(target).map((option) => ({
+          label: kindLabel(target, option),
+          category: `List in ${manifestName.value} as`,
+          icon:
+            option === kind.value
+              ? 'i-mdi-check text-amber-400'
+              : 'i-mdi-circle-small text-zinc-500',
+          action: () => {
+            kind.value = option;
+            reopen = true;
+          },
+        }))
+      : [];
   return [...imports, ...kinds];
 });
 
@@ -348,9 +407,14 @@ const title = computed(() => {
     return `Add ${props.listOnly} to ${manifestName.value}`;
   }
 
-  return chosen
-    ? `Add ${chosen.result.name} ${chosen.result.version}`
-    : 'Add a library';
+  if (!chosen) {
+    return 'Add a library';
+  }
+
+  const { name, version } = chosen.result;
+  return chosen.listed
+    ? `Import from ${name} ${version}`
+    : `Add ${name} ${version}`;
 });
 
 function suggest(): ActionEntry[] {

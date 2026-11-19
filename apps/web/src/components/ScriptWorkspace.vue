@@ -1109,6 +1109,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :at="addingPackage"
         :path="path"
         :files="files"
+        :read-file="readFile"
         :add-library="addLibrary"
         :offer="packageOffer"
         :list-only="addingPackage.library"

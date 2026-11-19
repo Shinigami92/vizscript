@@ -148,9 +148,9 @@ export interface FileSession {
   /**
    * Changes another file of the session (a manifest when a library is
    * added): its unsaved text, or its content with its draft, gets `edit`;
-   * it opens as a tab with unsaved changes.
+   * it opens as a tab with unsaved changes. Resolves whether it changed.
    */
-  editFile: (path: string, edit: (text: string) => string) => Promise<void>;
+  editFile: (path: string, edit: (text: string) => string) => Promise<boolean>;
   /**
    * A file or folder was renamed: tabs, unsaved text and drafts of the
    * files move along. The caller shows the moved file when it was on
@@ -485,10 +485,12 @@ export function useFileSession(options: FileSessionOptions): FileSession {
   async function editFile(
     path: string,
     edit: (text: string) => string
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (file.value?.path === path) {
-      text.value = edit(text.value);
-      return;
+      const next = edit(text.value);
+      const changed = next !== text.value;
+      text.value = next;
+      return changed;
     }
 
     let buffer = buffers.get(path);
@@ -504,10 +506,16 @@ export function useFileSession(options: FileSessionOptions): FileSession {
       };
     }
 
-    const changed = { ...buffer, text: edit(buffer.text) };
+    const next = edit(buffer.text);
+    if (next === buffer.text) {
+      return false;
+    }
+
+    const changed = { ...buffer, text: next };
     buffers.set(path, changed);
     writeDraft(path, changed);
     tabs.open(path, { preview: false, after: file.value?.path });
+    return true;
   }
 
   /** Draft keys of the scope's files within `folder`. */
