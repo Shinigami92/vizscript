@@ -21,6 +21,8 @@ interface Row {
 const props = defineProps<{
   entries: TreeEntry[];
   selectedPath: string | null;
+  /** Files with unsaved changes: marked like VS Code's modified files. */
+  changed?: ReadonlySet<string>;
 }>();
 
 const emit = defineEmits<{
@@ -30,6 +32,25 @@ const emit = defineEmits<{
 }>();
 
 const filter = ref('');
+
+/** Folders holding a changed file, at any depth. */
+const changedDirs = computed(() => {
+  const dirs = new Set<string>();
+  for (const path of props.changed ?? []) {
+    const parts = path.split('/');
+    for (let i = 1; i < parts.length; i++) {
+      dirs.add(parts.slice(0, i).join('/'));
+    }
+  }
+
+  return dirs;
+});
+
+function isChanged(row: Row): boolean {
+  return row.type === 'file'
+    ? (props.changed?.has(row.path) ?? false)
+    : changedDirs.value.has(row.path);
+}
 const expanded = ref(new Set<string>());
 
 const root = computed<DirNode>(() => {
@@ -170,9 +191,12 @@ function icon(row: Row): string {
           type="button"
           class="flex w-full items-center gap-1.5 truncate py-0.5 pr-2 text-left hover:bg-zinc-800/80"
           :class="[
-            row.path === selectedPath
-              ? 'bg-zinc-800 text-zinc-50'
-              : 'text-zinc-300',
+            row.path === selectedPath ? 'bg-zinc-800' : '',
+            isChanged(row)
+              ? 'text-amber-300'
+              : row.path === selectedPath
+                ? 'text-zinc-50'
+                : 'text-zinc-300',
             row.type === 'file' &&
             !isVisualizable(row.path) &&
             !isPreviewable(row.path)
@@ -195,6 +219,23 @@ function icon(row: Row): string {
             v-else-if="row.type === 'file' && isPreviewable(row.path)"
             class="i-mdi-eye-outline ml-auto shrink-0 text-xs text-sky-400/70"
             title="Has a rendered preview"
+          />
+          <!-- A column of its own, so the icons before it stay aligned. -->
+          <span
+            v-if="row.type === 'file'"
+            class="w-3 shrink-0 text-center text-xs font-semibold"
+            :class="
+              isVisualizable(row.path) || isPreviewable(row.path)
+                ? 'ml-1'
+                : 'ml-auto'
+            "
+            :title="isChanged(row) ? 'Unsaved changes' : undefined"
+            >{{ isChanged(row) ? 'M' : '' }}</span
+          >
+          <span
+            v-else-if="isChanged(row)"
+            class="mr-1 ml-auto size-1.5 shrink-0 rounded-full bg-amber-300/80"
+            title="Holds unsaved changes"
           />
         </button>
       </li>

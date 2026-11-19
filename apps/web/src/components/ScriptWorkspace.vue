@@ -897,6 +897,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :links="fileLinks"
         :diagnostics="parserDiagnostics"
         :keep-scope="editorScope"
+        :base-text="baseText"
         @problems="problems = $event"
         @change="onCodeChange"
         @cursor="onCursor"

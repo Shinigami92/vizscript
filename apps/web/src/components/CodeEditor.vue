@@ -12,6 +12,8 @@ import { monacoLanguage } from '../graph/languages';
 import type { Problem, ProblemSeverity } from '../graph/problems';
 import type { FileLinkSource } from '../monaco/file-links';
 import { registerFileLinks } from '../monaco/file-links';
+import type { LineChangeGutter } from '../monaco/line-change-gutter';
+import { lineChangeGutter } from '../monaco/line-change-gutter';
 import {
   keepModel,
   keptModel,
@@ -35,6 +37,8 @@ const props = defineProps<{
    * (`github/o/r@main`, `local/<id>`).
    */
   keepScope?: string;
+  /** The saved text: changed lines are marked in the gutter (VS Code). */
+  baseText?: string;
 }>();
 
 export interface EditorHistory {
@@ -131,6 +135,7 @@ const editor = shallowRef<monaco.editor.IStandaloneCodeEditor>();
 let model: monaco.editor.ITextModel | undefined;
 let selected: monaco.editor.IEditorDecorationsCollection | undefined;
 let hovered: monaco.editor.IEditorDecorationsCollection | undefined;
+let changes: LineChangeGutter | undefined;
 let suppressChange = false;
 let unregisterLinks: (() => void) | undefined;
 let markerListener: monaco.IDisposable | undefined;
@@ -217,6 +222,7 @@ onMounted(() => {
   emitProblems();
   selected = editor.value.createDecorationsCollection();
   hovered = editor.value.createDecorationsCollection();
+  changes = lineChangeGutter(editor.value, () => props.baseText);
 
   const emitHistory = (): void => {
     if (model) {
@@ -233,6 +239,8 @@ onMounted(() => {
     if (!suppressChange) {
       emit('change', model?.getValue() ?? '');
     }
+
+    changes?.update();
 
     // The undo stack is updated after the content event.
     queueMicrotask(emitHistory);
@@ -279,6 +287,11 @@ watch(
 );
 
 watch(
+  () => props.baseText,
+  () => changes?.update()
+);
+
+watch(
   () => props.readOnly,
   (readOnly) => editor.value?.updateOptions({ readOnly })
 );
@@ -287,6 +300,7 @@ onBeforeUnmount(() => {
   unregisterLinks?.();
   markerListener?.dispose();
   contentListener?.dispose();
+  changes?.dispose();
   if (props.keepScope !== undefined) {
     saveViewState(
       props.path,

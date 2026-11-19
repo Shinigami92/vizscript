@@ -78,3 +78,29 @@ body {
     );
   }
 }
+
+/* Lines changed against the saved text, in the editor's gutter (VS Code). */
+.monaco-editor .line-change-added,
+.monaco-editor .line-change-modified {
+  left: 3px !important;
+  width: 3px !important;
+}
+
+.monaco-editor .line-change-added {
+  background: var(--colors-emerald-500);
+}
+
+.monaco-editor .line-change-modified {
+  background: var(--colors-sky-500);
+}
+
+.monaco-editor .line-change-deleted::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 3px;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--colors-red-500);
+  z-index: 1;
+}

@@ -81,6 +81,7 @@ const {
   fileError,
   tabs: fileTabs,
   dirtyTabs,
+  changedFiles,
   openText,
   loadFile,
   closeTab: closeSessionTab,
@@ -279,6 +280,7 @@ function dropOutdatedEdits(): void {
           v-else-if="tree"
           :entries="tree.entries"
           :selected-path="path || null"
+          :changed="changedFiles"
           @select="selectFile"
           @pin="pinFile"
         />

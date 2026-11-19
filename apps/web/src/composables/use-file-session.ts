@@ -113,6 +113,11 @@ export interface FileSession {
   tabs: FileTabs;
   /** Tabs with unsaved changes (also not loaded ones with a draft). */
   dirtyTabs: ComputedRef<Set<string>>;
+  /**
+   * Every file of the scope with unsaved changes: open ones and those with
+   * a draft in the browser (the explorer marks them, like VS Code).
+   */
+  changedFiles: ComputedRef<Set<string>>;
   /** The current text of an open tab, if it is one. */
   openText: (path: string) => string | undefined;
   /** Reads the file of the URL (from its tab when it is open). */
@@ -181,7 +186,11 @@ export function useFileSession(options: FileSessionOptions): FileSession {
     return readStored(draftKey(path), parseDraft, storage());
   }
 
+  /** Bumped when a draft is written or removed: storage is read again. */
+  const draftsChanged = ref(0);
+
   function writeDraft(path: string, buffer: Buffer): void {
+    draftsChanged.value++;
     if (
       persist() &&
       (buffer.text !== buffer.file.content || buffer.overlay.edits.length > 0)
@@ -199,6 +208,30 @@ export function useFileSession(options: FileSessionOptions): FileSession {
       removeStored(draftKey(path), storage());
     }
   }
+
+  const changedFiles = computed(() => {
+    // Read for its dependency: drafts were written or removed.
+    void draftsChanged.value;
+    const result = new Set<string>();
+    const store = persist() ? storage() : undefined;
+    const prefix = draftKey('');
+    for (let i = 0; i < (store?.length ?? 0); i++) {
+      const key = store?.key(i);
+      if (key?.startsWith(prefix) && !key.endsWith('#outdated')) {
+        result.add(key.slice(prefix.length));
+      }
+    }
+
+    for (const [path, buffer] of buffers) {
+      if (isDirty(buffer)) {
+        result.add(path);
+      } else {
+        result.delete(path);
+      }
+    }
+
+    return result;
+  });
 
   function isDirty(buffer: Buffer): boolean {
     return (
@@ -299,6 +332,7 @@ export function useFileSession(options: FileSessionOptions): FileSession {
           storage()
         );
         removeStored(draftKey(loaded.path), storage());
+        draftsChanged.value++;
       }
 
       outdated.value = persist() ? outdatedOf(loaded.path) : null;
@@ -382,6 +416,7 @@ export function useFileSession(options: FileSessionOptions): FileSession {
       text.value = shown.content;
       overlay.value = EMPTY_OVERLAY;
       removeStored(draftKey(shown.path), storage());
+      draftsChanged.value++;
     }
   }
 
@@ -472,6 +507,7 @@ export function useFileSession(options: FileSessionOptions): FileSession {
     fileError,
     tabs,
     dirtyTabs,
+    changedFiles,
     openText: (path) => buffers.get(path)?.text,
     loadFile,
     closeTab,

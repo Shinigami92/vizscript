@@ -6,7 +6,15 @@ import {
 } from 'unocss';
 
 /** Color scales that light mode mirrors (50 ↔ 950, 100 ↔ 900 …). */
-const SWAPPED_COLORS = ['zinc', 'red', 'amber', 'sky', 'purple', 'yellow'];
+const SWAPPED_COLORS = [
+  'zinc',
+  'red',
+  'amber',
+  'sky',
+  'purple',
+  'yellow',
+  'emerald',
+];
 const SHADES = [
   '50',
   '100',

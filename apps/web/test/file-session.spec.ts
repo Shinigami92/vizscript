@@ -106,6 +106,33 @@ describe('file session', () => {
     expect(s.session.dirty.value).toBe(true);
   });
 
+  it('lists every changed file, also closed ones with a draft', async () => {
+    const storage = memoryStorage();
+    storage.setItem(
+      draftKey('lib/c.py'),
+      JSON.stringify({ version: 'c = 1\n', text: 'c = 2\n' })
+    );
+    storage.setItem(`${draftKey('d.py')}#outdated`, JSON.stringify({}));
+    storage.setItem(
+      'vizscript:draft:local/p2:e.py',
+      JSON.stringify({ version: 'e', text: 'f' })
+    );
+    const s = setup({ 'a.py': 'a = 1\n', 'b.py': 'b = 1\n' }, storage);
+    await s.show('a.py');
+    s.session.text.value = 'a = 2\n';
+    await nextTick();
+    expect([...s.session.changedFiles.value].toSorted()).toEqual([
+      'a.py',
+      'lib/c.py',
+    ]);
+
+    // Changed back: no longer listed.
+    s.session.text.value = 'a = 1\n';
+    await nextTick();
+    vi.advanceTimersByTime(600);
+    expect([...s.session.changedFiles.value]).toEqual(['lib/c.py']);
+  });
+
   it('restores drafts of the same version, also older formats', async () => {
     const storage = memoryStorage();
     storage.setItem(
