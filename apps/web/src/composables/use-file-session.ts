@@ -1,6 +1,6 @@
 import type { GraphOverlay } from '@vizscript/core';
 import { EMPTY_OVERLAY } from '@vizscript/core';
-import { useDebounceFn } from '@vueuse/core';
+import { tryOnBeforeUnmount, useDebounceFn } from '@vueuse/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, ref, shallowReactive, shallowRef, watch } from 'vue';
 import type { KeyValueStorage } from '../storage/browser-storage';
@@ -92,8 +92,8 @@ export interface FileSessionOptions {
   read: (path: string) => Promise<LoadedFile>;
   /** Whether unsaved changes are kept in the browser (default: yes). */
   persistDrafts?: () => boolean;
-  /** Frees what an editor kept for a file (its Monaco model). */
-  dispose: (path: string) => void;
+  /** Frees what an editor kept for a file of `scope` (its Monaco model). */
+  dispose: (path: string, scope: string) => void;
   /** Shown when a draft was restored. */
   onRestored?: () => void;
   /** The browser's storage; tests pass their own. */
@@ -218,15 +218,22 @@ export function useFileSession(options: FileSessionOptions): FileSession {
     return result;
   });
 
-  function forget(paths: Iterable<string>): void {
+  function forget(paths: Iterable<string>, scope = options.scope.value): void {
     for (const path of paths) {
       buffers.delete(path);
-      options.dispose(path);
+      options.dispose(path, scope);
     }
   }
 
   // Another branch or folder has other files: start fresh.
-  watch(options.scope, () => forget(buffers.keys()));
+  watch(options.scope, (_, previous) => forget(buffers.keys(), previous));
+  // Leaving the view: the editor state of its tabs goes (their buffers
+  // still write their drafts).
+  tryOnBeforeUnmount(() => {
+    for (const tab of tabs.tabs.value) {
+      options.dispose(tab.path, options.scope.value);
+    }
+  });
 
   let fileRequest = 0;
 

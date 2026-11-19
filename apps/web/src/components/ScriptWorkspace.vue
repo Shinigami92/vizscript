@@ -1002,7 +1002,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :read-only="!editable"
         :links="fileLinks"
         :diagnostics="parserDiagnostics"
-        :keep-model="keepEditor"
+        :keep-scope="editorScope"
         @problems="problems = $event"
         @change="onCodeChange"
         @cursor="onCursor"

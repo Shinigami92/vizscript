@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TreeEntry } from '@vizscript/api-contract';
 import { useEventListener } from '@vueuse/core';
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import FileTabs from '../components/FileTabs.vue';
 import FileTree from '../components/FileTree.vue';
@@ -52,6 +52,9 @@ const files = computed(
     new Set(entries.value?.filter((e) => e.type === 'file').map((e) => e.path))
 );
 
+/** The folder: drafts, tabs and editor state belong to it. */
+const scope = computed(() => `local/${id.value}`);
+
 /** Open files of this folder: the one on screen, tabs and drafts. */
 const {
   file,
@@ -74,7 +77,7 @@ const {
   markSaved,
   replaceShown,
 } = useFileSession({
-  scope: computed(() => `local/${id.value}`),
+  scope,
   path,
   isFile,
   read: async (filePath) => {
@@ -179,12 +182,6 @@ async function readFile(filePath: string): Promise<string> {
 
   return project.value.read(filePath);
 }
-
-onBeforeUnmount(() => {
-  for (const tab of fileTabs.tabs.value) {
-    disposeModel(tab.path);
-  }
-});
 
 function showNoFile(): void {
   void router.push({ name: 'local', params: { id: id.value, path: [] } });
@@ -426,7 +423,7 @@ function dropOutdatedEdits(): void {
       :read-file="readFile"
       :base-text="saved"
       hide-share
-      keep-editor
+      :editor-scope="scope"
       @open="selectFile"
       @out-of-sync="outOfSync = $event"
     >

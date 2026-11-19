@@ -12,7 +12,13 @@ import { monacoLanguage } from '../graph/languages';
 import type { Problem, ProblemSeverity } from '../graph/problems';
 import type { FileLinkSource } from '../monaco/file-links';
 import { registerFileLinks } from '../monaco/file-links';
-import { modelUri, saveViewState, viewStateOf } from '../monaco/models';
+import {
+  keepModel,
+  keptModel,
+  modelUri,
+  saveViewState,
+  viewStateOf,
+} from '../monaco/models';
 import { monaco, monacoTheme } from '../monaco/setup';
 
 const props = defineProps<{
@@ -25,9 +31,10 @@ const props = defineProps<{
   diagnostics?: ReadonlyArray<Diagnostic>;
   /**
    * Keep the model (and its undo history) and the view state when the
-   * editor goes away, for files open in tabs.
+   * editor goes away, for files open in tabs of this branch or folder
+   * (`github/o/r@main`, `local/<id>`).
    */
-  keepModel?: boolean;
+  keepScope?: string;
 }>();
 
 export interface EditorHistory {
@@ -127,7 +134,7 @@ let hovered: monaco.editor.IEditorDecorationsCollection | undefined;
 let suppressChange = false;
 let unregisterLinks: (() => void) | undefined;
 let markerListener: monaco.IDisposable | undefined;
-/** On the model, which outlives the editor when `keepModel` is set. */
+/** On the model, which outlives the editor when `keepScope` is set. */
 let contentListener: monaco.IDisposable | undefined;
 
 function toRange(range: SourceRange): monaco.Range {
@@ -148,8 +155,13 @@ watch(scheme, (value) => monaco.editor.setTheme(monacoTheme(value)));
 
 onMounted(() => {
   const uri = modelUri(props.path);
-  const existing = monaco.editor.getModel(uri);
-  if (props.keepModel && existing) {
+  const scope = props.keepScope;
+  // Another branch's or folder's model of the same path is never reused.
+  const existing =
+    scope === undefined
+      ? monaco.editor.getModel(uri)
+      : keptModel(props.path, scope);
+  if (scope !== undefined && existing) {
     // A tab shown again: same model, same undo history.
     model = existing;
     if (model.getValue() !== props.value) {
@@ -166,6 +178,9 @@ onMounted(() => {
       monacoLanguage(props.path),
       uri
     );
+    if (scope !== undefined) {
+      keepModel(props.path, scope);
+    }
   }
 
   unregisterLinks = registerFileLinks(model, {
@@ -192,7 +207,8 @@ onMounted(() => {
       emitProblems();
     }
   });
-  const viewState = props.keepModel ? viewStateOf(props.path) : undefined;
+  const viewState =
+    scope === undefined ? undefined : viewStateOf(props.path, scope);
   if (viewState) {
     editor.value.restoreViewState(viewState);
   }
@@ -271,12 +287,16 @@ onBeforeUnmount(() => {
   unregisterLinks?.();
   markerListener?.dispose();
   contentListener?.dispose();
-  if (props.keepModel) {
-    saveViewState(props.path, editor.value?.saveViewState() ?? null);
+  if (props.keepScope !== undefined) {
+    saveViewState(
+      props.path,
+      props.keepScope,
+      editor.value?.saveViewState() ?? null
+    );
   }
 
   editor.value?.dispose();
-  if (!props.keepModel) {
+  if (props.keepScope === undefined) {
     model?.dispose();
   }
 });

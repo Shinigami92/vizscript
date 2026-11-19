@@ -23,8 +23,11 @@ export interface ScriptWorkspaceProps {
   baseText?: string;
   /** Hide the share button (e.g. local folders, which have no shareable URL). */
   hideShare?: boolean;
-  /** The file is open in a tab: keep its editor state when switching. */
-  keepEditor?: boolean;
+  /**
+   * The file is open in a tab of this branch or folder: its editor state
+   * is kept when switching tabs (`github/o/r@main`, `local/<id>`).
+   */
+  editorScope?: string;
   /** Graph-only edits of the file (from its draft), `v-model:overlay`. */
   overlay?: GraphOverlay;
 }

@@ -5,7 +5,7 @@ import type {
   TreeResponse,
 } from '@vizscript/api-contract';
 import { useDebounceFn } from '@vueuse/core';
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '../api/client';
 import { repoSource } from '../api/repo-source';
@@ -182,12 +182,6 @@ function readFile(filePath: string): Promise<string> {
 
 watch(scope, () => readCache.clear());
 
-onBeforeUnmount(() => {
-  for (const tab of fileTabs.tabs.value) {
-    disposeModel(tab.path);
-  }
-});
-
 /** Shows the folder view (no file) when the last tab closes. */
 function showNoFile(): void {
   void router.push({ name: 'repo', params: { ...route.params, path: [] } });
@@ -353,7 +347,7 @@ function dropOutdatedEdits(): void {
       :files="files"
       :read-file="readFile"
       :base-text="file.content"
-      keep-editor
+      :editor-scope="scope"
       @open="selectFile"
     >
       <template #toolbar>

@@ -50,7 +50,7 @@ function setup(
         ? Promise.reject(new Error(`No ${file}`))
         : Promise.resolve({ path: file, content, version: content });
     },
-    dispose: (file) => disposed.push(file),
+    dispose: (file, owner) => disposed.push(`${owner}:${file}`),
     onRestored: () => restored.push(path.value),
     storage,
   });
@@ -154,7 +154,8 @@ describe('file session', () => {
     await s.show('a.py');
     s.scope.value = 'local/p2';
     await nextTick();
-    expect(s.disposed).toEqual(['a.py']);
+    // The models of the folder left behind, not of the new one.
+    expect(s.disposed).toEqual(['local/p1:a.py']);
     expect(s.session.openText('a.py')).toBeUndefined();
   });
 
