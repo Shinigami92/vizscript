@@ -219,6 +219,17 @@ export abstract class ExpressionLowering extends GraphBuilder {
       inputs.unshift({ pin: freeTarget, value: undefined });
     }
 
+    // `String()`: its value goes into the parentheses once it is given.
+    if (converts !== undefined && inputs.length === 0) {
+      inputs.push({
+        pin: this.dataIn('arg0', '', undefined, 'any', {
+          insertInitAt: rangeOf(expr).end - 1,
+          insertPrefix: '',
+        }),
+        value: undefined,
+      });
+    }
+
     const impure =
       mode !== 'pure' &&
       converts === undefined &&

@@ -75,4 +75,30 @@ describe('conversions (UE autocast)', () => {
     );
     expect(applyConversion('String($value)', 'a + b')).toBe('String(a + b)');
   });
+
+  it('draws `String()` like `String(x)`, its value given by a wire', () => {
+    const text =
+      'function f(repo: { id: number }): string {\n  return String();\n}\n';
+    const doc = parseTypeScript(text, 'a.ts');
+    const empty = node(doc, 'String');
+    expect(empty.purity).toBe('pure');
+    expect(isCompact(empty)).toBe(true);
+    expect(empty.pins.map((p) => p.id)).toEqual(['arg0', 'return']);
+    const entry = doc.functions
+      .flatMap((fn) => fn.nodes)
+      .find((n) => n.kind === 'entry' && n.title !== 'Module');
+    const repo = entry?.pins.find((p) => p.name === 'repo');
+    const result = applyTypeScriptOp(
+      text,
+      {
+        type: 'connect',
+        from: { node: entry?.id ?? '', pin: repo?.id ?? '' },
+        to: { node: empty.id, pin: 'arg0' },
+      },
+      'a.ts'
+    );
+    expect(result.ok && applyTextEdits(text, result.edits)).toBe(
+      'function f(repo: { id: number }): string {\n  return String(repo);\n}\n'
+    );
+  });
 });

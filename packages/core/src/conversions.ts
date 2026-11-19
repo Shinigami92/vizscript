@@ -59,7 +59,8 @@ export function conversionCall(
   callee: string,
   argumentCount: number
 ): DataType | undefined {
-  if (argumentCount !== 1) {
+  // `String()` too: the same node, its value not given yet.
+  if (argumentCount > 1) {
     return undefined;
   }
 

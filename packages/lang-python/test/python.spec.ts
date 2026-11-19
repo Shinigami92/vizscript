@@ -322,4 +322,22 @@ describe('conversions (UE autocast)', () => {
     expect(convert?.purity).toBe('pure');
     expect(convert?.compact).toBe(true);
   });
+
+  it('draws str() the same, its value given by a wire', () => {
+    const text = 'def f(count):\n    return str()\n';
+    const doc = parsePythonDocument(text);
+    const nodes = doc.functions.flatMap((f) => f.nodes);
+    const convert = nodes.find((n) => n.title === 'str');
+    expect(convert?.purity).toBe('pure');
+    expect(convert?.pins.map((p) => p.id)).toEqual(['arg0', 'return']);
+    const entry = nodes.find((n) => n.kind === 'entry' && n.title === 'f');
+    const count = entry?.pins.find((p) => p.name === 'count');
+    expect(
+      apply(text, {
+        type: 'connect',
+        from: { node: entry?.id ?? '', pin: count?.id ?? '' },
+        to: { node: convert?.id ?? '', pin: 'arg0' },
+      })
+    ).toBe('def f(count):\n    return str(count)\n');
+  });
 });
