@@ -34,9 +34,11 @@ import {
 } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useToasts } from '../composables/use-toasts';
+import { ecosystemOf } from '../graph/add-package';
 import { GraphClient } from '../graph/graph-client';
 import { isPreviewable, isVisualizable } from '../graph/languages';
 import { countedUses, symbolNodes } from '../graph/symbols';
+import { typeRegistryAvailable } from '../graph/type-registry';
 import { isCancelled } from '../graph/worker-connection';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
@@ -45,6 +47,7 @@ import DetailsPanel from './DetailsPanel.vue';
 import GraphCanvas from './GraphCanvas.vue';
 import MyScriptPanel from './MyScriptPanel.vue';
 import ProblemsPanel from './ProblemsPanel.vue';
+import AddPackageMenu from './script-workspace/AddPackageMenu.vue';
 import EditorActions from './script-workspace/EditorActions.vue';
 import GraphBreadcrumb from './script-workspace/GraphBreadcrumb.vue';
 import LanguageStatus from './script-workspace/LanguageStatus.vue';
@@ -169,6 +172,17 @@ const { version: languageVersion, versionFiles } = useLanguageVersion({
 /** Versions and dependency kinds of the imported modules (My Script). */
 const moduleInfos = useModuleInfo({ props, doc, version: languageVersion });
 
+/** "+" in Imports: where its menu opens, while it is open. */
+const addingPackage = ref<{ x: number; y: number } | null>(null);
+const registryReady = ref(false);
+void typeRegistryAvailable().then((ready) => (registryReady.value = ready));
+const canAddPackage = computed(
+  () =>
+    registryReady.value &&
+    props.editFile !== undefined &&
+    ecosystemOf(props.path) !== undefined
+);
+
 const {
   resolveReference,
   fileLinks,
@@ -182,6 +196,7 @@ const {
   onActionMenu,
   externals,
   declarations: importDeclarations,
+  packageOffer,
 } = useImports({
   props,
   client,
@@ -1151,6 +1166,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :editable="editable"
         :can-open-import="canOpenImport"
         :module-info="moduleInfos"
+        :can-add-package="canAddPackage"
         @select-symbol="selectSymbol"
         @open-symbol="openSymbol"
         @open-import="openImport"
@@ -1158,6 +1174,17 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         @select="selectNodes"
         @reveal="revealSymbol"
         @op="onScriptOp"
+        @add-package="addingPackage = $event"
+      />
+      <AddPackageMenu
+        v-if="addingPackage && editFile"
+        :at="addingPackage"
+        :path="path"
+        :files="files"
+        :edit-file="editFile"
+        :offer="packageOffer"
+        :apply="onScriptOp"
+        @close="addingPackage = null"
       />
     </WorkbenchView>
 

@@ -66,7 +66,11 @@ const props = defineProps<{
   bottom?: number;
 }>();
 
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{
+  close: [];
+  /** The search text changed (for actions found elsewhere, like a registry). */
+  query: [text: string];
+}>();
 
 const MAX_RESULTS = 200;
 
@@ -220,6 +224,8 @@ const flat = computed(() =>
 );
 
 const activeEntry = computed(() => flat.value[active.value]);
+
+watch(query, (text) => emit('query', text.trim()));
 
 watch([query, contextSensitive], () => {
   active.value = props.foldByDefault && !query.value.trim() ? -1 : 0;

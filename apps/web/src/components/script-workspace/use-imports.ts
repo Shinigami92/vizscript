@@ -75,6 +75,14 @@ export interface WorkspaceImports {
   externals: ComputedRef<ExternalName[]>;
   /** Declarations of the imported names, sent along with every parse. */
   declarations: () => ImportedDeclaration[];
+  /**
+   * What a library to add exports (not in the manifest yet): its module
+   * as code names it (`httpx`, `serde_json`, `vue`) and its exports.
+   */
+  packageOffer: (
+    name: string,
+    version: string
+  ) => Promise<{ module: string; exports: ScriptSymbol[] }>;
 }
 
 /**
@@ -470,6 +478,68 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     return exportedSymbols(parsed, declarations);
   }
 
+  async function packageOffer(
+    name: string,
+    version: string
+  ): Promise<{ module: string; exports: ScriptSymbol[] }> {
+    const language = languageOf(props.path);
+    if (language === 'typescript') {
+      return {
+        module: name,
+        exports: await npm.exportsOf(name, version).catch(() => []),
+      };
+    }
+
+    if (language === 'rust') {
+      const module = name.replaceAll('-', '_');
+      const root = (await crateStubs(name, version))?.modules[''];
+      if (!root) {
+        return { module, exports: [] };
+      }
+
+      const parsed = await client.parse(root, `${module}.rs`, undefined, {
+        background: true,
+      });
+      return { module, exports: exportedSymbols(parsed, root) };
+    }
+
+    if (language === 'python') {
+      const found = await packageTypes(normalizeName(name), version);
+      // The package's top folder named like it (`attrs`, not its legacy
+      // `attr`), else its only one (`PIL` of Pillow), else its name.
+      const named = name.toLowerCase().replaceAll('-', '_');
+      const folders = Object.keys(found?.files ?? {}).flatMap((path) => {
+        const parts = path.split('/');
+        return parts.length === 2 && parts[1]?.startsWith('__init__')
+          ? [parts[0] ?? '']
+          : [];
+      });
+      const module =
+        folders.find((folder) => folder.toLowerCase() === named) ??
+        folders[0] ??
+        named;
+      const stubs = found
+        ? new TypeshedStubs(
+            (raw) =>
+              client.prepareLibrary(
+                props.path,
+                raw,
+                stubVersion(deps.version?.())
+              ),
+            (source, fileName) =>
+              client.parse(source, fileName, undefined, { background: true }),
+            packageSource(found.files)
+          )
+        : typeshedFor(stubVersion(deps.version?.()));
+      return {
+        module,
+        exports: await stubs.exportsOf(module).catch(() => []),
+      };
+    }
+
+    return { module: name, exports: [] };
+  }
+
   /**
    * Exports of a library module: Python's standard library (typeshed and
    * the backend's stubs), npm packages (`.d.ts` files from jsDelivr), Rust
@@ -576,6 +646,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     updateReferences,
     updateImports,
     onActionMenu,
+    packageOffer,
     externals,
     declarations: () => importDeclarations,
   };

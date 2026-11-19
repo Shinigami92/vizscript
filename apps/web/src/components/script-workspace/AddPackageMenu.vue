@@ -1,0 +1,295 @@
+<script setup lang="ts">
+import type { PackageSearchResult } from '@vizscript/api-contract';
+import type { DependencyKind, GraphOp, ScriptSymbol } from '@vizscript/core';
+import { useDebounceFn } from '@vueuse/core';
+import { computed, ref, shallowRef } from 'vue';
+import { useToasts } from '../../composables/use-toasts';
+import {
+  defaultKind,
+  ecosystemOf,
+  installCommand,
+  kindLabel,
+  kindsOf,
+  libraryImport,
+  manifestEdit,
+  manifestFor,
+} from '../../graph/add-package';
+import { SYMBOL_ICONS } from '../../graph/symbols';
+import type { ActionEntry } from '../ActionMenu.vue';
+import ActionMenu from '../ActionMenu.vue';
+
+/**
+ * "+" in My Script's Imports: search a library in the language's registry
+ * (through the server), pick what to import from it, and how the manifest
+ * lists it. Writes the import into the file and the dependency into the
+ * manifest (an open tab with unsaved changes).
+ */
+const props = defineProps<{
+  at: { x: number; y: number };
+  path: string;
+  files: ReadonlySet<string> | undefined;
+  editFile: (path: string, edit: (text: string) => string) => Promise<void>;
+  /** A library's module as code names it and its exports. */
+  offer: (
+    name: string,
+    version: string
+  ) => Promise<{ module: string; exports: ScriptSymbol[] }>;
+  /**
+   * Writes the import. A function, not an event: the menu closes (and
+   * unmounts) while the manifest is still being changed.
+   */
+  apply: (op: GraphOp) => void;
+}>();
+
+const emit = defineEmits<{ close: [] }>();
+
+const toasts = useToasts();
+const ecosystem = computed(() => ecosystemOf(props.path));
+const manifest = computed(() => manifestFor(props.files, props.path));
+const manifestName = computed(
+  () => manifest.value?.split('/').at(-1) ?? 'the manifest'
+);
+
+const query = ref('');
+const results = shallowRef<PackageSearchResult[]>([]);
+const searching = ref(false);
+const failed = ref(false);
+const picked = shallowRef<{
+  result: PackageSearchResult;
+  module: string;
+  exports: ScriptSymbol[];
+} | null>(null);
+const loading = ref<string | null>(null);
+const kind = ref<DependencyKind>('runtime');
+/** A new key opens the menu again (after picking a library or a kind). */
+const menuKey = ref(0);
+let reopen = false;
+
+const search = useDebounceFn(async (text: string) => {
+  const target = ecosystem.value;
+  if (!target || text === '') {
+    results.value = [];
+    searching.value = false;
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `/api/types/search?ecosystem=${target}&q=${encodeURIComponent(text)}`
+    );
+    if (query.value === text) {
+      failed.value = !response.ok;
+      results.value = response.ok
+        ? ((await response.json()) as PackageSearchResult[])
+        : [];
+    }
+  } catch {
+    failed.value = true;
+  } finally {
+    if (query.value === text) {
+      searching.value = false;
+    }
+  }
+}, 300);
+
+function onQuery(text: string): void {
+  if (picked.value) {
+    return;
+  }
+
+  query.value = text;
+  searching.value = text !== '';
+  void search(text);
+}
+
+async function pick(result: PackageSearchResult): Promise<void> {
+  reopen = true;
+  loading.value = result.name;
+  kind.value = defaultKind(props.path, result.name);
+  const offer = await props
+    .offer(result.name, result.version)
+    .catch(() => ({ module: result.name, exports: [] }));
+  picked.value = { result, ...offer };
+  loading.value = null;
+  menuKey.value++;
+}
+
+async function add(imported: string | undefined): Promise<void> {
+  const chosen = picked.value;
+  const target = manifest.value;
+  if (!chosen || !target) {
+    return;
+  }
+
+  const { name, version } = chosen.result;
+  try {
+    await props.editFile(
+      target,
+      manifestEdit(target, name, version, kind.value)
+    );
+  } catch {
+    toasts.show(`${manifestName.value} could not be read.`, 'error');
+    return;
+  }
+
+  props.apply({
+    type: 'addImport',
+    import: libraryImport(props.path, chosen.module, imported),
+  });
+  toasts.show(
+    `Added ${name} ${version} to ${target} (unsaved). Run \`${installCommand(props.files, target)}\` to update the lockfile.`
+  );
+}
+
+const SHOWN_KINDS = new Set([
+  'function',
+  'class',
+  'type',
+  'enum',
+  'variable',
+  'constant',
+]);
+
+const entries = computed((): ActionEntry[] => {
+  if (loading.value) {
+    return [
+      {
+        label: `Loading ${loading.value}…`,
+        category: '',
+        disabled: 'Reading what the library exports',
+        action: () => undefined,
+      },
+    ];
+  }
+
+  const chosen = picked.value;
+  if (!chosen) {
+    if (!manifest.value) {
+      return [
+        {
+          label: `No ${ecosystem.value === 'npm' ? 'package.json' : ecosystem.value === 'crates' ? 'Cargo.toml' : 'pyproject.toml'} above this file`,
+          category: '',
+          disabled:
+            'A library is listed in the project’s manifest; this file has none.',
+          action: () => undefined,
+        },
+      ];
+    }
+
+    if (query.value === '') {
+      const registry =
+        ecosystem.value === 'npm'
+          ? 'npm'
+          : ecosystem.value === 'crates'
+            ? 'crates.io'
+            : 'PyPI (by its exact name)';
+      return [
+        {
+          label: `Type a library’s name to search ${registry}`,
+          category: '',
+          disabled: `It is added to ${manifest.value}`,
+          action: () => undefined,
+        },
+      ];
+    }
+
+    return results.value.map((result) => ({
+      label: result.name,
+      category: 'Libraries',
+      icon: 'i-mdi-package-variant-closed text-amber-400',
+      hint: result.version,
+      // Found by the registry, so always kept by the menu's own search.
+      keywords: query.value,
+      ...(result.description ? { detail: result.description } : {}),
+      action: () => void pick(result),
+    }));
+  }
+
+  const target = ecosystem.value;
+  const imports: ActionEntry[] = [
+    {
+      label: chosen.module,
+      category: 'Import',
+      icon: 'i-mdi-file-import-outline',
+      hint: 'whole module',
+      keywords: 'all module namespace',
+      action: () => void add(undefined),
+    },
+    ...chosen.exports
+      .filter((symbol) => SHOWN_KINDS.has(symbol.kind))
+      .map((symbol): ActionEntry => ({
+        label: symbol.name,
+        category: 'Import',
+        icon: SYMBOL_ICONS[symbol.kind],
+        hint: symbol.kind,
+        action: () => void add(symbol.name),
+      })),
+  ];
+  const kinds: ActionEntry[] = target
+    ? kindsOf(target).map((option) => ({
+        label: kindLabel(target, option),
+        category: `List in ${manifestName.value} as`,
+        icon:
+          option === kind.value
+            ? 'i-mdi-check text-amber-400'
+            : 'i-mdi-circle-small text-zinc-500',
+        action: () => {
+          kind.value = option;
+          reopen = true;
+        },
+      }))
+    : [];
+  return [...imports, ...kinds];
+});
+
+const title = computed(() => {
+  const chosen = picked.value;
+  return chosen
+    ? `Add ${chosen.result.name} ${chosen.result.version}`
+    : 'Add a library';
+});
+
+function suggest(): ActionEntry[] {
+  return !picked.value && query.value !== '' && results.value.length === 0
+    ? [
+        {
+          label: searching.value
+            ? 'Searching…'
+            : failed.value
+              ? 'The registry is not reachable'
+              : 'No library found',
+          category: '',
+          disabled: searching.value
+            ? 'Asking the registry'
+            : 'Try another name',
+          action: () => undefined,
+        },
+      ]
+    : [];
+}
+
+function onClose(): void {
+  if (reopen) {
+    reopen = false;
+    menuKey.value++;
+    return;
+  }
+
+  emit('close');
+}
+</script>
+
+<template>
+  <Teleport to="body">
+    <ActionMenu
+      :key="menuKey"
+      :x="at.x"
+      :y="at.y"
+      :title="title"
+      :entries="entries"
+      :suggest="suggest"
+      @query="onQuery"
+      @close="onClose"
+    />
+  </Teleport>
+</template>

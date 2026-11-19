@@ -52,6 +52,8 @@ const props = defineProps<{
   canOpenImport?: (symbol: ScriptSymbol) => boolean;
   /** Library, version and dependency kind of imported modules. */
   moduleInfo?: ReadonlyMap<string, ModuleInfo>;
+  /** "+" on Imports adds a library (a package manager and a server). */
+  canAddPackage?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -63,6 +65,8 @@ const emit = defineEmits<{
   select: [ids: string[]];
   reveal: [id: string];
   op: [op: GraphOp];
+  /** "+" on Imports, at the client point of the button. */
+  addPackage: [at: { x: number; y: number }];
 }>();
 
 const query = ref('');
@@ -114,6 +118,15 @@ function matches(symbol: ScriptSymbol): boolean {
  * The library info of an import group: none for files of the repository
  * (a module that resolves to one isn't a missing dependency).
  */
+const canAddPackage = computed(
+  () => props.editable && props.canAddPackage === true
+);
+
+function addPackage(event: MouseEvent): void {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  emit('addPackage', { x: rect.left, y: rect.bottom + 4 });
+}
+
 function infoOf(group: Group): ModuleInfo | undefined {
   const first = group.items[0];
   return first && props.canOpenImport?.(first)
@@ -234,9 +247,9 @@ const sections = computed<Section[]>(() => {
     add: 'type',
   });
 
-  // Grouped by module, in code order.
+  // Grouped by module, in code order; with "+" (add a library) also empty.
   const imports = of('import');
-  if (imports.length > 0) {
+  if (imports.length > 0 || canAddPackage.value) {
     const modules = new Map<string, ScriptSymbol[]>();
     for (const item of imports) {
       const module = item.module ?? '';
@@ -247,6 +260,7 @@ const sections = computed<Section[]>(() => {
       id: 'imports',
       title: 'Imports',
       groups: [...modules].map(([owner, items]) => ({ owner, items })),
+      empty: 'No imports',
     });
   }
 
@@ -723,6 +737,17 @@ function addLabel(kind: AddKind, owner: string): string {
               :class="{ '-rotate-90': collapsed[section.id] }"
             />
             <span class="truncate">{{ section.title }}</span>
+          </button>
+          <button
+            v-if="section.id === 'imports' && canAddPackage"
+            type="button"
+            class="add"
+            data-ui="add-package"
+            title="Add a library"
+            aria-label="Add a library"
+            @click="addPackage"
+          >
+            <span class="i-mdi-plus" />
           </button>
           <button
             v-if="editable && section.add"
