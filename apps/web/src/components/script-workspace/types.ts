@@ -28,6 +28,11 @@ export interface ScriptWorkspaceProps {
    * is kept when switching tabs (`github/o/r@main`, `local/<id>`).
    */
   editorScope?: string;
+  /**
+   * Changes another file of the repository or folder (a manifest when a
+   * library is added): it becomes an open tab with unsaved changes.
+   */
+  editFile?: (path: string, edit: (text: string) => string) => Promise<void>;
   /** Graph-only edits of the file (from its draft), `v-model:overlay`. */
   overlay?: GraphOverlay;
 }

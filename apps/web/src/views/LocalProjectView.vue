@@ -75,6 +75,7 @@ const {
   outdated,
   restoreOutdated,
   dropOutdated,
+  editFile,
   markSaved,
   replaceShown,
 } = useFileSession({
@@ -406,6 +407,7 @@ function dropOutdatedEdits(): void {
       :base-text="saved"
       hide-share
       :editor-scope="scope"
+      :edit-file="editFile"
       @open="selectFile"
       @out-of-sync="outOfSync = $event"
     >

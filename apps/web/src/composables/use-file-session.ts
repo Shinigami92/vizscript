@@ -138,6 +138,12 @@ export interface FileSession {
   markSaved: (path: string, content: string, version: string) => void;
   /** The open file changed elsewhere and has no changes here: show it. */
   replaceShown: (file: LoadedFile) => void;
+  /**
+   * Changes another file of the session (a manifest when a library is
+   * added): its unsaved text, or its content with its draft, gets `edit`;
+   * it opens as a tab with unsaved changes.
+   */
+  editFile: (path: string, edit: (text: string) => string) => Promise<void>;
 }
 
 /**
@@ -428,7 +434,36 @@ export function useFileSession(options: FileSessionOptions): FileSession {
     });
   }
 
+  async function editFile(
+    path: string,
+    edit: (text: string) => string
+  ): Promise<void> {
+    if (file.value?.path === path) {
+      text.value = edit(text.value);
+      return;
+    }
+
+    let buffer = buffers.get(path);
+    if (!buffer) {
+      const loaded = await options.read(path);
+      const draft = persist() ? readDraft(path) : null;
+      const current =
+        draft && draft.version === loaded.version ? draft.text : loaded.content;
+      buffer = {
+        file: loaded,
+        text: current,
+        overlay: draft?.overlay ?? EMPTY_OVERLAY,
+      };
+    }
+
+    const changed = { ...buffer, text: edit(buffer.text) };
+    buffers.set(path, changed);
+    writeDraft(path, changed);
+    tabs.open(path, { preview: false, after: file.value?.path });
+  }
+
   return {
+    editFile,
     file,
     text,
     overlay,

@@ -90,6 +90,7 @@ const {
   outdated,
   restoreOutdated,
   dropOutdated,
+  editFile,
 } = useFileSession({
   scope,
   path,
@@ -315,6 +316,7 @@ function dropOutdatedEdits(): void {
       :read-file="readFile"
       :base-text="file.content"
       :editor-scope="scope"
+      :edit-file="editFile"
       @open="selectFile"
     >
       <template #toolbar>

@@ -159,6 +159,21 @@ describe('file session', () => {
     expect(s.session.openText('a.py')).toBeUndefined();
   });
 
+  it('changes another file as an unsaved tab', async () => {
+    const s = setup({ 'a.py': 'a = 1\n', 'pyproject.toml': '[project]\n' });
+    await s.show('a.py');
+    await s.session.editFile('pyproject.toml', (t) => `${t}x = 1\n`);
+    expect(s.session.openText('pyproject.toml')).toBe('[project]\nx = 1\n');
+    expect(s.session.dirtyTabs.value.has('pyproject.toml')).toBe(true);
+    // The file on screen stays.
+    expect(s.session.file.value?.path).toBe('a.py');
+    // A second change builds on the first.
+    await s.session.editFile('pyproject.toml', (t) => `${t}y = 2\n`);
+    expect(s.session.openText('pyproject.toml')).toBe(
+      '[project]\nx = 1\ny = 2\n'
+    );
+  });
+
   it('keeps the newest file when an earlier read finishes late', async () => {
     const s = setup({ 'a.py': 'a = 1\n', 'b.py': 'b = 1\n' });
     s.path.value = 'a.py';
