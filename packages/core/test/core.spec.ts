@@ -236,6 +236,29 @@ describe('layoutDocument', () => {
     expect(moved.b1?.x).toBe(saved.b1?.x);
   });
 
+  it('pushes all later functions down for a new one between them', () => {
+    const before: GraphDocument = {
+      language: 'test',
+      diagnostics: [],
+      functions: [fnOf('a'), fnOf('b'), fnOf('c')],
+    };
+    const saved = layoutDocument(before, { sizeOf });
+    // `n` added between `a` and `b`; the others keep their saved places.
+    const doc: GraphDocument = {
+      ...before,
+      functions: [fnOf('a'), fnOf('n'), fnOf('b'), fnOf('c')],
+    };
+    const laid = layoutDocument(doc, { sizeOf }, saved);
+    // Each frame starts a frame gap (110) below the one before it.
+    const height = sizeOf(node('x', 'impure', [])).height;
+    const tops = ['a', 'n', 'b', 'c'].map((f) => laid[`${f}0`]?.y ?? 0);
+    for (let i = 1; i < tops.length; i++) {
+      expect(tops[i] ?? 0).toBeGreaterThanOrEqual(
+        (tops[i - 1] ?? 0) + height + 110
+      );
+    }
+  });
+
   it('never moves other functions for nodes the user placed', () => {
     const doc: GraphDocument = {
       language: 'test',

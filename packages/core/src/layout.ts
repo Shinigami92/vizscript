@@ -355,7 +355,8 @@ function separateFunction(
     ...box,
     top: box.top + shift,
     bottom: box.bottom + shift,
-    grew,
+    // Pushed down by the code: it pushes the functions below it on.
+    grew: grew || shift > 0,
   });
 }
 
