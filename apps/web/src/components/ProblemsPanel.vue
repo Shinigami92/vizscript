@@ -6,6 +6,8 @@ import { SEVERITY_ORDER } from '../graph/problems';
 const props = defineProps<{
   problems: ReadonlyArray<Problem>;
   path: string;
+  /** Imports and library types are still read: problems may change. */
+  checking?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -37,14 +39,24 @@ const fileName = computed(() => props.path.split('/').at(-1) ?? props.path);
     class="flex h-full min-h-0 flex-col bg-zinc-950 text-sm"
   >
     <div
-      v-if="sorted.length === 0"
+      v-if="checking"
+      data-ui="problems-checking"
+      class="flex items-center gap-1.5 border-b border-zinc-800 px-4 py-1.5 text-xs text-zinc-500"
+      role="status"
+    >
+      <span class="i-mdi-loading shrink-0 animate-spin" />
+      Still checking: imports and library types are loading, so these may
+      change.
+    </div>
+    <div
+      v-if="sorted.length === 0 && !checking"
       class="px-4 py-3 text-xs text-zinc-500"
       role="status"
     >
       No problems have been detected in {{ fileName }}.
     </div>
     <ul
-      v-else
+      v-else-if="sorted.length > 0"
       class="min-h-0 flex-1 overflow-y-auto py-1"
       aria-label="Problems"
     >

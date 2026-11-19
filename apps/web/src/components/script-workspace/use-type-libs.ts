@@ -1,8 +1,8 @@
 import type { ModuleReference } from '@vizscript/core';
 import { resolveModuleReference } from '@vizscript/core';
-import type { Ref, ShallowRef } from 'vue';
+import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { onBeforeUnmount, watch } from 'vue';
-import { trackTask } from '../../composables/use-background-tasks';
+import { trackTask, useBusy } from '../../composables/use-background-tasks';
 import type { GraphClient } from '../../graph/graph-client';
 import { languageOf } from '../../graph/languages';
 import {
@@ -46,8 +46,13 @@ interface TypeLibDeps {
  * declarations of the npm packages they use. Problems then see real types
  * instead of unresolved modules, and later the pins can too.
  */
-export function useTypeLibs(deps: TypeLibDeps): void {
+/**
+ * Returns whether the declarations are still being read (the checker's
+ * problems may change).
+ */
+export function useTypeLibs(deps: TypeLibDeps): { busy: ComputedRef<boolean> } {
   const { props, client } = deps;
+  const { busy, run } = useBusy();
   const owner = Symbol('workspace');
   /** Texts and references of repository files, read once per workspace. */
   const texts = new Map<string, Promise<string | undefined>>();
@@ -201,7 +206,7 @@ export function useTypeLibs(deps: TypeLibDeps): void {
       ].join('\n');
       if (key !== lastKey) {
         lastKey = key;
-        void trackTask('Loading library types', update());
+        void trackTask('Loading library types', run(update()));
       }
     },
     { immediate: true }
@@ -211,4 +216,6 @@ export function useTypeLibs(deps: TypeLibDeps): void {
     seq++;
     clearProjectLibs(owner);
   });
+
+  return { busy };
 }

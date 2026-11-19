@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useSlowTasks } from '../../composables/use-background-tasks';
 import { shortcut } from '../../graph/source';
 import { useWorkbenchStore } from '../../stores/workbench';
 
@@ -8,9 +9,13 @@ defineProps<{
   saving: 'idle' | 'saving' | 'saved' | 'error' | null;
   /** The graph has edits the code doesn't have yet. */
   outOfSync?: boolean;
+  /** Imports and library types are still read: the counts may change. */
+  checking?: boolean;
 }>();
 
 const workbench = useWorkbenchStore();
+/** The progress next to the problems says it already: one spinner. */
+const slow = useSlowTasks();
 </script>
 
 <template>
@@ -21,17 +26,29 @@ const workbench = useWorkbenchStore();
       type="button"
       class="flex h-full items-center gap-1 rounded-sm px-1.5 hover:bg-zinc-800 hover:text-zinc-100"
       :class="
-        problemCounts.errors > 0
-          ? 'text-red-300'
-          : problemCounts.warnings > 0
-            ? 'text-amber-300'
-            : ''
+        checking
+          ? 'text-zinc-500'
+          : problemCounts.errors > 0
+            ? 'text-red-300'
+            : problemCounts.warnings > 0
+              ? 'text-amber-300'
+              : ''
       "
-      :title="`Problems (${shortcut('M', true)})`"
+      :title="
+        checking
+          ? `Problems (${shortcut('M', true)}), still checking: imports and library types are loading`
+          : `Problems (${shortcut('M', true)})`
+      "
+      :aria-busy="checking"
       :aria-label="`${problemCounts.errors} errors, ${problemCounts.warnings} warnings. Toggle problems`"
       :aria-pressed="workbench.isVisible('problems')"
       @click="workbench.toggle('problems')"
     >
+      <span
+        v-if="checking && slow.length === 0"
+        data-ui="status-problems-checking"
+        class="i-mdi-loading animate-spin"
+      />
       <span class="i-mdi-close-circle-outline" />{{ problemCounts.errors }}
       <span class="i-mdi-alert-outline ml-1" />{{ problemCounts.warnings }}
     </button>

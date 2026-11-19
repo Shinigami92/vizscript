@@ -15,7 +15,7 @@ import {
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
-import { trackTask } from '../../composables/use-background-tasks';
+import { trackTask, useBusy } from '../../composables/use-background-tasks';
 import { localLibraries, rustDependencies } from '../../graph/cargo-project';
 import {
   crateModule,
@@ -113,6 +113,8 @@ export interface WorkspaceImports {
   onActionMenu: () => void;
   /** Names of other files and libraries for the action menu. */
   externals: ComputedRef<ExternalName[]>;
+  /** The imports' declarations are still being read. */
+  busy: ComputedRef<boolean>;
   /** Declarations of the imported names, sent along with every parse. */
   declarations: () => ImportedDeclaration[];
   /**
@@ -137,6 +139,7 @@ export interface WorkspaceImports {
  */
 export function useImports(deps: ImportDeps): WorkspaceImports {
   const { props, client, doc, text } = deps;
+  const { busy, run } = useBusy();
 
   function resolveReference(
     reference: ModuleReference
@@ -826,7 +829,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
   }
 
   function updateImports(seq: number): Promise<void> {
-    return trackTask('Reading imports', readImports(seq));
+    return trackTask('Reading imports', run(readImports(seq)));
   }
 
   async function readImports(seq: number): Promise<void> {
@@ -875,5 +878,6 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     externals,
     declarations: () => importDeclarations,
     withNeededImport,
+    busy,
   };
 }

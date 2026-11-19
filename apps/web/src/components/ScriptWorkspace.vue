@@ -195,6 +195,7 @@ const {
   declarations: importDeclarations,
   packageOffer,
   withNeededImport,
+  busy: importsBusy,
 } = useImports({
   props,
   client,
@@ -207,7 +208,18 @@ const {
   version: () => languageVersion.value?.text,
 });
 
-useTypeLibs({ props, client, references, text });
+const { busy: typesBusy } = useTypeLibs({ props, client, references, text });
+
+/**
+ * Problems may still change: imports or library types are being read, or
+ * the repository's file list (for imported files) is still on its way.
+ */
+const checking = computed(
+  () =>
+    importsBusy.value ||
+    typesBusy.value ||
+    (props.readFile !== undefined && props.files === undefined)
+);
 
 const selectedImportPath = computed(() => {
   const symbol = selectedSymbol.value;
@@ -903,6 +915,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
 
     <WorkspaceStatus
       :problem-counts="problemCounts"
+      :checking="checking"
       :saving="layoutStore ? saving : null"
       :out-of-sync="outOfSync"
     />
@@ -1046,6 +1059,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
       <ProblemsPanel
         :problems="allProblems"
         :path="path"
+        :checking="checking"
         @select="showProblem"
       />
     </WorkbenchView>

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SLOW_TASK_MS,
   trackTask,
+  useBusy,
   useSlowTasks,
 } from '../src/composables/use-background-tasks';
 
@@ -48,5 +49,24 @@ describe('background tasks', () => {
     await expect(trackTask('Opening b.ts', Promise.resolve(1))).resolves.toBe(
       1
     );
+  });
+});
+
+describe('useBusy', () => {
+  it('is busy while any of its work runs, without a delay', async () => {
+    const { busy, run } = useBusy();
+    const first = pending();
+    const second = pending();
+    void run(first.work);
+    void run(second.work).catch(() => undefined);
+    expect(busy.value).toBe(true);
+    first.finish();
+    await first.work;
+    await Promise.resolve();
+    expect(busy.value).toBe(true);
+    second.finish();
+    await second.work;
+    await Promise.resolve();
+    expect(busy.value).toBe(false);
   });
 });

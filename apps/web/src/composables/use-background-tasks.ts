@@ -1,5 +1,5 @@
 import type { ComputedRef } from 'vue';
-import { computed, reactive } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 /** Work the user waits for is shown once it takes longer than this. */
 export const SLOW_TASK_MS = 2000;
@@ -48,4 +48,30 @@ export function useSlowTasks(): ComputedRef<string[]> {
   return computed(() => [
     ...new Set(tasks.filter((t) => t.slow).map((t) => t.label)),
   ]);
+}
+
+/**
+ * Whether some of a component's own work is still running (no delay):
+ * `run` counts a piece of work until it settles.
+ */
+export function useBusy(): {
+  busy: ComputedRef<boolean>;
+  run: <T>(work: Promise<T>) => Promise<T>;
+} {
+  const running = ref(0);
+  function run<T>(work: Promise<T>): Promise<T> {
+    running.value++;
+    void (async (): Promise<void> => {
+      try {
+        await work;
+      } catch {
+        // The caller handles it.
+      } finally {
+        running.value--;
+      }
+    })();
+    return work;
+  }
+
+  return { busy: computed(() => running.value > 0), run };
 }
