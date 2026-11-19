@@ -32,6 +32,17 @@ export const SYMBOL_LABELS: Record<SymbolKind, string> = {
   import: 'Import',
 };
 
+/**
+ * An import that names only a type (`import type { A }`, or a type alias
+ * or interface of the imported module): it has no value to call or read.
+ */
+export function isTypeImport(symbol: ScriptSymbol): boolean {
+  return (
+    symbol.kind === 'import' &&
+    (symbol.modifiers.includes('type') || symbol.importedKind === 'type')
+  );
+}
+
 /** "Function", or "Imported function" once the import's file was read. */
 export function symbolLabel(symbol: ScriptSymbol): string {
   if (symbol.modifiers.includes('callback')) {

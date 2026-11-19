@@ -39,6 +39,7 @@ import {
   stubVersion,
   TypeshedStubs,
 } from '../../graph/python-stubs';
+import { isTypeImport } from '../../graph/symbols';
 import type { FileLinkSource } from '../../monaco/file-links';
 import type { ResolveReference } from './symbol-lookup';
 import type { ScriptWorkspaceProps } from './types';
@@ -158,14 +159,20 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
 
   const references = shallowRef<ModuleReference[]>([]);
 
-  const importedNames = computed(() => [
-    ...new Set(
-      references.value
-        .filter((r) => r.symbol && !r.typeOnly)
-        .map((r) => text.value.slice(r.range.start, r.range.end))
-        .filter((name) => /^[A-Za-z_$][\w$]*$/.test(name))
-    ),
-  ]);
+  const importedNames = computed(() => {
+    // A type alias or interface has no value to call.
+    const types = new Set(
+      (doc.value?.symbols ?? []).filter(isTypeImport).map((s) => s.name)
+    );
+    return [
+      ...new Set(
+        references.value
+          .filter((r) => r.symbol && !r.typeOnly)
+          .map((r) => text.value.slice(r.range.start, r.range.end))
+          .filter((name) => /^[A-Za-z_$][\w$]*$/.test(name) && !types.has(name))
+      ),
+    ];
+  });
 
   /**
    * The file an import comes from and the name to open there; `null` when it

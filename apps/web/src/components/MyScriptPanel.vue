@@ -21,6 +21,7 @@ import type { ModuleInfo } from '../graph/module-info';
 import {
   countedUses,
   DRAGGABLE_KINDS,
+  isTypeImport,
   newFunctionAnchor,
   SYMBOL_DRAG_MIME,
   SYMBOL_ICONS,
@@ -558,10 +559,7 @@ function remove(symbol: ScriptSymbol): void {
 
 /** Type-only imports have no value to use in the graph. */
 function draggable(symbol: ScriptSymbol): boolean {
-  return (
-    DRAGGABLE_KINDS.has(symbol.kind) &&
-    !(symbol.kind === 'import' && symbol.modifiers.includes('type'))
-  );
+  return DRAGGABLE_KINDS.has(symbol.kind) && !isTypeImport(symbol);
 }
 
 /** Like UE: drag a function or variable into the graph. */

@@ -21,6 +21,7 @@ import {
 import type { DocIndex } from '../../graph/doc-index';
 import type { ExternalName } from '../../graph/project-index';
 import { signature } from '../../graph/project-index';
+import { isTypeImport } from '../../graph/symbols';
 import { IDENTIFIER_PATH } from './menu-data';
 
 export interface Variable {
@@ -248,6 +249,7 @@ export function globalObjects(
     if (
       symbol.kind === 'import' &&
       symbol.importedKind !== 'function' &&
+      !isTypeImport(symbol) &&
       !found.has(symbol.name)
     ) {
       found.set(symbol.name, { name: symbol.name, hint: 'import' });

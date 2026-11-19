@@ -3,7 +3,7 @@ import { qualifiedName } from '@vizscript/core';
 import type { Ref } from 'vue';
 import { ref } from 'vue';
 import { isMac } from '../../graph/source';
-import { SYMBOL_DRAG_MIME } from '../../graph/symbols';
+import { isTypeImport, SYMBOL_DRAG_MIME } from '../../graph/symbols';
 import type { MenuEntry } from '../ContextMenu.vue';
 import { memberAccess, typeDefault } from './graph-helpers';
 import type { CanvasContext } from './types';
@@ -80,6 +80,13 @@ export function useSymbolDrop(ctx: CanvasContext): SymbolDrop {
       // Like a new call node: its inputs show as pins (from the signature)
       // that fill in the arguments when they get a value or a wire.
       add({ type: 'call', callee });
+      return;
+    }
+
+    if (isTypeImport(symbol)) {
+      show(
+        `${symbol.name} is a type: pick it as a variable's or input's type.`
+      );
       return;
     }
 
