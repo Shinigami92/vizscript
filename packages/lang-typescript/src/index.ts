@@ -1,7 +1,8 @@
 import type { LanguageBackend } from '@vizscript/core';
 import { LANGUAGE_ID, parseTypeScript } from './lower';
-import { applyTypeScriptOp, TYPESCRIPT_TYPES } from './ops';
+import { applyTypeScriptOp } from './ops';
 import { typeScriptReferences } from './references';
+import { TYPESCRIPT_TYPES } from './type-system';
 import { TS_VERSION_FILES, typescriptVersion } from './version';
 
 export { typescriptVersion } from './version';
