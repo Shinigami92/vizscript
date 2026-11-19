@@ -19,4 +19,9 @@ export interface ProjectDependency {
   manifest: string;
   /** A package of the repository itself (`workspace:`, `link:`, `file:`). */
   local?: boolean;
+  /**
+   * The name code imports it by, when the manifest renames it (Cargo's
+   * `alias = { package = "name" }`).
+   */
+  alias?: string;
 }
