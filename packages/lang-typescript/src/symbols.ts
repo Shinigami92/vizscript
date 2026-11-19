@@ -236,6 +236,17 @@ class SymbolCollector {
     }
   }
 
+  /** A list of a header as written (`A, B<T>`), from its first to its last item. */
+  private listText(
+    items: ReadonlyArray<{ start?: number | null; end?: number | null }>
+  ): string | undefined {
+    const first = items[0];
+    const last = items.at(-1);
+    return first?.start != null && last?.end != null
+      ? this.text.slice(first.start, last.end)
+      : undefined;
+  }
+
   /** Fields and methods of an interface or object type literal. */
   private fields(members: ReadonlyArray<t.TSTypeElement>): SymbolField[] {
     return members.flatMap((member): SymbolField[] => {
@@ -447,6 +458,8 @@ class SymbolCollector {
 
     const name = node.id.name;
     const base = node.superClass ? rangeOf(node.superClass) : undefined;
+    const baseEnd = node.superTypeArguments?.end ?? base?.end;
+    const implemented = this.listText(node.implements ?? []);
     this.add({
       kind: 'class',
       name,
@@ -460,7 +473,8 @@ class SymbolCollector {
         ...(node.abstract ? ['abstract'] : []),
       ],
       ...this.typeParams(node),
-      ...(base ? { extends: this.text.slice(base.start, base.end) } : {}),
+      ...(base ? { extends: this.text.slice(base.start, baseEnd) } : {}),
+      ...(implemented ? { implements: implemented } : {}),
       graphStart: node.start ?? 0,
     });
 
@@ -741,6 +755,9 @@ class SymbolCollector {
           ],
           ...this.typeParams(node),
           ...(fields.length > 0 ? { fields } : {}),
+          ...(node.type === 'TSInterfaceDeclaration' && node.extends
+            ? { extends: this.listText(node.extends) }
+            : {}),
         });
         this.typeMembers(node.id.name, body);
         break;

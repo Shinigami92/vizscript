@@ -320,6 +320,7 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
   exposeOnSpawn: true,
   decorators: { on: ['class', 'member', 'parameter'] },
   typeParams: true,
+  heritage: { class: ['extends', 'implements'], interface: ['extends'] },
   typeKinds: [
     { kind: 'interface', label: 'Interface' },
     { kind: 'class', label: 'Class' },

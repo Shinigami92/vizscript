@@ -290,6 +290,16 @@ export type GraphOp =
    */
   | { type: 'setTypeParams'; symbol: string; text: string }
   /**
+   * Sets what a class or interface extends or a class implements, as
+   * written after the keyword (`Base`, `A, B<T>`); `''` removes it.
+   */
+  | {
+      type: 'setHeritage';
+      symbol: string;
+      clause: 'extends' | 'implements';
+      text: string;
+    }
+  /**
    * Adds an input to a function (UE: Inputs `+`). Same-file calls get
    * `argument` when one is given, else they stay as they are (the missing
    * argument shows as an empty pin).
@@ -531,6 +541,10 @@ export interface TypeSystemInfo {
   };
   /** Generics' type parameters can be edited (`setTypeParams`). */
   typeParams?: boolean;
+  /** Clauses of classes and interfaces that can be edited (`setHeritage`). */
+  heritage?: Partial<
+    Record<'class' | 'interface', ReadonlyArray<'extends' | 'implements'>>
+  >;
   /**
    * Kinds of new types My Script's "+" offers (`interface`, `class`), the
    * first by default; none: one kind.

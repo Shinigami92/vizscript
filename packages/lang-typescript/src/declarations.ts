@@ -2,6 +2,7 @@ import type { DataType, DeclarationSyntax } from '@vizscript/core';
 import { typeCoversInput } from '@vizscript/core';
 import { addTypeScriptImport } from './add-import';
 import { setDecorator, setTypeParams } from './decorators';
+import { setHeritage } from './heritage';
 import { setModifier } from './modifiers';
 import { parseFile } from './parse-file';
 import { renameTypeScriptSymbol, typeScriptCallSites } from './rename';
@@ -66,6 +67,8 @@ export function declarations(
     setModifier,
     setDecorator,
     setTypeParams,
+    setHeritage: (source, symbol, clause, value) =>
+      setHeritage(source, fileName, symbol, clause, value),
     identifier: /^[A-Za-z_$][\w$]*$/,
     keywords: KEYWORDS,
     keywordMembers: true,

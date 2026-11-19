@@ -100,8 +100,13 @@ export interface ScriptSymbol {
   /** Declared return type. */
   returns?: TypeRef;
   returnType?: DataType;
-  /** `extends` / base classes of a class. */
+  /**
+   * `extends` of a class (its base class) or of an interface (the
+   * interfaces it extends), as written.
+   */
   extends?: string;
+  /** `implements` of a class (TypeScript), as written: `A, B<T>`. */
+  implements?: string;
   /** Start offset of the code that became a function graph. */
   graphStart?: number;
   /** The function graph of a function, method or class. */

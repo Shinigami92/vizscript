@@ -218,7 +218,8 @@ function applySymbolOp(
         | 'setParameterValue'
         | 'setReturnType'
         | 'setDecorator'
-        | 'setTypeParams';
+        | 'setTypeParams'
+        | 'setHeritage';
     }
   >,
   syntax: StatementSyntax
@@ -381,6 +382,17 @@ function applySymbolOp(
       return declarations.setTypeParams
         ? declarations.setTypeParams(text, doc, symbol, op.text)
         : failed('Type parameters of this language are edited in the code.');
+    }
+
+    case 'setHeritage': {
+      const symbol = doc.symbols?.find((s) => s.id === op.symbol);
+      if (!symbol) {
+        return failed('Cannot find this declaration.');
+      }
+
+      return declarations.setHeritage
+        ? declarations.setHeritage(text, symbol, op.clause, op.text)
+        : failed('Base classes of this language are edited in the code.');
     }
 
     case 'setModifier': {

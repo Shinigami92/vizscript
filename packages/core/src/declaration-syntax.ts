@@ -97,6 +97,13 @@ export interface DeclarationSyntax {
     symbol: ScriptSymbol,
     params: string
   ) => OpResult;
+  /** `setHeritage`: what a class or interface extends or implements. */
+  setHeritage?: (
+    text: string,
+    symbol: ScriptSymbol,
+    clause: 'extends' | 'implements',
+    value: string
+  ) => OpResult;
   /**
    * Edits that rename a symbol and its uses; backends resolve the uses with
    * their own scope rules.
