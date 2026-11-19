@@ -122,7 +122,13 @@ const knownFiles = computed(() => (tree.value ? files.value : undefined));
 async function readRepoFile(
   filePath: string,
   keptTree = false
-): Promise<{ path: string; content: string; version: string }> {
+): Promise<{
+  path: string;
+  content: string;
+  version: string;
+  /** Read by a sha of the last visit's tree: it may be outdated. */
+  kept?: boolean;
+}> {
   const original = sourceOf(treeChanges.changes.value, filePath);
   if (original === '') {
     return { path: filePath, content: '', version: 'new' };
@@ -139,7 +145,12 @@ async function readRepoFile(
   });
   const cached = sha === undefined ? undefined : await cachedBlob(key(sha));
   if (sha !== undefined && cached !== undefined) {
-    return { path: filePath, content: cached, version: sha };
+    return {
+      path: filePath,
+      content: cached,
+      version: sha,
+      ...(treeFresh.value ? {} : { kept: true }),
+    };
   }
 
   const loaded = await source.value.getFile(
@@ -159,6 +170,67 @@ const opening = new Map<
 >();
 
 /**
+ * Files opened by a sha of the last visit's tree, with that sha: checked
+ * when GitHub's tree arrives.
+ */
+const openedFromKept = new Map<string, string>();
+
+/** The kept tree being looked up (opening a file waits for it). */
+let keptTreeLookup: Promise<unknown> = Promise.resolve();
+
+async function openKeptOrFresh(
+  filePath: string
+): Promise<{ path: string; content: string; version: string }> {
+  // The kept tree's sha, if its content is cached: shown at once. Looking
+  // the kept tree up takes milliseconds.
+  await keptTreeLookup;
+  const { kept, ...loaded } = await readRepoFile(filePath, true);
+  if (kept) {
+    openedFromKept.set(filePath, loaded.version);
+  }
+
+  return loaded;
+}
+
+/**
+ * Files opened from the kept tree whose content changed on the branch:
+ * shown again in the new version, unless edited already (their draft is
+ * of the older version then, and is kept aside on the next load).
+ */
+async function checkOpenedFiles(): Promise<void> {
+  const opened = [...openedFromKept];
+  openedFromKept.clear();
+  for (const [filePath, sha] of opened) {
+    const stored = sourceOf(treeChanges.changes.value, filePath) ?? filePath;
+    const fresh = shas.value.get(stored);
+    if (fresh === undefined || fresh === sha) {
+      continue;
+    }
+
+    const shown = file.value;
+    if (shown?.path !== filePath || shown.version !== sha) {
+      continue;
+    }
+
+    if (dirty.value) {
+      show(
+        `${filePath.split('/').at(-1) ?? filePath} changed on the branch since your last visit; your edits are on the older version.`
+      );
+      continue;
+    }
+
+    try {
+      const loaded = await readRepoFile(filePath);
+      if (file.value === shown && !dirty.value) {
+        replaceShown(loaded);
+      }
+    } catch {
+      // Unreadable now: the file stays as it is.
+    }
+  }
+}
+
+/**
  * A file to open: asked once while a read is on its way (the kept tree
  * and the fresh one each make the file load again).
  */
@@ -168,7 +240,7 @@ function openRepoFile(
   const key = `${scope.value}:${filePath}`;
   let read = opening.get(key);
   if (!read) {
-    read = readRepoFile(filePath);
+    read = openKeptOrFresh(filePath);
     opening.set(key, read);
     void (async (): Promise<void> => {
       try {
@@ -215,6 +287,7 @@ const {
   restoreOutdated,
   dropOutdated,
   editFile,
+  replaceShown,
   movePath,
   forgetPath,
 } = useFileSession({
@@ -273,11 +346,14 @@ async function loadTree(): Promise<void> {
   loadingTree.value = true;
   treeFresh.value = false;
   tree.value = null;
+  openedFromKept.clear();
   // The branch list is for the picker: nothing waits for it.
   void loadBranches(request);
   // The last visit's tree at once; GitHub's replaces it.
   const key = treeKey();
-  const kept = await cachedTree(key);
+  const lookup = cachedTree(key);
+  keptTreeLookup = lookup;
+  const kept = await lookup;
   if (kept && request === treeRequest) {
     tree.value = kept;
   }
@@ -297,6 +373,9 @@ async function loadTree(): Promise<void> {
       // The branch moved: files read from the kept tree are read again.
       readCache.clear();
       tree.value = t;
+      void checkOpenedFiles();
+    } else {
+      openedFromKept.clear();
     }
 
     if (t.truncated) {
