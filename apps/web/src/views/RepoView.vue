@@ -19,8 +19,20 @@ import ScriptWorkspace from '../components/ScriptWorkspace.vue';
 import { useFileSession } from '../composables/use-file-session';
 import { useTabActions } from '../composables/use-tab-actions';
 import { useToasts } from '../composables/use-toasts';
+import { useTreeChanges } from '../composables/use-tree-changes';
 import type { LayoutStore } from '../graph/layout-store';
 import { repoLayoutStore } from '../graph/layout-store';
+import {
+  changedTree,
+  createFile,
+  createFolder,
+  currentFiles,
+  isWithin,
+  removePath,
+  renamePath,
+  restorePath,
+  sourceOf,
+} from '../graph/tree-changes';
 import { disposeModel } from '../monaco/models';
 import { useRecentStore } from '../stores/recent';
 import { useSessionStore } from '../stores/session';
@@ -56,20 +68,40 @@ const tree = shallowRef<TreeResponse | null>(null);
 const branches = shallowRef<BranchSummary[]>([]);
 const loadingTree = ref(false);
 
-const files = computed(
-  () =>
-    new Set(
-      tree.value?.entries.filter((e) => e.type === 'file').map((e) => e.path)
-    )
+/** Files created, renamed and deleted here, kept in the browser. */
+const treeChanges = useTreeChanges(scope);
+
+/** The tree with those changes, deleted files still listed. */
+const shownTree = computed(() =>
+  tree.value ? changedTree(tree.value.entries, treeChanges.changes.value) : null
+);
+
+/** The files there are now. */
+const files = computed(() =>
+  currentFiles(tree.value?.entries ?? [], treeChanges.changes.value)
 );
 
 const isFile = computed(
-  () =>
-    path.value !== '' &&
-    tree.value?.entries.some(
-      (e) => e.path === path.value && e.type === 'file'
-    ) === true
+  () => path.value !== '' && tree.value !== null && files.value.has(path.value)
 );
+
+/** Reads a file of the branch: new ones are empty, moved ones read their original. */
+async function readRepoFile(
+  filePath: string
+): Promise<{ path: string; content: string; version: string }> {
+  const original = sourceOf(treeChanges.changes.value, filePath);
+  if (original === '') {
+    return { path: filePath, content: '', version: 'new' };
+  }
+
+  const loaded = await source.value.getFile(
+    owner.value,
+    repo.value,
+    ref_.value,
+    original ?? filePath
+  );
+  return { path: filePath, content: loaded.content, version: loaded.sha };
+}
 
 /** Open files of this branch: the one on screen, tabs and drafts. */
 const {
@@ -92,19 +124,13 @@ const {
   restoreOutdated,
   dropOutdated,
   editFile,
+  movePath,
+  forgetPath,
 } = useFileSession({
   scope,
   path,
   isFile,
-  read: async (filePath) => {
-    const loaded = await source.value.getFile(
-      owner.value,
-      repo.value,
-      ref_.value,
-      filePath
-    );
-    return { path: loaded.path, content: loaded.content, version: loaded.sha };
-  },
+  read: readRepoFile,
   dispose: disposeModel,
   onRestored: () => show('Restored your unsaved changes for this file.'),
 });
@@ -172,11 +198,13 @@ function readFile(filePath: string): Promise<string> {
     return Promise.resolve(open);
   }
 
+  if (!files.value.has(filePath)) {
+    return Promise.reject(new Error(`${filePath} was deleted.`));
+  }
+
   let read = readCache.get(filePath);
   if (!read) {
-    read = source.value
-      .getFile(owner.value, repo.value, ref_.value, filePath)
-      .then((f) => f.content);
+    read = readRepoFile(filePath).then((f) => f.content);
     read.catch(() => readCache.delete(filePath));
     readCache.set(filePath, read);
   }
@@ -249,6 +277,71 @@ function switchBranch(next: string): void {
   void router.push({ name: 'repo', params: { ...route.params, ref: next } });
 }
 
+// ------------------------------------------- create, rename, delete files
+
+/** The open file is gone: the next tab, else the folder. */
+function showAnother(): void {
+  const next = fileTabs.tabs.value[0]?.path;
+  if (next) {
+    selectFile(next);
+  } else {
+    showNoFile();
+  }
+}
+
+function createPath(target: string, kind: 'file' | 'dir'): void {
+  const changes = treeChanges.changes.value;
+  treeChanges.set(
+    kind === 'file'
+      ? createFile(changes, target)
+      : createFolder(changes, target)
+  );
+  if (kind === 'file') {
+    pinFile(target);
+  }
+}
+
+function renameFile(from: string, to: string): void {
+  readCache.clear();
+  const shown = path.value;
+  treeChanges.set(renamePath(treeChanges.changes.value, files.value, from, to));
+  movePath(from, to);
+  if (isWithin(shown, from)) {
+    selectFile(to + shown.slice(from.length));
+  }
+}
+
+function removeFile(target: string): void {
+  const changes = treeChanges.changes.value;
+  // New files and unsaved text can't be restored: ask first.
+  const lost =
+    Object.keys(changes.added).some((p) => isWithin(p, target)) ||
+    [...changedFiles.value].some((p) => isWithin(p, target));
+  if (
+    lost &&
+    !globalThis.confirm(
+      `Delete ${target}? Its unsaved changes are lost for good.`
+    )
+  ) {
+    return;
+  }
+
+  readCache.clear();
+  const shown = path.value;
+  treeChanges.set(removePath(changes, files.value, target));
+  forgetPath(target);
+  if (isWithin(shown, target)) {
+    showAnother();
+  } else {
+    show(`Deleted ${target}. Right-click it in the explorer to restore it.`);
+  }
+}
+
+function restoreFile(target: string): void {
+  readCache.clear();
+  treeChanges.set(restorePath(treeChanges.changes.value, target));
+}
+
 /** Older unsaved edits are dropped for good: ask first. */
 function dropOutdatedEdits(): void {
   if (
@@ -277,12 +370,18 @@ function dropOutdatedEdits(): void {
           <span class="i-mdi-loading animate-spin" /> Loading…
         </div>
         <FileTree
-          v-else-if="tree"
-          :entries="tree.entries"
+          v-else-if="shownTree"
+          :entries="shownTree.entries"
           :selected-path="path || null"
           :changed="changedFiles"
+          :status="shownTree.status"
+          editable
           @select="selectFile"
           @pin="pinFile"
+          @create="createPath"
+          @rename="renameFile"
+          @remove="removeFile"
+          @restore="restoreFile"
         />
       </div>
     </WorkbenchView>

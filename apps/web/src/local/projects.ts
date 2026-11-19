@@ -20,6 +20,12 @@ export interface LocalProject {
   list(): Promise<FolderListing>;
   read(path: string): Promise<string>;
   write(path: string, text: string): Promise<void>;
+  /** Creates an empty file or a folder (folders on the way too). */
+  create?(path: string, kind: 'file' | 'dir'): Promise<void>;
+  /** Moves a file or a folder with everything in it. */
+  rename?(from: string, to: string): Promise<void>;
+  /** Deletes a file or a folder with everything in it. */
+  remove?(path: string): Promise<void>;
 }
 
 /** Whether the browser can open folders with read and write access. */
@@ -51,6 +57,65 @@ async function fileHandle(
   }
 
   return dir.getFileHandle(name);
+}
+
+/** The folder holding `path`, and the name in it. */
+async function parentOf(
+  root: FileSystemDirectoryHandle,
+  path: string,
+  create = false
+): Promise<{ dir: FileSystemDirectoryHandle; name: string }> {
+  const parts = path.split('/');
+  const name = parts.pop() ?? '';
+  let dir = root;
+  for (const part of parts) {
+    dir = await dir.getDirectoryHandle(part, { create });
+  }
+
+  return { dir, name };
+}
+
+/** The file or folder at a path, or `undefined`. */
+async function entryAt(
+  root: FileSystemDirectoryHandle,
+  path: string
+): Promise<FileSystemHandle | undefined> {
+  try {
+    const { dir, name } = await parentOf(root, path);
+    for await (const [entry, handle] of dir.entries()) {
+      if (entry === name) {
+        return handle;
+      }
+    }
+  } catch {
+    // a folder on the way is missing
+  }
+
+  return undefined;
+}
+
+/** Copies a file or a folder into `dir` under `name`. */
+async function copyInto(
+  handle: FileSystemHandle,
+  dir: FileSystemDirectoryHandle,
+  name: string
+): Promise<void> {
+  if (handle.kind === 'file') {
+    const content = await (handle as FileSystemFileHandle).getFile();
+    const writable = await (
+      await dir.getFileHandle(name, { create: true })
+    ).createWritable();
+    await writable.write(content);
+    await writable.close();
+    return;
+  }
+
+  const target = await dir.getDirectoryHandle(name, { create: true });
+  for await (const [child, childHandle] of (
+    handle as FileSystemDirectoryHandle
+  ).entries()) {
+    await copyInto(childHandle, target, child);
+  }
 }
 
 async function listHandle(
@@ -102,6 +167,12 @@ function handleProject(
   id: string,
   root: FileSystemDirectoryHandle
 ): LocalProject {
+  const mayWrite = async (): Promise<void> => {
+    if (!(await ensurePermission(root, 'readwrite'))) {
+      throw new Error('No permission to change this folder.');
+    }
+  };
+
   return {
     id,
     name: root.name,
@@ -117,6 +188,39 @@ function handleProject(
       const writable = await (await fileHandle(root, path)).createWritable();
       await writable.write(text);
       await writable.close();
+    },
+    create: async (path, kind) => {
+      await mayWrite();
+      if (await entryAt(root, path)) {
+        throw new Error(`${path} already exists.`);
+      }
+
+      const { dir, name } = await parentOf(root, path, true);
+      await (kind === 'file'
+        ? dir.getFileHandle(name, { create: true })
+        : dir.getDirectoryHandle(name, { create: true }));
+    },
+    rename: async (from, to) => {
+      await mayWrite();
+      const handle = await entryAt(root, from);
+      if (!handle) {
+        throw new Error(`${from} is gone.`);
+      }
+
+      if (await entryAt(root, to)) {
+        throw new Error(`${to} already exists.`);
+      }
+
+      // Copied, then removed: `move()` isn't there for every folder.
+      const target = await parentOf(root, to, true);
+      await copyInto(handle, target.dir, target.name);
+      const source = await parentOf(root, from);
+      await source.dir.removeEntry(source.name, { recursive: true });
+    },
+    remove: async (path) => {
+      await mayWrite();
+      const { dir, name } = await parentOf(root, path);
+      await dir.removeEntry(name, { recursive: true });
     },
   };
 }

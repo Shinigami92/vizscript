@@ -216,6 +216,26 @@ const GROUPS: ReadonlyArray<{
     ],
   },
   {
+    title: 'Explorer',
+    rows: [
+      {
+        action: 'New file or folder',
+        input:
+          'Its buttons next to the filter, or right-click → New File / New Folder (a name with / makes folders too)',
+      },
+      { action: 'Rename or move', input: '{F2}, or right-click → Rename' },
+      { action: 'Delete', input: '{Delete}, or right-click → Delete' },
+      {
+        action: 'Restore a deleted file (repositories)',
+        input: 'Right-click it → Restore',
+      },
+      {
+        action: 'Fold or reorder panels',
+        input: 'Click a sidebar panel’s header; drag it above or below another',
+      },
+    ],
+  },
+  {
     title: 'My Script',
     rows: [
       {

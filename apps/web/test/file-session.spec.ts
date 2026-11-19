@@ -133,6 +133,47 @@ describe('file session', () => {
     expect([...s.session.changedFiles.value]).toEqual(['lib/c.py']);
   });
 
+  it('moves tabs, unsaved text and drafts with a renamed folder', async () => {
+    const s = setup({ 'src/a.py': 'a = 1\n', 'b.py': 'b = 1\n' });
+    await s.show('src/a.py');
+    s.session.text.value = 'a = 2\n';
+    await nextTick();
+    vi.advanceTimersByTime(600);
+    await s.show('b.py');
+
+    s.session.movePath('src', 'lib');
+    expect(s.session.tabs.tabs.value.map((t) => t.path)).toEqual([
+      'lib/a.py',
+      'b.py',
+    ]);
+    expect(s.storage.getItem(draftKey('src/a.py'))).toBeNull();
+    expect(stored(s.storage, draftKey('lib/a.py'))).toEqual(
+      expect.objectContaining({ text: 'a = 2\n' })
+    );
+    expect(s.session.openText('lib/a.py')).toBe('a = 2\n');
+    expect(s.disposed).toContain('local/p1:src/a.py');
+
+    // Its unsaved text shows under the new path.
+    s.disk.set('lib/a.py', 'a = 1\n');
+    await s.show('lib/a.py');
+    expect(s.session.text.value).toBe('a = 2\n');
+    expect(s.session.file.value?.path).toBe('lib/a.py');
+  });
+
+  it('forgets a deleted file', async () => {
+    const s = setup({ 'a.py': 'a = 1\n', 'b.py': 'b = 1\n' });
+    await s.show('a.py');
+    s.session.text.value = 'a = 2\n';
+    await nextTick();
+    vi.advanceTimersByTime(600);
+
+    s.session.forgetPath('a.py');
+    expect(s.session.tabs.tabs.value).toEqual([]);
+    expect(s.storage.getItem(draftKey('a.py'))).toBeNull();
+    expect(s.session.file.value).toBeNull();
+    expect([...s.session.changedFiles.value]).toEqual([]);
+  });
+
   it('restores drafts of the same version, also older formats', async () => {
     const storage = memoryStorage();
     storage.setItem(

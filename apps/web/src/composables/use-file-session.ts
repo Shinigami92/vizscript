@@ -3,6 +3,7 @@ import { EMPTY_OVERLAY } from '@vizscript/core';
 import { tryOnBeforeUnmount, useDebounceFn } from '@vueuse/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, ref, shallowReactive, shallowRef, watch } from 'vue';
+import { isWithin } from '../graph/tree-changes';
 import type { KeyValueStorage } from '../storage/browser-storage';
 import {
   readStored,
@@ -149,6 +150,14 @@ export interface FileSession {
    * it opens as a tab with unsaved changes.
    */
   editFile: (path: string, edit: (text: string) => string) => Promise<void>;
+  /**
+   * A file or folder was renamed: tabs, unsaved text and drafts of the
+   * files move along. The caller shows the moved file when it was on
+   * screen.
+   */
+  movePath: (from: string, to: string) => void;
+  /** A file or folder was deleted: its tabs, unsaved text and drafts go. */
+  forgetPath: (path: string) => void;
 }
 
 /**
@@ -497,8 +506,91 @@ export function useFileSession(options: FileSessionOptions): FileSession {
     tabs.open(path, { preview: false, after: file.value?.path });
   }
 
+  /** Draft keys of the scope's files within `folder`. */
+  function storedWithin(folder: string): string[] {
+    const store = storage();
+    const prefix = draftKey('');
+    const keys: string[] = [];
+    for (let i = 0; i < (store?.length ?? 0); i++) {
+      const key = store?.key(i);
+      const path = key?.startsWith(prefix)
+        ? key.slice(prefix.length).replace(/#outdated$/, '')
+        : undefined;
+      if (key && path !== undefined && isWithin(path, folder)) {
+        keys.push(key);
+      }
+    }
+
+    return keys;
+  }
+
+  function movePath(from: string, to: string): void {
+    const moved = (path: string): string | undefined =>
+      isWithin(path, from) ? to + path.slice(from.length) : undefined;
+    for (const [path, buffer] of Array.from(buffers)) {
+      const target = moved(path);
+      if (target !== undefined) {
+        buffers.delete(path);
+        options.dispose(path, options.scope.value);
+        buffers.set(target, {
+          ...buffer,
+          file: { ...buffer.file, path: target },
+        });
+        // A draft still to write goes to the new path.
+        if (pending.delete(path)) {
+          pending.add(target);
+        }
+      }
+    }
+
+    const store = storage();
+    const prefix = draftKey('');
+    for (const key of storedWithin(from)) {
+      const raw = store?.getItem(key);
+      const target = moved(key.slice(prefix.length).replace(/#outdated$/, ''));
+      if (raw !== null && raw !== undefined && target !== undefined) {
+        store?.setItem(
+          key.endsWith('#outdated') ? outdatedKey(target) : draftKey(target),
+          raw
+        );
+        removeStored(key, store);
+      }
+    }
+
+    tabs.rename(moved);
+    const shown = file.value;
+    if (shown && moved(shown.path) !== undefined) {
+      // The next load shows it from its buffer, under the new path.
+      file.value = null;
+    }
+
+    draftsChanged.value++;
+  }
+
+  function forgetPath(path: string): void {
+    for (const open of Array.from(buffers.keys())) {
+      if (isWithin(open, path)) {
+        buffers.delete(open);
+        options.dispose(open, options.scope.value);
+      }
+    }
+
+    for (const key of storedWithin(path)) {
+      removeStored(key, storage());
+    }
+
+    tabs.remove((tab) => isWithin(tab, path));
+    if (file.value && isWithin(file.value.path, path)) {
+      file.value = null;
+    }
+
+    draftsChanged.value++;
+  }
+
   return {
     editFile,
+    movePath,
+    forgetPath,
     file,
     text,
     overlay,

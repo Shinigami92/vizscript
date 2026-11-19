@@ -12,6 +12,7 @@ import { useTabActions } from '../composables/use-tab-actions';
 import { useToasts } from '../composables/use-toasts';
 import { localLayoutStore } from '../graph/layout-store';
 import { shortcut } from '../graph/source';
+import { isWithin } from '../graph/tree-changes';
 import type { LocalProject, OpenResult } from '../local/projects';
 import { openProject } from '../local/projects';
 import { disposeModel } from '../monaco/models';
@@ -79,6 +80,8 @@ const {
   editFile,
   markSaved,
   replaceShown,
+  movePath,
+  forgetPath,
 } = useFileSession({
   scope,
   path,
@@ -319,6 +322,89 @@ useEventListener(window, 'focus', async () => {
   }
 });
 
+// ------------------------------------------- create, rename, delete files
+
+/** Files and folders can be created, renamed and deleted on disk. */
+const canChangeFiles = computed(
+  () =>
+    project.value?.canWrite === true &&
+    project.value.create !== undefined &&
+    project.value.rename !== undefined &&
+    project.value.remove !== undefined
+);
+
+/** Runs a change on disk, then lists the folder again. */
+async function changeFiles(
+  what: string,
+  run: (folder: LocalProject) => Promise<void>
+): Promise<boolean> {
+  if (!project.value) {
+    return false;
+  }
+
+  try {
+    await run(project.value);
+    return true;
+  } catch (error) {
+    show(`${what} failed: ${(error as Error).message}`, 'error');
+    return false;
+  } finally {
+    await loadTree();
+  }
+}
+
+async function createPath(target: string, kind: 'file' | 'dir'): Promise<void> {
+  if (
+    (await changeFiles('Creating', (folder) =>
+      folder.create ? folder.create(target, kind) : Promise.resolve()
+    )) &&
+    kind === 'file'
+  ) {
+    pinFile(target);
+  }
+}
+
+async function renameFile(from: string, to: string): Promise<void> {
+  const shownPath = path.value;
+  if (
+    await changeFiles('Renaming', (folder) =>
+      folder.rename ? folder.rename(from, to) : Promise.resolve()
+    )
+  ) {
+    movePath(from, to);
+    if (isWithin(shownPath, from)) {
+      selectFile(to + shownPath.slice(from.length));
+    }
+  }
+}
+
+async function removeFile(target: string, kind: 'file' | 'dir'): Promise<void> {
+  if (
+    !globalThis.confirm(
+      `Delete ${target}${kind === 'dir' ? ' and everything in it' : ''} from your disk? This can't be undone.`
+    )
+  ) {
+    return;
+  }
+
+  const shownPath = path.value;
+  if (
+    await changeFiles('Deleting', (folder) =>
+      folder.remove ? folder.remove(target) : Promise.resolve()
+    )
+  ) {
+    forgetPath(target);
+    if (isWithin(shownPath, target)) {
+      const next = fileTabs.tabs.value[0]?.path;
+      if (next) {
+        selectFile(next);
+      } else {
+        showNoFile();
+      }
+    }
+  }
+}
+
 /** Opens a file, optionally at the definition of `symbol`. */
 function selectFile(next: string, symbol?: string): void {
   workbench.mobileDrawer = false;
@@ -371,8 +457,12 @@ function dropOutdatedEdits(): void {
           :entries="entries"
           :selected-path="path || null"
           :changed="changedFiles"
+          :editable="canChangeFiles"
           @select="selectFile"
           @pin="pinFile"
+          @create="createPath"
+          @rename="renameFile"
+          @remove="removeFile"
         />
       </div>
     </WorkbenchView>

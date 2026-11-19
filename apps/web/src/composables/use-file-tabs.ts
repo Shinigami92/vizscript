@@ -24,6 +24,10 @@ export interface FileTabs {
   closeAll: () => void;
   /** Moves a tab to another position. */
   move: (path: string, index: number) => void;
+  /** A file was renamed: its tab (and those of a folder's files) follow. */
+  rename: (rename: (path: string) => string | undefined) => void;
+  /** Files are gone: their tabs close (none is shown next). */
+  remove: (gone: (path: string) => boolean) => void;
 }
 
 function isTabs(data: unknown): FileTab[] | null {
@@ -128,5 +132,26 @@ export function useFileTabs(key: Ref<string>): FileTabs {
     }
   }
 
-  return { tabs, open, pin, close, closeOthers, closeAll, move };
+  function rename(renamed: (path: string) => string | undefined): void {
+    tabs.value = tabs.value.map((tab) => {
+      const next = renamed(tab.path);
+      return next === undefined ? tab : { ...tab, path: next };
+    });
+  }
+
+  function remove(gone: (path: string) => boolean): void {
+    tabs.value = tabs.value.filter((tab) => !gone(tab.path));
+  }
+
+  return {
+    tabs,
+    open,
+    pin,
+    close,
+    closeOthers,
+    closeAll,
+    move,
+    rename,
+    remove,
+  };
 }

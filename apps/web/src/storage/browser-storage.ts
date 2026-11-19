@@ -127,10 +127,14 @@ const DAY = 24 * 60 * 60 * 1000;
 /** How long entries of each kind are kept after they were last written. */
 const KEEP: ReadonlyArray<{ prefix: string; days: number }> = [
   { prefix: 'vizscript:draft:', days: 90 },
+  { prefix: 'vizscript:tree:', days: 90 },
   { prefix: 'vizscript:layout:', days: 180 },
   { prefix: 'vizscript:camera:', days: 60 },
   { prefix: 'vizscript:tabs:', days: 120 },
 ];
+
+/** Entries holding unsaved work. */
+const UNSAVED = new Set(['vizscript:draft:', 'vizscript:tree:']);
 
 /**
  * Removes per-file entries not written for a long time (`aggressive`: a
@@ -159,7 +163,8 @@ export function pruneStored(
         continue;
       }
 
-      if (options.aggressive && kind.prefix === 'vizscript:draft:') {
+      // Unsaved work stays, also when room is needed.
+      if (options.aggressive && UNSAVED.has(kind.prefix)) {
         continue;
       }
 
