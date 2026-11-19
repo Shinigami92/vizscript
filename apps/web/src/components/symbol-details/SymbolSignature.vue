@@ -9,7 +9,7 @@ import type {
   ValueKind,
 } from '@vizscript/core';
 import { fieldValue, isArrayType, typeParamName } from '@vizscript/core';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { usesSnakeCase } from '../../graph/languages';
 import { decoratable, parameterUses } from '../../graph/symbols';
 import DetailsSection from '../DetailsSection.vue';
@@ -81,7 +81,13 @@ function setParamDecorator(
   });
 }
 
-function addParameter(): void {
+/**
+ * "+ Input": a row for the new input's name first; the input is written
+ * once it is named (one undo step), and calls get a placeholder for it.
+ */
+const newParameter = ref<string | null>(null);
+
+async function addParameter(): Promise<void> {
   const taken = new Set((props.symbol.params ?? []).map((p) => p.name));
   const base = usesSnakeCase(props.language) ? 'new_param' : 'newParam';
   let name = base;
@@ -89,29 +95,34 @@ function addParameter(): void {
     name = `${base}${i}`;
   }
 
-  pendingParameter.value = name;
-  emit('op', { type: 'addParameter', symbol: props.symbol.id, name });
+  newParameter.value = name;
+  await nextTick();
+  const input = document.querySelector<HTMLInputElement>(
+    '[data-ui="parameter-new"]'
+  );
+  input?.focus();
+  input?.select();
 }
 
-/** A new input starts with its name selected, like a new function. */
-const pendingParameter = ref<string | null>(null);
-watch(
-  () => props.symbol.params?.map((p) => p.name).join(','),
-  async () => {
-    const name = pendingParameter.value;
-    if (!name || !props.symbol.params?.some((p) => p.name === name)) {
-      return;
-    }
-
-    pendingParameter.value = null;
-    await nextTick();
-    const input = document.querySelector<HTMLInputElement>(
-      `[data-ui="parameter-name"][data-name="${CSS.escape(name)}"]`
-    );
-    input?.focus();
-    input?.select();
+function commitParameter(event: Event): void {
+  if (newParameter.value === null) {
+    return;
   }
-);
+
+  const name = (event.target as HTMLInputElement).value.trim();
+  newParameter.value = null;
+  if (name === '') {
+    return;
+  }
+
+  const placeholder = typeInfo.value.placeholder;
+  emit('op', {
+    type: 'addParameter',
+    symbol: props.symbol.id,
+    name,
+    ...(placeholder === undefined ? {} : { argument: placeholder }),
+  });
+}
 
 function removeParameter(index: number): void {
   const param = props.symbol.params?.[index];
@@ -488,6 +499,22 @@ function setReturnType(typeText: string | null): void {
             </button>
           </dd>
         </dl>
+      </div>
+      <div
+        v-if="newParameter !== null"
+        class="flex items-center gap-1 px-1.5 py-0.5 text-xs"
+      >
+        <span class="i-mdi-plus shrink-0 px-0.5 text-zinc-500" />
+        <input
+          class="input min-w-0 flex-1 py-0.5 font-mono text-xs"
+          :value="newParameter"
+          data-ui="parameter-new"
+          aria-label="Name of the new input"
+          spellcheck="false"
+          @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
+          @keydown.esc.prevent.stop="newParameter = null"
+          @blur="commitParameter"
+        />
       </div>
     </template>
     <template v-else>

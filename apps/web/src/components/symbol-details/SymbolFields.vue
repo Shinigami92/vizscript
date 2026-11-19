@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GraphOp, ScriptSymbol, TypeSystemInfo } from '@vizscript/core';
 import { holdsFields, qualifiedName, typeParamName } from '@vizscript/core';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { usesSnakeCase } from '../../graph/languages';
 import DetailsSection from '../DetailsSection.vue';
 import TypePicker from '../TypePicker.vue';
@@ -50,27 +50,13 @@ function toggle(name: string): void {
   expanded.value = next;
 }
 
-/** A new field starts with its name selected, like a new input. */
-const pending = ref<string | null>(null);
-watch(
-  () => fields.value.map((f) => f.name).join(','),
-  async () => {
-    const name = pending.value;
-    if (!name || !fields.value.some((f) => f.name === name)) {
-      return;
-    }
+/**
+ * "+ Field": a row for the new field's name first; the field is written
+ * once it is named (one undo step), like a new input.
+ */
+const newField = ref<string | null>(null);
 
-    pending.value = null;
-    await nextTick();
-    const input = document.querySelector<HTMLInputElement>(
-      `[data-ui="field-name"][data-name="${CSS.escape(name)}"]`
-    );
-    input?.focus();
-    input?.select();
-  }
-);
-
-function addField(): void {
+async function addField(): Promise<void> {
   const taken = new Set(fields.value.map((f) => f.name));
   const base = usesSnakeCase(props.language) ? 'new_field' : 'newField';
   let name = base;
@@ -78,8 +64,25 @@ function addField(): void {
     name = `${base}${i}`;
   }
 
-  pending.value = name;
-  emit('op', { type: 'addVariable', scope: owner.value, name });
+  newField.value = name;
+  await nextTick();
+  const input = document.querySelector<HTMLInputElement>(
+    '[data-ui="field-new"]'
+  );
+  input?.focus();
+  input?.select();
+}
+
+function commitField(event: Event): void {
+  if (newField.value === null) {
+    return;
+  }
+
+  const name = (event.target as HTMLInputElement).value.trim();
+  newField.value = null;
+  if (name !== '') {
+    emit('op', { type: 'addVariable', scope: owner.value, name });
+  }
 }
 
 function rename(field: ScriptSymbol, event: Event): void {
@@ -199,6 +202,22 @@ function remove(field: ScriptSymbol): void {
           </label>
         </dd>
       </dl>
+    </div>
+    <div
+      v-if="newField !== null"
+      class="flex items-center gap-1 px-1.5 py-0.5 text-xs"
+    >
+      <span class="i-mdi-plus shrink-0 px-0.5 text-zinc-500" />
+      <input
+        class="input min-w-0 flex-1 py-0.5 font-mono text-xs"
+        :value="newField"
+        data-ui="field-new"
+        aria-label="Name of the new field"
+        spellcheck="false"
+        @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
+        @keydown.esc.prevent.stop="newField = null"
+        @blur="commitField"
+      />
     </div>
   </DetailsSection>
 </template>
