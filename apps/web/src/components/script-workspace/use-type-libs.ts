@@ -50,7 +50,10 @@ interface TypeLibDeps {
  * Returns whether the declarations are still being read (the checker's
  * problems may change).
  */
-export function useTypeLibs(deps: TypeLibDeps): { busy: ComputedRef<boolean> } {
+export function useTypeLibs(deps: TypeLibDeps): {
+  busy: ComputedRef<boolean>;
+  forgetFiles: () => void;
+} {
   const { props, client } = deps;
   const { busy, run } = useBusy();
   const owner = Symbol('workspace');
@@ -217,5 +220,13 @@ export function useTypeLibs(deps: TypeLibDeps): { busy: ComputedRef<boolean> } {
     clearProjectLibs(owner);
   });
 
-  return { busy };
+  return {
+    busy,
+    // Files read so far may have changed (a newer tree): read them again.
+    forgetFiles: () => {
+      texts.clear();
+      refs.clear();
+      lastKey = '';
+    },
+  };
 }

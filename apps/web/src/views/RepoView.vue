@@ -33,11 +33,17 @@ import {
   removePath,
   renamePath,
   restorePath,
+  sameTree,
   sourceOf,
 } from '../graph/tree-changes';
 import { disposeModel } from '../monaco/models';
-import type { BlobKey } from '../storage/blob-cache';
-import { cachedBlob, storeBlob } from '../storage/blob-cache';
+import type { BlobKey, TreeKey } from '../storage/blob-cache';
+import {
+  cachedBlob,
+  cachedTree,
+  storeBlob,
+  storeTree,
+} from '../storage/blob-cache';
 import { useRecentStore } from '../stores/recent';
 import { useSessionStore } from '../stores/session';
 import { useWorkbenchStore } from '../stores/workbench';
@@ -71,6 +77,8 @@ const source = computed(() => repoSource(provider.value, session.me !== null));
 const tree = shallowRef<TreeResponse | null>(null);
 const branches = shallowRef<BranchSummary[]>([]);
 const loadingTree = ref(false);
+/** The tree came from GitHub now, not from the last visit. */
+const treeFresh = ref(false);
 
 /** Files created, renamed and deleted here, kept in the browser. */
 const treeChanges = useTreeChanges(scope);
@@ -95,17 +103,25 @@ const isFile = computed(() => {
     return false;
   }
 
-  return tree.value === null
-    ? loadingTree.value && looksLikeFile(path.value)
-    : files.value.has(path.value);
+  // A file new since the last visit isn't in the kept tree yet.
+  return (
+    files.value.has(path.value) ||
+    (!treeFresh.value && loadingTree.value && looksLikeFile(path.value))
+  );
 });
 
 /** The files of the branch, once the tree is known. */
 const knownFiles = computed(() => (tree.value ? files.value : undefined));
 
-/** Reads a file of the branch: new ones are empty, moved ones read their original. */
+/**
+ * Reads a file of the branch: new ones are empty, moved ones read their
+ * original. `keptTree`: a sha of the last visit's tree will do (imported
+ * files, read again if the fresh tree differs); a file the user edits only
+ * trusts the fresh tree.
+ */
 async function readRepoFile(
-  filePath: string
+  filePath: string,
+  keptTree = false
 ): Promise<{ path: string; content: string; version: string }> {
   const original = sourceOf(treeChanges.changes.value, filePath);
   if (original === '') {
@@ -114,7 +130,7 @@ async function readRepoFile(
 
   // The tree names the content: read before, it comes from the cache.
   const stored = original ?? filePath;
-  const sha = shas.value.get(stored);
+  const sha = treeFresh.value || keptTree ? shas.value.get(stored) : undefined;
   const key = (blob: string): BlobKey => ({
     provider: provider.value,
     owner: owner.value,
@@ -134,6 +150,38 @@ async function readRepoFile(
   );
   void storeBlob(key(loaded.sha), loaded.content);
   return { path: filePath, content: loaded.content, version: loaded.sha };
+}
+
+/** Reads of files to open that are still on their way, by path. */
+const opening = new Map<
+  string,
+  Promise<{ path: string; content: string; version: string }>
+>();
+
+/**
+ * A file to open: asked once while a read is on its way (the kept tree
+ * and the fresh one each make the file load again).
+ */
+function openRepoFile(
+  filePath: string
+): Promise<{ path: string; content: string; version: string }> {
+  const key = `${scope.value}:${filePath}`;
+  let read = opening.get(key);
+  if (!read) {
+    read = readRepoFile(filePath);
+    opening.set(key, read);
+    void (async (): Promise<void> => {
+      try {
+        await read;
+      } catch {
+        // The session shows the error.
+      } finally {
+        opening.delete(key);
+      }
+    })();
+  }
+
+  return read;
 }
 
 /** Blob shas of the branch's files, by path. */
@@ -173,7 +221,7 @@ const {
   scope,
   path,
   isFile,
-  read: readRepoFile,
+  read: (filePath) => openRepoFile(filePath),
   dispose: disposeModel,
   onRestored: () => show('Restored your unsaved changes for this file.'),
 });
@@ -210,23 +258,47 @@ async function loadBranches(request: number): Promise<void> {
   }
 }
 
+function treeKey(): TreeKey {
+  return {
+    provider: provider.value,
+    owner: owner.value,
+    repo: repo.value,
+    ref: ref_.value,
+  };
+}
+
 async function loadTree(): Promise<void> {
   // A newer branch or repository wins over a slow earlier one.
   const request = ++treeRequest;
   loadingTree.value = true;
+  treeFresh.value = false;
   tree.value = null;
   // The branch list is for the picker: nothing waits for it.
   void loadBranches(request);
+  // The last visit's tree at once; GitHub's replaces it.
+  const key = treeKey();
+  const kept = await cachedTree(key);
+  if (kept && request === treeRequest) {
+    tree.value = kept;
+  }
+
   try {
-    const t = await trackTask(
-      'Loading the file list',
-      source.value.getTree(owner.value, repo.value, ref_.value)
-    );
+    const fetching = source.value.getTree(owner.value, repo.value, ref_.value);
+    const t = kept
+      ? await fetching
+      : await trackTask('Loading the file list', fetching);
     if (request !== treeRequest) {
       return;
     }
 
-    tree.value = t;
+    void storeTree(key, t);
+    treeFresh.value = true;
+    if (!kept || !sameTree(kept.entries, t.entries)) {
+      // The branch moved: files read from the kept tree are read again.
+      readCache.clear();
+      tree.value = t;
+    }
+
     if (t.truncated) {
       show('This repository is large; the file list is truncated.');
     }
@@ -256,15 +328,15 @@ async function readFile(filePath: string): Promise<string> {
     return open;
   }
 
-  // Whether it exists is known with the tree.
-  await until(loadingTree).toBe(false);
+  // Whether it exists is known with the tree (the kept one will do).
+  await until(() => tree.value !== null || !loadingTree.value).toBe(true);
   if (!files.value.has(filePath)) {
     throw new Error(`${filePath} was deleted.`);
   }
 
   let read = readCache.get(filePath);
   if (!read) {
-    read = readRepoFile(filePath).then((f) => f.content);
+    read = readRepoFile(filePath, true).then((f) => f.content);
     read.catch(() => readCache.delete(filePath));
     readCache.set(filePath, read);
   }
@@ -426,7 +498,7 @@ function dropOutdatedEdits(): void {
     />
     <WorkbenchView id="explorer">
       <div data-ui="explorer" class="flex h-full min-h-0 flex-col">
-        <div v-if="loadingTree" class="p-4 text-sm text-zinc-500">
+        <div v-if="loadingTree && !tree" class="p-4 text-sm text-zinc-500">
           <span class="i-mdi-loading animate-spin" /> Loading…
         </div>
         <FileTree
@@ -553,7 +625,7 @@ function dropOutdatedEdits(): void {
         <div
           class="flex h-full items-center justify-center p-6 text-center text-sm text-zinc-500"
         >
-          <span v-if="loadingFile || loadingTree"
+          <span v-if="loadingFile || (loadingTree && !tree)"
             ><span class="i-mdi-loading animate-spin" /> Loading…</span
           >
           <span v-else-if="fileError" class="text-red-300">{{

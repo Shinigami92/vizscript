@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { looksLikeFile } from '../src/graph/project-files';
-import { cachedBlob, clearBlobs, storeBlob } from '../src/storage/blob-cache';
+import {
+  cachedBlob,
+  cachedTree,
+  clearRepoCache,
+  storeBlob,
+  storeTree,
+} from '../src/storage/blob-cache';
 
 /** The Cache API, in memory. */
 function fakeCaches(): CacheStorage {
@@ -41,8 +47,23 @@ describe('file contents by blob sha', () => {
     await storeBlob(KEY, 'export const a = 1;\n');
     expect(await cachedBlob(KEY)).toBe('export const a = 1;\n');
     expect(await cachedBlob({ ...KEY, sha: 'other' })).toBeUndefined();
-    await clearBlobs();
+    await clearRepoCache();
     expect(await cachedBlob(KEY)).toBeUndefined();
+  });
+
+  it('keeps the last tree of a branch', async () => {
+    const branch = { provider: 'github', owner: 'o', repo: 'r', ref: 'main' };
+    const tree = {
+      ref: 'main',
+      truncated: false,
+      entries: [{ path: 'a.ts', type: 'file' as const, sha: 'abc' }],
+    };
+    expect(await cachedTree(branch)).toBeUndefined();
+    await storeTree(branch, tree);
+    expect(await cachedTree(branch)).toEqual(tree);
+    expect(await cachedTree({ ...branch, ref: 'dev' })).toBeUndefined();
+    await clearRepoCache();
+    expect(await cachedTree(branch)).toBeUndefined();
   });
 
   it('works without the Cache API', async () => {

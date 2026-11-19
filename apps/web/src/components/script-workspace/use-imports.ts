@@ -115,6 +115,8 @@ export interface WorkspaceImports {
   externals: ComputedRef<ExternalName[]>;
   /** The imports' declarations are still being read. */
   busy: ComputedRef<boolean>;
+  /** Files read so far may have changed (a newer tree): read them again. */
+  forgetFiles: () => void;
   /** Declarations of the imported names, sent along with every parse. */
   declarations: () => ImportedDeclaration[];
   /**
@@ -879,5 +881,10 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     declarations: () => importDeclarations,
     withNeededImport,
     busy,
+    forgetFiles: () => {
+      exportsByPath.clear();
+      parsedFiles.clear();
+      libraryCache.clear();
+    },
   };
 }

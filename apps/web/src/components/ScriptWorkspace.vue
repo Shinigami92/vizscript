@@ -196,6 +196,7 @@ const {
   packageOffer,
   withNeededImport,
   busy: importsBusy,
+  forgetFiles: forgetImportFiles,
 } = useImports({
   props,
   client,
@@ -208,7 +209,12 @@ const {
   version: () => languageVersion.value?.text,
 });
 
-const { busy: typesBusy } = useTypeLibs({ props, client, references, text });
+const { busy: typesBusy, forgetFiles: forgetTypeFiles } = useTypeLibs({
+  props,
+  client,
+  references,
+  text,
+});
 
 /**
  * Problems may still change: imports or library types are being read, or
@@ -843,13 +849,22 @@ const { onOp } = useOpRunner({
 });
 
 // The repository's file list can arrive after the file (it loads alongside
-// it): imports resolve to files then.
+// it): imports resolve to files then. A newer list (the branch moved since
+// the kept one, files created or renamed) may change imported files: they
+// are read again.
 watch(
-  () => props.files !== undefined,
-  (known, before) => {
-    if (known && before === false) {
-      void reparse();
+  () => props.files,
+  (now, before) => {
+    if (now === undefined) {
+      return;
     }
+
+    if (before !== undefined) {
+      forgetImportFiles();
+      forgetTypeFiles();
+    }
+
+    void reparse();
   }
 );
 

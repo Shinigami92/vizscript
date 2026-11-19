@@ -12,6 +12,7 @@ import {
   removePath,
   renamePath,
   restorePath,
+  sameTree,
   sourceOf,
 } from '../src/graph/tree-changes';
 
@@ -97,5 +98,27 @@ describe('tree changes of a repository', () => {
     expect(pathError(taken, 'src/../x')).toBe('Names can’t be . or ..');
     expect(pathError(taken, 'src/x:y')).toMatch(/can’t hold/);
     expect(pathError(taken, 'src/b/c.ts')).toBeUndefined();
+  });
+
+  it('tells whether a kept tree is still the branch', () => {
+    const kept: TreeEntry[] = [
+      { path: 'src', type: 'dir' },
+      { path: 'src/a.ts', type: 'file', sha: '1' },
+    ];
+    expect(
+      sameTree(
+        kept,
+        kept.map((e) => ({ ...e }))
+      )
+    ).toBe(true);
+    expect(
+      sameTree(kept, [
+        kept[0] as TreeEntry,
+        { path: 'src/a.ts', type: 'file', sha: '2' },
+      ])
+    ).toBe(false);
+    expect(sameTree(kept, [...kept, { path: 'b.ts', type: 'file' }])).toBe(
+      false
+    );
   });
 });

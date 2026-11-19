@@ -273,3 +273,22 @@ export function pathError(
 
   return undefined;
 }
+
+/** Whether two trees list the same entries with the same contents. */
+export function sameTree(
+  a: ReadonlyArray<TreeEntry>,
+  b: ReadonlyArray<TreeEntry>
+): boolean {
+  return (
+    a.length === b.length &&
+    a.every((entry, i) => {
+      const other = b[i];
+      return (
+        other !== undefined &&
+        entry.path === other.path &&
+        entry.type === other.type &&
+        entry.sha === other.sha
+      );
+    })
+  );
+}
