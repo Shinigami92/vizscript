@@ -178,6 +178,7 @@ export function exportedSymbols(
 /**
  * Exports of a module including what it re-exports: `resolve` returns the
  * exports of another module (already followed), or nothing when unknown.
+ * The re-exported modules are resolved at the same time.
  */
 export async function withReexports(
   exports: ReadonlyArray<ScriptSymbol>,
@@ -193,8 +194,15 @@ export async function withReexports(
     }
   };
 
-  for (const reexport of reexports) {
-    const from = reexport.module ? await resolve(reexport.module) : exports;
+  // Read side by side (a package's index can re-export hundreds of files),
+  // merged in order.
+  const sources = await Promise.all(
+    reexports.map((reexport) =>
+      reexport.module ? resolve(reexport.module) : Promise.resolve(exports)
+    )
+  );
+  for (const [index, reexport] of reexports.entries()) {
+    const from = sources[index] ?? [];
     if (reexport.imported === '*' && reexport.name === '*') {
       // `export *` leaves out the default export.
       for (const symbol of from) {
