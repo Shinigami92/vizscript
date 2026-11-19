@@ -1,6 +1,8 @@
 import type {
   GraphDocument,
+  GraphOp,
   ImportedDeclaration,
+  ImportRequest,
   ModuleReference,
   ScriptSymbol,
 } from '@vizscript/core';
@@ -112,6 +114,11 @@ export interface WorkspaceImports {
   externals: ComputedRef<ExternalName[]>;
   /** Declarations of the imported names, sent along with every parse. */
   declarations: () => ImportedDeclaration[];
+  /**
+   * The op with the import it needs: a decorator named by a library this
+   * file imports from or by another file (`@Header()`) gets its import.
+   */
+  withNeededImport: (op: GraphOp) => Promise<GraphOp>;
   /**
    * What a library to add exports (not in the manifest yet): its module
    * as code names it (`httpx`, `serde_json`, `vue`) and its exports.
@@ -426,6 +433,57 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
       ),
     ];
   });
+
+  /**
+   * The import `name` needs, when the file neither declares nor imports
+   * it: from a library the file imports from (joined into that import;
+   * their exports are known from linking the imports), else from another
+   * file the action menu has indexed already.
+   */
+  async function importFor(name: string): Promise<ImportRequest | undefined> {
+    const symbols = doc.value?.symbols ?? [];
+    if (symbols.some((s) => s.scope === '' && s.name === name)) {
+      return undefined;
+    }
+
+    const modules = new Set(
+      symbols.flatMap((s) =>
+        s.kind === 'import' &&
+        s.module !== undefined &&
+        packageName(s.module) === s.module
+          ? [s.module]
+          : []
+      )
+    );
+    for (const module of modules) {
+      const exported = topLevel(await libraryExports(module)).some(
+        (s) => s.name === name
+      );
+      if (exported) {
+        return {
+          path: '',
+          from: props.path,
+          name,
+          imported: name,
+          module,
+        };
+      }
+    }
+
+    return externals.value.find(
+      (e) => e.name === name && e.request.imported !== '*'
+    )?.request;
+  }
+
+  async function withNeededImport(op: GraphOp): Promise<GraphOp> {
+    if (op.type !== 'setDecorator' || !op.text) {
+      return op;
+    }
+
+    const name = /^@?\s*([A-Za-z_$][\w$]*)/.exec(op.text.trim())?.[1];
+    const request = name ? await importFor(name) : undefined;
+    return request ? { type: 'withImport', import: request, op } : op;
+  }
 
   /** Declarations of the imported names, sent along with every parse. */
   let importDeclarations: ImportedDeclaration[] = [];
@@ -811,5 +869,6 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     packageOffer,
     externals,
     declarations: () => importDeclarations,
+    withNeededImport,
   };
 }

@@ -194,6 +194,7 @@ const {
   externals,
   declarations: importDeclarations,
   packageOffer,
+  withNeededImport,
 } = useImports({
   props,
   client,
@@ -1104,7 +1105,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         @open-import="openImport"
         @select-symbol="selectSymbol"
         @box-color="setBoxColor"
-        @op="onScriptOp"
+        @op="(op) => void withNeededImport(op).then(onScriptOp)"
         @close="workbench.hide('details')"
       />
     </WorkbenchView>
