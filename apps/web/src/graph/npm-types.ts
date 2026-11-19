@@ -183,16 +183,16 @@ export function typesPackage(name: string): string {
   return `@types/${name.replace(/^@/, '').replace('/', '__')}`;
 }
 
-/**
- * One resolution of a package's exports. Re-exports are followed one after
- * another, so every file on `path` is an ancestor of the one being read.
- */
-interface Walk {
-  /** Files being read on the current re-export path: a cycle ends there. */
-  readonly path: Set<string>;
-  /** Exports of the files this walk has read. */
-  readonly done: Map<string, ScriptSymbol[]>;
+/** A loaded declaration file and where each of its re-exports points. */
+interface LoadedFile {
+  file: ParsedFile;
+  /** The file each re-export (by index) names, if found. */
+  targets: Array<string | undefined>;
 }
+
+/** Files of one package's exports at most (with the packages it re-exports). */
+const FILE_LIMIT = 2000;
+const MAX_DEPTH = 12;
 
 interface ParsedFile {
   text: string;
@@ -258,71 +258,162 @@ export class NpmTypes {
     const key = `${name}@${range}`;
     let exports = this.packages.get(key);
     if (!exports) {
-      exports = this.packageExports(name, range, {
-        path: new Set(),
-        done: new Map(),
-      });
+      exports = this.packageExports(name, range);
       this.packages.set(key, exports);
     }
 
     return exports;
   }
 
+  /**
+   * Read in two steps: every file the exports reach is loaded side by side
+   * (a package's index can re-export hundreds of files), then the exports
+   * are put together without waiting, cycles cut along each chain.
+   */
   private async packageExports(
     name: string,
-    range: string,
-    walk: Walk
+    range: string
   ): Promise<ScriptSymbol[]> {
+    const entry = await this.entryOf(name, range);
+    if (!entry) {
+      return [];
+    }
+
+    const loaded = await this.loadAll(entry.url, entry.manifest);
+    const resolved = new Map<string, ScriptSymbol[]>();
+    return this.resolve(entry.url, loaded, [], resolved);
+  }
+
+  /** The declaration file a package's exports start at. */
+  private async entryOf(
+    name: string,
+    range: string
+  ): Promise<{ url: string; manifest: Manifest } | undefined> {
     const manifest = await this.manifest(name, range);
     // Without a types entry, TypeScript reads `index.d.ts` when there is one.
     const entry =
       manifest?.types ??
       (manifest?.files?.has('index.d.ts') ? 'index.d.ts' : undefined);
     if (manifest && entry) {
-      return this.fileExports(manifest.base + entry, manifest, 0, walk);
+      return { url: manifest.base + entry, manifest };
     }
 
     // No types of its own: DefinitelyTyped.
     if (!name.startsWith('@types/')) {
       const types = await this.manifest(typesPackage(name), 'latest');
       if (types) {
-        return this.fileExports(
-          types.base + (types.types ?? 'index.d.ts'),
-          types,
-          0,
-          walk
-        );
+        return {
+          url: types.base + (types.types ?? 'index.d.ts'),
+          manifest: types,
+        };
       }
     }
 
-    return [];
+    return undefined;
   }
 
-  private async fileExports(
+  /** The file a re-export of `url` names (another package's entry too). */
+  private async targetOf(
     url: string,
     manifest: Manifest,
-    depth: number,
-    walk: Walk
-  ): Promise<ScriptSymbol[]> {
-    const done = walk.done.get(url);
-    if (done) {
-      return done;
+    specifier: string
+  ): Promise<{ url: string; manifest: Manifest } | undefined> {
+    const name = packageName(specifier);
+    if (name) {
+      return this.entryOf(name, manifest.dependencies[name] ?? 'latest');
     }
 
-    // A cycle (`a` re-exports `b`, `b` re-exports `a`): the file being read
-    // has no exports yet.
-    if (walk.path.has(url) || depth > 8) {
+    for (const candidate of declarationFiles(url, specifier)) {
+      const listed =
+        !manifest.files ||
+        manifest.files.has(candidate.slice(manifest.base.length));
+      if (listed && (await fetchText(candidate)) !== undefined) {
+        return { url: candidate, manifest };
+      }
+    }
+
+    return undefined;
+  }
+
+  /** Every file the exports of `start` reach, read in waves. */
+  private async loadAll(
+    start: string,
+    manifest: Manifest
+  ): Promise<Map<string, LoadedFile>> {
+    const loaded = new Map<string, LoadedFile>();
+    const seen = new Set([start]);
+    let wave = [{ url: start, manifest }];
+    for (let depth = 0; depth <= MAX_DEPTH && wave.length > 0; depth++) {
+      const read = await Promise.all(
+        wave.map(async (item) => {
+          const file = await this.parsedFile(item.url);
+          if (!file) {
+            return undefined;
+          }
+
+          const targets = await Promise.all(
+            (file.doc.reexports ?? []).map((reexport) =>
+              reexport.module
+                ? this.targetOf(item.url, item.manifest, reexport.module)
+                : Promise.resolve(undefined)
+            )
+          );
+          return { url: item.url, file, targets };
+        })
+      );
+      wave = [];
+      for (const entry of read) {
+        if (!entry) {
+          continue;
+        }
+
+        loaded.set(entry.url, {
+          file: entry.file,
+          targets: entry.targets.map((t) => t?.url),
+        });
+        for (const target of entry.targets) {
+          if (target && !seen.has(target.url) && seen.size < FILE_LIMIT) {
+            seen.add(target.url);
+            wave.push(target);
+          }
+        }
+      }
+    }
+
+    return loaded;
+  }
+
+  /** The exports of a loaded file with its re-exports; `chain` cuts cycles. */
+  private async resolve(
+    url: string,
+    loaded: ReadonlyMap<string, LoadedFile>,
+    chain: ReadonlyArray<string>,
+    resolved: Map<string, ScriptSymbol[]>
+  ): Promise<ScriptSymbol[]> {
+    const known = resolved.get(url);
+    if (known) {
+      return known;
+    }
+
+    const entry = loaded.get(url);
+    if (!entry) {
       return [];
     }
 
-    walk.path.add(url);
-    try {
-      const exports = await this.readFile(url, manifest, depth, walk);
-      walk.done.set(url, exports);
-      return exports;
-    } finally {
-      walk.path.delete(url);
-    }
+    const reexports = entry.file.doc.reexports ?? [];
+    const exports = await withReexports(
+      exportedSymbols(entry.file.doc, entry.file.text),
+      reexports,
+      (module) => {
+        const index = reexports.findIndex((r) => r.module === module);
+        const target = entry.targets[index];
+        return !target || chain.includes(target) || target === url
+          ? Promise.resolve([])
+          : this.resolve(target, loaded, [...chain, url], resolved);
+      }
+    );
+    resolved.set(url, exports);
+    return exports;
   }
 
   private parsedFile(url: string): Promise<ParsedFile | undefined> {
@@ -341,44 +432,6 @@ export class NpmTypes {
     }
 
     return file;
-  }
-
-  private async readFile(
-    url: string,
-    manifest: Manifest,
-    depth: number,
-    walk: Walk
-  ): Promise<ScriptSymbol[]> {
-    const file = await this.parsedFile(url);
-    if (!file) {
-      return [];
-    }
-
-    return withReexports(
-      exportedSymbols(file.doc, file.text),
-      file.doc.reexports ?? [],
-      async (specifier) => {
-        const name = packageName(specifier);
-        if (name) {
-          return this.packageExports(
-            name,
-            manifest.dependencies[name] ?? 'latest',
-            walk
-          );
-        }
-
-        for (const candidate of declarationFiles(url, specifier)) {
-          const listed =
-            !manifest.files ||
-            manifest.files.has(candidate.slice(manifest.base.length));
-          if (listed && (await fetchText(candidate)) !== undefined) {
-            return this.fileExports(candidate, manifest, depth + 1, walk);
-          }
-        }
-
-        return [];
-      }
-    );
   }
 }
 

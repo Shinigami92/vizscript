@@ -96,6 +96,22 @@ describe('NpmTypes', () => {
     expect(names(right)).toEqual(['l', 'r']);
   });
 
+  it('reads files re-exporting each other side by side without waiting forever', async () => {
+    // `index` → `b`, `c`; `b` → `c` and `c` → `b`: read in parallel, a
+    // naive walk would wait for `b` and `c` on each other.
+    serve({
+      ...manifest('knot', 'index.d.ts'),
+      [`${CDN}knot@1.0.0/index.d.ts`]: 'exports top; from ./b, ./c',
+      [`${CDN}knot@1.0.0/b.d.ts`]: 'exports b; from ./c',
+      [`${CDN}knot@1.0.0/c.d.ts`]: 'exports c; from ./b',
+    });
+    expect(names(await npmTypes().exportsOf('knot'))).toEqual([
+      'b',
+      'c',
+      'top',
+    ]);
+  });
+
   it('reads a file re-exported twice once', async () => {
     const requests = serve({
       ...manifest('diamond', 'index.d.ts'),
