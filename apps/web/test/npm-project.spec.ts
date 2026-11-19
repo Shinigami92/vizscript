@@ -144,6 +144,17 @@ describe('packageVersion', () => {
     expect(await version('pinia')).toBe('latest');
   });
 
+  it("waits for a repository's file list, not for the playground's", async () => {
+    // A repository whose list is still loading: nothing on npm yet.
+    expect(
+      await packageVersion(undefined, read, 'apps/web/src/main.ts', 'vue')
+    ).toBe('');
+    // The playground has no repository: the registry's latest.
+    expect(await packageVersion(undefined, undefined, 'main.ts', 'vue')).toBe(
+      'latest'
+    );
+  });
+
   it('lists the nearest manifest with versions and kinds', async () => {
     const deps = await npmDependencies(
       new Set(files.keys()),

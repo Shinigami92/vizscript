@@ -10,7 +10,7 @@ import {
   NODE_BUILTINS,
   npmDeclarations,
 } from '../../graph/npm-declarations';
-import { packageVersion } from '../../graph/npm-project';
+import { npmDependencyChain, packageVersion } from '../../graph/npm-project';
 import { packageName } from '../../graph/npm-types';
 import { tsEnvironment } from '../../graph/ts-environment';
 import { clearProjectLibs, setProjectLibs } from '../../monaco/project-libs';
@@ -113,6 +113,12 @@ export function useTypeLibs(deps: TypeLibDeps): {
       return;
     }
 
+    // A repository's file list is still on its way: versions and imported
+    // files are known with it (the list's arrival runs this again).
+    if (props.readFile && !props.files) {
+      return;
+    }
+
     const files = new Map<string, string>();
     const packages = new Set(packagesOf(deps.text.value));
     const seen = new Set([path]);
@@ -170,12 +176,22 @@ export function useTypeLibs(deps: TypeLibDeps): {
       hasNodeTypes: nodeTypes !== 'latest' && nodeTypes !== '',
       builtins: NODE_BUILTINS,
     });
-    const declarations = await npmDeclarations([
-      ...roots.filter(([, range]) => range !== ''),
-      ...(environment.node
-        ? [['@types/node', nodeTypes || 'latest'] as const]
-        : []),
-    ]);
+    // The project's own versions for every package reached (`@types/pg`).
+    const pinned = new Map(
+      (await npmDependencyChain(props.files, props.readFile, path)).flatMap(
+        (d) => (d.version && !d.local ? [[d.name, d.version] as const] : [])
+      )
+    );
+    const declarations = await npmDeclarations(
+      [
+        ...roots.filter(([, range]) => range !== ''),
+        ...(environment.node
+          ? [['@types/node', nodeTypes || 'latest'] as const]
+          : []),
+      ],
+      undefined,
+      pinned
+    );
     if (current !== seq) {
       return;
     }

@@ -849,22 +849,18 @@ const { onOp } = useOpRunner({
 });
 
 // The repository's file list can arrive after the file (it loads alongside
-// it): imports resolve to files then. A newer list (the branch moved since
-// the kept one, files created or renamed) may change imported files: they
-// are read again.
+// it): imports resolve to files then, and libraries get their versions. A
+// newer list (the branch moved since the kept one, files created or
+// renamed) may change imported files. Either way, what was read without
+// it is read again.
 watch(
   () => props.files,
-  (now, before) => {
-    if (now === undefined) {
-      return;
-    }
-
-    if (before !== undefined) {
+  (now) => {
+    if (now !== undefined) {
       forgetImportFiles();
       forgetTypeFiles();
+      void reparse();
     }
-
-    void reparse();
   }
 );
 

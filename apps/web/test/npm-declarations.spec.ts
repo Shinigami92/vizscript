@@ -118,6 +118,28 @@ describe('npmDeclarations', () => {
     expect(requests).not.toContain(`${CDN}untyped@2.0.0/index.d.ts`);
   });
 
+  it("takes the project's version of the @types package", async () => {
+    const requests = serve({
+      [`${CDN}pgish@8.0.0/package.json`]: JSON.stringify({ version: '8.0.0' }),
+      ...listing('pgish@8.0.0', ['package.json', 'index.js']),
+      [`${CDN}@types/pgish@8.0.1/package.json`]: JSON.stringify({
+        version: '8.0.1',
+        types: 'index.d.ts',
+      }),
+      ...listing('@types/pgish@8.0.1', ['package.json', 'index.d.ts']),
+      [`${CDN}@types/pgish@8.0.1/index.d.ts`]: 'export declare const p: 1;',
+    });
+    const files = await npmDeclarations(
+      [['pgish', '8.0.0']],
+      undefined,
+      new Map([['@types/pgish', '8.0.1']])
+    );
+    expect(files.map((f) => f.path)).toContain(
+      'node_modules/@types/pgish/index.d.ts'
+    );
+    expect(requests).not.toContain(`${CDN}@types/pgish@latest/package.json`);
+  });
+
   it('reads `/// <reference types>` from @types first', async () => {
     const requests = serve({
       [`${CDN}bundler@latest/package.json`]: JSON.stringify({

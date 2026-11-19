@@ -357,7 +357,9 @@ export async function npmDependencyChain(
 /**
  * The version to read a package's types in: the lockfile's exact version,
  * else the manifest's range, `latest` when no manifest lists it, `''` for
- * packages of the repository (nothing to fetch).
+ * packages of the repository (nothing to fetch). Without a file list:
+ * `latest` (the playground), `''` while a repository's list is still on
+ * its way (`read` given), so its own packages aren't looked up on npm.
  */
 export async function packageVersion(
   files: ReadonlySet<string> | undefined,
@@ -365,6 +367,10 @@ export async function packageVersion(
   path: string,
   name: string
 ): Promise<string> {
+  if (!files && read) {
+    return '';
+  }
+
   const dependency = (await npmDependencyChain(files, read, path)).find(
     (d) => d.name === name
   );

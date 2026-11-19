@@ -395,13 +395,22 @@ function packageResult(name: string, range: string): Promise<PackageResult> {
 /**
  * Declaration files of `roots` and the packages their declarations import
  * (one version per package name, the first one met), up to `limit` files.
+ * `pinned`: versions the project lists (its lockfile), used for every
+ * package reached (`@types/pg` of `pg`), else the importing package's range.
  */
 export async function npmDeclarations(
   roots: ReadonlyArray<readonly [name: string, range: string]>,
-  limit = 800
+  limit = 800,
+  pinned: ReadonlyMap<string, string> = new Map()
 ): Promise<LibFile[]> {
   const seen = new Set<string>();
   const files: LibFile[] = [];
+  const pin = (dependency: Dependency): Dependency => ({
+    options: dependency.options.map((o) => ({
+      name: o.name,
+      range: pinned.get(o.name) ?? o.range,
+    })),
+  });
   let level: Dependency[] = roots
     .filter(([name]) => !NODE_BUILTINS.has(name))
     .map(([name, range]) => ({ options: [{ name, range }] }));
@@ -429,7 +438,7 @@ export async function npmDeclarations(
     level = [];
     for (const result of results) {
       files.push(...result.files);
-      level.push(...result.dependencies);
+      level.push(...result.dependencies.map(pin));
     }
   }
 
