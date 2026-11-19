@@ -1,44 +1,31 @@
-import type {
-  DataType,
-  ExpressionTemplate,
-  Pin,
-  PinRef,
-  Point,
-} from '@vizscript/core';
-import { isTypeCompatible, qualifiedName } from '@vizscript/core';
+import type { DataType, ExpressionTemplate, Point } from '@vizscript/core';
+import { isTypeCompatible } from '@vizscript/core';
 import { shortcut } from '../../graph/source';
-import { topLevelGraph } from '../../graph/symbols';
 import type { ActionEntry } from '../ActionMenu.vue';
+import { addNodeEntries } from './add-node-entries';
 import { containerEntries, methodCallExpression } from './container-entries';
-import { engineMembers, scriptBaseClass } from './engine-entries';
 import {
   callSignature,
   codeOffset,
   emptyInput,
   fillTemplate,
   fitsType,
-  globalObjects,
   ownMethodName,
   scopeVariables,
-  typeDefault,
   valueName,
   variablesNear,
   withImport,
 } from './graph-helpers';
 import { elementEntries, makeEntries, throwEntries } from './make-entries';
+import { memberEntries } from './member-entries';
 import {
   EXPRESSION_ICONS,
-  FLOW_ENTRIES,
   ICON_CALL,
   ICON_IMPORT,
-  ICON_MEMBER,
   ICON_SET,
-  ICON_VARIABLE,
-  IDENTIFIER_PATH,
-  JUMPS,
-  VALUE_WORDS,
 } from './menu-data';
 import type { NodeCommands } from './node-commands';
+import { suggestEntries } from './suggest-entries';
 import type { CanvasContext, MenuState } from './types';
 import { variableReadEntries } from './variable-entries';
 
@@ -61,28 +48,10 @@ export interface ActionEntries {
 export function createActionEntries(
   ctx: CanvasContext & ActionEntryDeps
 ): ActionEntries {
-  const { props, emitOp, addNode, ask, pinOf, commands } = ctx;
+  const { props, emitOp, ask, pinOf, commands } = ctx;
   const index = ctx.index;
   const callables = ctx.callables;
   const externalNames = ctx.externalNames;
-  /**
-   * `new X()` of classes this file imports already (TypeScript) and of the
-   * language's built-in classes (`new Error()`): one node each.
-   */
-  const constructable = (): Array<{ name: string; global: boolean }> => {
-    const imported =
-      props.doc?.language === 'typescript'
-        ? (props.doc.symbols ?? [])
-            .filter((s) => s.kind === 'import' && s.importedKind === 'class')
-            .map((s) => s.name)
-        : [];
-    return [
-      ...imported.map((name) => ({ name, global: false })),
-      ...(props.types?.constructors ?? [])
-        .filter((name) => !imported.includes(name))
-        .map((name) => ({ name, global: true })),
-    ];
-  };
   const signatureOf = (callee: string): ReturnType<typeof callSignature> =>
     callSignature(props.doc, props.text, callee);
   const fill = (
@@ -168,344 +137,11 @@ export function createActionEntries(
     });
   }
 
-  /**
-   * Methods and properties the script inherits from its engine class
-   * (`extends CharacterBody2D`: `move_and_slide()`, `velocity`), like UE's
-   * functions and variables of the parent class.
-   */
-  function inheritedEntries(state: MenuState): ActionEntry[] {
-    const base = scriptBaseClass(props.doc, props.types);
-    const own = new Set(callables.value);
-    const category = `Inherited from ${base}`;
-    return engineMembers(props.types, base).flatMap((member): ActionEntry[] => {
-      if (member.method) {
-        return own.has(member.name)
-          ? []
-          : [
-              {
-                label: member.name,
-                category,
-                icon: ICON_CALL,
-                hint: member.owner,
-                ...(member.detail ? { detail: member.detail } : {}),
-                action: () =>
-                  addNode({ type: 'call', callee: member.name }, state),
-              },
-            ];
-      }
-
-      return [
-        ...(state.from
-          ? []
-          : [
-              {
-                label: `Get ${member.name}`,
-                category,
-                icon: ICON_VARIABLE,
-                hint: member.type,
-                keywords: `get read ${member.owner}`,
-                action: () =>
-                  addNode({ type: 'value', expression: member.name }, state),
-              },
-            ]),
-        {
-          label: `Set ${member.name}`,
-          category,
-          icon: ICON_SET,
-          hint: member.type,
-          keywords: `set assign write ${member.owner}`,
-          action: () =>
-            addNode(
-              {
-                type: 'setVar',
-                name: member.name,
-                declaration: 'none',
-                value: typeDefault(props.types, member.type),
-              },
-              state
-            ),
-        },
-      ];
-    });
-  }
-
-  /** Add-node actions at an exec pin (or, without one, at the end). */
-  function addNodeActions(state: MenuState, after: boolean): ActionEntry[] {
-    const fnId = state.from
-      ? index.value.nodes.get(state.from.node)?.fn.id
-      : ctx.placeAt(state.world)?.fnId;
-    return [
-      // UE's Get / Set of every variable; a Get from an exec pin makes no
-      // sense (it has no exec pins).
-      ...scopeVariables(props.doc, fnId).flatMap((variable): ActionEntry[] => [
-        ...(state.from
-          ? []
-          : [
-              {
-                label: `Get ${variable.expression}`,
-                category: 'Variables',
-                icon: ICON_VARIABLE,
-                hint: variable.type,
-                keywords: 'get read',
-                action: () =>
-                  addNode(
-                    { type: 'value', expression: variable.expression },
-                    state
-                  ),
-              },
-            ]),
-        ...(variable.constant
-          ? []
-          : [
-              {
-                label: `Set ${variable.expression}`,
-                category: 'Variables',
-                icon: ICON_SET,
-                hint: variable.type,
-                keywords: 'set assign write',
-                action: () =>
-                  addNode(
-                    {
-                      type: 'setVar',
-                      name: variable.expression,
-                      declaration: 'none',
-                      value: typeDefault(props.types, variable.type),
-                    },
-                    state
-                  ),
-              },
-            ]),
-      ]),
-      // UE's Get of a global object; not from an exec pin (no exec pins).
-      ...(state.from
-        ? []
-        : globalObjects(props.doc, props.types).map((global): ActionEntry => ({
-            label: `Get ${global.name}`,
-            category: 'Globals',
-            icon: ICON_VARIABLE,
-            hint: global.hint,
-            keywords: 'get read',
-            action: () =>
-              addNode({ type: 'value', expression: global.name }, state),
-          }))),
-      ...callables.value.map((callee): ActionEntry => ({
-        label: callee,
-        category: 'Call function',
-        icon: ICON_CALL,
-        detail: signatureOf(callee).detail,
-        action: () => addNode({ type: 'call', callee }, state),
-      })),
-      ...constructable().map(({ name, global }): ActionEntry => ({
-        label: `new ${name}()`,
-        category: 'Construct',
-        icon: ICON_CALL,
-        ...(global ? { hint: 'global' } : {}),
-        keywords: `${name} new construct create`,
-        action: () =>
-          addNode({ type: 'value', expression: `new ${name}()` }, state),
-      })),
-      ...externalNames.value.map((external): ActionEntry =>
-        external.kind === 'class'
-          ? {
-              // UE's "Construct Object": a new instance, with its import.
-              label: external.expression,
-              category: 'Construct',
-              icon: ICON_IMPORT,
-              hint: external.where,
-              // Context Sensitive on empty space: this file and its imports.
-              ...(state.from ? {} : { fits: false }),
-              keywords: `${external.name} new construct create ${external.path} import`,
-              action: () =>
-                addNode(
-                  { type: 'value', expression: external.expression },
-                  state,
-                  (op) => withImport(external, op)
-                ),
-            }
-          : {
-              label: external.callee,
-              category: 'Call function',
-              icon: ICON_IMPORT,
-              detail: external.detail,
-              hint: external.where,
-              ...(state.from ? {} : { fits: false }),
-              keywords: `${external.path} import`,
-              action: () =>
-                addNode(
-                  { type: 'call', callee: external.callee },
-                  state,
-                  (op) => withImport(external, op)
-                ),
-            }
-      ),
-      ...inheritedEntries(state),
-      {
-        label: 'Branch (if)',
-        category: 'Flow control',
-        icon: 'i-mdi-source-branch',
-        keywords: 'if condition',
-        action: () => addNode({ type: 'branch' }, state),
-      },
-      // No `return` in the file's top level (a module).
-      ...(after && fnId !== topLevelGraph(props.doc, props.text)?.id
-        ? [
-            {
-              label: 'Return',
-              category: 'Flow control',
-              icon: 'i-mdi-keyboard-return text-purple-400',
-              action: () => addNode({ type: 'return' }, state),
-            },
-          ]
-        : []),
-      // UE's For Each Loop, For Loop, While Loop, Switch …, in the language's
-      // syntax; jumps (break, throw) only after a statement, like Return.
-      ...(props.types?.flow ?? [])
-        .filter((flow) => after || !JUMPS.has(flow))
-        // On empty space the node goes to the end of the function, never
-        // into a loop: no break / continue there.
-        .filter(
-          (flow) =>
-            state.from !== undefined ||
-            (flow !== 'break' && flow !== 'continue')
-        )
-        .map((flow): ActionEntry => ({
-          ...FLOW_ENTRIES[flow],
-          category: 'Flow control',
-          action: () => addNode({ type: 'flow', flow }, state),
-        })),
-      {
-        label: 'Declare variable…',
-        category: 'Variables',
-        icon: 'i-mdi-variable text-sky-400',
-        keywords: 'let const var set',
-        // The search text found this entry, so it is no name ("Declare
-        // variable foo" from the typed entries is).
-        action: () =>
-          void ask({
-            label: 'Variable name',
-            placeholder: 'value',
-            value: '',
-            submit: (name) =>
-              addNode({ type: 'setVar', name, declaration: 'const' }, state),
-          }),
-      },
-    ];
-  }
-
-  /** An action that reads `member` of the value at `source`. */
-  function readMember(
-    source: PinRef,
-    state: MenuState,
-    member: { name: string; method: boolean }
-  ): () => void {
-    return () =>
-      emitOp({
-        type: 'useValue',
-        pin: source,
-        expression: member.method
-          ? methodCallExpression(props.types, pinOf(source)?.pin, member.name)
-          : `$value.${member.name}`,
-        position: { ...state.world },
-      });
-  }
-
-  /**
-   * Fields and methods of a value's type, like UE's "Target is …" actions:
-   * those a type checker saw (with inherited ones, also of library types),
-   * else the fields of an interface or object type of the file, the public
-   * members of a class of the file, or the members of an engine class.
-   */
-  function memberEntries(
-    pin: Pin,
-    source: PinRef,
-    state: MenuState
-  ): ActionEntry[] {
-    const typeName = String(pin.type);
-    const checked =
-      pin.typeText === undefined
-        ? undefined
-        : props.doc?.typeMembers?.[pin.typeText];
-    if (checked && checked.length > 0) {
-      // The checked type as the language writes it (`Option<Item>`).
-      const category = `Members of ${pin.typeText ?? typeName}`;
-      return checked.map((member): ActionEntry => {
-        const method = member.kind === 'method';
-        return {
-          label: method ? `.${member.name}()` : `.${member.name}`,
-          category,
-          icon: method ? ICON_CALL : ICON_MEMBER,
-          hint: String(member.type),
-          ...(member.detail ? { detail: member.detail } : {}),
-          keywords: `${member.name} member property method field`,
-          action: readMember(source, state, { name: member.name, method }),
-        };
-      });
-    }
-
-    const symbols = props.doc?.symbols ?? [];
-    const declared = /^[A-Za-z_$][\w$]*$/.test(typeName)
-      ? symbols.find(
-          (s) =>
-            s.name === typeName &&
-            s.scope === '' &&
-            (s.kind === 'type' || s.kind === 'class')
-        )
-      : undefined;
-    if (!declared) {
-      // A class of the engine (Godot's `Area2D`), with inherited members.
-      return engineMembers(props.types, typeName).map(
-        (member): ActionEntry => ({
-          label: member.method ? `.${member.name}()` : `.${member.name}`,
-          category: `Members of ${typeName}`,
-          icon: member.method ? ICON_CALL : ICON_MEMBER,
-          hint: member.owner === typeName ? member.type : member.owner,
-          ...(member.detail ? { detail: member.detail } : {}),
-          keywords: `${member.name} ${member.owner} member property method`,
-          action: readMember(source, state, member),
-        })
-      );
-    }
-
-    const scope = qualifiedName(declared);
-    const members =
-      declared.kind === 'class'
-        ? symbols
-            .filter(
-              (s) =>
-                s.scope === scope &&
-                (s.kind === 'variable' ||
-                  s.kind === 'constant' ||
-                  s.kind === 'method') &&
-                s.name !== 'constructor' &&
-                !s.name.startsWith('#') &&
-                !s.modifiers.includes('static') &&
-                !s.modifiers.includes('private')
-            )
-            .map((s) => ({
-              name: s.name,
-              type: s.type?.text ?? String(s.dataType),
-              method: s.kind === 'method',
-            }))
-        : (declared.fields ?? []).map((f) => ({
-            name: f.name,
-            type: f.type?.text ?? String(f.dataType),
-            method: f.method === true,
-          }));
-    return members.map((member): ActionEntry => ({
-      label: member.method ? `.${member.name}()` : `.${member.name}`,
-      category: `Members of ${typeName}`,
-      icon: member.method ? ICON_CALL : ICON_MEMBER,
-      ...(member.method ? {} : { hint: member.type }),
-      keywords: `${member.name} get member property field`,
-      action: readMember(source, state, member),
-    }));
-  }
-
   /** Actions of the empty graph (no wire was dragged). */
   function backgroundEntries(state: MenuState): ActionEntry[] {
     const v = ctx.view.value;
     return [
-      ...(props.editable ? addNodeActions(state, true) : []),
+      ...(props.editable ? addNodeEntries(ctx, state, true) : []),
       ...(props.editable ? expressionActions(state) : []),
       ...(props.editable
         ? [
@@ -579,12 +215,12 @@ export function createActionEntries(
 
     const { node, pin } = found;
     if (pin.kind === 'exec') {
-      return addNodeActions(state, pin.direction === 'out');
+      return addNodeEntries(ctx, state, pin.direction === 'out');
     }
 
     if (pin.direction === 'out') {
       const named = node.kind === 'setVar' || node.kind === 'entry';
-      const members = memberEntries(pin, source, state);
+      const members = memberEntries(ctx, pin, source, state);
       const ownMethod = (callee: string): string | undefined =>
         ownMethodName(node, pin, callee);
       const methods = callables.value.flatMap((callee): ActionEntry[] => {
@@ -787,141 +423,6 @@ export function createActionEntries(
     ];
   }
 
-  function suggestActions(state: MenuState, query: string): ActionEntry[] {
-    const found = state.from ? pinOf(state.from) : undefined;
-    const source = state.from;
-    const reserved = new Set(props.types?.keywords ?? []).has(
-      query.split('.')[0] ?? query
-    );
-    // Names the menu offers already ("greeter()") need no typed twin.
-    const known =
-      callables.value.includes(query) ||
-      externalNames.value.some((e) => e.callee === query);
-    const callable = IDENTIFIER_PATH.test(query) && !reserved && !known;
-    const declarable = /^[A-Za-z_$][\w$]*$/.test(query) && !reserved;
-    if (!props.editable) {
-      return [];
-    }
-
-    if (!found || !source || found.pin.kind === 'exec') {
-      return [
-        ...(callable
-          ? [
-              {
-                label: `Call ${query}()`,
-                category: 'Typed',
-                icon: ICON_CALL,
-                action: () => addNode({ type: 'call', callee: query }, state),
-              },
-            ]
-          : []),
-        ...(declarable
-          ? [
-              {
-                label: `Declare variable ${query}`,
-                category: 'Typed',
-                icon: 'i-mdi-variable text-sky-400',
-                action: () =>
-                  addNode(
-                    { type: 'setVar', name: query, declaration: 'const' },
-                    state
-                  ),
-              },
-            ]
-          : []),
-      ];
-    }
-
-    if (found.pin.direction === 'out') {
-      // A member of the value (`.description()`), also for types the
-      // editor doesn't know; on a call's unused result it continues the
-      // chain (`program.name('x').description()`).
-      const member = query.replace(/^\./, '');
-      const useMember = (expression: string): void =>
-        emitOp({
-          type: 'useValue',
-          pin: source,
-          expression,
-          position: { ...state.world },
-        });
-      const members: ActionEntry[] = /^[A-Za-z_$][\w$]*$/.test(member)
-        ? [
-            {
-              label: `.${member}()`,
-              category: 'Typed',
-              icon: ICON_CALL,
-              hint: 'call on the value',
-              action: () =>
-                useMember(methodCallExpression(props.types, found.pin, member)),
-            },
-            {
-              label: `.${member}`,
-              category: 'Typed',
-              icon: ICON_MEMBER,
-              hint: 'member of the value',
-              action: () => useMember(`$value.${member}`),
-            },
-          ]
-        : [];
-      return [
-        ...members,
-        ...(callable
-          ? [
-              {
-                label: `Call ${query}(value)`,
-                category: 'Typed',
-                icon: ICON_CALL,
-                action: () =>
-                  emitOp({
-                    type: 'callWith',
-                    pin: source,
-                    callee: query,
-                    position: { ...state.world },
-                  }),
-              },
-            ]
-          : []),
-      ];
-    }
-
-    // A value written by hand: not an operator alone ("+"), not a variable
-    // the menu lists anyway.
-    const listed = scopeVariables(
-      props.doc,
-      index.value.nodes.get(found.node.id)?.fn.id
-    ).some((v) => v.expression === query);
-    return [
-      ...(/[\w$'"`]/.test(query) &&
-      !listed &&
-      (!reserved || VALUE_WORDS.has(query))
-        ? [
-            {
-              label: `Use ${query}`,
-              category: 'Typed',
-              icon: 'i-mdi-form-textbox',
-              action: () =>
-                emitOp({ type: 'setInput', pin: source, expression: query }),
-            },
-          ]
-        : []),
-      ...(callable
-        ? [
-            {
-              label: `Call ${query}()`,
-              category: 'Typed',
-              icon: ICON_CALL,
-              action: () =>
-                emitOp({
-                  type: 'setInput',
-                  pin: source,
-                  expression: `${query}()`,
-                }),
-            },
-          ]
-        : []),
-    ];
-  }
-
   function actionTitle(state: MenuState): string {
     const found = state.from ? pinOf(state.from) : undefined;
     if (!found) {
@@ -937,5 +438,9 @@ export function createActionEntries(
       : `Actions providing ${String(found.pin.type)}`;
   }
 
-  return { actionEntries, suggestActions, actionTitle };
+  return {
+    actionEntries,
+    suggestActions: (state, query) => suggestEntries(ctx, state, query),
+    actionTitle,
+  };
 }
