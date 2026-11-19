@@ -13,7 +13,7 @@ import {
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
 import { rustDependencies } from '../../graph/cargo-project';
-import { crateModule, crateStubs } from '../../graph/crate-types';
+import { crateModule, crateStubs, usePath } from '../../graph/crate-types';
 import type { GraphClient } from '../../graph/graph-client';
 import { languageOf } from '../../graph/languages';
 import { pythonDistribution } from '../../graph/module-info';
@@ -644,17 +644,20 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
 
   /**
    * An item of a library the code names by its path without importing it
-   * (Rust's `serde_json::to_string`), as an import named by the path.
+   * (Rust's `serde_json::to_string`, also through a `use` of its module:
+   * `overrides::OverrideBuilder`), as an import named by the path.
    */
   async function pathDeclaration(
-    path: string
+    path: string,
+    uses: ReadonlyArray<ScriptSymbol>
   ): Promise<ImportedDeclaration | undefined> {
-    const at = path.lastIndexOf('::');
+    const full = usePath(path, uses);
+    const at = full.lastIndexOf('::');
     return at === -1
       ? undefined
       : namedDeclaration(
-          await libraryExports(path.slice(0, at)),
-          path.slice(at + 2),
+          await libraryExports(full.slice(0, at)),
+          full.slice(at + 2),
           path
         );
   }
@@ -674,7 +677,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
 
     const found = await Promise.all([
       ...imports.map((s) => declarationOf(s)),
-      ...paths.map((path) => pathDeclaration(path)),
+      ...paths.map((path) => pathDeclaration(path, imports)),
     ]);
     if (seq !== deps.parseSeq()) {
       return;

@@ -66,3 +66,26 @@ export function crateModule(
     ? { crate, path: rest.join('::') }
     : undefined;
 }
+
+/**
+ * A path with its first segment resolved through the file's `use`s:
+ * `overrides::OverrideBuilder` after `use ignore::overrides;` is
+ * `ignore::overrides::OverrideBuilder`, `json::Value` after `use
+ * serde_json as json;` is `serde_json::Value`.
+ */
+export function usePath(
+  path: string,
+  uses: ReadonlyArray<{ name: string; module?: string; imported?: string }>
+): string {
+  const [head, ...rest] = path.split('::');
+  const use = uses.find((u) => u.name === head && u.module);
+  if (!use?.module || rest.length === 0) {
+    return path;
+  }
+
+  const module =
+    use.imported && use.imported !== '*'
+      ? `${use.module}::${use.imported}`
+      : use.module;
+  return [module, ...rest].join('::');
+}
