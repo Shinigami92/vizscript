@@ -16,9 +16,13 @@ import type { CanvasContext, MenuState } from './types';
 export function suggestEntries(
   ctx: CanvasContext,
   state: MenuState,
-  query: string
+  typed: string
 ): ActionEntry[] {
   const { props, emitOp, addNode, pinOf } = ctx;
+  // `load(` or `load()`: a call, not the name itself.
+  const call = typed.match(/^(.+?)\s*\(\s*\)?$/);
+  const wantsCall = call?.[1] !== undefined;
+  const query = call?.[1] ?? typed;
   const found = state.from ? pinOf(state.from) : undefined;
   const source = state.from;
   const reserved = new Set(props.types?.keywords ?? []).has(
@@ -26,10 +30,12 @@ export function suggestEntries(
   );
   // Names the menu offers already ("greeter()") need no typed twin.
   const known =
-    ctx.callables.value.includes(query) ||
-    ctx.externalNames.value.some((e) => e.callee === query);
+    !wantsCall &&
+    (ctx.callables.value.includes(query) ||
+      ctx.externalNames.value.some((e) => e.callee === query));
   const callable = IDENTIFIER_PATH.test(query) && !reserved && !known;
-  const declarable = /^[A-Za-z_$][\w$]*$/.test(query) && !reserved;
+  const declarable =
+    !wantsCall && /^[A-Za-z_$][\w$]*$/.test(query) && !reserved;
   if (!props.editable) {
     return [];
   }
@@ -85,13 +91,17 @@ export function suggestEntries(
             action: () =>
               useMember(methodCallExpression(props.types, found.pin, member)),
           },
-          {
-            label: `.${member}`,
-            category: 'Typed',
-            icon: ICON_MEMBER,
-            hint: 'member of the value',
-            action: () => useMember(`$value.${member}`),
-          },
+          ...(wantsCall
+            ? []
+            : [
+                {
+                  label: `.${member}`,
+                  category: 'Typed',
+                  icon: ICON_MEMBER,
+                  hint: 'member of the value',
+                  action: () => useMember(`$value.${member}`),
+                },
+              ]),
         ]
       : [];
     return [
@@ -122,7 +132,8 @@ export function suggestEntries(
     ctx.index.value.nodes.get(found.node.id)?.fn.id
   ).some((v) => v.expression === query);
   return [
-    ...(/[\w$'"`]/.test(query) &&
+    ...(!wantsCall &&
+    /[\w$'"`]/.test(query) &&
     !listed &&
     (!reserved || VALUE_WORDS.has(query))
       ? [
