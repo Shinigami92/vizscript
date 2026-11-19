@@ -58,8 +58,9 @@ const picked = shallowRef<{
   result: PackageSearchResult;
   module: string;
   exports: ScriptSymbol[];
+  /** Its exports are still being read (big type packages take a while). */
+  reading: boolean;
 } | null>(null);
-const loading = ref<string | null>(null);
 const kind = ref<DependencyKind>('runtime');
 /** A new key opens the menu again (after picking a library or a kind). */
 const menuKey = ref(0);
@@ -102,16 +103,33 @@ function onQuery(text: string): void {
   void search(text);
 }
 
+/** How code names a library's module before its files are read. */
+function guessModule(name: string): string {
+  return ecosystem.value === 'npm'
+    ? name
+    : name.toLowerCase().replaceAll('-', '_');
+}
+
+/**
+ * Shows the library's choices at once (the whole module, the kinds); its
+ * named exports follow when read.
+ */
 async function pick(result: PackageSearchResult): Promise<void> {
   reopen = true;
-  loading.value = result.name;
   kind.value = defaultKind(props.path, result.name);
+  const current = {
+    result,
+    module: guessModule(result.name),
+    exports: [],
+    reading: true,
+  };
+  picked.value = current;
   const offer = await props
     .offer(result.name, result.version)
-    .catch(() => ({ module: result.name, exports: [] }));
-  picked.value = { result, ...offer };
-  loading.value = null;
-  menuKey.value++;
+    .catch(() => ({ module: current.module, exports: [] }));
+  if (picked.value === current) {
+    picked.value = { result, ...offer, reading: false };
+  }
 }
 
 async function add(imported: string | undefined): Promise<void> {
@@ -151,17 +169,6 @@ const SHOWN_KINDS = new Set([
 ]);
 
 const entries = computed((): ActionEntry[] => {
-  if (loading.value) {
-    return [
-      {
-        label: `Loading ${loading.value}…`,
-        category: '',
-        disabled: 'Reading what the library exports',
-        action: () => undefined,
-      },
-    ];
-  }
-
   const chosen = picked.value;
   if (!chosen) {
     if (!manifest.value) {
@@ -215,6 +222,18 @@ const entries = computed((): ActionEntry[] => {
       keywords: 'all module namespace',
       action: () => void add(undefined),
     },
+    ...(chosen.reading
+      ? [
+          {
+            label: `Reading what ${chosen.result.name} exports…`,
+            category: 'Import',
+            icon: 'i-mdi-loading animate-spin text-zinc-500',
+            disabled:
+              'Big type packages take a while; the whole module can be imported already.',
+            action: () => undefined,
+          },
+        ]
+      : []),
     ...chosen.exports
       .filter((symbol) => SHOWN_KINDS.has(symbol.kind))
       .map((symbol): ActionEntry => ({
