@@ -7,6 +7,7 @@ import type {
 import {
   defaultExport,
   exportedSymbols,
+  exportedTypeMembers,
   resolveModuleReference,
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
@@ -38,6 +39,19 @@ import type { ScriptWorkspaceProps } from './types';
 
 /** Files read for the index: nearest folders first. */
 const INDEX_LIMIT = 150;
+
+/**
+ * A parsed file's exports and, after them, the members of its exported
+ * types (scoped by the type), which an import of the type brings along.
+ */
+function withTypeMembers(doc: GraphDocument, text: string): ScriptSymbol[] {
+  return [...exportedSymbols(doc, text), ...exportedTypeMembers(doc, text)];
+}
+
+/** Exports without the members of exported types. */
+function topLevel(exports: ReadonlyArray<ScriptSymbol>): ScriptSymbol[] {
+  return exports.filter((s) => s.scope === '');
+}
 
 export interface ImportDeps {
   props: Readonly<ScriptWorkspaceProps>;
@@ -197,7 +211,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
       exports = read
         ? read(path)
             .then(async (source) =>
-              exportedSymbols(
+              withTypeMembers(
                 await client.parse(source, path, undefined, {
                   background: true,
                 }),
@@ -235,7 +249,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     const found = new Map<string, ScriptSymbol[]>();
     const worker = async (): Promise<void> => {
       for (let path = queue.shift(); path; path = queue.shift()) {
-        const exports = await exportsOf(path);
+        const exports = topLevel(await exportsOf(path));
         if (exports.length > 0) {
           found.set(path, exports);
           projectExports.value = new Map(found);
@@ -276,7 +290,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
       found.push(
         ...libraryNames(
           module,
-          await libraryExports(module),
+          topLevel(await libraryExports(module)),
           language === 'python' ? 'module' : 'named',
           props.path
         )
@@ -475,7 +489,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
       undefined,
       { background: true }
     );
-    return exportedSymbols(parsed, declarations);
+    return withTypeMembers(parsed, declarations);
   }
 
   async function packageOffer(
@@ -579,13 +593,13 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
   ): Promise<ImportedDeclaration | undefined> {
     // A file of the repository, else a library.
     const target = importTarget(symbol);
-    let exports: ScriptSymbol[];
+    let all: ScriptSymbol[];
     let named: string | undefined;
     if (target) {
-      exports = await exportsOf(target.path);
+      all = await exportsOf(target.path);
       named = target.symbol;
     } else if (symbol.module) {
-      exports = await libraryExports(symbol.module);
+      all = await libraryExports(symbol.module);
       named =
         symbol.imported === '*' || symbol.imported === 'default'
           ? undefined
@@ -594,6 +608,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
       return undefined;
     }
 
+    const exports = topLevel(all);
     if (exports.length === 0) {
       return undefined;
     }
@@ -605,7 +620,15 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
 
     if (named) {
       const declaration = exports.find((s) => s.name === named);
-      return declaration ? { name: symbol.name, declaration } : undefined;
+      // A type brings its members along (Rust's `impl` methods).
+      const members = all.filter((s) => s.scope !== '' && s.scope === named);
+      return declaration
+        ? {
+            name: symbol.name,
+            declaration,
+            ...(members.length > 0 ? { members } : {}),
+          }
+        : undefined;
     }
 
     // A whole module: `ns.fn()`, `module.fn()`, `Script.new()`.

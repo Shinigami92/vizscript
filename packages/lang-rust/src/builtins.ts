@@ -68,6 +68,7 @@ trait Option<T> {
     fn unwrap_or(self, default: T) -> T;
     fn unwrap_or_default(self) -> T;
     fn ok_or(self, err: E) -> Result<T, E>;
+    fn ok_or_else(self, err: impl FnOnce() -> _) -> Result<T, _>;
     fn cloned(self) -> Option<T>;
     fn take(&mut self) -> Option<T>;
 }
@@ -82,6 +83,7 @@ trait Result<T, E> {
     fn unwrap_or(self, default: T) -> T;
     fn unwrap_or_default(self) -> T;
     fn unwrap_err(self) -> E;
+    fn map_err(self, op: impl FnOnce(E) -> _) -> Result<T, _>;
 }
 
 trait HashMap<K, V> {

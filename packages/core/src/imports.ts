@@ -175,6 +175,38 @@ export function exportedSymbols(
     .map((symbol) => portable(symbol, text));
 }
 
+const TYPE_KINDS = new Set(['class', 'enum', 'type']);
+
+/**
+ * Public members of a parsed file's exported types, scoped by the type's
+ * plain name (`Value`, not `Value<T>`): what an import of the type brings
+ * along, so its methods and fields get followed. Rust only for now (`pub
+ * fn` of `impl` blocks, `pub` fields); other languages' checkers or
+ * stubs know their members already.
+ */
+export function exportedTypeMembers(
+  doc: GraphDocument,
+  text: string
+): ScriptSymbol[] {
+  if (doc.language !== 'rust') {
+    return [];
+  }
+
+  const types = new Set(
+    exportedSymbols(doc, text)
+      .filter((s) => TYPE_KINDS.has(s.kind))
+      .map((s) => s.name)
+  );
+  return (doc.symbols ?? []).flatMap((symbol) => {
+    const owner = symbol.scope.replace(/<.*$/s, '').trim();
+    return types.has(owner) &&
+      (symbol.kind === 'method' || symbol.kind === 'variable') &&
+      symbol.modifiers.some((m) => m.startsWith('pub'))
+      ? [{ ...portable(symbol, text), scope: owner }]
+      : [];
+  });
+}
+
 /**
  * Exports of a module including what it re-exports: `resolve` returns the
  * exports of another module (already followed), or nothing when unknown.

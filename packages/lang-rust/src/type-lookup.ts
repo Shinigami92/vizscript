@@ -1,4 +1,11 @@
-import type { SymbolParam, TypeInfo, TypeMap } from '@vizscript/core';
+import type {
+  ImportedDeclaration,
+  ScriptSymbol,
+  SymbolParam,
+  TypeInfo,
+  TypeMap,
+  TypeMember,
+} from '@vizscript/core';
 import { rangeKey } from '@vizscript/core';
 import type {
   Block,
@@ -11,7 +18,7 @@ import type {
   Span,
   Stmt,
 } from './ast';
-import type { Callable } from './builtin-types';
+import type { Callable, StubParam } from './builtin-types';
 import {
   builtinMembers,
   builtinMethod,
@@ -45,6 +52,26 @@ import {
 interface TypeScope {
   fields: Map<string, string | undefined>;
   methods: Map<string, Callable>;
+  /** Imported (a crate's or another file's): its members for the menu. */
+  imported?: boolean;
+}
+
+/** A function or method of another file or crate, as a callable. */
+function importedCallable(symbol: ScriptSymbol, self?: string): Callable {
+  const params = (symbol.params ?? []).map((p): StubParam => ({
+    name: p.name,
+    ...(p.type ? { type: p.type.text } : {}),
+  }));
+  const returns = symbol.returns?.text;
+  const list = params
+    .map((p) => (p.type ? `${p.name}: ${p.type}` : p.name))
+    .join(', ');
+  return {
+    returns: normalize(returns, self),
+    detail: `${symbol.name}(${list})${returns ? ` -> ${returns}` : ''}`,
+    isAsync: symbol.modifiers.includes('async'),
+    params,
+  };
 }
 
 class Scope {
@@ -90,9 +117,11 @@ class TypeLookup {
 
   public constructor(
     private readonly text: string,
-    items: ReadonlyArray<Item>
+    items: ReadonlyArray<Item>,
+    imports: ReadonlyArray<ImportedDeclaration>
   ) {
     const module = new Scope();
+    this.declareImports(imports);
     this.declare(items, module);
     this.walkItems(items, module);
   }
@@ -115,6 +144,70 @@ class TypeLookup {
     }
 
     return scope;
+  }
+
+  /**
+   * Functions and types of `use` imports (crates, other files): what calls
+   * of them give, the fields and methods of their types. The file's own
+   * declarations come after them and win.
+   */
+  private declareImports(imports: ReadonlyArray<ImportedDeclaration>): void {
+    for (const { name, declaration, members } of imports) {
+      if (declaration?.kind === 'function') {
+        this.functions.set(name, importedCallable(declaration));
+        continue;
+      }
+
+      if (
+        declaration?.kind !== 'class' &&
+        declaration?.kind !== 'enum' &&
+        declaration?.kind !== 'type'
+      ) {
+        continue;
+      }
+
+      if (declaration.kind === 'enum') {
+        this.enums.add(name);
+      }
+
+      // Traits, and aliases (`Result<T>`) whose target has the members.
+      if (declaration.modifiers.includes('trait') || declaration.type) {
+        continue;
+      }
+
+      const scope = this.typeScope(name);
+      scope.imported = true;
+      for (const member of members ?? []) {
+        if (member.kind === 'method') {
+          scope.methods.set(member.name, importedCallable(member, name));
+        } else if (member.kind === 'variable') {
+          scope.fields.set(member.name, normalize(member.type?.text, name));
+        }
+      }
+    }
+  }
+
+  /** Members of an imported type for the action menu (`Value::as_str`). */
+  public importedMembers(type: string): TypeMember[] | undefined {
+    const scope = this.typesOfFile.get(generic(type).name);
+    if (!scope?.imported) {
+      return undefined;
+    }
+
+    const members: TypeMember[] = [
+      ...[...scope.fields].map(([name, fieldType]): TypeMember => ({
+        name,
+        kind: 'property',
+        type: dataTypeOf(fieldType),
+      })),
+      ...[...scope.methods].map(([name, method]): TypeMember => ({
+        name,
+        kind: 'method',
+        type: dataTypeOf(method.returns ?? '()'),
+        detail: method.detail,
+      })),
+    ];
+    return members.length > 0 ? members : undefined;
   }
 
   private declare(items: ReadonlyArray<Item>, module: Scope): void {
@@ -814,11 +907,15 @@ class TypeLookup {
  * Types of the values of a Rust file, by source range (see `TypeLookup`):
  * what `applyTypes` makes the pins and symbols of its graph.
  */
-export function rustTypes(text: string, items: ReadonlyArray<Item>): TypeMap {
+export function rustTypes(
+  text: string,
+  items: ReadonlyArray<Item>,
+  imports: ReadonlyArray<ImportedDeclaration> = []
+): TypeMap {
   const types = new Map<string, TypeInfo>();
   let lookup: TypeLookup;
   try {
-    lookup = new TypeLookup(text, items);
+    lookup = new TypeLookup(text, items, imports);
   } catch {
     // Code the parser recovered from in an unexpected shape: the graph
     // keeps the parser's types.
@@ -834,7 +931,7 @@ export function rustTypes(text: string, items: ReadonlyArray<Item>): TypeMap {
       continue;
     }
 
-    const members = builtinMembers(type);
+    const members = builtinMembers(type) ?? lookup.importedMembers(type);
     types.set(key, {
       text: type,
       dataType: dataTypeOf(type),
