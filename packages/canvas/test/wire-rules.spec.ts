@@ -47,6 +47,13 @@ describe('wire rules', () => {
     expect(
       connectProblem(out, end('b', { direction: 'in', type: 'number' }))
     ).toBeNull();
+    // `String(repo)`: the argument shows `object`, but takes anything.
+    expect(
+      connectProblem(
+        out,
+        end('b', { direction: 'in', type: 'object', declared: 'any' })
+      )
+    ).toBeNull();
   });
 
   it('allows a wire a conversion makes fit', () => {

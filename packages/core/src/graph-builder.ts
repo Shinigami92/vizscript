@@ -140,6 +140,7 @@ export abstract class GraphBuilderBase {
     }
 
     if (refinesType(pin.type, value.type)) {
+      pin.declared ??= pin.type;
       pin.type = value.type;
     }
   }

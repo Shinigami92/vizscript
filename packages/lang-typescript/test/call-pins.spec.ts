@@ -219,4 +219,13 @@ describe('argument pins from signatures', () => {
       .find((n) => n.kind === 'return');
     expect(ret?.pins.find((p) => p.id === 'value')?.type).toBe('any');
   });
+
+  it('keeps the type an argument takes when its value narrows it', () => {
+    const pin = callNode(
+      'function f(repo: { id: number }): string {\n  return String(repo);\n}\n',
+      'String'
+    ).pins.find((p) => p.id === 'arg0');
+    expect(pin?.type).toBe('object');
+    expect(pin?.declared).toBe('any');
+  });
 });

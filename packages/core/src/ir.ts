@@ -80,6 +80,12 @@ export interface Pin {
    * (`typeOutputsByUse`): the code doesn't declare it.
    */
   usedAs?: boolean;
+  /**
+   * The type an input takes when its value made `type` narrower (an `any`
+   * argument shows `object` while an object is wired in): another wire
+   * may bring any value it takes.
+   */
+  declared?: DataType;
   /** Source range of the expression feeding (in) or produced by (out) this pin. */
   range?: SourceRange;
   literal?: PinLiteral;

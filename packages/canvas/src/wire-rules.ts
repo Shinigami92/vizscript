@@ -67,8 +67,10 @@ export function connectProblem(
   if (pa.kind === 'data') {
     const out = pa.direction === 'out' ? pa : pb;
     const input = pa.direction === 'out' ? pb : pa;
+    // An input takes what it was declared to take, not just what its
+    // wire brings now.
     if (
-      !isTypeCompatible(out.type, input.type) &&
+      !isTypeCompatible(out.type, input.declared ?? input.type) &&
       !(conversions && conversionOf(a, b, conversions))
     ) {
       return `${label(pa)} is not compatible with ${label(pb)}.`;
