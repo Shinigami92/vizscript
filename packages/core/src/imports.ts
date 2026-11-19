@@ -78,7 +78,7 @@ function portableType(type: TypeRef | undefined): TypeRef | undefined {
 }
 
 function portableParam(param: SymbolParam, text: string): SymbolParam {
-  const { defaultRange, type, ...rest } = param;
+  const { defaultRange, type, range: _range, ...rest } = param;
   const defaultText = defaultRange
     ? text.slice(defaultRange.start, defaultRange.end)
     : param.defaultText;

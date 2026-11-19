@@ -114,6 +114,59 @@ function setConstructorParameter(
   };
 }
 
+/**
+ * Where keywords of a declaration starting at `start` go: after its
+ * decorators (`@Get()\n  private get()`, `@Injectable()\nexport class`).
+ */
+export function afterDecorators(text: string, start: number): number {
+  let at = start;
+  const skipSpace = (): void => {
+    while (at < text.length && /\s/.test(text.charAt(at))) {
+      at++;
+    }
+  };
+
+  while (text.charAt(at) === '@') {
+    at++;
+    while (at < text.length && /[\w$.]/.test(text.charAt(at))) {
+      at++;
+    }
+
+    skipSpace();
+    if (text.charAt(at) === '(') {
+      at = closingParen(text, at) + 1;
+    }
+
+    skipSpace();
+  }
+
+  return at;
+}
+
+/** Index of the `)` closing the `(` at `open`, skipping strings. */
+function closingParen(text: string, open: number): number {
+  let depth = 0;
+  let quote = '';
+  for (let i = open; i < text.length; i++) {
+    const c = text.charAt(i);
+    if (quote) {
+      if (c === '\\') {
+        i++;
+      } else if (c === quote) {
+        quote = '';
+      }
+    } else if (c === "'" || c === '"' || c === '`') {
+      quote = c;
+    } else if (c === '(') {
+      depth++;
+    } else if (c === ')' && --depth === 0) {
+      return i;
+    }
+  }
+
+  return text.length - 1;
+}
+
 /** End of a parameter in the code (with its type and default value). */
 function paramEnd(text: string, param: SymbolParam): number {
   return Math.max(
@@ -169,8 +222,12 @@ export function setModifier(
       return replaceKeyword(text, symbol, ACCESS, modifier);
     }
 
-    // The access level comes first (`private static readonly`).
-    const at = (symbol.declarationRange ?? symbol.range).start;
+    // The access level comes first (`private static readonly`), after the
+    // decorators.
+    const at = afterDecorators(
+      text,
+      (symbol.declarationRange ?? symbol.range).start
+    );
     return { ok: true, edits: [{ start: at, end: at, text: `${modifier} ` }] };
   }
 
@@ -234,7 +291,10 @@ export function setModifier(
       );
     }
 
-    const at = (symbol.declarationRange ?? symbol.range).start;
+    const at = afterDecorators(
+      text,
+      (symbol.declarationRange ?? symbol.range).start
+    );
     return { ok: true, edits: [{ start: at, end: at, text: 'export ' }] };
   }
 

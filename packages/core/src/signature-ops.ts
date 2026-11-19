@@ -83,7 +83,7 @@ function parameterList(
 
 /** Whole text of a parameter: `...rest`, `*args`, `name: T = value`. */
 function paramRange(text: string, param: SymbolParam): SourceRange {
-  let start = param.nameRange.start;
+  let start = Math.min(param.range?.start ?? Infinity, param.nameRange.start);
   while (start > 0 && (text[start - 1] === '.' || text[start - 1] === '*')) {
     start--;
   }
@@ -91,7 +91,8 @@ function paramRange(text: string, param: SymbolParam): SourceRange {
   const end = Math.max(
     param.nameRange.end,
     param.type?.range.end ?? 0,
-    param.defaultRange?.end ?? 0
+    param.defaultRange?.end ?? 0,
+    param.range?.end ?? 0
   );
   return { start, end };
 }

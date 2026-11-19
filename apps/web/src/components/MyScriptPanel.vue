@@ -21,15 +21,19 @@ import type { ModuleInfo } from '../graph/module-info';
 import {
   callbackGroups,
   countedUses,
+  decoratorsOf,
   DRAGGABLE_KINDS,
   isTypeImport,
   newFunctionAnchor,
+  shortDecorator,
   SYMBOL_DRAG_MIME,
   SYMBOL_ICONS,
   symbolLabel,
   symbolNodes,
   symbolType,
   topLevelGraph,
+  typeParamNames,
+  typeParamsText,
 } from '../graph/symbols';
 import CollapseTransition from './CollapseTransition.vue';
 import type { MenuEntry } from './ContextMenu.vue';
@@ -389,15 +393,23 @@ function badges(symbol: ScriptSymbol): string {
       .join(' ');
   }
 
+  const decorators = new Set(decoratorsOf(symbol));
   return symbol.modifiers
     .filter(
       (m) => !(eye && (m.startsWith('export') || m.startsWith('@export')))
     )
-    .filter((m) =>
-      /^(?:export|export default|static|async|private|protected|@export.*|@onready|readonly|get|set)$/.test(
-        m
-      )
-    )
+    .flatMap((m) => {
+      if (
+        /^(?:export|export default|static|async|private|protected|@export.*|@onready|readonly|get|set)$/.test(
+          m
+        )
+      ) {
+        return [m];
+      }
+
+      // Decorators by name (`@Get`): their arguments are in Details.
+      return decorators.has(m) ? [shortDecorator(m)] : [];
+    })
     .join(' ');
 }
 
@@ -919,8 +931,14 @@ function addLabel(kind: AddKind, owner: string): string {
                   <!-- The name before badges and type: they shrink first. -->
                   <span
                     class="max-w-[65%] min-w-0 shrink-0 truncate"
-                    :title="symbol.name"
-                    >{{ symbol.name }}</span
+                    :title="`${symbol.name}${typeParamsText(symbol)}`"
+                    >{{ symbol.name
+                    }}<span
+                      v-if="symbol.typeParams"
+                      data-ui="type-params"
+                      class="text-zinc-500"
+                      >{{ typeParamNames(symbol) }}</span
+                    ></span
                   >
                   <span
                     v-if="badges(symbol)"

@@ -426,6 +426,21 @@ function setReturnType(typeText: string | null): void {
               >
             </dd>
           </template>
+          <template v-if="param.decorators">
+            <dt class="text-zinc-500">Decorators</dt>
+            <dd
+              data-ui="parameter-decorators"
+              class="flex min-w-0 flex-col font-mono text-zinc-200"
+            >
+              <span
+                v-for="decorator in param.decorators"
+                :key="decorator"
+                class="truncate"
+                :title="decorator"
+                >{{ decorator }}</span
+              >
+            </dd>
+          </template>
           <dt class="text-zinc-500">Order</dt>
           <dd class="flex gap-1">
             <button
@@ -459,6 +474,13 @@ function setReturnType(typeText: string | null): void {
         class="flex items-center gap-2 px-3 py-1 text-xs"
       >
         <PinIcon :pin="{ kind: 'data', type: param.dataType }" />
+        <span
+          v-if="param.decorators"
+          data-ui="parameter-decorators"
+          class="max-w-28 shrink-0 truncate font-mono text-zinc-500"
+          :title="param.decorators.join(' ')"
+          >{{ param.decorators.join(' ') }}</span
+        >
         <span class="min-w-0 truncate font-mono text-zinc-200"
           >{{ param.rest ? '…' : '' }}{{ param.name }}</span
         >

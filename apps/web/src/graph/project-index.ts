@@ -6,6 +6,7 @@ import type {
 } from '@vizscript/core';
 import { relativePath } from '@vizscript/core';
 import { languageOf } from './languages';
+import { typeParamsText } from './symbols';
 
 /** A name of another file the action menu offers; using it imports it. */
 export interface ExternalName {
@@ -54,7 +55,7 @@ export function signatureText(
     return `${p.rest ? '…' : ''}${p.name}${p.type ? `: ${p.type.text}` : ''}${value === undefined ? '' : ` = ${value}`}`;
   });
   const returns = symbol.returns?.text;
-  return `${symbol.name}(${params.join(', ')})${returns ? ` → ${returns}` : ''}`;
+  return `${symbol.name}${typeParamsText(symbol)}(${params.join(', ')})${returns ? ` → ${returns}` : ''}`;
 }
 
 /**

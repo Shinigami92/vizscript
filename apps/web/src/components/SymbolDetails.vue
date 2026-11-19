@@ -15,11 +15,13 @@ import {
 import { computed, ref, watch } from 'vue';
 import { lineColumn, snippet } from '../graph/source';
 import {
+  decoratorsOf,
   SYMBOL_BARS,
   SYMBOL_ICONS,
   symbolSubtitle,
   symbolType,
   topLevelGraph,
+  typeParamsText,
 } from '../graph/symbols';
 import DetailsHeader from './DetailsHeader.vue';
 import DetailsSection from './DetailsSection.vue';
@@ -150,6 +152,9 @@ function cancelRename(event: KeyboardEvent): void {
   nameDraft.value = props.symbol.name;
   (event.target as HTMLInputElement).blur();
 }
+/** Decorators (`@Get()`) or GDScript's other annotations, as written. */
+const decorators = computed(() => decoratorsOf(props.symbol));
+
 /** What an import takes from its module, in words. */
 const importedText = computed(() => {
   const imported = props.symbol.imported;
@@ -261,7 +266,7 @@ function hasModifier(modifier: string): boolean {
   );
 }
 
-/** Modifiers the Details can't switch (decorators, `declare`, …). */
+/** Modifiers the Details can't switch (`declare`, …); decorators have a row. */
 const otherModifiers = computed(() => {
   const options = modifierOptions.value;
   const known = new Set([
@@ -273,6 +278,7 @@ const otherModifiers = computed(() => {
     ...(props.types?.exposeOnSpawn ? ['constructor'] : []),
     // Shown as the label ("Callback"), not as a modifier.
     'callback',
+    ...decorators.value,
   ]);
   return props.symbol.modifiers.filter((m) => !known.has(m));
 });
@@ -514,6 +520,35 @@ function setModifier(modifier: string, enabled: boolean): void {
               rows="2"
               @change="commitDescription"
             />
+          </dd>
+        </template>
+        <!-- Like UE's specifiers (UFUNCTION(BlueprintCallable)): edited in
+             the code for now. -->
+        <template v-if="decorators.length > 0">
+          <dt class="text-zinc-500">
+            {{ language === 'gdscript' ? 'Annotations' : 'Decorators' }}
+          </dt>
+          <dd
+            data-ui="symbol-decorators"
+            class="flex min-w-0 flex-col gap-0.5 font-mono text-zinc-200"
+          >
+            <span
+              v-for="decorator in decorators"
+              :key="decorator"
+              class="truncate"
+              :title="decorator"
+              >{{ decorator }}</span
+            >
+          </dd>
+        </template>
+        <template v-if="symbol.typeParams">
+          <dt class="text-zinc-500">Type parameters</dt>
+          <dd
+            data-ui="symbol-type-params"
+            class="truncate font-mono text-zinc-200"
+            :title="typeParamsText(symbol)"
+          >
+            {{ typeParamsText(symbol) }}
           </dd>
         </template>
         <template v-if="modifierOptions?.keywords">

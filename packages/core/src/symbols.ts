@@ -27,6 +27,11 @@ export interface TypeRef {
 export interface SymbolParam {
   name: string;
   nameRange: SourceRange;
+  /**
+   * The whole parameter when it starts before its name: decorators and
+   * modifiers (`@Param('id') private readonly id`).
+   */
+  range?: SourceRange;
   /** Declared type; missing when untyped. */
   type?: TypeRef;
   /** Pin type (declared, or inferred from the default value). */
@@ -39,6 +44,8 @@ export interface SymbolParam {
   rest?: boolean;
   /** `**kwargs`: takes keyword arguments, not positional ones. */
   keywords?: boolean;
+  /** Decorators as written (`@Param('id')`, TypeScript's parameter ones). */
+  decorators?: string[];
 }
 
 /** A declaration of the script (UE: an entry of "My Blueprint"). */
@@ -85,6 +92,11 @@ export interface ScriptSymbol {
   modifiers: string[];
   /** Inputs of functions, methods and signals. */
   params?: SymbolParam[];
+  /**
+   * Type parameters of a generic function, class or type as written
+   * (`T`, `K extends string = 'id'`).
+   */
+  typeParams?: string[];
   /** Declared return type. */
   returns?: TypeRef;
   returnType?: DataType;

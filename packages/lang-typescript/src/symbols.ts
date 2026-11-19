@@ -163,6 +163,29 @@ class SymbolCollector {
     return { text: this.text.slice(range.start, range.end), range };
   }
 
+  /** Decorators of a declaration as written, on one line each. */
+  private decorators(node: t.Node): string[] {
+    const decorators = 'decorators' in node ? node.decorators : undefined;
+    return (decorators ?? []).map((d) =>
+      this.text.slice(d.start ?? 0, d.end ?? 0).replaceAll(/\s+/g, ' ')
+    );
+  }
+
+  /** `<T, K extends string = 'id'>` of a generic declaration. */
+  private typeParams(node: t.Node): { typeParams?: string[] } {
+    const declaration =
+      'typeParameters' in node ? node.typeParameters : undefined;
+    if (declaration?.type !== 'TSTypeParameterDeclaration') {
+      return {};
+    }
+
+    return {
+      typeParams: declaration.params.map((p) =>
+        this.text.slice(p.start ?? 0, p.end ?? 0).replaceAll(/\s+/g, ' ')
+      ),
+    };
+  }
+
   private add(
     symbol: Omit<ScriptSymbol, 'id' | 'modifiers'> & { modifiers?: string[] }
   ): void {
@@ -258,6 +281,18 @@ class SymbolCollector {
 
     const annotation = patternAnnotation(node);
     const type = this.typeRef(annotation);
+    // `@Param('id') id`, on the parameter property or the name.
+    const decorated = [node, ...(node === pattern ? [] : [pattern])].flatMap(
+      (n) => ('decorators' in n ? (n.decorators ?? []) : [])
+    );
+    const decorators = [
+      ...this.decorators(node),
+      ...(node === pattern ? [] : this.decorators(pattern)),
+    ];
+    const start = Math.min(
+      node.start ?? Infinity,
+      ...decorated.map((d) => d.start ?? Infinity)
+    );
     let name: string;
     let nameRange: SourceRange;
     if (pattern.type === 'Identifier') {
@@ -282,6 +317,11 @@ class SymbolCollector {
           : 'any',
       ...(defaultRange ? { defaultRange } : {}),
       ...(rest ? { rest } : {}),
+      ...(decorators.length > 0 ? { decorators } : {}),
+      // Decorators and `private readonly` before the name go with it.
+      ...(start < nameRange.start
+        ? { range: { start, end: rangeOf(node).end } }
+        : {}),
     };
   }
 
@@ -304,6 +344,7 @@ class SymbolCollector {
       nameRange,
       dataType: 'function',
       modifiers: [...modifiers, ...(node.async ? ['async'] : [])],
+      ...this.typeParams(node),
       params: node.params.map((p) => this.param(p)),
       ...(returns
         ? { returns, returnType: typeFromAnnotation(node.returnType) }
@@ -413,13 +454,19 @@ class SymbolCollector {
       range,
       nameRange: nameRangeOf(node.id),
       dataType: name,
-      modifiers: [...modifiers, ...(node.abstract ? ['abstract'] : [])],
+      modifiers: [
+        ...this.decorators(node),
+        ...modifiers,
+        ...(node.abstract ? ['abstract'] : []),
+      ],
+      ...this.typeParams(node),
       ...(base ? { extends: this.text.slice(base.start, base.end) } : {}),
       graphStart: node.start ?? 0,
     });
 
     for (const member of node.body.body) {
       const memberModifiers = [
+        ...this.decorators(member),
         ...(member.type !== 'StaticBlock' &&
         member.type !== 'TSIndexSignature' &&
         'static' in member &&
@@ -514,6 +561,7 @@ class SymbolCollector {
           : inferType(value),
         ...(value ? { defaultRange: rangeOf(value) } : {}),
         modifiers: [
+          ...this.decorators(param),
           ...(param.accessibility ? [param.accessibility] : []),
           ...(param.readonly ? ['readonly'] : []),
           'constructor',
@@ -688,6 +736,7 @@ class SymbolCollector {
             ...modifiers,
             node.type === 'TSInterfaceDeclaration' ? 'interface' : 'type',
           ],
+          ...this.typeParams(node),
           ...(fields.length > 0 ? { fields } : {}),
         });
         this.typeMembers(node.id.name, body);
@@ -722,10 +771,6 @@ function exportName(node: t.Identifier | t.StringLiteral): string {
 }
 
 /**
- * Re-exports of a module: `export { a as b } from './x'`, `export * from
- * './x'`, `export * as ns from './x'` and local aliases `export { a as b }`.
- */
-/**
  * Imported names by their local name: what an `export { z }` without a
  * module re-exports (`import * as z from './x'` is `*` of `./x`).
  */
@@ -754,6 +799,10 @@ function importBindings(
   return bindings;
 }
 
+/**
+ * Re-exports of a module: `export { a as b } from './x'`, `export * from
+ * './x'`, `export * as ns from './x'` and local aliases `export { a as b }`.
+ */
 export function typeScriptReexports(program: t.Program): Reexport[] {
   const result: Reexport[] = [];
   const bindings = importBindings(program);

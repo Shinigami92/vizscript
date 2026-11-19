@@ -57,6 +57,37 @@ export function isUncallableImport(symbol: ScriptSymbol): boolean {
   );
 }
 
+/**
+ * Decorators of a symbol as written (`@Get()`, Python's `@staticmethod`,
+ * GDScript's other annotations); GDScript's `@export…` and `@onready`
+ * have switches of their own.
+ */
+export function decoratorsOf(symbol: ScriptSymbol): string[] {
+  return symbol.modifiers.filter(
+    (m) => m.startsWith('@') && !/^@(?:export\w*|onready)\b/.test(m)
+  );
+}
+
+/** A decorator without its arguments: `@UseGuards(A)` → `@UseGuards`. */
+export function shortDecorator(decorator: string): string {
+  return decorator.replace(/\(.*$/s, '');
+}
+
+/** `<T, K extends string>` of a generic declaration, else `''`. */
+export function typeParamsText(symbol: ScriptSymbol): string {
+  return symbol.typeParams && symbol.typeParams.length > 0
+    ? `<${symbol.typeParams.join(', ')}>`
+    : '';
+}
+
+/** The names of a generic's type parameters: `<T, K>`, else `''`. */
+export function typeParamNames(symbol: ScriptSymbol): string {
+  const names = (symbol.typeParams ?? []).map(
+    (p) => /^(?:(?:const|in|out)\s+)*([\w$]+)/.exec(p)?.[1] ?? p
+  );
+  return names.length > 0 ? `<${names.join(', ')}>` : '';
+}
+
 /** "Function", or "Imported function" once the import's file was read. */
 export function symbolLabel(symbol: ScriptSymbol): string {
   if (symbol.modifiers.includes('callback')) {
