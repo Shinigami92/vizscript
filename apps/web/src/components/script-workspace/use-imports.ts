@@ -15,6 +15,7 @@ import { rustDependencies } from '../../graph/cargo-project';
 import { crateModule, crateStubs } from '../../graph/crate-types';
 import type { GraphClient } from '../../graph/graph-client';
 import { languageOf } from '../../graph/languages';
+import { pythonDistribution } from '../../graph/module-info';
 import { packageVersion } from '../../graph/npm-project';
 import { NpmTypes, packageName } from '../../graph/npm-types';
 import type { ExternalName } from '../../graph/project-index';
@@ -24,7 +25,13 @@ import {
   godotRoot,
   libraryNames,
 } from '../../graph/project-index';
-import { stubVersion, TypeshedStubs } from '../../graph/python-stubs';
+import { packageTypes, pythonPackageVersion } from '../../graph/pypi-types';
+import { normalizeName, pythonDependencies } from '../../graph/python-project';
+import {
+  packageSource,
+  stubVersion,
+  TypeshedStubs,
+} from '../../graph/python-stubs';
 import type { FileLinkSource } from '../../monaco/file-links';
 import type { ResolveReference } from './symbol-lookup';
 import type { ScriptWorkspaceProps } from './types';
@@ -358,15 +365,70 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
    * `HTTPResponse`, where typeshed says `Any`).
    */
   async function pythonExports(module: string): Promise<ScriptSymbol[]> {
-    const [{ stub }, read] = await Promise.all([
+    const [{ stub }, packaged, read] = await Promise.all([
       client.library(props.path, module),
+      packageExports(module),
       typeshedFor(stubVersion(deps.version?.()))
         .exportsOf(module)
         .catch(() => []),
     ]);
     const own = stub ? await stubExports(stub) : [];
+    // PEP 561: the package's own types before typeshed's stubs of it.
+    const result = [...own];
     const names = new Set(own.map((s) => s.name));
-    return [...own, ...read.filter((s) => !names.has(s.name))];
+    for (const symbol of [...packaged, ...read]) {
+      if (!names.has(symbol.name)) {
+        names.add(symbol.name);
+        result.push(symbol);
+      }
+    }
+
+    return result;
+  }
+
+  /** Readers of packages' own typed files, by `name@version`. */
+  const packageStubs = new Map<string, Promise<TypeshedStubs | undefined>>();
+
+  /**
+   * Exports of a module of a package the project depends on, from its own
+   * typed files (its wheel on PyPI, through the server), in the locked or
+   * pinned version; none for packages without types (typeshed then).
+   */
+  async function packageExports(module: string): Promise<ScriptSymbol[]> {
+    const top = module.split('.')[0] ?? '';
+    const wanted = normalizeName(pythonDistribution(top));
+    const dependency = (
+      await pythonDependencies(props.files, props.readFile, props.path)
+    ).find((d) => normalizeName(d.name) === wanted);
+    if (!dependency || dependency.local) {
+      return [];
+    }
+
+    const key = `${wanted}@${pythonPackageVersion(dependency)}`;
+    let stubs = packageStubs.get(key);
+    if (!stubs) {
+      stubs = packageTypes(wanted, pythonPackageVersion(dependency)).then(
+        (found) =>
+          found
+            ? new TypeshedStubs(
+                (raw) =>
+                  client.prepareLibrary(
+                    props.path,
+                    raw,
+                    stubVersion(deps.version?.())
+                  ),
+                (source, fileName) =>
+                  client.parse(source, fileName, undefined, {
+                    background: true,
+                  }),
+                packageSource(found.files)
+              )
+            : undefined
+      );
+      packageStubs.set(key, stubs);
+    }
+
+    return (await stubs)?.exportsOf(module).catch(() => []) ?? [];
   }
 
   /**

@@ -40,6 +40,11 @@ const PYTHON_DISTRIBUTIONS: Readonly<Record<string, string>> = {
   win32api: 'pywin32',
 };
 
+/** The distribution a top-level Python module comes from (`PIL` → `pillow`). */
+export function pythonDistribution(top: string): string {
+  return PYTHON_DISTRIBUTIONS[top] ?? top;
+}
+
 const RUST_BUILTIN = new Set(['std', 'core', 'alloc', 'proc_macro', 'test']);
 const RUST_LOCAL = new Set(['crate', 'self', 'super']);
 
