@@ -8,6 +8,7 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  applyImportChain,
   applyInValue,
   applyTextOp,
   removeModifier,
@@ -508,6 +509,13 @@ export function applyPythonOp(
     return applyInValue(text, op, PYTHON_TYPES, (host) =>
       applyPythonOp(host, op.op, fileName, options)
     );
+  }
+
+  const chain = applyImportChain(text, op, (current, next) =>
+    applyPythonOp(current, next, fileName, options)
+  );
+  if (chain) {
+    return chain;
   }
 
   return applyTextOp(

@@ -1,5 +1,5 @@
 import type { GraphOp, OpResult, ParseOptions } from '@vizscript/core';
-import { applyInValue, applyTextOp } from '@vizscript/core';
+import { applyImportChain, applyInValue, applyTextOp } from '@vizscript/core';
 import { declarations } from './declarations';
 import { parseTypeScript } from './lower';
 import { quoteOf, TYPESCRIPT_SYNTAX } from './syntax';
@@ -26,6 +26,13 @@ export function applyTypeScriptOp(
     return applyInValue(text, op, TYPESCRIPT_TYPES, (host) =>
       applyTypeScriptOp(host, op.op, fileName, options)
     );
+  }
+
+  const chain = applyImportChain(text, op, (current, next) =>
+    applyTypeScriptOp(current, next, fileName, options)
+  );
+  if (chain) {
+    return chain;
   }
 
   return applyTextOp(

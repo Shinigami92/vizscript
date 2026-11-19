@@ -12,6 +12,7 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  applyImportChain,
   applyInValue,
   applyTextOp,
   checkName,
@@ -843,6 +844,13 @@ export function applyRustOp(
     return applyInValue(text, op, RUST_TYPES, (host) =>
       applyRustOp(host, op.op, fileName, options)
     );
+  }
+
+  const chain = applyImportChain(text, op, (current, next) =>
+    applyRustOp(current, next, fileName, options)
+  );
+  if (chain) {
+    return chain;
   }
 
   const doc = parseRustDocument(text, fileName, options);

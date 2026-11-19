@@ -37,8 +37,9 @@ function moduleOf(doc: GraphDocument, request: ImportRequest): string {
 
 /**
  * `import { name } from './x';` (or `import name from` for a default
- * export), joined into an existing import of the module when there is one,
- * in the quotes and semicolon style of the file's imports.
+ * export; `import type` for a type-only request), joined into an existing
+ * import of the module when there is one, in the quotes and semicolon style
+ * of the file's imports.
  */
 export function addTypeScriptImport(
   text: string,
@@ -48,8 +49,9 @@ export function addTypeScriptImport(
 ): OpResult {
   const module = moduleOf(doc, request);
   const { name, imported } = request;
+  const typeOnly = request.typeOnly === true && imported !== '*';
   if (imported !== '*' && imported !== 'default') {
-    const joined = joinImport(doc, module, name, imported, text);
+    const joined = joinImport(doc, module, name, imported, text, typeOnly);
     if (joined) {
       return { ok: true, edits: [joined] };
     }
@@ -71,6 +73,6 @@ export function addTypeScriptImport(
     names = `{ ${imported === name ? name : `${imported} as ${name}`} }`;
   }
 
-  const line = `import ${names} from ${quote}${module}${quote}${semicolon}`;
+  const line = `import ${typeOnly ? 'type ' : ''}${names} from ${quote}${module}${quote}${semicolon}`;
   return { ok: true, edits: [insertImport(text, doc, syntax, line)] };
 }

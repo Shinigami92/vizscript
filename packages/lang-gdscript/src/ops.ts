@@ -11,6 +11,7 @@ import type {
   TypeSystemInfo,
 } from '@vizscript/core';
 import {
+  applyImportChain,
   applyInValue,
   applyTextOp,
   lineStart,
@@ -705,6 +706,13 @@ export function applyGDScriptOp(
     return applyInValue(text, op, GDSCRIPT_TYPES, (host) =>
       applyGDScriptOp(host, op.op, fileName, options)
     );
+  }
+
+  const chain = applyImportChain(text, op, (current, next) =>
+    applyGDScriptOp(current, next, fileName, options)
+  );
+  if (chain) {
+    return chain;
   }
 
   return applyTextOp(

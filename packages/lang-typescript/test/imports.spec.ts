@@ -200,6 +200,47 @@ function useGreet(
   return applyTextEdits(text, result.edits);
 }
 
+/** Sets `f`'s return type with two type-only imports. */
+function setReturn(text: string): string {
+  const fn = parseTypeScript(text, 'src/main.ts').symbols?.find(
+    (s) => s.name === 'f'
+  );
+  const result = applyTypeScriptOp(
+    text,
+    {
+      type: 'withImport',
+      import: {
+        path: 'src/types.ts',
+        from: 'src/main.ts',
+        name: 'User',
+        imported: 'User',
+        typeOnly: true,
+      },
+      op: {
+        type: 'withImport',
+        import: {
+          path: 'src/types.ts',
+          from: 'src/main.ts',
+          name: 'Role',
+          imported: 'Role',
+          typeOnly: true,
+        },
+        op: {
+          type: 'setReturnType',
+          symbol: fn?.id ?? '',
+          typeText: 'Map<Role, User>',
+        },
+      },
+    },
+    'src/main.ts'
+  );
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+
+  return applyTextEdits(text, result.edits);
+}
+
 describe('adding imports', () => {
   it('adds an import on top', () => {
     expect(useGreet('function f() {\n}\n')).toBe(
@@ -239,6 +280,19 @@ describe('adding imports', () => {
       useGreet("import { greet } from './util';\n\nfunction f() {\n}\n")
     ).toBe(
       "import { greet } from './util';\n\nfunction f() {\n  greet();\n}\n"
+    );
+  });
+
+  it('imports a type as type-only, joined into a type import', () => {
+    expect(setReturn('function f() {\n}\n')).toBe(
+      "import type { User, Role } from './types';\n\nfunction f(): Map<Role, User> {\n  return;\n}\n"
+    );
+    expect(
+      setReturn(
+        "import { load } from './types';\nimport type { Id } from './types';\n\nfunction f() {\n}\n"
+      )
+    ).toBe(
+      "import { load } from './types';\nimport type { Id, User, Role } from './types';\n\nfunction f(): Map<Role, User> {\n  return;\n}\n"
     );
   });
 

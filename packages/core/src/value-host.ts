@@ -1,6 +1,8 @@
 import type { SourceRange } from './ir';
 import { failed, succeeded } from './op-result';
 import type { GraphOp, OpResult, TextEdit, TypeSystemInfo } from './ops';
+import { applyTextEdits } from './ops';
+import { diffEdits } from './reconcile';
 
 /** The value of a function input as a file of its own, see `valueHost`. */
 export interface ValueHost {
@@ -70,4 +72,34 @@ export function applyInValue(
   }
 
   return succeeded(edits);
+}
+
+/**
+ * Several imports for one op (`withImport` around `withImport`): each is
+ * written into the code parsed anew, so names of one module end up in one
+ * import; the whole is one change (one undo step). `undefined`: not such
+ * an op.
+ */
+export function applyImportChain(
+  text: string,
+  op: GraphOp,
+  apply: (text: string, op: GraphOp) => OpResult
+): OpResult | undefined {
+  if (op.type !== 'withImport' || op.op.type !== 'withImport') {
+    return undefined;
+  }
+
+  const imported = apply(text, { type: 'addImport', import: op.import });
+  if (!imported.ok) {
+    return imported;
+  }
+
+  const between = applyTextEdits(text, imported.edits);
+  const used = apply(between, op.op);
+  return used.ok
+    ? {
+        ok: true,
+        edits: diffEdits(text, applyTextEdits(between, used.edits)),
+      }
+    : used;
 }

@@ -35,6 +35,11 @@ export interface ImportRequest {
    * are not used then.
    */
   module?: string;
+  /**
+   * Only used as a type: written as a type-only import where the language
+   * has them (TypeScript's `import type { User }`).
+   */
+  typeOnly?: boolean;
 }
 
 function dirname(path: string): string {

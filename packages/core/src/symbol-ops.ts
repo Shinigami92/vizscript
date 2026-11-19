@@ -430,7 +430,9 @@ export function joinImport(
   module: string,
   name: string,
   imported: string,
-  text?: string
+  text?: string,
+  /** Joins a type-only import (`import type { … }`) instead. */
+  typeOnly = false
 ): TextEdit | undefined {
   const listed = (doc.symbols ?? []).filter(
     (s) =>
@@ -438,7 +440,11 @@ export function joinImport(
       s.module === module &&
       s.imported !== '*' &&
       s.imported !== 'default' &&
-      !s.modifiers.includes('type')
+      (typeOnly
+        ? text !== undefined &&
+          s.declarationRange !== undefined &&
+          /^import\s+type\b/.test(text.slice(s.declarationRange.start))
+        : !s.modifiers.includes('type'))
   );
   const statement = listed.at(-1)?.declarationRange;
   const last = listed
