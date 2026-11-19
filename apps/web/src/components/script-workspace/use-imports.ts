@@ -37,6 +37,11 @@ import {
   TypeshedStubs,
 } from '../../graph/python-stubs';
 import { isUncallableImport } from '../../graph/symbols';
+import type { WorkspacePackage } from '../../graph/workspace-packages';
+import {
+  resolveWorkspaceImport,
+  workspacePackages,
+} from '../../graph/workspace-packages';
 import type { FileLinkSource } from '../../monaco/file-links';
 import type { ResolveReference } from './symbol-lookup';
 import type { ScriptWorkspaceProps } from './types';
@@ -140,10 +145,34 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     reference: ModuleReference
   ): { path: string; symbol?: string } | undefined {
     const files = props.files;
+    const exists = (p: string): boolean => files?.has(p) === true;
     const path = files
-      ? resolveModuleReference(props.path, reference, (p) => files.has(p))
+      ? (resolveModuleReference(props.path, reference, exists) ??
+        resolveWorkspaceImport(reference.specifier, workspace.value, exists))
       : null;
     return path ? { path, symbol: reference.symbol } : undefined;
+  }
+
+  // ------------------------------------------------ packages of the repo
+
+  /** The repository's own packages by name (a monorepo's `packages/*`). */
+  const workspace = shallowRef<ReadonlyMap<string, WorkspacePackage>>(
+    new Map()
+  );
+  let workspaceRead: Promise<void> | undefined;
+
+  /** Reads the repository's package manifests (once per file list). */
+  function readWorkspace(): Promise<void> {
+    const files = props.files;
+    const read = props.readFile;
+    if (!files || !read || languageOf(props.path) !== 'typescript') {
+      return Promise.resolve();
+    }
+
+    workspaceRead ??= (async (): Promise<void> => {
+      workspace.value = await workspacePackages(files, read);
+    })();
+    return workspaceRead;
   }
 
   const fileLinks = computed<FileLinkSource | undefined>(() => {
@@ -591,7 +620,9 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
         const name = packageName(module);
         if (language === 'typescript' && name === module) {
           const range = await packageRange(name);
-          return range === '' ? [] : npm.exportsOf(name, range);
+          return range === ''
+            ? workspaceExports(module)
+            : npm.exportsOf(name, range);
         }
 
         return [];
@@ -600,6 +631,16 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     }
 
     return exports;
+  }
+
+  /** Exports of a package of the repository (`workspace:`). */
+  async function workspaceExports(module: string): Promise<ScriptSymbol[]> {
+    await readWorkspace();
+    const files = props.files;
+    const entry = files
+      ? resolveWorkspaceImport(module, workspace.value, (p) => files.has(p))
+      : undefined;
+    return entry ? exportsOf(entry) : [];
   }
 
   async function declarationOf(
@@ -684,6 +725,11 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     const imports = (doc.value?.symbols ?? []).filter(
       (s) => s.kind === 'import'
     );
+    // Imports of the repository's own packages are its files.
+    if (imports.some((s) => s.module && packageName(s.module) !== undefined)) {
+      await readWorkspace();
+    }
+
     const paths = doc.value?.libraryPaths ?? [];
     if (
       imports.length === 0 &&
@@ -732,6 +778,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
       exportsByPath.clear();
       parsedFiles.clear();
       libraryCache.clear();
+      workspaceRead = undefined;
     },
   };
 }
