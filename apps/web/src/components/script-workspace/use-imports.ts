@@ -12,7 +12,7 @@ import {
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
-import { ownLibrary, rustDependencies } from '../../graph/cargo-project';
+import { localLibraries, rustDependencies } from '../../graph/cargo-project';
 import {
   crateModule,
   crateStubs,
@@ -486,11 +486,13 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
       return [];
     }
 
-    // The crate's own library, as its binaries and tests name it
-    // (`hsml::parser`): a file of the repository.
-    const own = await ownLibrary(props.files, props.readFile, props.path);
-    if (own?.name === found.crate) {
-      const file = moduleFiles(own.root, found.path).find((f) =>
+    // A crate of the repository: the crate's own library, as its
+    // binaries and tests name it (`hsml::parser`), or a path dependency.
+    const local = (
+      await localLibraries(props.files, props.readFile, props.path)
+    ).find((library) => library.name === found.crate);
+    if (local) {
+      const file = moduleFiles(local.root, found.path).find((f) =>
         props.files?.has(f)
       );
       return file ? exportsOf(file) : [];

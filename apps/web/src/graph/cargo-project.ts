@@ -142,31 +142,10 @@ async function workspaceDependencies(
   read: (path: string) => Promise<string>,
   manifest: string
 ): Promise<Table | undefined> {
-  let dirs = folderOf(manifest);
-  for (;;) {
-    const found = nearest(files, dirs, ['Cargo.toml']);
-    if (!found) {
-      return undefined;
-    }
-
-    try {
-      const workspace = table(
-        parse(await read(found).catch(() => '')).workspace
-      );
-      if (workspace) {
-        return table(workspace.dependencies) ?? {};
-      }
-    } catch {
-      // not TOML: look further up
-    }
-
-    const dir = folderOf(found);
-    if (dir.length === 0) {
-      return undefined;
-    }
-
-    dirs = dir.slice(0, -1);
-  }
+  const workspace = await workspaceManifest(files, read, manifest);
+  return workspace
+    ? (table(table(workspace.toml.workspace)?.dependencies) ?? {})
+    : undefined;
 }
 
 /** Parsed results, by manifest path; read again when a text changes. */
@@ -216,51 +195,147 @@ export async function rustDependencies(
   return dependencies;
 }
 
-/** The library target of a crate, as code of its binaries names it. */
-export interface OwnLibrary {
+/** The library target of a crate of the repository, as code names it. */
+export interface CrateLibrary {
   /** `[lib] name`, else the package's name with `_` for `-`. */
   name: string;
   /** Its root file (`[lib] path`, else `src/lib.rs`). */
   root: string;
 }
 
-/**
- * The library of the crate a file belongs to (the nearest `Cargo.toml`),
- * when the repository has its root file: binaries and tests name it by
- * its crate name (`hsml::parser::parse`).
- */
-export async function ownLibrary(
-  files: ReadonlySet<string> | undefined,
-  read: ((path: string) => Promise<string>) | undefined,
-  path: string
-): Promise<OwnLibrary | undefined> {
-  const manifest = files
-    ? nearest(files, folderOf(path), ['Cargo.toml'])
-    : undefined;
-  if (!files || !read || !manifest) {
-    return undefined;
+/** `dirs` joined with a relative path (`..` goes up). */
+function joinPath(dirs: ReadonlyArray<string>, relative: string): string[] {
+  const result = [...dirs];
+  for (const part of relative.split('/')) {
+    if (part === '..') {
+      result.pop();
+    } else if (part !== '.' && part !== '') {
+      result.push(part);
+    }
   }
 
-  let toml: Table;
+  return result;
+}
+
+async function readToml(
+  read: (path: string) => Promise<string>,
+  path: string
+): Promise<Table | undefined> {
   try {
-    toml = parse(await read(manifest));
+    return parse(await read(path));
   } catch {
     return undefined;
   }
+}
 
-  const lib = table(toml.lib);
-  const pkg = table(toml.package);
+/** The library a `Cargo.toml` declares, when its root file exists. */
+async function libraryOf(
+  files: ReadonlySet<string>,
+  read: (path: string) => Promise<string>,
+  manifest: string
+): Promise<CrateLibrary | undefined> {
+  const toml = files.has(manifest) ? await readToml(read, manifest) : undefined;
+  const lib = table(toml?.lib);
+  const pkg = table(toml?.package);
   const name =
     typeof lib?.name === 'string'
       ? lib.name
       : typeof pkg?.name === 'string'
         ? pkg.name.replaceAll('-', '_')
         : undefined;
-  const root = [
-    ...folderOf(manifest),
-    ...(typeof lib?.path === 'string' ? lib.path : 'src/lib.rs')
-      .replace(/^\.\//, '')
-      .split('/'),
-  ].join('/');
+  const root = joinPath(
+    folderOf(manifest),
+    typeof lib?.path === 'string' ? lib.path : 'src/lib.rs'
+  ).join('/');
   return name && files.has(root) ? { name, root } : undefined;
+}
+
+/** The nearest workspace root's manifest above a manifest. */
+async function workspaceManifest(
+  files: ReadonlySet<string>,
+  read: (path: string) => Promise<string>,
+  manifest: string
+): Promise<{ path: string; toml: Table } | undefined> {
+  let dirs = folderOf(manifest);
+  for (;;) {
+    const found = nearest(files, dirs, ['Cargo.toml']);
+    if (!found) {
+      return undefined;
+    }
+
+    const toml = await readToml(read, found);
+    if (table(toml?.workspace) && toml) {
+      return { path: found, toml };
+    }
+
+    const dir = folderOf(found);
+    if (dir.length === 0) {
+      return undefined;
+    }
+
+    dirs = dir.slice(0, -1);
+  }
+}
+
+/**
+ * The crates of the repository a file can name: its own library and its
+ * path dependencies (`x = { path = "../x" }`, also through the
+ * workspace's `[workspace.dependencies]`), by the name code uses (a
+ * renamed dependency's key).
+ */
+export async function localLibraries(
+  files: ReadonlySet<string> | undefined,
+  read: ((path: string) => Promise<string>) | undefined,
+  path: string
+): Promise<CrateLibrary[]> {
+  const manifest = files
+    ? nearest(files, folderOf(path), ['Cargo.toml'])
+    : undefined;
+  const toml = manifest && read ? await readToml(read, manifest) : undefined;
+  if (!files || !read || !manifest || !toml) {
+    return [];
+  }
+
+  const own = await libraryOf(files, read, manifest);
+  const workspace = await workspaceManifest(files, read, manifest);
+  const shared = table(table(workspace?.toml.workspace)?.dependencies);
+  const found: Array<Promise<CrateLibrary | undefined>> = [];
+  const owners = [
+    toml,
+    ...Object.values(table(toml.target) ?? {}).map((t) => table(t)),
+  ];
+  for (const owner of owners) {
+    for (const [section] of SECTIONS) {
+      for (const [key, value] of Object.entries(
+        table(owner?.[section]) ?? {}
+      )) {
+        let spec = table(value);
+        let base = folderOf(manifest);
+        if (spec?.workspace === true && workspace) {
+          spec = table(shared?.[key]);
+          base = folderOf(workspace.path);
+        }
+
+        if (typeof spec?.path !== 'string') {
+          continue;
+        }
+
+        const renamed = typeof spec.package === 'string';
+        const dependency = [...joinPath(base, spec.path), 'Cargo.toml'].join(
+          '/'
+        );
+        found.push(
+          libraryOf(files, read, dependency).then((library) =>
+            library && renamed
+              ? { ...library, name: key.replaceAll('-', '_') }
+              : library
+          )
+        );
+      }
+    }
+  }
+
+  return [own, ...(await Promise.all(found))].filter(
+    (library): library is CrateLibrary => library !== undefined
+  );
 }

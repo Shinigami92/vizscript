@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cargoDependencies,
   cargoLockVersions,
-  ownLibrary,
+  localLibraries,
   rustDependencies,
 } from '../src/graph/cargo-project';
 
@@ -104,21 +104,21 @@ describe('Cargo manifests', () => {
   });
 });
 
-function library(
+function libraries(
   files: Record<string, string>,
   path: string
-): ReturnType<typeof ownLibrary> {
-  return ownLibrary(
+): ReturnType<typeof localLibraries> {
+  return localLibraries(
     new Set(Object.keys(files)),
     async (p) => files[p] ?? '',
     path
   );
 }
 
-describe('ownLibrary', () => {
-  it('names the library by the package, with _ for -', async () => {
+describe('localLibraries', () => {
+  it('names the own library by the package, with _ for -', async () => {
     expect(
-      await library(
+      await libraries(
         {
           'Cargo.toml': '[package]\nname = "my-tool"\n',
           'src/lib.rs': '',
@@ -126,12 +126,12 @@ describe('ownLibrary', () => {
         },
         'src/cli/run.rs'
       )
-    ).toEqual({ name: 'my_tool', root: 'src/lib.rs' });
+    ).toEqual([{ name: 'my_tool', root: 'src/lib.rs' }]);
   });
 
   it('follows [lib] name and path', async () => {
     expect(
-      await library(
+      await libraries(
         {
           'crates/x/Cargo.toml':
             '[package]\nname = "x"\n\n[lib]\nname = "xlib"\npath = "src/x.rs"\n',
@@ -139,15 +139,38 @@ describe('ownLibrary', () => {
         },
         'crates/x/src/main.rs'
       )
-    ).toEqual({ name: 'xlib', root: 'crates/x/src/x.rs' });
+    ).toEqual([{ name: 'xlib', root: 'crates/x/src/x.rs' }]);
   });
 
-  it('is undefined for a crate without a library', async () => {
+  it('adds path dependencies, also from the workspace', async () => {
     expect(
-      await library(
+      await libraries(
+        {
+          'Cargo.toml':
+            '[workspace]\nmembers = ["crates/*"]\n\n[workspace.dependencies]\nshared-core = { path = "crates/core" }\n',
+          'crates/app/Cargo.toml':
+            '[package]\nname = "app"\n\n[dependencies]\nshared-core = { workspace = true }\nutil = { path = "../util-lib", package = "util-lib" }\nserde = "1"\n',
+          'crates/app/src/main.rs': '',
+          'crates/core/Cargo.toml': '[package]\nname = "shared-core"\n',
+          'crates/core/src/lib.rs': '',
+          'crates/util-lib/Cargo.toml': '[package]\nname = "util-lib"\n',
+          'crates/util-lib/src/lib.rs': '',
+        },
+        'crates/app/src/main.rs'
+      )
+    ).toEqual([
+      { name: 'shared_core', root: 'crates/core/src/lib.rs' },
+      // Renamed: code names it by its key.
+      { name: 'util', root: 'crates/util-lib/src/lib.rs' },
+    ]);
+  });
+
+  it('is empty for a crate without a library', async () => {
+    expect(
+      await libraries(
         { 'Cargo.toml': '[package]\nname = "app"\n', 'src/main.rs': '' },
         'src/main.rs'
       )
-    ).toBeUndefined();
+    ).toEqual([]);
   });
 });
