@@ -28,7 +28,7 @@ const PACKAGE_LIMIT = 250;
  * placeholder packages there, and `@types/node` is large, so they stay
  * unresolved.
  */
-const SKIPPED = new Set([
+export const NODE_BUILTINS: ReadonlySet<string> = new Set([
   'node',
   'assert',
   'async_hooks',
@@ -255,7 +255,7 @@ async function readPackage(
     if (
       !dependency ||
       dependency === name ||
-      SKIPPED.has(dependency) ||
+      NODE_BUILTINS.has(dependency) ||
       dependencies.has(dependency)
     ) {
       return;
@@ -382,7 +382,7 @@ export async function npmDeclarations(
   const seen = new Set<string>();
   const files: LibFile[] = [];
   let level: Dependency[] = roots
-    .filter(([name]) => !SKIPPED.has(name))
+    .filter(([name]) => !NODE_BUILTINS.has(name))
     .map(([name, range]) => ({ options: [{ name, range }] }));
   while (level.length > 0 && files.length < limit) {
     const key = (dependency: Dependency): string =>
