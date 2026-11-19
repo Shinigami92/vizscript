@@ -19,6 +19,7 @@ import {
   isArrayType,
   linkImports,
   linkSymbolGraphs,
+  withoutTypeParams,
 } from '@vizscript/core';
 import { patternAnnotation, typeFromAnnotation } from './annotations';
 import { TYPESCRIPT_CONTAINER_OPS } from './container-ops';
@@ -72,6 +73,24 @@ class DocumentLowering implements DocumentContext {
     return count === 0 ? `fn:${name}` : `fn:${name}~${count}`;
   }
 
+  /**
+   * What a call of a function gives: its declared type, with its type
+   * parameters as wildcards (`first<T>(…): T` gives `any` until the
+   * checker knows).
+   */
+  private resultType(fn: {
+    returnType?: t.FunctionDeclaration['returnType'];
+    typeParameters?: t.FunctionDeclaration['typeParameters'];
+  }): DataType {
+    const params =
+      fn.typeParameters?.type === 'TSTypeParameterDeclaration'
+        ? fn.typeParameters.params.map((p) =>
+            this.text.slice(p.start ?? 0, p.end ?? 0)
+          )
+        : [];
+    return withoutTypeParams(typeFromAnnotation(fn.returnType), params);
+  }
+
   private collectSignatures(program: t.Program): void {
     const visit = (stmt: t.Statement): void => {
       if (stmt.type === 'ExportNamedDeclaration' && stmt.declaration) {
@@ -92,10 +111,7 @@ class DocumentLowering implements DocumentContext {
           stmt.id.name,
           stmt.params.map((p) => patternName(p, this.text))
         );
-        this.functionReturnTypes.set(
-          stmt.id.name,
-          typeFromAnnotation(stmt.returnType)
-        );
+        this.functionReturnTypes.set(stmt.id.name, this.resultType(stmt));
       }
 
       if (stmt.type === 'VariableDeclaration') {
@@ -118,10 +134,7 @@ class DocumentLowering implements DocumentContext {
               decl.id.name,
               init.params.map((p) => patternName(p, this.text))
             );
-            this.functionReturnTypes.set(
-              decl.id.name,
-              typeFromAnnotation(init.returnType)
-            );
+            this.functionReturnTypes.set(decl.id.name, this.resultType(init));
           }
         }
       }

@@ -53,6 +53,59 @@ export function arrayElementType(type: DataType): DataType {
   return type.endsWith('[]') ? type.slice(0, -2) || 'any' : 'any';
 }
 
+/** The name a type parameter declares: `T` of `const T extends X = Y`. */
+export function typeParamName(param: string): string {
+  return /^(?:(?:const|in|out)\s+)*([\w$]+)/.exec(param)?.[1] ?? param;
+}
+
+/**
+ * A type a generic declares, where it is used: its type parameters are
+ * unknown there, like UE's wildcard pins, so they become `any` (`T` →
+ * `any`, `T[]` → `array`, `Map<K, V>` → `Map<any, any>`) until a checker
+ * knows the real types.
+ */
+export function withoutTypeParams(
+  type: DataType,
+  params: ReadonlyArray<string> | undefined
+): DataType {
+  if (!params || params.length === 0) {
+    return type;
+  }
+
+  const names = params
+    .map((p) => typeParamName(p).replaceAll('$', String.raw`\$`))
+    .join('|');
+  const replaced = type.replaceAll(
+    new RegExp(String.raw`(?<![\w$.])(?:${names})(?![\w$])`, 'g'),
+    'any'
+  );
+  // Containers of unknown elements have names of their own.
+  if (replaced === 'any[]') {
+    return 'array';
+  }
+
+  if (isMapType(replaced)) {
+    return mapOf(mapKeyType(replaced), mapValueType(replaced));
+  }
+
+  return isSetType(replaced) ? setOf(setElementType(replaced)) : replaced;
+}
+
+/**
+ * Whether `value` fills in the wildcards of `pin`: `Promise<any>` is
+ * refined by `Promise<string>`.
+ */
+function fillsWildcards(pin: DataType, value: DataType): boolean {
+  if (!/\bany\b/.test(pin)) {
+    return false;
+  }
+
+  const pattern = pin
+    .replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+    .replaceAll(/\bany\b/g, '.+');
+  return new RegExp(`^${pattern}$`).test(value);
+}
+
 /** The array type of an element type (`array` for `any`). */
 export function arrayOf(element: DataType): DataType {
   return element === 'any' || element === '' ? 'array' : `${element}[]`;
@@ -172,7 +225,8 @@ export function refinesType(pin: DataType, value: DataType): boolean {
     pin === 'any' ||
     (pin === 'array' && isArrayType(value)) ||
     (pin === 'map' && isMapType(value)) ||
-    (pin === 'set' && isSetType(value))
+    (pin === 'set' && isSetType(value)) ||
+    fillsWildcards(pin, value)
   );
 }
 

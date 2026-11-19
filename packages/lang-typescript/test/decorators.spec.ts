@@ -1,5 +1,5 @@
 import { summarizeGraph } from '@vizscript/core';
-import type { GraphOp } from '@vizscript/core';
+import type { GraphOp, ScriptSymbol } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import {
   applyTypeScriptOp,
@@ -167,3 +167,80 @@ describe('decorators and type parameters in symbols', () => {
     ).toContain("get(@Query('b') b?: string, @Param('a') a: string)");
   });
 });
+
+describe('calls of generics', () => {
+  it('give wildcards for type parameters until the checker knows', () => {
+    const doc = parseTypeScript(
+      [
+        'function first<T>(items: T[]): T {',
+        '  return items[0] as T;',
+        '}',
+        'function pair<K, V>(key: K, value: V): Map<K, V> {',
+        '  return new Map([[key, value]]);',
+        '}',
+        'const n = first([1, 2]);',
+        "const m = pair('a', 1);",
+        '',
+      ].join('\n'),
+      'a.ts'
+    );
+    const nodes = doc.functions.flatMap((f) => f.nodes);
+    const result = (title: string): string | undefined =>
+      nodes
+        .find((n) => n.kind === 'call' && n.title === title)
+        ?.pins.find((p) => p.id === 'return')?.type;
+    expect(result('first')).toBe('any');
+    expect(result('pair')).toBe('map');
+    // Inside the generic, T is a type of its own.
+    expect(symbolOf(doc.symbols, 'function:first').params?.[0]?.dataType).toBe(
+      'T[]'
+    );
+  });
+
+  it('give wildcards for imported generics', () => {
+    const declaration: ScriptSymbol = {
+      id: 'function:first',
+      kind: 'function',
+      name: 'first',
+      scope: '',
+      range: { start: 0, end: 0 },
+      nameRange: { start: 0, end: 0 },
+      dataType: 'function',
+      modifiers: ['export'],
+      typeParams: ['T'],
+      params: [
+        {
+          name: 'items',
+          nameRange: { start: 0, end: 0 },
+          dataType: 'T[]',
+        },
+      ],
+      returnType: 'T',
+    };
+    const doc = parseTypeScript(
+      "import { first } from './util';\n\nconst n = first(list);\n",
+      'a.ts',
+      { imports: [{ name: 'first', declaration }] }
+    );
+    const call = doc.functions
+      .flatMap((f) => f.nodes)
+      .find((n) => n.kind === 'call' && n.title === 'first');
+    expect(
+      call?.pins
+        .filter((p) => p.kind === 'data')
+        .map((p) => `${p.direction} ${p.name}:${p.type}`)
+    ).toEqual(['in this:object', 'in items:array', 'out :any']);
+  });
+});
+
+function symbolOf(
+  symbols: ReadonlyArray<ScriptSymbol> | undefined,
+  id: string
+): ScriptSymbol {
+  const found = symbols?.find((s) => s.id === id);
+  if (!found) {
+    throw new Error(id);
+  }
+
+  return found;
+}

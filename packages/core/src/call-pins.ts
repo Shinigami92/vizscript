@@ -15,7 +15,7 @@ import type {
 } from './ir';
 import type { ScriptSymbol, SymbolParam } from './symbols';
 import { qualifiedName } from './symbols';
-import { arrayElementType } from './types';
+import { arrayElementType, withoutTypeParams } from './types';
 
 export interface CallPinOptions {
   /** Argument written for a skipped parameter (`undefined`, `null`). */
@@ -533,6 +533,32 @@ export function namedContainerNode(
  * Missing arguments become unconnected pins that insert the argument when
  * they get a value or a wire.
  */
+/**
+ * A generic's signature as a call sees it: its type parameters are
+ * wildcards there (`first<T>(items: T[]): T` takes an `array`, gives `any`).
+ */
+function genericUse(symbol: ScriptSymbol): ScriptSymbol {
+  const typeParams = symbol.typeParams;
+  if (!typeParams || typeParams.length === 0) {
+    return symbol;
+  }
+
+  return {
+    ...symbol,
+    ...(symbol.returnType === undefined
+      ? {}
+      : { returnType: withoutTypeParams(symbol.returnType, typeParams) }),
+    ...(symbol.params
+      ? {
+          params: symbol.params.map((p) => ({
+            ...p,
+            dataType: withoutTypeParams(p.dataType, typeParams),
+          })),
+        }
+      : {}),
+  };
+}
+
 export function completeCallPins(
   doc: GraphDocument,
   text: string,
@@ -562,12 +588,13 @@ export function completeCallPins(
         continue;
       }
 
-      if (symbol && !own.has(symbol)) {
-        typeResult(fn, node, symbol);
+      const called = symbol ? genericUse(symbol) : undefined;
+      if (symbol && called && !own.has(symbol)) {
+        typeResult(fn, node, called);
       }
 
-      const params = symbol?.params;
-      if (symbol && params) {
+      const params = called?.params;
+      if (called && params) {
         node.pins = withParamPins(text, node, params, options);
         if (takesMoreArguments(params)) {
           node.addPin = true;

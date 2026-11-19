@@ -1,4 +1,6 @@
 import type { SourceRange } from '@vizscript/core';
+import { resolveTypes } from '@vizscript/core';
+import { parseTypeScript } from '@vizscript/lang-typescript';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { checkerTypesAt } from '../src/monaco/checker-types';
@@ -170,5 +172,37 @@ describe('type texts', () => {
         defaultText: "'x'",
       }),
     ]);
+  });
+});
+
+describe('calls of generics with the checker', () => {
+  it('get the types the checker infers for the type parameters', async () => {
+    const text = [
+      'function first<T>(items: T[]): T {',
+      '  return items[0] as T;',
+      '}',
+      'function pair<K, V>(key: K, value: V): Map<K, V> {',
+      '  return new Map([[key, value]]);',
+      '}',
+      'const n = first([1, 2]);',
+      "const m = pair('a', 1);",
+      '',
+    ].join('\n');
+    const doc = await resolveTypes(
+      parseTypeScript(text, 'main.ts'),
+      text,
+      '/main.ts',
+      {
+        typesAt: (_text, _file, ranges) =>
+          Promise.resolve(
+            checkerTypesAt(ts, program(text), '/main.ts', ranges)
+          ),
+      }
+    );
+    const sets = doc.functions
+      .flatMap((f) => f.nodes)
+      .filter((n) => n.kind === 'setVar')
+      .map((n) => n.pins.find((p) => p.id === 'value')?.type);
+    expect(sets).toEqual(['number', 'Map<string, number>']);
   });
 });
