@@ -8,6 +8,7 @@ import FileTree from '../components/FileTree.vue';
 import OutdatedDraftNotice from '../components/OutdatedDraftNotice.vue';
 import ScriptWorkspace from '../components/ScriptWorkspace.vue';
 import { useFileSession } from '../composables/use-file-session';
+import { useTabActions } from '../composables/use-tab-actions';
 import { useToasts } from '../composables/use-toasts';
 import { localLayoutStore } from '../graph/layout-store';
 import { shortcut } from '../graph/source';
@@ -187,35 +188,16 @@ function showNoFile(): void {
   void router.push({ name: 'local', params: { id: id.value, path: [] } });
 }
 
-function closeTab(tabPath: string): void {
-  const next = closeSessionTab(tabPath);
-  if (next !== undefined) {
-    if (next) {
-      selectFile(next);
-    } else {
-      showNoFile();
-    }
-  }
-}
-
-function closeOtherTabs(tabPath: string): void {
-  closeSessionOthers(tabPath);
-  if (tabPath !== shown.value) {
-    selectFile(tabPath);
-  }
-}
-
-function closeAllTabs(): void {
-  closeSessionAll();
-  showNoFile();
-}
-
-function pinFile(next: string): void {
-  fileTabs.open(next, { preview: false });
-  if (next !== path.value) {
-    selectFile(next);
-  }
-}
+const { closeTab, closeOtherTabs, closeAllTabs, pinFile } = useTabActions(
+  {
+    file,
+    tabs: fileTabs,
+    closeTab: closeSessionTab,
+    closeOtherTabs: closeSessionOthers,
+    closeAllTabs: closeSessionAll,
+  },
+  { path, selectFile, showNoFile }
+);
 
 watch(id, open, { immediate: true });
 watch([entries, path], loadFile, { immediate: true });

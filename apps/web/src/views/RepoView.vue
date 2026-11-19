@@ -16,6 +16,7 @@ import OutdatedDraftNotice from '../components/OutdatedDraftNotice.vue';
 import RepoAccessHint from '../components/RepoAccessHint.vue';
 import ScriptWorkspace from '../components/ScriptWorkspace.vue';
 import { useFileSession } from '../composables/use-file-session';
+import { useTabActions } from '../composables/use-tab-actions';
 import { useToasts } from '../composables/use-toasts';
 import type { LayoutStore } from '../graph/layout-store';
 import { repoLayoutStore } from '../graph/layout-store';
@@ -187,36 +188,16 @@ function showNoFile(): void {
   void router.push({ name: 'repo', params: { ...route.params, path: [] } });
 }
 
-function closeTab(tabPath: string): void {
-  const next = closeSessionTab(tabPath);
-  if (next !== undefined) {
-    if (next) {
-      selectFile(next);
-    } else {
-      showNoFile();
-    }
-  }
-}
-
-function closeOtherTabs(tabPath: string): void {
-  closeSessionOthers(tabPath);
-  if (tabPath !== file.value?.path) {
-    selectFile(tabPath);
-  }
-}
-
-function closeAllTabs(): void {
-  closeSessionAll();
-  showNoFile();
-}
-
-/** Double-click in the explorer: open in a tab that stays. */
-function pinFile(next: string): void {
-  fileTabs.open(next, { preview: false });
-  if (next !== path.value) {
-    selectFile(next);
-  }
-}
+const { closeTab, closeOtherTabs, closeAllTabs, pinFile } = useTabActions(
+  {
+    file,
+    tabs: fileTabs,
+    closeTab: closeSessionTab,
+    closeOtherTabs: closeSessionOthers,
+    closeAllTabs: closeSessionAll,
+  },
+  { path, selectFile, showNoFile }
+);
 
 // Also when signing in or out (an expired session): another source.
 watch([provider, owner, repo, ref_, source], loadTree, { immediate: true });
