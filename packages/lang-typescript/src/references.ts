@@ -312,14 +312,18 @@ export function typeScriptReferences(
 
     const literal = specifierOf(node);
     const range = literal ? rangeOf(literal) : undefined;
-    if (!literal || !range || !isRelative(literal.value)) {
+    if (!literal || !range || /^[a-z]+:/i.test(literal.value)) {
       return;
     }
 
+    // A package (`@acme/api`): no file of its own; the repository may
+    // have it as a package (`workspace:`), which the app knows.
     references.push({
       range: { start: range.start + 1, end: range.end - 1 },
       specifier: literal.value,
-      candidates: moduleCandidates(literal.value),
+      candidates: isRelative(literal.value)
+        ? moduleCandidates(literal.value)
+        : [],
     });
   });
   return references.toSorted((a, b) => a.range.start - b.range.start);

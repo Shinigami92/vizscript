@@ -19,7 +19,7 @@ function uses(text: string): Array<[string, string, string | undefined]> {
 }
 
 describe('typeScriptReferences', () => {
-  it('finds relative module specifiers', () => {
+  it('finds module specifiers', () => {
     const text = [
       "import { a } from './a';",
       "import type { B } from '../b.js';",
@@ -39,12 +39,24 @@ describe('typeScriptReferences', () => {
       '../b.js',
       './c',
       './d',
+      'side-effect',
       './e',
       './f',
       './g',
       './h',
       './worker.ts',
     ]);
+  });
+
+  it('gives packages no files of their own', () => {
+    const [pkg] = typeScriptReferences(
+      "import type { TreeEntry } from '@acme/api';\nimport fs from 'node:fs';",
+      'a.ts'
+    );
+    expect(pkg).toMatchObject({ specifier: '@acme/api', candidates: [] });
+    expect(typeScriptReferences("import fs from 'node:fs';", 'a.ts')).toEqual(
+      []
+    );
   });
 
   it('works for JavaScript with JSX', () => {
