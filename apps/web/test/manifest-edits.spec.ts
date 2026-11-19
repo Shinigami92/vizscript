@@ -33,6 +33,12 @@ describe('addNpmDependency', () => {
     );
   });
 
+  it('writes a package of the repository with its protocol', () => {
+    expect(
+      addNpmDependency(PACKAGE, '@acme/api', 'workspace:*', 'runtime')
+    ).toContain('"@acme/api": "workspace:*",\n    "pinia"');
+  });
+
   it('adds a missing section at the end, and leaves listed packages', () => {
     // A new section takes the file's style.
     expect(addNpmDependency(PACKAGE, 'vitest', '5.0.5', 'dev')).toBe(`{

@@ -155,7 +155,9 @@ export function addNpmDependency(
   const style = npmRangeStyle(
     /"\s*:\s*"[\^~]?\d/.test(sectionText) ? sectionText : text
   );
-  const entry = `${JSON.stringify(name)}: ${JSON.stringify(`${style}${version}`)}`;
+  // A protocol (`workspace:*`) is written as it is.
+  const range = /^[a-z]+:/.test(version) ? version : `${style}${version}`;
+  const entry = `${JSON.stringify(name)}: ${JSON.stringify(range)}`;
   if (!target) {
     // A new section at the end of the file's object.
     const last = root.at(-1);

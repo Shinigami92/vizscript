@@ -197,3 +197,12 @@ export function resolveWorkspaceImport(
 
   return undefined;
 }
+
+/** A module of the repository Add a library offers. */
+export interface LocalModule {
+  /** As shown and imported: a package's name, or the file's relative path. */
+  label: string;
+  kind: 'package' | 'file';
+  /** The file it is (a package's entry). */
+  path: string;
+}

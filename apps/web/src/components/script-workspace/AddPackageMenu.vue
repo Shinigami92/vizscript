@@ -3,6 +3,7 @@ import type { PackageSearchResult } from '@vizscript/api-contract';
 import type {
   DependencyKind,
   GraphOp,
+  ImportRequest,
   ProjectDependency,
   ScriptSymbol,
 } from '@vizscript/core';
@@ -23,14 +24,16 @@ import {
 } from '../../graph/add-package';
 import { projectDependencies } from '../../graph/project-dependencies';
 import { SYMBOL_ICONS } from '../../graph/symbols';
+import type { LocalModule } from '../../graph/workspace-packages';
 import type { ActionEntry } from '../ActionMenu.vue';
 import ActionMenu from '../ActionMenu.vue';
 
 /**
  * "+" in My Script's Imports: search a library in the language's registry
- * (through the server), pick what to import from it, and how the manifest
- * lists it. Writes the import into the file and the dependency into the
- * manifest (an open tab with unsaved changes), one undo step for both.
+ * (through the server), or a package or file of the repository, pick what
+ * to import from it, and how the manifest lists it. Writes the import into
+ * the file and the dependency into the manifest (an open tab with unsaved
+ * changes), one undo step for both.
  */
 const props = defineProps<{
   at: { x: number; y: number };
@@ -58,6 +61,12 @@ const props = defineProps<{
    * warning: the import is there already).
    */
   listOnly?: string;
+  /** Packages of the repository and files of this file's package. */
+  localModules?: () => Promise<LocalModule[]>;
+  /** What one of them exports. */
+  localExports?: (module: LocalModule) => Promise<ScriptSymbol[]>;
+  /** Writes an import of a file of the repository (no manifest). */
+  importFile?: (request: ImportRequest) => Promise<void>;
 }>();
 
 const emit = defineEmits<{ close: [] }>();
@@ -79,6 +88,8 @@ const picked = shallowRef<{
   result: PackageSearchResult;
   /** The manifest lists it already: only the import is written. */
   listed?: boolean;
+  /** A package or file of the repository. */
+  local?: LocalModule;
   module: string;
   exports: ScriptSymbol[];
   /** Its exports are still being read (big type packages take a while). */
@@ -177,6 +188,47 @@ async function pick(found: PackageSearchResult): Promise<void> {
   }
 }
 
+/** Modules of the repository, read when the menu opens. */
+const locals = shallowRef<LocalModule[]>([]);
+/** Most of them shown at once (search for the others). */
+const LOCAL_SHOWN = 20;
+
+const localMatches = computed(() => {
+  const text = query.value.trim().toLowerCase();
+  return locals.value
+    .filter((m) =>
+      text === '' ? m.kind === 'package' : m.label.toLowerCase().includes(text)
+    )
+    .slice(0, LOCAL_SHOWN);
+});
+
+/** A package or file of the repository: its exports to import. */
+async function pickLocal(module: LocalModule): Promise<void> {
+  reopen = true;
+  const listedLocal = listed.value.some(
+    (d) => d.local === true && d.name === module.label
+  );
+  const current = {
+    result: {
+      name: module.label,
+      version: module.kind === 'package' ? 'workspace:*' : '',
+    },
+    local: module,
+    // A file needs no manifest entry.
+    ...(listedLocal || module.kind === 'file' ? { listed: true } : {}),
+    module: module.label,
+    exports: [],
+    reading: true,
+  };
+  picked.value = current;
+  const exports = props.localExports
+    ? await props.localExports(module).catch(() => [])
+    : [];
+  if (picked.value === current) {
+    picked.value = { ...current, exports, reading: false };
+  }
+}
+
 /** List-only: the library looked up by its exact name, picked when found. */
 async function lookUp(name: string): Promise<void> {
   query.value = name;
@@ -206,6 +258,16 @@ async function readListed(): Promise<void> {
 
 onMounted(() => {
   void readListed();
+  if (!props.listOnly && props.localModules) {
+    void props
+      .localModules()
+      .then((found) => {
+        locals.value = found;
+        return found;
+      })
+      .catch(() => []);
+  }
+
   if (props.listOnly) {
     void lookUp(props.listOnly);
   }
@@ -244,6 +306,18 @@ function addedMessage(name: string, version: string, target: string): string {
 
 async function add(imported: string | undefined): Promise<void> {
   const chosen = picked.value;
+  const file = chosen?.local?.kind === 'file' ? chosen.local : undefined;
+  if (chosen && file) {
+    // A file of the repository: by its path, no manifest.
+    const { module: _, ...request } = libraryImport(
+      props.path,
+      chosen.module,
+      imported
+    );
+    await props.importFile?.({ ...request, path: file.path });
+    return;
+  }
+
   const target = manifest.value;
   if (!chosen || !target) {
     return;
@@ -300,6 +374,17 @@ const entries = computed((): ActionEntry[] => {
       ];
     }
 
+    const local = localMatches.value.map((module): ActionEntry => ({
+      label: module.label,
+      category: 'In the repository',
+      icon:
+        module.kind === 'package'
+          ? 'i-mdi-package-variant text-sky-400'
+          : 'i-mdi-file-code-outline text-zinc-400',
+      hint: module.kind === 'package' ? 'package' : 'file',
+      keywords: query.value,
+      action: () => void pickLocal(module),
+    }));
     if (query.value === '') {
       const registry =
         ecosystem.value === 'npm'
@@ -314,10 +399,11 @@ const entries = computed((): ActionEntry[] => {
           disabled: `It is added to ${manifest.value}`,
           action: () => undefined,
         },
+        ...local,
       ];
     }
 
-    return results.value.map((result) => ({
+    const found = results.value.map((result) => ({
       label: result.name,
       category: 'Libraries',
       icon: 'i-mdi-package-variant-closed text-amber-400',
@@ -329,6 +415,7 @@ const entries = computed((): ActionEntry[] => {
       ...(result.description ? { detail: result.description } : {}),
       action: () => void pick(result),
     }));
+    return [...local, ...found];
   }
 
   const target = ecosystem.value;
@@ -412,6 +499,10 @@ const title = computed(() => {
   }
 
   const { name, version } = chosen.result;
+  if (chosen.local) {
+    return `Import from ${name}`;
+  }
+
   return chosen.listed
     ? `Import from ${name} ${version}`
     : `Add ${name} ${version}`;

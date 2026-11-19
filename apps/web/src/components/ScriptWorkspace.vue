@@ -198,6 +198,8 @@ const {
   externalTypes,
   declarations: importDeclarations,
   packageOffer,
+  localModules,
+  localExports,
   withNeededImport,
   busy: importsBusy,
   forgetFiles: forgetImportFiles,
@@ -1139,6 +1141,11 @@ defineExpose({
         :add-library="addLibrary"
         :offer="packageOffer"
         :list-only="addingPackage.library"
+        :local-modules="localModules"
+        :local-exports="localExports"
+        :import-file="
+          (request) => onScriptOp({ type: 'addImport', import: request })
+        "
         @close="addingPackage = null"
       />
     </WorkbenchView>

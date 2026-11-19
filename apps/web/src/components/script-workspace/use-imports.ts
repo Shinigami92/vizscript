@@ -9,6 +9,7 @@ import {
   defaultExport,
   exportedSymbols,
   exportedTypeMembers,
+  relativePath,
   resolveModuleReference,
   withReexports,
 } from '@vizscript/core';
@@ -28,7 +29,11 @@ import { pythonDistribution } from '../../graph/module-info';
 import { packageVersion } from '../../graph/npm-project';
 import { NpmTypes, packageName } from '../../graph/npm-types';
 import type { ExternalName, ExternalType } from '../../graph/project-index';
-import { topLevel } from '../../graph/project-index';
+import {
+  candidateFiles,
+  packageRoot,
+  topLevel,
+} from '../../graph/project-index';
 import { packageTypes, pythonPackageVersion } from '../../graph/pypi-types';
 import { normalizeName, pythonDependencies } from '../../graph/python-project';
 import {
@@ -37,7 +42,10 @@ import {
   TypeshedStubs,
 } from '../../graph/python-stubs';
 import { isUncallableImport } from '../../graph/symbols';
-import type { WorkspacePackage } from '../../graph/workspace-packages';
+import type {
+  LocalModule,
+  WorkspacePackage,
+} from '../../graph/workspace-packages';
 import {
   resolveWorkspaceImport,
   workspacePackages,
@@ -130,6 +138,13 @@ export interface WorkspaceImports {
     name: string,
     version: string
   ) => Promise<{ module: string; exports: ScriptSymbol[] }>;
+  /**
+   * Modules of the repository Add a library offers: its other packages and
+   * the files of the file's own package.
+   */
+  localModules: () => Promise<LocalModule[]>;
+  /** What a module of the repository exports. */
+  localExports: (module: LocalModule) => Promise<ScriptSymbol[]>;
 }
 
 /**
@@ -633,6 +648,38 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     return exports;
   }
 
+  async function localModules(): Promise<LocalModule[]> {
+    const files = props.files;
+    if (!files || languageOf(props.path) !== 'typescript') {
+      return [];
+    }
+
+    await readWorkspace();
+    const exists = (p: string): boolean => files.has(p);
+    const own = packageRoot(files, props.path);
+    const packages = [...workspace.value.values()].flatMap(
+      (pkg): LocalModule[] => {
+        const path =
+          pkg.dir === own
+            ? undefined
+            : resolveWorkspaceImport(pkg.name, workspace.value, exists);
+        return path ? [{ label: pkg.name, kind: 'package', path }] : [];
+      }
+    );
+    const sources = candidateFiles(files, props.path, Number.POSITIVE_INFINITY)
+      .filter((path) => /\.[cm]?[jt]sx?$/.test(path))
+      .map((path): LocalModule => ({
+        // As imports write it: `./util`, not `./util.ts`.
+        label: relativePath(props.path, path).replace(/\.[cm]?[jt]sx?$/, ''),
+        kind: 'file',
+        path,
+      }));
+    return [
+      ...packages.toSorted((a, b) => a.label.localeCompare(b.label)),
+      ...sources,
+    ];
+  }
+
   /** Exports of a package of the repository (`workspace:`). */
   async function workspaceExports(module: string): Promise<ScriptSymbol[]> {
     await readWorkspace();
@@ -769,6 +816,8 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     updateImports,
     onActionMenu,
     packageOffer,
+    localModules,
+    localExports: async (module) => topLevel(await exportsOf(module.path)),
     externals,
     externalTypes: projectTypes,
     declarations: () => importDeclarations,
