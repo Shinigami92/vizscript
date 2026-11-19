@@ -1,6 +1,5 @@
 import type {
   ImportedDeclaration,
-  ScriptSymbol,
   SymbolParam,
   TypeInfo,
   TypeMap,
@@ -18,7 +17,7 @@ import type {
   Span,
   Stmt,
 } from './ast';
-import type { Callable, StubParam } from './builtin-types';
+import type { Callable } from './builtin-types';
 import {
   builtinMembers,
   builtinMethod,
@@ -29,6 +28,7 @@ import {
   substitute,
 } from './builtin-types';
 import { dataTypeOf } from './data-type';
+import { importedCallable } from './imported-types';
 import { unwrap } from './lower-utils';
 import {
   binaryType,
@@ -54,24 +54,6 @@ interface TypeScope {
   methods: Map<string, Callable>;
   /** Imported (a crate's or another file's): its members for the menu. */
   imported?: boolean;
-}
-
-/** A function or method of another file or crate, as a callable. */
-function importedCallable(symbol: ScriptSymbol, self?: string): Callable {
-  const params = (symbol.params ?? []).map((p): StubParam => ({
-    name: p.name,
-    ...(p.type ? { type: p.type.text } : {}),
-  }));
-  const returns = symbol.returns?.text;
-  const list = params
-    .map((p) => (p.type ? `${p.name}: ${p.type}` : p.name))
-    .join(', ');
-  return {
-    returns: normalize(returns, self),
-    detail: `${symbol.name}(${list})${returns ? ` -> ${returns}` : ''}`,
-    isAsync: symbol.modifiers.includes('async'),
-    params,
-  };
 }
 
 class Scope {
@@ -166,8 +148,11 @@ class TypeLookup {
         continue;
       }
 
+      // Types go by their last segment, like `normalize` writes them
+      // (`serde_json::Value` named by its path is a `Value`).
+      const type = name.split('::').at(-1) ?? name;
       if (declaration.kind === 'enum') {
-        this.enums.add(name);
+        this.enums.add(type);
       }
 
       // Traits, and aliases (`Result<T>`) whose target has the members.
@@ -175,13 +160,13 @@ class TypeLookup {
         continue;
       }
 
-      const scope = this.typeScope(name);
+      const scope = this.typeScope(type);
       scope.imported = true;
       for (const member of members ?? []) {
         if (member.kind === 'method') {
-          scope.methods.set(member.name, importedCallable(member, name));
+          scope.methods.set(member.name, importedCallable(member, type));
         } else if (member.kind === 'variable') {
-          scope.fields.set(member.name, normalize(member.type?.text, name));
+          scope.fields.set(member.name, normalize(member.type?.text, type));
         }
       }
     }
@@ -780,10 +765,13 @@ class TypeLookup {
       return this.owner;
     }
 
-    // `Direction::Up`: a variant of an enum of the file.
-    const [head, last] = name.split('::');
-    if (head && last && this.enums.has(head)) {
-      return head;
+    // `Direction::Up`: a variant of an enum of the file (or of a crate:
+    // `serde_json::Value::Null`).
+    const parts = name.split('::');
+    const [head, last] = parts;
+    const owner = normalize(parts.slice(0, -1).join('::'));
+    if (parts.length > 1 && owner && this.enums.has(owner)) {
+      return owner;
     }
 
     return head === 'Self' && last && this.owner && this.enums.has(this.owner)
@@ -846,6 +834,16 @@ class TypeLookup {
 
       // A tuple struct (`Meters(5.0)`).
       return this.typesOfFile.has(first) ? { type: first } : undefined;
+    }
+
+    // A function of a crate by its path (`serde_json::to_string`).
+    const imported = this.functions.get(callee.name);
+    if (imported) {
+      return {
+        type: normalize(imported.returns) ?? '()',
+        isAsync: imported.isAsync,
+        params: signatureOf(imported, ''),
+      };
     }
 
     const owner = path.slice(0, -1).join('::');

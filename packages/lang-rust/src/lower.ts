@@ -20,6 +20,7 @@ import { parseRust } from './convert';
 import { dataTypeOf } from './data-type';
 import { rustImports } from './imports';
 import type { GraphSource, LoweringContext, Signature } from './lower-utils';
+import { rustPaths } from './paths';
 import { FnGraphBuilder } from './statement-lowering';
 import { rustSymbols } from './symbols';
 import { rustTypes } from './type-lookup';
@@ -159,6 +160,11 @@ export function parseRustDocument(
     })),
     symbols: [...rustImports(text), ...rustSymbols(items, text)],
   };
+  const paths = rustPaths(text);
+  if (paths.length > 0) {
+    doc.libraryPaths = paths;
+  }
+
   attachComments(doc, text, comments);
   linkSymbolGraphs(doc);
   linkImports(doc, options.imports);

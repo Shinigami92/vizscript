@@ -244,6 +244,13 @@ export interface GraphDocument {
    * (`Pin.typeText`; `applyTypes`), for the action menu of such a pin.
    */
   typeMembers?: Record<string, ReadonlyArray<TypeMember>>;
+  /**
+   * Items of libraries the code names by their path without importing
+   * them (Rust's `serde_json::to_string`, `x: serde_json::Value`). The
+   * web app supplies their declarations as `ParseOptions.imports` named by
+   * the path.
+   */
+  libraryPaths?: string[];
 }
 
 /** A setting of the whole script, edited with `setScriptSetting`. */

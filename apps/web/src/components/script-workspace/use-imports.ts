@@ -53,6 +53,22 @@ function topLevel(exports: ReadonlyArray<ScriptSymbol>): ScriptSymbol[] {
   return exports.filter((s) => s.scope === '');
 }
 
+/**
+ * The export `named` of a module as the import `name`; a type brings its
+ * members along (Rust's `impl` methods).
+ */
+function namedDeclaration(
+  all: ReadonlyArray<ScriptSymbol>,
+  named: string,
+  name: string
+): ImportedDeclaration | undefined {
+  const declaration = all.find((s) => s.scope === '' && s.name === named);
+  const members = all.filter((s) => s.scope !== '' && s.scope === named);
+  return declaration
+    ? { name, declaration, ...(members.length > 0 ? { members } : {}) }
+    : undefined;
+}
+
 export interface ImportDeps {
   props: Readonly<ScriptWorkspaceProps>;
   client: GraphClient;
@@ -619,31 +635,47 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
     }
 
     if (named) {
-      const declaration = exports.find((s) => s.name === named);
-      // A type brings its members along (Rust's `impl` methods).
-      const members = all.filter((s) => s.scope !== '' && s.scope === named);
-      return declaration
-        ? {
-            name: symbol.name,
-            declaration,
-            ...(members.length > 0 ? { members } : {}),
-          }
-        : undefined;
+      return namedDeclaration(all, named, symbol.name);
     }
 
     // A whole module: `ns.fn()`, `module.fn()`, `Script.new()`.
     return { name: symbol.name, members: exports };
   }
 
+  /**
+   * An item of a library the code names by its path without importing it
+   * (Rust's `serde_json::to_string`), as an import named by the path.
+   */
+  async function pathDeclaration(
+    path: string
+  ): Promise<ImportedDeclaration | undefined> {
+    const at = path.lastIndexOf('::');
+    return at === -1
+      ? undefined
+      : namedDeclaration(
+          await libraryExports(path.slice(0, at)),
+          path.slice(at + 2),
+          path
+        );
+  }
+
   async function updateImports(seq: number): Promise<void> {
     const imports = (doc.value?.symbols ?? []).filter(
       (s) => s.kind === 'import'
     );
-    if (imports.length === 0 && importDeclarations.length === 0) {
+    const paths = doc.value?.libraryPaths ?? [];
+    if (
+      imports.length === 0 &&
+      paths.length === 0 &&
+      importDeclarations.length === 0
+    ) {
       return;
     }
 
-    const found = await Promise.all(imports.map((s) => declarationOf(s)));
+    const found = await Promise.all([
+      ...imports.map((s) => declarationOf(s)),
+      ...paths.map((path) => pathDeclaration(path)),
+    ]);
     if (seq !== deps.parseSeq()) {
       return;
     }

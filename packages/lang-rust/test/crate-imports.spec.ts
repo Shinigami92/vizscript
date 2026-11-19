@@ -147,3 +147,73 @@ describe('types of crate imports', () => {
     ]);
   });
 });
+
+const BY_PATH = `fn run(text: &str) {
+    let parsed: serde_json::Value = serde_json::from_str(text).unwrap();
+    let name = parsed.as_str();
+    let json = serde_json::to_string(&parsed);
+    let null = serde_json::Value::Null;
+    let client = serde_json::Client::new();
+    let wait = client.timeout;
+}
+`;
+
+describe('crate items named by their path', () => {
+  it('lists the items a file names by a path, not std or its own', () => {
+    const doc = parseRustDocument(
+      `use nom::IResult;
+use std::fmt;
+
+fn f(v: serde_json::Value, r: std::io::Result<()>) -> crate::Item {
+    let a = ignore::overrides::OverrideBuilder::new(".");
+    let b = serde_json::to_string(&v);
+    let c = Item::new();
+    let d = super::helper();
+    let e = serde_json::Value::Null;
+}
+`,
+      'main.rs'
+    );
+    expect(doc.libraryPaths).toEqual([
+      'serde_json::Value',
+      'ignore::overrides::OverrideBuilder',
+      'serde_json::to_string',
+    ]);
+  });
+
+  const stubs = parseRustDocument(STUBS, 'serde_json.rs');
+  const exports = exportedSymbols(stubs, STUBS);
+  const members = exportedTypeMembers(stubs, STUBS);
+  const byPath = (item: string): ImportedDeclaration => {
+    const own = members.filter((s) => s.scope === item);
+    const declaration = exports.find((s) => s.name === item);
+    return {
+      name: `serde_json::${item}`,
+      ...(declaration ? { declaration } : {}),
+      ...(own.length > 0 ? { members: own } : {}),
+    };
+  };
+  const doc = parseRustDocument(BY_PATH, 'main.rs', {
+    imports: ['Value', 'from_str', 'to_string', 'Client'].map(byPath),
+  });
+  const pins = new Map<string, Pin>();
+  for (const node of doc.functions.flatMap((f) => f.nodes)) {
+    for (const pin of node.pins) {
+      if (pin.range && pin.direction === 'out' && pin.kind === 'data') {
+        pins.set(BY_PATH.slice(pin.range.start, pin.range.end), pin);
+      }
+    }
+  }
+
+  const typeOf = (code: string): string | undefined => pins.get(code)?.typeText;
+
+  it('follows them like imported names', () => {
+    expect(typeOf('parsed.as_str()')).toBe('Option<str>');
+    expect(typeOf('serde_json::to_string(&parsed)')).toBe('Result<String>');
+    // `from_str<T>`'s `T` is unknown, not a type named `T`.
+    expect(typeOf('serde_json::from_str(text)')).toBeUndefined();
+    expect(typeOf('serde_json::Value::Null')).toBe('Value');
+    expect(typeOf('serde_json::Client::new()')).toBe('Client');
+    expect(typeOf('client.timeout')).toBe('u64');
+  });
+});
