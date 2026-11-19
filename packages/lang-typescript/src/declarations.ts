@@ -1,8 +1,8 @@
 import type { DataType, DeclarationSyntax } from '@vizscript/core';
 import { typeCoversInput } from '@vizscript/core';
 import { addTypeScriptImport } from './add-import';
-import { parseFile } from './lower';
 import { setModifier } from './modifiers';
+import { parseFile } from './parse-file';
 import { renameTypeScriptSymbol, typeScriptCallSites } from './rename';
 import { quoteOf, quoteString } from './syntax';
 import { KEYWORDS, TYPESCRIPT_TYPES } from './type-system';

@@ -11,6 +11,11 @@ import { folderOf, nearest } from './project-files';
 export interface TsEnvironment {
   dom: boolean;
   node: boolean;
+  /**
+   * `experimentalDecorators`: TypeScript's older decorators (NestJS,
+   * Angular), the only ones on parameters.
+   */
+  experimentalDecorators?: true;
   /** The config it was read from, if any. */
   config?: string;
 }
@@ -262,6 +267,9 @@ export async function tsEnvironment(
     dom: lib ? lib.some((l) => l === 'dom' || l.startsWith('dom.')) : true,
     // Without `types`, every installed `@types` package counts.
     node: types ? types.includes('node') : options.hasNodeTypes,
+    ...(compiler.experimentalDecorators === true
+      ? { experimentalDecorators: true as const }
+      : {}),
     config: config.path,
   };
 }

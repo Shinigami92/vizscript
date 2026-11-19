@@ -1,6 +1,6 @@
-import { parse } from '@babel/parser';
 import type * as t from '@babel/types';
 import type { ModuleReference } from '@vizscript/core';
+import { parseFile } from './parse-file';
 
 const EXTENSIONS = [
   '.ts',
@@ -215,18 +215,9 @@ export function typeScriptReferences(
   text: string,
   fileName = 'file.ts'
 ): ModuleReference[] {
-  const isJsLike = /\.[cm]?jsx?$/i.test(fileName);
-  const isJsx = /\.[jt]sx$/i.test(fileName);
   let program: t.Program;
   try {
-    program = parse(text, {
-      sourceType: 'unambiguous',
-      errorRecovery: true,
-      plugins: [
-        ...(isJsLike ? [] : [['typescript', {}] as ['typescript', object]]),
-        ...(isJsx || isJsLike ? ['jsx' as const] : []),
-      ],
-    }).program;
+    program = parseFile(text, fileName).program;
   } catch {
     return [];
   }

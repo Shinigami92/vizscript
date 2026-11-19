@@ -1,4 +1,3 @@
-import { parse } from '@babel/parser';
 import type * as t from '@babel/types';
 import type {
   DataType,
@@ -26,6 +25,7 @@ import { TYPESCRIPT_CONTAINER_OPS } from './container-ops';
 import { constructedType } from './expression-lowering';
 import type { DocumentContext, PendingFunction } from './lower-utils';
 import { DECLARATION_ONLY, patternName, rangeOf, unwrap } from './lower-utils';
+import { parseFile } from './parse-file';
 import { StatementLowering } from './statement-lowering';
 import { typeScriptReexports, typeScriptSymbols } from './symbols';
 
@@ -277,23 +277,6 @@ class FnGraphBuilder extends StatementLowering {
       });
     }
   }
-}
-
-/** Parses a file with Babel (TypeScript unless it is plain JavaScript). */
-export function parseFile(
-  text: string,
-  fileName = 'file.ts'
-): ReturnType<typeof parse> {
-  const isJsLike = /\.[cm]?jsx?$/i.test(fileName);
-  const isJsx = /\.[jt]sx$/i.test(fileName);
-  return parse(text, {
-    sourceType: 'unambiguous',
-    errorRecovery: true,
-    plugins: [
-      ...(isJsLike ? [] : [['typescript', {}] as ['typescript', object]]),
-      ...(isJsx || isJsLike ? ['jsx' as const] : []),
-    ],
-  });
 }
 
 export function parseTypeScript(

@@ -75,7 +75,7 @@ describe('tsEnvironment', () => {
       }`,
       'apps/api/tsconfig.json': `{
         "extends": "../../tsconfig.base.json",
-        "compilerOptions": { "types": ["node"] }
+        "compilerOptions": { "types": ["node"], "experimentalDecorators": true }
       }`,
     };
     expect(await environment(files, 'apps/web/src/main.ts')).toEqual({
@@ -86,6 +86,7 @@ describe('tsEnvironment', () => {
     expect(await environment(files, 'apps/api/src/main.ts')).toEqual({
       dom: false,
       node: true,
+      experimentalDecorators: true,
       config: 'apps/api/tsconfig.json',
     });
   });

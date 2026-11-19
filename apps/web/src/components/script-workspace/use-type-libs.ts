@@ -181,6 +181,7 @@ export function useTypeLibs(deps: TypeLibDeps): void {
     setTsEnvironment({
       dom: environment.dom,
       nodeStub: environment.node && !nodeLoaded,
+      experimentalDecorators: environment.experimentalDecorators ?? false,
     });
     setProjectLibs(owner, files);
   }

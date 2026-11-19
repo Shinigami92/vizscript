@@ -86,19 +86,22 @@ let environmentKey = '';
 export function setTsEnvironment(environment: {
   dom: boolean;
   nodeStub: boolean;
+  /** The project's `experimentalDecorators` (NestJS, Angular). */
+  experimentalDecorators?: boolean;
 }): void {
-  const key = `${environment.dom}:${environment.nodeStub}`;
+  const decorators = environment.experimentalDecorators ?? false;
+  const key = `${environment.dom}:${environment.nodeStub}:${decorators}`;
   if (key === environmentKey) {
     return;
   }
 
   environmentKey = key;
   for (const defaults of DEFAULTS) {
-    defaults.setCompilerOptions(
-      environment.dom
-        ? COMPILER_OPTIONS
-        : { ...COMPILER_OPTIONS, lib: ['lib.esnext.d.ts'] }
-    );
+    defaults.setCompilerOptions({
+      ...COMPILER_OPTIONS,
+      ...(environment.dom ? {} : { lib: ['lib.esnext.d.ts'] }),
+      ...(decorators ? { experimentalDecorators: true } : {}),
+    });
   }
 
   if (environment.nodeStub && nodeStub.length === 0) {
