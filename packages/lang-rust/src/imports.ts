@@ -301,7 +301,9 @@ export function addRustImport(
       s.declarationRange &&
       text.slice(s.declarationRange.start, s.declarationRange.end).includes('{')
   );
-  const joined = listed ? joinImport(doc, module, name, imported) : undefined;
+  const joined = listed
+    ? joinImport(doc, module, name, imported, text)
+    : undefined;
   if (joined) {
     return { ok: true, edits: [joined] };
   }

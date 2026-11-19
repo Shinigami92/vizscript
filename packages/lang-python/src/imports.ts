@@ -196,7 +196,7 @@ export function addPythonImport(
     };
   }
 
-  const joined = joinImport(doc, module, name, imported);
+  const joined = joinImport(doc, module, name, imported, text);
   if (joined) {
     return { ok: true, edits: [joined] };
   }

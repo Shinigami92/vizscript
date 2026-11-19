@@ -49,7 +49,7 @@ export function addTypeScriptImport(
   const module = moduleOf(doc, request);
   const { name, imported } = request;
   if (imported !== '*' && imported !== 'default') {
-    const joined = joinImport(doc, module, name, imported);
+    const joined = joinImport(doc, module, name, imported, text);
     if (joined) {
       return { ok: true, edits: [joined] };
     }

@@ -400,13 +400,15 @@ export function addSignal(
 
 /**
  * Adds `name` to an import statement of `module` that lists names (`import
- * { a } from './x'`, `from x import a`): `, name` or `, imported as name`.
+ * { a } from './x'`, `from x import a`): `, name` or `, imported as name`,
+ * on a line of its own in a list written one name per line (with `text`).
  */
 export function joinImport(
   doc: GraphDocument,
   module: string,
   name: string,
-  imported: string
+  imported: string,
+  text?: string
 ): TextEdit | undefined {
   const listed = (doc.symbols ?? []).filter(
     (s) =>
@@ -428,7 +430,15 @@ export function joinImport(
   }
 
   const item = imported === name ? name : `${imported} as ${name}`;
-  return { start: last.range.end, end: last.range.end, text: `, ${item}` };
+  // A list with one name per line gets another line.
+  const indent =
+    text?.slice(lineStart(text, last.range.start), last.range.start) ?? '';
+  const ownLine = text !== undefined && indent !== '' && indent.trim() === '';
+  return {
+    start: last.range.end,
+    end: last.range.end,
+    text: ownLine ? `,\n${indent}${item}` : `, ${item}`,
+  };
 }
 
 /**

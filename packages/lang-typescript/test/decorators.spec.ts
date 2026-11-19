@@ -255,6 +255,96 @@ describe('editing decorators and type parameters', () => {
   });
 });
 
+describe('a new decorator with its import', () => {
+  it('joins the import of its module, in one edit', () => {
+    const text = [
+      "import { Controller, Get } from '@nestjs/common';",
+      '',
+      "@Controller('x')",
+      'export class C {',
+      '  @Get()',
+      '  get(): void {}',
+      '}',
+      '',
+    ].join('\n');
+    const result = applyTypeScriptOp(
+      text,
+      {
+        type: 'withImport',
+        import: {
+          path: '',
+          from: 'c.ts',
+          name: 'Header',
+          imported: 'Header',
+          module: '@nestjs/common',
+        },
+        op: {
+          type: 'setDecorator',
+          symbol: 'method:C.get',
+          text: "@Header('a', 'b')",
+        },
+      },
+      'c.ts'
+    );
+    expect(result.ok && applyEdits(text, result.edits)).toBe(
+      [
+        "import { Controller, Get, Header } from '@nestjs/common';",
+        '',
+        "@Controller('x')",
+        'export class C {',
+        '  @Get()',
+        "  @Header('a', 'b')",
+        '  get(): void {}',
+        '}',
+        '',
+      ].join('\n')
+    );
+  });
+});
+
+describe('a new name in an import written one per line', () => {
+  it('gets a line of its own', () => {
+    const text = [
+      'import {',
+      '  Controller,',
+      '  Get,',
+      "} from '@nestjs/common';",
+      '',
+      'export class C {}',
+      '',
+    ].join('\n');
+    const result = applyTypeScriptOp(
+      text,
+      {
+        type: 'addImport',
+        import: {
+          path: '',
+          from: 'c.ts',
+          name: 'Header',
+          imported: 'Header',
+          module: '@nestjs/common',
+        },
+      },
+      'c.ts'
+    );
+    expect(result.ok && applyEdits(text, result.edits)).toContain(
+      "  Get,\n  Header,\n} from '@nestjs/common';"
+    );
+  });
+});
+
+function applyEdits(
+  text: string,
+  edits: ReadonlyArray<{ start: number; end: number; text: string }>
+): string {
+  let result = text;
+  for (const edit of edits.toSorted((a, b) => b.start - a.start)) {
+    result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
+  }
+
+  return result;
+}
+
 describe('calls of generics', () => {
   it('give wildcards for type parameters until the checker knows', () => {
     const doc = parseTypeScript(
