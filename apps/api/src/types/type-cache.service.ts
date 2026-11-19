@@ -8,10 +8,13 @@ import {
 import type { TypeCacheStats } from '@vizscript/api-contract';
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
+import { promisify } from 'node:util';
+import { zstdDecompress as zstdDecompressCallback } from 'node:zlib';
 import type { AppConfig } from '../config/config';
 import { APP_CONFIG } from '../config/config';
 import { DB } from '../database/database.module';
 import type { Database } from '../database/schema';
+import { rustdocStubs } from './rustdoc';
 import type { TypeSource } from './type-sources';
 
 export interface CachedType {
@@ -22,6 +25,12 @@ export interface CachedType {
 
 /** A file larger than this is not served (declaration files are smaller). */
 export const MAX_FILE_BYTES = 8 * 1024 * 1024;
+/** A crate's compressed rustdoc JSON, and the JSON itself, at most. */
+const MAX_RUSTDOC_BYTES = 32 * 1024 * 1024;
+const MAX_RUSTDOC_JSON_BYTES = 256 * 1024 * 1024;
+/** zstd frames start with these bytes. */
+const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+const zstdDecompress = promisify(zstdDecompressCallback);
 /** Upstream requests give up after this long. */
 const FETCH_TIMEOUT_MS = 15_000;
 /** A version range (`latest`, `^3.5.0`) is resolved again after a day. */
@@ -137,40 +146,91 @@ export class TypeCacheService {
 
   private async fetchAndStore(source: TypeSource): Promise<CachedType> {
     this.fetches++;
-    const fetched = await this.fetchUpstream(source.url);
+    const fetched =
+      source.kind === 'crate'
+        ? await this.fetchCrate(source)
+        : await this.fetchText(source);
     const size = Buffer.byteLength(fetched.body);
-    const expires = source.immutable
+    const expires = fetched.immutable
       ? null
       : new Date(Date.now() + RANGE_TTL_MS);
+    const row = {
+      status: fetched.status,
+      body: fetched.body,
+      size,
+      immutable: fetched.immutable,
+      expires_at: expires,
+    };
     await this.db
       .insertInto('type_cache')
-      .values({
-        key: source.key,
-        status: fetched.status,
-        body: fetched.body,
-        size,
-        immutable: source.immutable,
-        expires_at: expires,
-      })
+      .values({ key: source.key, ...row })
       .onConflict((oc) =>
         oc.column('key').doUpdateSet({
-          status: fetched.status,
-          body: fetched.body,
-          size,
-          immutable: source.immutable,
-          expires_at: expires,
+          ...row,
           fetched_at: sql`now()`,
           last_used_at: sql`now()`,
         })
       )
       .execute();
     void this.evict();
-    return { ...fetched, immutable: source.immutable };
+    return fetched;
+  }
+
+  private async fetchText(source: TypeSource): Promise<CachedType> {
+    const fetched = await this.fetchUpstream(source.url, MAX_FILE_BYTES);
+    return {
+      status: fetched.status,
+      body: fetched.bytes.toString('utf8'),
+      immutable: source.immutable,
+    };
+  }
+
+  /**
+   * A crate's rustdoc JSON from docs.rs (zstd), turned into Rust
+   * declarations per module; the newest compatible version when the asked
+   * one has none (built before docs.rs made rustdoc JSON).
+   */
+  private async fetchCrate(source: TypeSource): Promise<CachedType> {
+    let fetched = await this.fetchUpstream(source.url, MAX_RUSTDOC_BYTES);
+    let immutable = source.immutable;
+    if (fetched.status === 404 && source.fallback) {
+      fetched = await this.fetchUpstream(source.fallback, MAX_RUSTDOC_BYTES);
+      immutable = false;
+    }
+
+    if (fetched.status === 404 || !source.crate) {
+      return { status: 404, body: '', immutable };
+    }
+
+    let json: unknown;
+    try {
+      const zstd = fetched.bytes.subarray(0, 4).equals(ZSTD_MAGIC);
+      const raw = zstd
+        ? await zstdDecompress(fetched.bytes, {
+            maxOutputLength: MAX_RUSTDOC_JSON_BYTES,
+          })
+        : fetched.bytes;
+      json = JSON.parse(raw.toString('utf8'));
+    } catch {
+      throw new BadGatewayException("The crate's documentation is unreadable");
+    }
+
+    const version =
+      (typeof (json as { crate_version?: unknown }).crate_version === 'string'
+        ? (json as { crate_version: string }).crate_version
+        : undefined) ?? source.crate.version;
+    const stubs = rustdocStubs(json, source.crate.name, version);
+    if (!stubs) {
+      throw new BadGatewayException("The crate's documentation is unreadable");
+    }
+
+    return { status: 200, body: JSON.stringify(stubs), immutable };
   }
 
   private async fetchUpstream(
-    url: string
-  ): Promise<{ status: 200 | 404; body: string }> {
+    url: string,
+    limit: number
+  ): Promise<{ status: 200 | 404; bytes: Buffer }> {
     let response: Response;
     try {
       response = await fetch(url, {
@@ -183,7 +243,7 @@ export class TypeCacheService {
 
     if (response.status === 404) {
       await response.body?.cancel();
-      return { status: 404, body: '' };
+      return { status: 404, bytes: Buffer.alloc(0) };
     }
 
     if (!response.ok) {
@@ -194,17 +254,17 @@ export class TypeCacheService {
     }
 
     const length = Number(response.headers.get('content-length') ?? 0);
-    if (length > MAX_FILE_BYTES) {
+    if (length > limit) {
       await response.body?.cancel();
       throw new BadGatewayException('Library file too large');
     }
 
-    const body = await response.text();
-    if (Buffer.byteLength(body) > MAX_FILE_BYTES) {
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.byteLength > limit) {
       throw new BadGatewayException('Library file too large');
     }
 
-    return { status: 200, body };
+    return { status: 200, bytes };
   }
 
   private async touch(key: string): Promise<void> {

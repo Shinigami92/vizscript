@@ -21,8 +21,8 @@ export interface AppConfig {
   githubServerToken?: string;
   /** Size the type registry's cache may grow to, in bytes (1 GB default). */
   typeCacheMaxBytes: number;
-  /** Where library types come from (jsDelivr; tests use a local server). */
-  typeUpstream: { cdn: string; listing: string };
+  /** Where library types come from (jsDelivr, docs.rs; tests use a local server). */
+  typeUpstream: { cdn: string; listing: string; docs: string };
 }
 
 /** 1 GB. */
@@ -108,6 +108,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       listing: `${withoutSlash(
         env.TYPE_LISTING_URL ?? 'https://data.jsdelivr.com/v1/packages'
       )}/`,
+      docs: `${withoutSlash(env.TYPE_DOCS_URL ?? 'https://docs.rs')}/`,
     },
   };
 }

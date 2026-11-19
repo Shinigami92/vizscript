@@ -3,11 +3,13 @@ import type { TypeCacheStats } from '@vizscript/api-contract';
 import { sql } from 'kysely';
 import { createServer } from 'node:http';
 import type { AddressInfo, Server } from 'node:net';
+import { zstdCompressSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import type { AppConfig } from '../src/config/config';
 import { createDatabase } from '../src/database/database.module';
 import { TypeCacheService } from '../src/types/type-cache.service';
+import { RUSTDOC } from './rustdoc-fixture';
 
 const databaseUrl = process.env.DATABASE_URL;
 const runId = Math.random().toString(36).slice(2, 8);
@@ -24,6 +26,17 @@ const upstreamFiles: Record<string, string> = {
 };
 const upstreamRequests = new Map<string, number>();
 
+/** docs.rs serves rustdoc JSON compressed with zstd. */
+const crateFiles: Record<string, Buffer> = {
+  [`/docs/crate/${pkg}/1.2.3/json`]: zstdCompressSync(
+    Buffer.from(JSON.stringify(RUSTDOC))
+  ),
+  // An old version without rustdoc JSON: the compatible one instead.
+  [`/docs/crate/${pkg}/%5E1.0.0/json`]: zstdCompressSync(
+    Buffer.from(JSON.stringify(RUSTDOC))
+  ),
+};
+
 function get(app: NestFastifyApplication, url: string) {
   return app.inject({ method: 'GET', url });
 }
@@ -37,7 +50,7 @@ describe.skipIf(!databaseUrl)('type registry (e2e)', () => {
     upstream = createServer((request, response) => {
       const url = request.url ?? '';
       upstreamRequests.set(url, (upstreamRequests.get(url) ?? 0) + 1);
-      const body = upstreamFiles[url];
+      const body = upstreamFiles[url] ?? crateFiles[url];
       response.statusCode = body === undefined ? 404 : 200;
       response.end(body ?? 'Not found');
     });
@@ -57,7 +70,11 @@ describe.skipIf(!databaseUrl)('type registry (e2e)', () => {
       githubRawUrl: 'https://raw.githubusercontent.com',
       githubWebUrl: 'https://github.com',
       typeCacheMaxBytes: 1024 * 1024 * 1024,
-      typeUpstream: { cdn: `${base}/`, listing: `${base}/v1/packages/` },
+      typeUpstream: {
+        cdn: `${base}/`,
+        listing: `${base}/v1/packages/`,
+        docs: `${base}/docs/`,
+      },
     };
     app = await createApp(config, { logger: false });
     await app.init();
@@ -125,6 +142,29 @@ describe.skipIf(!databaseUrl)('type registry (e2e)', () => {
       );
       expect(response.statusCode).toBe(400);
     }
+  });
+
+  it("serves a crate's API as Rust declarations from docs.rs", async () => {
+    const response = await get(
+      app,
+      `/api/types/crate?name=${pkg}&version=1.2.3`
+    );
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toContain('immutable');
+    const stubs = response.json<{
+      version: string;
+      modules: Record<string, string>;
+    }>();
+    expect(stubs.version).toBe('1.2.3');
+    expect(stubs.modules.nested).toBe(
+      'pub fn run(input: &str) -> Result<Value> {}'
+    );
+
+    // No rustdoc JSON of 1.0.0: the newest compatible version, for a day.
+    const old = await get(app, `/api/types/crate?name=${pkg}&version=1.0.0`);
+    expect(old.statusCode).toBe(200);
+    expect(old.headers['cache-control']).toBe('public, max-age=3600');
+    expect((await get(app, '/api/types/crate?name=../x')).statusCode).toBe(400);
   });
 
   it('reports how full the cache is', async () => {

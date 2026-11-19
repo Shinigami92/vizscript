@@ -12,7 +12,14 @@ export interface TypeSource {
   url: string;
   /** An exact version or commit: its content never changes. */
   immutable: boolean;
-  kind: 'file' | 'listing';
+  kind: 'file' | 'listing' | 'crate';
+  /**
+   * Asked when `url` answers 404 (docs.rs has no rustdoc JSON of older
+   * versions: the newest compatible one instead); not immutable then.
+   */
+  fallback?: string;
+  /** A crate: its name and version as asked (`serde_json`, `1.0.150`). */
+  crate?: { name: string; version: string };
 }
 
 export interface TypeUpstream {
@@ -20,12 +27,14 @@ export interface TypeUpstream {
   cdn: string;
   /** jsDelivr's data API for listings (`https://data.jsdelivr.com/v1/packages/`). */
   listing: string;
+  /** docs.rs, ending with `/` (`https://docs.rs/`): crates' rustdoc JSON. */
+  docs: string;
 }
 
 /** npm package names: `vue`, `@vue/runtime-dom`. */
 const PACKAGE = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/;
 /** An exact semver version (`3.5.45`, `1.0.0-beta.1`). */
-const EXACT = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+export const EXACT = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 /** A version, tag or range as `package.json` writes it (`^3.5.0`, `latest`). */
 const RANGE = /^[\w.^~<>=|* -]{1,64}$/;
 /** typeshed, pinned to a commit. */
@@ -130,4 +139,33 @@ export function typeListingSource(
         kind: 'listing',
       }
     : undefined;
+}
+
+/** Crate names on crates.io: `serde_json`, `serde-wasm-bindgen`. */
+const CRATE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+/**
+ * The public API of a crate (rustdoc JSON from docs.rs, turned into Rust
+ * declarations by `rustdocStubs`), in a version or range (`1.0`, `latest`).
+ */
+export function typeCrateSource(
+  name: string,
+  version: string,
+  upstream: TypeUpstream
+): TypeSource | undefined {
+  if (!CRATE.test(name) || !RANGE.test(version)) {
+    return undefined;
+  }
+
+  const url = (v: string): string =>
+    `${upstream.docs}crate/${name}/${encodeURIComponent(v)}/json`;
+  const exact = EXACT.test(version);
+  return {
+    key: `crate:${name}@${version}`,
+    url: url(version),
+    immutable: exact,
+    kind: 'crate',
+    ...(exact ? { fallback: url(`^${version}`) } : {}),
+    crate: { name, version },
+  };
 }

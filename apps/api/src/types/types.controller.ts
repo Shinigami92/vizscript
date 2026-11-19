@@ -15,7 +15,11 @@ import { APP_CONFIG } from '../config/config';
 import type { CachedType } from './type-cache.service';
 import { TypeCacheService } from './type-cache.service';
 import type { TypeSource } from './type-sources';
-import { typeFileSource, typeListingSource } from './type-sources';
+import {
+  typeCrateSource,
+  typeFileSource,
+  typeListingSource,
+} from './type-sources';
 
 /**
  * The type registry: library type files and listings by the paths jsDelivr
@@ -47,6 +51,22 @@ export class TypesController {
     @Res({ passthrough: true }) reply: FastifyReply
   ): Promise<string> {
     const source = typeListingSource(path ?? '', this.config.typeUpstream);
+    return this.serve(source, request, reply, 'application/json');
+  }
+
+  /** A crate's public API as Rust declarations per module (JSON). */
+  @Get('crate')
+  public async crate(
+    @Query('name') name: string | undefined,
+    @Query('version') version: string | undefined,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply
+  ): Promise<string> {
+    const source = typeCrateSource(
+      name ?? '',
+      version ?? 'latest',
+      this.config.typeUpstream
+    );
     return this.serve(source, request, reply, 'application/json');
   }
 

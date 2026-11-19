@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { byteSize, DEFAULT_TYPE_CACHE_BYTES } from '../src/config/config';
-import { typeFileSource, typeListingSource } from '../src/types/type-sources';
+import {
+  typeCrateSource,
+  typeFileSource,
+  typeListingSource,
+} from '../src/types/type-sources';
 
 const UPSTREAM = {
   cdn: 'https://cdn.jsdelivr.net/',
   listing: 'https://data.jsdelivr.com/v1/packages/',
+  docs: 'https://docs.rs/',
 };
 const COMMIT = 'f0512c2d5d5d319570d2517d74419633c0174ec2';
 
@@ -78,6 +83,25 @@ describe('type sources', () => {
     );
     expect(typeListingSource('npm/vue@latest', UPSTREAM)).toBeUndefined();
     expect(typeListingSource('npm/vue@3.5.45/x', UPSTREAM)).toBeUndefined();
+  });
+});
+
+describe('crate sources', () => {
+  it('asks docs.rs, the compatible version when the exact one has none', () => {
+    expect(typeCrateSource('serde_json', '1.0.150', UPSTREAM)).toEqual({
+      key: 'crate:serde_json@1.0.150',
+      url: 'https://docs.rs/crate/serde_json/1.0.150/json',
+      immutable: true,
+      kind: 'crate',
+      fallback: 'https://docs.rs/crate/serde_json/%5E1.0.150/json',
+      crate: { name: 'serde_json', version: '1.0.150' },
+    });
+    expect(typeCrateSource('nom', '8', UPSTREAM)).toMatchObject({
+      url: 'https://docs.rs/crate/nom/8/json',
+      immutable: false,
+    });
+    expect(typeCrateSource('../evil', '1.0.0', UPSTREAM)).toBeUndefined();
+    expect(typeCrateSource('nom', '1.0/../x', UPSTREAM)).toBeUndefined();
   });
 });
 

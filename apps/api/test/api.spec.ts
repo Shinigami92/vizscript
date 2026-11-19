@@ -143,6 +143,7 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
       typeUpstream: {
         cdn: 'http://127.0.0.1:9/',
         listing: 'http://127.0.0.1:9/',
+        docs: 'http://127.0.0.1:9/',
       },
     };
     app = await createApp(config, {
