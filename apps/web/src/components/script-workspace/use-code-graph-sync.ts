@@ -38,7 +38,8 @@ export interface CodeGraphSync {
   openSymbol: (id: string) => void;
   revealSymbol: (id: string) => void;
   /** Edits from "My Script"; a renamed selection keeps being selected. */
-  onScriptOp: (op: GraphOp) => void;
+  /** Resolves once the op's code is written. */
+  onScriptOp: (op: GraphOp) => Promise<void>;
   revealRange: (range: SourceRange) => Promise<void>;
   /** Selects nodes from outside the canvas (details panel, My Script). */
   selectNodes: (ids: string[]) => Promise<void>;
@@ -148,12 +149,12 @@ export function useCodeGraphSync(deps: CodeGraphDeps): CodeGraphSync {
   }
 
   /** Edits from "My Script"; a renamed selection keeps being selected. */
-  function onScriptOp(op: GraphOp): void {
+  function onScriptOp(op: GraphOp): Promise<void> {
     if (op.type === 'renameSymbol' && selectedSymbolId.value === op.symbol) {
       selectedSymbolId.value = op.symbol.replace(/[^:.]+$/, op.name);
     }
 
-    void deps.onOp(op);
+    return deps.onOp(op);
   }
 
   async function revealRange(range: SourceRange): Promise<void> {

@@ -1,10 +1,11 @@
-import type { GraphDocument, LanguageVersion } from '@vizscript/core';
+import type { GraphDocument, GraphOp, LanguageVersion } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, ref } from 'vue';
 import { ecosystemOf } from '../../graph/add-package';
 import type { ModuleInfo } from '../../graph/module-info';
 import { typeRegistryAvailable } from '../../graph/type-registry';
 import type { ScriptWorkspaceProps } from './types';
+import type { FileEdit } from './use-layout-history';
 import { useModuleInfo } from './use-module-info';
 
 export interface LibraryAdditions {
@@ -14,11 +15,21 @@ export interface LibraryAdditions {
   addingPackage: Ref<{ x: number; y: number; library?: string } | null>;
   /** A package manager, a way to change the manifest, and the server. */
   canAddPackage: ComputedRef<boolean>;
-  /** Changes another file; the imports' library info follows. */
-  editOtherFile: (
-    path: string,
-    edit: (text: string) => string
+  /**
+   * Adds a library: `edit` changes its manifest, `op` writes its import;
+   * one undo step for both.
+   */
+  addLibrary: (
+    manifest: string,
+    edit: (text: string) => string,
+    op?: GraphOp
   ) => Promise<void>;
+  /** Undo and redo of a manifest change (`false`: it changed since). */
+  restoreOtherFile: (
+    path: string,
+    from: string,
+    to: string
+  ) => Promise<boolean>;
 }
 
 /**
@@ -29,6 +40,11 @@ export function useLibraryAdditions(deps: {
   props: Readonly<ScriptWorkspaceProps>;
   doc: ShallowRef<GraphDocument | null>;
   version: Ref<LanguageVersion | null>;
+  /** Writes an op into the code; resolves once it is written. */
+  apply: (op: GraphOp) => Promise<void>;
+  /** The code's version in the undo history. */
+  codeVersion: () => number;
+  recordFileEdit: (edit: FileEdit, beforeVersion: number) => void;
 }): LibraryAdditions {
   const { props } = deps;
   const { infos, refresh } = useModuleInfo(deps);
@@ -46,13 +62,49 @@ export function useLibraryAdditions(deps: {
       ecosystemOf(props.path) !== undefined
   );
 
-  async function editOtherFile(
-    path: string,
-    edit: (text: string) => string
+  async function addLibrary(
+    manifest: string,
+    edit: (text: string) => string,
+    op?: GraphOp
   ): Promise<void> {
-    await props.editFile?.(path, edit);
+    const beforeVersion = deps.codeVersion();
+    let before = '';
+    let after = '';
+    await props.editFile?.(manifest, (text) => {
+      before = text;
+      after = edit(text);
+      return after;
+    });
     refresh();
+    if (op) {
+      // The editor reports its new version before the op resolves.
+      await deps.apply(op);
+    }
+
+    if (before !== after) {
+      deps.recordFileEdit({ path: manifest, before, after }, beforeVersion);
+    }
   }
 
-  return { moduleInfos: infos, addingPackage, canAddPackage, editOtherFile };
+  async function restoreOtherFile(
+    path: string,
+    from: string,
+    to: string
+  ): Promise<boolean> {
+    let restored = false;
+    await props.editFile?.(path, (text) => {
+      restored = text === from;
+      return restored ? to : text;
+    });
+    refresh();
+    return restored;
+  }
+
+  return {
+    moduleInfos: infos,
+    addingPackage,
+    canAddPackage,
+    addLibrary,
+    restoreOtherFile,
+  };
 }

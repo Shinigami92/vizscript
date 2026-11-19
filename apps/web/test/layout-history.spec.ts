@@ -25,10 +25,12 @@ function setup(): {
   overlay: () => GraphOverlay;
   calls: string[];
   editCode: () => void;
+  files: Map<string, string>;
 } {
   const pinned = shallowRef<Positions>({});
   const calls: string[] = [];
   let overlay = EMPTY_OVERLAY;
+  const files = new Map<string, string>();
   const history = useLayoutHistory({
     layoutStore: () => null,
     pinned,
@@ -56,6 +58,15 @@ function setup(): {
     setOverlay: (next) => {
       overlay = next;
     },
+    restoreFile: (path, from, to) => {
+      calls.push(`restore ${path}`);
+      if (files.get(path) !== from) {
+        return Promise.resolve(false);
+      }
+
+      files.set(path, to);
+      return Promise.resolve(true);
+    },
     show: () => undefined,
   });
   const editCode = (): void => {
@@ -66,7 +77,7 @@ function setup(): {
       version: version + 1,
     };
   };
-  return { history, pinned, overlay: () => overlay, calls, editCode };
+  return { history, pinned, overlay: () => overlay, calls, editCode, files };
 }
 
 describe('undo of graph-only edits', () => {
@@ -119,5 +130,45 @@ describe('undo of nodes an edit left graph-only', () => {
     expect(pinned.value['~via|get']).toBeUndefined();
     expect(pinned.value['overlay:g/n']).toBeUndefined();
     expect(history.canUndo.value).toBe(false);
+  });
+});
+
+describe('undo of a library added with its import', () => {
+  const BEFORE = '{"a":1}';
+  const AFTER = '{"a":1,"zod":"^4"}';
+
+  it('undoes the import and the manifest as one step', async () => {
+    const { history, calls, editCode, files } = setup();
+    files.set('package.json', AFTER);
+    editCode();
+    history.recordFileEdit(
+      { path: 'package.json', before: BEFORE, after: AFTER },
+      0
+    );
+
+    history.undo();
+    await Promise.resolve();
+    expect(calls).toEqual(['undoCode', 'restore package.json']);
+    expect(files.get('package.json')).toBe(BEFORE);
+    expect(history.canUndo.value).toBe(false);
+
+    history.redo();
+    await Promise.resolve();
+    expect(files.get('package.json')).toBe(AFTER);
+    expect(history.codeHistory.value.version).toBe(1);
+  });
+
+  it('keeps a manifest changed since', async () => {
+    const { history, calls, files } = setup();
+    // Only listed: no code was written.
+    history.recordFileEdit(
+      { path: 'package.json', before: BEFORE, after: AFTER },
+      0
+    );
+    files.set('package.json', '{}');
+    history.undo();
+    await Promise.resolve();
+    expect(calls).toEqual(['restore package.json']);
+    expect(files.get('package.json')).toBe('{}');
   });
 });

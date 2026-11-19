@@ -23,23 +23,27 @@ import ActionMenu from '../ActionMenu.vue';
  * "+" in My Script's Imports: search a library in the language's registry
  * (through the server), pick what to import from it, and how the manifest
  * lists it. Writes the import into the file and the dependency into the
- * manifest (an open tab with unsaved changes).
+ * manifest (an open tab with unsaved changes), one undo step for both.
  */
 const props = defineProps<{
   at: { x: number; y: number };
   path: string;
   files: ReadonlySet<string> | undefined;
-  editFile: (path: string, edit: (text: string) => string) => Promise<void>;
+  /**
+   * Changes the manifest and writes the import (one undo step). A
+   * function, not an event: the menu closes (and unmounts) while the
+   * manifest is still being changed.
+   */
+  addLibrary: (
+    manifest: string,
+    edit: (text: string) => string,
+    op?: GraphOp
+  ) => Promise<void>;
   /** A library's module as code names it and its exports. */
   offer: (
     name: string,
     version: string
   ) => Promise<{ module: string; exports: ScriptSymbol[] }>;
-  /**
-   * Writes the import. A function, not an event: the menu closes (and
-   * unmounts) while the manifest is still being changed.
-   */
-  apply: (op: GraphOp) => void;
   /**
    * Only list this library in the manifest (an import's "not listed"
    * warning: the import is there already).
@@ -173,7 +177,7 @@ async function list(as: DependencyKind): Promise<void> {
 
   const { name, version } = chosen.result;
   try {
-    await props.editFile(target, manifestEdit(target, name, version, as));
+    await props.addLibrary(target, manifestEdit(target, name, version, as));
   } catch {
     toasts.show(`${manifestName.value} could not be read.`, 'error');
     return;
@@ -193,19 +197,19 @@ async function add(imported: string | undefined): Promise<void> {
 
   const { name, version } = chosen.result;
   try {
-    await props.editFile(
+    await props.addLibrary(
       target,
-      manifestEdit(target, name, version, kind.value)
+      manifestEdit(target, name, version, kind.value),
+      {
+        type: 'addImport',
+        import: libraryImport(props.path, chosen.module, imported),
+      }
     );
   } catch {
     toasts.show(`${manifestName.value} could not be read.`, 'error');
     return;
   }
 
-  props.apply({
-    type: 'addImport',
-    import: libraryImport(props.path, chosen.module, imported),
-  });
   toasts.show(
     `Added ${name} ${version} to ${target} (unsaved). Run \`${installCommand(props.files, target)}\` to update the lockfile.`
   );

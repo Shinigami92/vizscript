@@ -165,8 +165,20 @@ const { version: languageVersion, versionFiles } = useLanguageVersion({
   files: () => props.files,
   readFile: () => props.readFile,
 });
-const { moduleInfos, addingPackage, canAddPackage, editOtherFile } =
-  useLibraryAdditions({ props, doc, version: languageVersion });
+const {
+  moduleInfos,
+  addingPackage,
+  canAddPackage,
+  addLibrary,
+  restoreOtherFile,
+} = useLibraryAdditions({
+  props,
+  doc,
+  version: languageVersion,
+  apply: (op) => onScriptOp(op),
+  codeVersion: () => codeHistory.value.version,
+  recordFileEdit: (edit, beforeVersion) => recordFileEdit(edit, beforeVersion),
+});
 
 const {
   resolveReference,
@@ -221,6 +233,7 @@ const {
   parsed,
   recordOverlayCode,
   recordCodeOverlay,
+  recordFileEdit,
   onLayoutChange,
   boxColorOf,
   setBoxColor,
@@ -235,6 +248,7 @@ const {
   undoCode: () => editor.value?.undo(),
   redoCode: () => editor.value?.redo(),
   setOverlay: (overlay) => setOverlay(overlay),
+  restoreFile: restoreOtherFile,
   show,
 });
 const placedLayout = usePlacedLayout({ pinned, recordCodeLayout });
@@ -1058,9 +1072,8 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :at="addingPackage"
         :path="path"
         :files="files"
-        :edit-file="editOtherFile"
+        :add-library="addLibrary"
         :offer="packageOffer"
-        :apply="onScriptOp"
         :list-only="addingPackage.library"
         @close="addingPackage = null"
       />

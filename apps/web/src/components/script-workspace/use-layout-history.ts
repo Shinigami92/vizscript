@@ -35,7 +35,23 @@ type HistoryStep =
       beforeVersion?: number;
       /** Layout entries made with the code it wrote (Gets kept as nodes). */
       layout?: { before: LayoutPatch; after: LayoutPatch };
+    }
+  | {
+      kind: 'file';
+      /** Another file's text before and after (a library's manifest). */
+      edit: FileEdit;
+      codeVersion: number;
+      /** The step also wrote code (the library's import). */
+      code?: boolean;
+      beforeVersion?: number;
     };
+
+/** A change of another file of the session, undone with this file's. */
+export interface FileEdit {
+  path: string;
+  before: string;
+  after: string;
+}
 
 export interface EditorHistory {
   canUndo: boolean;
@@ -56,6 +72,11 @@ export interface LayoutHistoryDeps {
   redoCode: () => void;
   /** Restores graph-only edits (undo / redo). */
   setOverlay: (overlay: GraphOverlay) => void;
+  /**
+   * Sets another file's text to `to` if it is still `from`: false when it
+   * changed since.
+   */
+  restoreFile: (path: string, from: string, to: string) => Promise<boolean>;
   show: (message: string, kind?: 'info' | 'error') => void;
 }
 
@@ -91,6 +112,11 @@ export interface LayoutHistory {
     after: GraphOverlay,
     layout: LayoutPatch
   ) => void;
+  /**
+   * Another file changed together with the code edits made since the code
+   * had `beforeVersion` (a manifest with a library's import): one step.
+   */
+  recordFileEdit: (edit: FileEdit, beforeVersion: number) => void;
   onLayoutChange: (patch: LayoutPatch) => void;
   /** Colors of comment boxes are layout entries, undone like moves. */
   boxColorOf: (boxId: string) => number;
@@ -307,6 +333,30 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     applyLayoutPatch(layout);
   }
 
+  function recordFileEdit(edit: FileEdit, beforeVersion: number): void {
+    const { version } = codeHistory.value;
+    undoStack.value = [
+      ...undoStack.value.slice(-199),
+      {
+        kind: 'file',
+        edit,
+        codeVersion: version,
+        code: version !== beforeVersion,
+        beforeVersion,
+      },
+    ];
+    redoStack.value = [];
+  }
+
+  async function setFile(edit: FileEdit, undone: boolean): Promise<void> {
+    const [from, to] = undone
+      ? [edit.after, edit.before]
+      : [edit.before, edit.after];
+    if (!(await deps.restoreFile(edit.path, from, to))) {
+      show(`${edit.path} changed since: it stays as it is.`, 'error');
+    }
+  }
+
   function undo(): void {
     const step = undoStack.value.at(-1);
     if (
@@ -321,6 +371,12 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
         if (step.code) {
           deps.undoCode();
         }
+      } else if (step.kind === 'file') {
+        if (step.code) {
+          deps.undoCode();
+        }
+
+        void setFile(step.edit, true);
       } else {
         if (step.layout) {
           applyLayoutPatch(step.layout.before);
@@ -354,6 +410,12 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
         deps.redoCode();
       } else if (step.kind === 'layout') {
         applyLayoutPatch(step.after);
+      } else if (step.kind === 'file') {
+        if (step.code) {
+          deps.redoCode();
+        }
+
+        void setFile(step.edit, false);
       } else {
         if (step.code) {
           afterParse = step.layout?.after ?? null;
@@ -444,6 +506,7 @@ export function useLayoutHistory(deps: LayoutHistoryDeps): LayoutHistory {
     parsed,
     recordOverlayCode,
     recordCodeOverlay,
+    recordFileEdit,
     onLayoutChange,
     boxColorOf,
     setBoxColor,
