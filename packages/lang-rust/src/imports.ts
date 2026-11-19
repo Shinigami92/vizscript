@@ -4,6 +4,7 @@ import type {
   GraphDocument,
   ImportRequest,
   OpResult,
+  Reexport,
   ScriptSymbol,
 } from '@vizscript/core';
 import { insertImport, joinImport, symbolId } from '@vizscript/core';
@@ -48,6 +49,8 @@ export interface UseBinding {
   /** Ranges of the path's segments, for Ctrl/Cmd+click. */
   path: Array<{ text: string; start: number; end: number }>;
   isPub: boolean;
+  /** `use a::b::*;` (`name` and `imported` are `*`, `path` the module's). */
+  glob?: boolean;
 }
 
 /**
@@ -152,6 +155,26 @@ export function rustUses(text: string): UseBinding[] {
         return;
       }
 
+      case 'UseWildcard': {
+        const path = [...prefix, ...segmentsOf(node)];
+        const first = path[0];
+        if (first) {
+          result.push({
+            name: '*',
+            module: path.map((p) => p.text).join('::'),
+            imported: '*',
+            range: { start: node.from, end: node.to },
+            nameRange: { start: node.to - 1, end: node.to },
+            statement: { start: statement.from, end: statement.to },
+            path,
+            isPub,
+            glob: true,
+          });
+        }
+
+        return;
+      }
+
       default: {
         return;
       }
@@ -184,12 +207,33 @@ export function rustUses(text: string): UseBinding[] {
   return result;
 }
 
+/**
+ * What a file re-exports with `pub use`: names (`pub use crate::walk::{
+ * WalkBuilder, Walk as W }`) and globs (`pub use self::types::*`), from
+ * their module path.
+ */
+export function rustReexports(text: string): Reexport[] {
+  return rustUses(text).flatMap((use): Reexport[] => {
+    if (!use.isPub || use.name === '_') {
+      return [];
+    }
+
+    if (use.glob) {
+      return [{ module: use.module, imported: '*', name: '*' }];
+    }
+
+    return use.imported === '*'
+      ? []
+      : [{ module: use.module, imported: use.imported, name: use.name }];
+  });
+}
+
 /** `use` bindings as symbols of "My Script". */
 export function rustImports(text: string): ScriptSymbol[] {
   const symbols: ScriptSymbol[] = [];
   for (const use of rustUses(text)) {
     const id = symbolId('import', '', use.name);
-    if (symbols.some((s) => s.id === id) || use.name === '_') {
+    if (symbols.some((s) => s.id === id) || use.name === '_' || use.glob) {
       continue;
     }
 

@@ -131,7 +131,7 @@ export function rustReferences(
   >();
 
   for (const use of rustUses(text)) {
-    const moduleParts = use.path.slice(0, -1);
+    const moduleParts = use.glob ? use.path : use.path.slice(0, -1);
     const module = pathCandidates(
       moduleParts.map((p) => p.text),
       fileName
@@ -149,7 +149,7 @@ export function rustReferences(
       candidates: module.candidates,
       ...(module.anchor ? { anchor: module.anchor } : {}),
     });
-    if (!item) {
+    if (!item || use.glob) {
       continue;
     }
 
@@ -177,10 +177,12 @@ export function rustReferences(
   const { tree } = parseRustTree(text);
   const modPrefix = selfPrefix(fileName);
   const modules = new Map(
-    rustUses(text).map((use) => [
-      use.name,
-      use.path.map((p) => p.text).filter((p) => p !== 'self'),
-    ])
+    rustUses(text)
+      .filter((use) => !use.glob)
+      .map((use) => [
+        use.name,
+        use.path.map((p) => p.text).filter((p) => p !== 'self'),
+      ])
   );
   tree.iterate({
     enter: (ref) => {

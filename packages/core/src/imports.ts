@@ -207,6 +207,11 @@ export function exportedTypeMembers(
   });
 }
 
+/** An export's key: members of exported types go by their type. */
+function exportKey(scope: string, name: string): string {
+  return `${scope}\0${name}`;
+}
+
 /**
  * Exports of a module including what it re-exports: `resolve` returns the
  * exports of another module (already followed), or nothing when unknown.
@@ -218,11 +223,15 @@ export async function withReexports(
   resolve: (module: string) => Promise<ReadonlyArray<ScriptSymbol>>
 ): Promise<ScriptSymbol[]> {
   const result = [...exports];
-  const names = new Set(result.map((s) => s.name));
-  const add = (symbol: ScriptSymbol, name: string): void => {
-    if (!names.has(name)) {
-      names.add(name);
-      result.push(name === symbol.name ? symbol : { ...symbol, name });
+  const names = new Set(result.map((s) => exportKey(s.scope, s.name)));
+  const add = (symbol: ScriptSymbol, name: string, scope = ''): void => {
+    if (!names.has(exportKey(scope, name))) {
+      names.add(exportKey(scope, name));
+      result.push(
+        name === symbol.name && scope === symbol.scope
+          ? symbol
+          : { ...symbol, name, scope }
+      );
     }
   };
 
@@ -239,14 +248,14 @@ export async function withReexports(
       // `export *` leaves out the default export.
       for (const symbol of from) {
         if (!symbol.modifiers.includes('export default')) {
-          add(symbol, symbol.name);
+          add(symbol, symbol.name, symbol.scope);
         }
       }
     } else if (reexport.imported !== '*') {
       const symbol =
         reexport.imported === 'default'
           ? defaultExport(from)
-          : from.find((s) => s.name === reexport.imported);
+          : from.find((s) => s.scope === '' && s.name === reexport.imported);
       if (symbol) {
         add(
           reexport.name === 'default'
@@ -254,6 +263,12 @@ export async function withReexports(
             : symbol,
           reexport.name === 'default' ? symbol.name : reexport.name
         );
+        // A type brings its members along, under its new name.
+        for (const member of from) {
+          if (member.scope !== '' && member.scope === symbol.name) {
+            add(member, member.name, reexport.name);
+          }
+        }
       }
     }
   }

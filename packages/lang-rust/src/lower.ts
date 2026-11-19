@@ -18,7 +18,7 @@ import type { FunctionItem, Item, ValueItem } from './ast';
 import { RUST_CONTAINER_OPS } from './container-ops';
 import { parseRust } from './convert';
 import { dataTypeOf } from './data-type';
-import { rustImports } from './imports';
+import { rustImports, rustReexports } from './imports';
 import type { GraphSource, LoweringContext, Signature } from './lower-utils';
 import { rustPaths } from './paths';
 import { FnGraphBuilder } from './statement-lowering';
@@ -160,6 +160,11 @@ export function parseRustDocument(
     })),
     symbols: [...rustImports(text), ...rustSymbols(items, text)],
   };
+  const reexports = rustReexports(text);
+  if (reexports.length > 0) {
+    doc.reexports = reexports;
+  }
+
   const paths = rustPaths(text);
   if (paths.length > 0) {
     doc.libraryPaths = paths;

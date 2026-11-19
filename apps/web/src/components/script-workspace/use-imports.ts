@@ -9,6 +9,7 @@ import {
   exportedSymbols,
   exportedTypeMembers,
   resolveModuleReference,
+  withReexports,
 } from '@vizscript/core';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
@@ -225,26 +226,89 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
   /** What imported files export, by path (parsed once per workspace). */
   const exportsByPath = new Map<string, Promise<ScriptSymbol[]>>();
 
+  /** A file parsed for its exports (once per workspace). */
+  interface ParsedFile {
+    source: string;
+    doc: GraphDocument;
+    exports: ScriptSymbol[];
+  }
+
+  const parsedFiles = new Map<string, Promise<ParsedFile | undefined>>();
+
+  function parsedFile(path: string): Promise<ParsedFile | undefined> {
+    let parsed = parsedFiles.get(path);
+    if (!parsed) {
+      const read = props.readFile;
+      parsed = read
+        ? read(path)
+            .then(async (source) => {
+              const fileDoc = await client.parse(source, path, undefined, {
+                background: true,
+              });
+              return {
+                source,
+                doc: fileDoc,
+                exports: withTypeMembers(fileDoc, source),
+              };
+            })
+            .catch(() => undefined)
+        : Promise.resolve(undefined);
+      parsedFiles.set(path, parsed);
+    }
+
+    return parsed;
+  }
+
+  /**
+   * Exports of a file of the repository; a Rust file's with what it
+   * re-exports (`pub use crate::walk::WalkBuilder;`, globs), followed
+   * through the files and crates they come from.
+   */
   function exportsOf(path: string): Promise<ScriptSymbol[]> {
     let exports = exportsByPath.get(path);
     if (!exports) {
-      const read = props.readFile;
-      exports = read
-        ? read(path)
-            .then(async (source) =>
-              withTypeMembers(
-                await client.parse(source, path, undefined, {
-                  background: true,
-                }),
-                source
-              )
-            )
-            .catch(() => [])
-        : Promise.resolve([]);
+      exports = followed(path, new Set());
       exportsByPath.set(path, exports);
     }
 
     return exports;
+  }
+
+  /** `seen`: files on the way here (re-exports may run in a circle). */
+  async function followed(
+    path: string,
+    seen: ReadonlySet<string>
+  ): Promise<ScriptSymbol[]> {
+    const file = await parsedFile(path);
+    const reexports = file?.doc.reexports ?? [];
+    if (
+      !file ||
+      file.doc.language !== 'rust' ||
+      reexports.length === 0 ||
+      seen.has(path)
+    ) {
+      return file?.exports ?? [];
+    }
+
+    const next = new Set([...seen, path]);
+    const fileReferences = await client
+      .references(file.source, path)
+      .catch(() => []);
+    const files = props.files;
+    return withReexports(file.exports, reexports, async (module) => {
+      const reference = fileReferences.find(
+        (r) => !r.symbol && r.specifier === module
+      );
+      if (!reference) {
+        // Another crate (`pub use serde_json::Value;`).
+        return libraryExports(module);
+      }
+
+      const target = files
+        ? resolveModuleReference(path, reference, (p) => files.has(p))
+        : null;
+      return target ? followed(target, next) : [];
+    }).catch(() => file.exports);
   }
 
   // ----------------------------------------------------- project index

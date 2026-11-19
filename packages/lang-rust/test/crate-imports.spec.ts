@@ -1,5 +1,9 @@
 import type { GraphDocument, ImportedDeclaration, Pin } from '@vizscript/core';
-import { exportedSymbols, exportedTypeMembers } from '@vizscript/core';
+import {
+  exportedSymbols,
+  exportedTypeMembers,
+  withReexports,
+} from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
 import { parseRustDocument } from '../src';
 
@@ -218,5 +222,55 @@ fn f(v: serde_json::Value, r: std::io::Result<()>) -> crate::Item {
     expect(typeOf('serde_json::Value::Null')).toBe('Value');
     expect(typeOf('serde_json::Client::new()')).toBe('Client');
     expect(typeOf('client.timeout')).toBe('u64');
+  });
+});
+
+describe('pub use re-exports', () => {
+  const LIB = `mod walk;
+pub mod overrides;
+
+pub use crate::walk::{Walk, WalkBuilder as Builder};
+pub use self::types::*;
+pub use serde_json;
+use crate::private::Hidden;
+`;
+
+  it('lists names and globs a file re-exports', () => {
+    expect(parseRustDocument(LIB, 'src/lib.rs').reexports).toEqual([
+      { module: 'crate::walk', imported: 'Walk', name: 'Walk' },
+      { module: 'crate::walk', imported: 'WalkBuilder', name: 'Builder' },
+      { module: 'self::types', imported: '*', name: '*' },
+    ]);
+  });
+
+  it('keeps globs out of the imports of My Script', () => {
+    const imports = (parseRustDocument(LIB, 'src/lib.rs').symbols ?? [])
+      .filter((s) => s.kind === 'import')
+      .map((s) => s.name);
+    expect(imports).toEqual(['Walk', 'Builder', 'serde_json', 'Hidden']);
+  });
+
+  it('brings the members of a re-exported type along', async () => {
+    const walk = `pub struct WalkBuilder {}
+impl WalkBuilder {
+    pub fn new(path: &str) -> Self {}
+    pub fn max_depth(&mut self, depth: Option<usize>) -> &mut WalkBuilder {}
+}
+`;
+    const doc = parseRustDocument(walk, 'src/walk.rs');
+    const exports = [
+      ...exportedSymbols(doc, walk),
+      ...exportedTypeMembers(doc, walk),
+    ];
+    const all = await withReexports(
+      [],
+      [{ module: 'crate::walk', imported: 'WalkBuilder', name: 'Builder' }],
+      async () => exports
+    );
+    expect(all.map((s) => `${s.scope}.${s.name}`)).toEqual([
+      '.Builder',
+      'Builder.new',
+      'Builder.max_depth',
+    ]);
   });
 });
