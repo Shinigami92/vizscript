@@ -17,6 +17,7 @@ import {
   watch,
 } from 'vue';
 import { usesSnakeCase } from '../graph/languages';
+import type { ModuleInfo } from '../graph/module-info';
 import {
   countedUses,
   DRAGGABLE_KINDS,
@@ -49,6 +50,8 @@ const props = defineProps<{
   types?: TypeSystemInfo | null;
   /** Whether an import resolves to a file that can be opened. */
   canOpenImport?: (symbol: ScriptSymbol) => boolean;
+  /** Library, version and dependency kind of imported modules. */
+  moduleInfo?: ReadonlyMap<string, ModuleInfo>;
 }>();
 
 const emit = defineEmits<{
@@ -105,6 +108,17 @@ function matches(symbol: ScriptSymbol): boolean {
     symbol.name.toLowerCase().includes(q) ||
     (symbol.type?.text.toLowerCase().includes(q) ?? false)
   );
+}
+
+/**
+ * The library info of an import group: none for files of the repository
+ * (a module that resolves to one isn't a missing dependency).
+ */
+function infoOf(group: Group): ModuleInfo | undefined {
+  const first = group.items[0];
+  return first && props.canOpenImport?.(first)
+    ? undefined
+    : props.moduleInfo?.get(group.owner);
 }
 
 function grouped(items: ReadonlyArray<ScriptSymbol>): Group[] {
@@ -749,6 +763,30 @@ function addLabel(kind: AddKind, owner: string): string {
                   :title="group.owner"
                   >{{ group.owner }}</span
                 >
+                <template v-if="section.id === 'imports' && infoOf(group)">
+                  <span
+                    v-if="infoOf(group)?.badge"
+                    data-ui="import-kind"
+                    class="shrink-0 rounded bg-zinc-800 px-1 text-[10px] leading-4 text-zinc-400"
+                    :title="infoOf(group)?.title"
+                    >{{ infoOf(group)?.badge }}</span
+                  >
+                  <span
+                    v-if="infoOf(group)?.label"
+                    data-ui="import-version"
+                    class="max-w-24 shrink-0 truncate font-mono text-[11px] text-zinc-500"
+                    :title="infoOf(group)?.title"
+                    >{{ infoOf(group)?.label }}</span
+                  >
+                  <span
+                    v-if="infoOf(group)?.warning"
+                    data-ui="import-warning"
+                    class="i-mdi-alert-outline shrink-0 text-amber-400"
+                    role="img"
+                    :aria-label="infoOf(group)?.warning"
+                    :title="infoOf(group)?.warning"
+                  />
+                </template>
                 <button
                   v-if="editable && section.add && !group.category"
                   type="button"

@@ -80,6 +80,7 @@ import { useImports } from './script-workspace/use-imports';
 import { useKeptNodes } from './script-workspace/use-kept-nodes';
 import { useLanguageVersion } from './script-workspace/use-language-version';
 import { useLayoutHistory } from './script-workspace/use-layout-history';
+import { useModuleInfo } from './script-workspace/use-module-info';
 import { useOpRunner } from './script-workspace/use-op-runner';
 import { provideParseValue } from './script-workspace/use-parse-value';
 import { usePinnedLayout } from './script-workspace/use-pinned-layout';
@@ -165,6 +166,8 @@ const { version: languageVersion, versionFiles } = useLanguageVersion({
   files: () => props.files,
   readFile: () => props.readFile,
 });
+/** Versions and dependency kinds of the imported modules (My Script). */
+const moduleInfos = useModuleInfo({ props, doc, version: languageVersion });
 
 const {
   resolveReference,
@@ -1147,6 +1150,7 @@ defineExpose({ frameAll: () => canvas.value?.frameAll() });
         :current-function="currentFunction"
         :editable="editable"
         :can-open-import="canOpenImport"
+        :module-info="moduleInfos"
         @select-symbol="selectSymbol"
         @open-symbol="openSymbol"
         @open-import="openImport"
