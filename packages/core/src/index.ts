@@ -1,6 +1,7 @@
 export * from './call-pins';
 export * from './callee';
 export * from './constant-value';
+export * from './dependencies';
 export * from './grid';
 export * from './infer-types';
 export * from './collapse';

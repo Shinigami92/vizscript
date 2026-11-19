@@ -13,11 +13,8 @@ import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { computed, shallowRef } from 'vue';
 import type { GraphClient } from '../../graph/graph-client';
 import { languageOf } from '../../graph/languages';
-import {
-  nearestPackageRange,
-  NpmTypes,
-  packageName,
-} from '../../graph/npm-types';
+import { packageVersion } from '../../graph/npm-project';
+import { NpmTypes, packageName } from '../../graph/npm-types';
 import type { ExternalName } from '../../graph/project-index';
 import {
   candidateFiles,
@@ -319,7 +316,7 @@ export function useImports(deps: ImportDeps): WorkspaceImports {
   const libraryCache = new Map<string, Promise<ScriptSymbol[]>>();
 
   function packageRange(name: string): Promise<string> {
-    return nearestPackageRange(props.files, props.readFile, props.path, name);
+    return packageVersion(props.files, props.readFile, props.path, name);
   }
 
   /** Exports of a stub file, parsed like a file of the language. */

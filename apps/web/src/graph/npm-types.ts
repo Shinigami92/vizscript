@@ -116,50 +116,6 @@ export function packageName(specifier: string): string | undefined {
   return first || undefined;
 }
 
-/**
- * Version range of an npm package in the nearest `package.json` above
- * `path`: `latest` when none lists it, `''` for packages of the repository
- * (`workspace:`).
- */
-export async function nearestPackageRange(
-  files: ReadonlySet<string> | undefined,
-  read: ((path: string) => Promise<string>) | undefined,
-  path: string,
-  name: string
-): Promise<string> {
-  if (!files || !read) {
-    return 'latest';
-  }
-
-  const dirs = path.split('/').slice(0, -1);
-  for (;;) {
-    const manifest = [...dirs, 'package.json'].join('/');
-    if (files.has(manifest)) {
-      try {
-        const json = JSON.parse(await read(manifest)) as Record<
-          string,
-          Record<string, string> | undefined
-        >;
-        const range =
-          json.dependencies?.[name] ??
-          json.devDependencies?.[name] ??
-          json.peerDependencies?.[name];
-        if (range !== undefined) {
-          return /^(?:workspace|file|link|portal):/.test(range) ? '' : range;
-        }
-      } catch {
-        // not JSON: look further up
-      }
-    }
-
-    if (dirs.length === 0) {
-      return 'latest';
-    }
-
-    dirs.pop();
-  }
-}
-
 interface Manifest {
   /** URL of the package version's folder (ends with `/`). */
   base: string;

@@ -8,7 +8,8 @@ import {
   declarationSpecifiers,
   npmDeclarations,
 } from '../../graph/npm-declarations';
-import { nearestPackageRange, packageName } from '../../graph/npm-types';
+import { packageVersion } from '../../graph/npm-project';
+import { packageName } from '../../graph/npm-types';
 import { clearProjectLibs, setProjectLibs } from '../../monaco/project-libs';
 import type { ScriptWorkspaceProps } from './types';
 
@@ -139,7 +140,7 @@ export function useTypeLibs(deps: TypeLibDeps): void {
         async (name) =>
           [
             name,
-            await nearestPackageRange(props.files, props.readFile, path, name),
+            await packageVersion(props.files, props.readFile, path, name),
           ] as const
       )
     );
