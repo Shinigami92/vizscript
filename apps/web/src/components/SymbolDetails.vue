@@ -15,7 +15,9 @@ import {
 import { computed, ref, watch } from 'vue';
 import { lineColumn, snippet } from '../graph/source';
 import {
+  decoratable,
   decoratorsOf,
+  hasEditableTypeParams,
   SYMBOL_BARS,
   SYMBOL_ICONS,
   symbolSubtitle,
@@ -26,6 +28,7 @@ import {
 import DetailsHeader from './DetailsHeader.vue';
 import DetailsSection from './DetailsSection.vue';
 import PinIcon from './PinIcon.vue';
+import DecoratorList from './symbol-details/DecoratorList.vue';
 import SymbolExportHint from './symbol-details/SymbolExportHint.vue';
 import SymbolFields from './symbol-details/SymbolFields.vue';
 import SymbolSignature from './symbol-details/SymbolSignature.vue';
@@ -154,6 +157,33 @@ function cancelRename(event: KeyboardEvent): void {
 }
 /** Decorators (`@Get()`) or GDScript's other annotations, as written. */
 const decorators = computed(() => decoratorsOf(props.symbol));
+
+/** Decorators are edited here where the language allows them. */
+const editsDecorators = computed(
+  () =>
+    props.editable &&
+    decoratable(props.types, props.doc, props.symbol).declaration
+);
+
+const editsTypeParams = computed(
+  () => props.editable && hasEditableTypeParams(props.types, props.symbol)
+);
+
+function setDecorator(index: number | undefined, text: string | null): void {
+  emit('op', {
+    type: 'setDecorator',
+    symbol: props.symbol.id,
+    ...(index === undefined ? {} : { index }),
+    text,
+  });
+}
+
+function setTypeParams(event: Event): void {
+  const text = (event.target as HTMLInputElement).value.trim();
+  if (text !== (props.symbol.typeParams ?? []).join(', ')) {
+    emit('op', { type: 'setTypeParams', symbol: props.symbol.id, text });
+  }
+}
 
 /** What an import takes from its module, in words. */
 const importedText = computed(() => {
@@ -524,24 +554,37 @@ function setModifier(modifier: string, enabled: boolean): void {
         </template>
         <!-- Like UE's specifiers (UFUNCTION(BlueprintCallable)): edited in
              the code for now. -->
-        <template v-if="decorators.length > 0">
-          <dt class="text-zinc-500">
+        <template v-if="decorators.length > 0 || editsDecorators">
+          <dt :class="editsDecorators ? 'pt-1' : ''" class="text-zinc-500">
             {{ language === 'gdscript' ? 'Annotations' : 'Decorators' }}
           </dt>
-          <dd
-            data-ui="symbol-decorators"
-            class="flex min-w-0 flex-col gap-0.5 font-mono text-zinc-200"
-          >
-            <span
-              v-for="decorator in decorators"
-              :key="decorator"
-              class="truncate"
-              :title="decorator"
-              >{{ decorator }}</span
-            >
+          <dd data-ui="symbol-decorators" class="min-w-0">
+            <DecoratorList
+              :decorators="decorators"
+              :editable="editsDecorators"
+              :owner="symbol.name"
+              @set="setDecorator"
+            />
           </dd>
         </template>
-        <template v-if="symbol.typeParams">
+        <template v-if="editsTypeParams">
+          <dt class="pt-1 text-zinc-500">Type parameters</dt>
+          <dd data-ui="symbol-type-params" class="min-w-0">
+            <input
+              :key="typeParamsText(symbol)"
+              class="input py-0.5 font-mono text-xs"
+              :value="(symbol.typeParams ?? []).join(', ')"
+              placeholder="none"
+              :aria-label="`Type parameters of ${symbol.name}`"
+              spellcheck="false"
+              @keydown.enter.prevent="
+                ($event.target as HTMLInputElement).blur()
+              "
+              @change="setTypeParams"
+            />
+          </dd>
+        </template>
+        <template v-else-if="symbol.typeParams">
           <dt class="text-zinc-500">Type parameters</dt>
           <dd
             data-ui="symbol-type-params"

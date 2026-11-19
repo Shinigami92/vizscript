@@ -11,13 +11,14 @@ import type {
 import { fieldValue, isArrayType } from '@vizscript/core';
 import { computed, nextTick, ref, watch } from 'vue';
 import { usesSnakeCase } from '../../graph/languages';
-import { parameterUses } from '../../graph/symbols';
+import { decoratable, parameterUses } from '../../graph/symbols';
 import DetailsSection from '../DetailsSection.vue';
 import NumberField from '../NumberField.vue';
 import PinIcon from '../PinIcon.vue';
 import TypePicker from '../TypePicker.vue';
 import ValueFields from '../ValueFields.vue';
 import ArrayDefaultField from './ArrayDefaultField.vue';
+import DecoratorList from './DecoratorList.vue';
 import { PLACEHOLDER_VALUES, stringValue, valueKindOf } from './value-kinds';
 
 /** Inputs and output of a function or signal (UE: Inputs / Outputs). */
@@ -56,6 +57,25 @@ const editingSignature = computed(
       props.symbol.kind === 'method' ||
       props.symbol.kind === 'signal')
 );
+
+/** Inputs of class methods take decorators (`@Param('id')`). */
+const decoratesParams = computed(
+  () => decoratable(props.types, props.doc, props.symbol).params
+);
+
+function setParamDecorator(
+  param: number,
+  index: number | undefined,
+  text: string | null
+): void {
+  emit('op', {
+    type: 'setDecorator',
+    symbol: props.symbol.id,
+    param,
+    ...(index === undefined ? {} : { index }),
+    text,
+  });
+}
 
 function addParameter(): void {
   const taken = new Set((props.symbol.params ?? []).map((p) => p.name));
@@ -426,19 +446,17 @@ function setReturnType(typeText: string | null): void {
               >
             </dd>
           </template>
-          <template v-if="param.decorators">
-            <dt class="text-zinc-500">Decorators</dt>
-            <dd
-              data-ui="parameter-decorators"
-              class="flex min-w-0 flex-col font-mono text-zinc-200"
-            >
-              <span
-                v-for="decorator in param.decorators"
-                :key="decorator"
-                class="truncate"
-                :title="decorator"
-                >{{ decorator }}</span
-              >
+          <template v-if="param.decorators || decoratesParams">
+            <dt class="self-start pt-1 text-zinc-500">Decorators</dt>
+            <dd data-ui="parameter-decorators" class="min-w-0">
+              <DecoratorList
+                :decorators="param.decorators ?? []"
+                :editable="decoratesParams"
+                :owner="`input ${param.name}`"
+                @set="
+                  (decorator, text) => setParamDecorator(index, decorator, text)
+                "
+              />
             </dd>
           </template>
           <dt class="text-zinc-500">Order</dt>

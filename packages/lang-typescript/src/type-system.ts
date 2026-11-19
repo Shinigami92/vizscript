@@ -318,6 +318,8 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
   ],
   containerDefaults: { array: '[]', map: 'new Map()', set: 'new Set()' },
   exposeOnSpawn: true,
+  decorators: { on: ['class', 'member', 'parameter'] },
+  typeParams: true,
   flow: [
     'forEach',
     'forRange',

@@ -168,6 +168,93 @@ describe('decorators and type parameters in symbols', () => {
   });
 });
 
+function decorate(
+  symbol: string,
+  change: { param?: number; index?: number; text: string | null }
+): string {
+  return edited({ type: 'setDecorator', symbol, ...change });
+}
+
+/** Why an op on `GENERIC` was refused. */
+function refused(op: GraphOp): string | undefined {
+  const result = applyTypeScriptOp(GENERIC, op, 'store.ts');
+  return result.ok ? undefined : result.error;
+}
+
+function typed(symbol: string, text: string): string {
+  return edited({ type: 'setTypeParams', symbol, text });
+}
+
+describe('editing decorators and type parameters', () => {
+  it('adds decorators in the style of the others', () => {
+    expect(decorate('method:Store.get', { text: "@Header('x')" })).toContain(
+      "@UseGuards(A, B)\n  @Header('x')\n  async get("
+    );
+    // `@` is added when it is missing.
+    expect(decorate('class:Store', { text: "Controller('x')" })).toContain(
+      "@Injectable()\n@Controller('x')\nclass Store"
+    );
+    expect(decorate('variable:Store.name', { text: '@Output()' })).toContain(
+      "@Input() @Output() name = '';"
+    );
+    expect(
+      decorate('method:Store.get', { param: 0, text: '@Body()' })
+    ).toContain("get(@Param('a') @Body() a: string");
+  });
+
+  it('replaces and removes decorators', () => {
+    expect(
+      decorate('method:Store.get', { index: 1, text: '@UseGuards(C)' })
+    ).toContain('@Get()\n  @UseGuards(C)\n  async get(');
+    expect(decorate('method:Store.get', { index: 0, text: null })).toContain(
+      '{\n  @UseGuards(A, B)\n  async get('
+    );
+    expect(
+      decorate('method:Store.get', { param: 1, index: 0, text: null })
+    ).toContain("@Param('a') a: string, b?: string)");
+  });
+
+  it('refuses what is no decorator, or where none can be', () => {
+    expect(
+      refused({
+        type: 'setDecorator',
+        symbol: 'method:Store.get',
+        text: '@Get(',
+      })
+    ).toBe('"@Get(" is not a valid decorator.');
+    expect(
+      refused({
+        type: 'setDecorator',
+        symbol: 'method:Store.get',
+        text: '@A() m() {} @B()',
+      })
+    ).toMatch(/not a valid decorator/);
+    expect(
+      refused({ type: 'setDecorator', symbol: 'function:call', text: '@Log()' })
+    ).toBe('Only classes and their members have decorators in TypeScript.');
+    expect(
+      refused({
+        type: 'setTypeParams',
+        symbol: 'function:call',
+        text: 'T extends',
+      })
+    ).toBe('"T extends" are not valid type parameters.');
+  });
+
+  it('sets, adds and removes type parameters', () => {
+    expect(typed('class:Store', 'T, K extends keyof T')).toContain(
+      'class Store<T, K extends keyof T> {'
+    );
+    expect(typed('function:call', '')).toContain('export function call(fn:');
+    expect(typed('method:Store.get', '<R = void>')).toContain(
+      'async get<R = void>(@Param'
+    );
+    expect(typed('type:Box', 'T extends () => void')).toContain(
+      'interface Box<T extends () => void> {'
+    );
+  });
+});
+
 describe('calls of generics', () => {
   it('give wildcards for type parameters until the checker knows', () => {
     const doc = parseTypeScript(

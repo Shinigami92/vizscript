@@ -75,6 +75,20 @@ export interface DeclarationSyntax {
     modifier: string,
     enabled: boolean
   ) => OpResult;
+  /** `setDecorator`: adds, replaces or removes a decorator. */
+  setDecorator?: (
+    text: string,
+    doc: GraphDocument,
+    symbol: ScriptSymbol,
+    change: { param?: number; index?: number; text: string | null }
+  ) => OpResult;
+  /** `setTypeParams`: the type parameters of a generic (`''`: none). */
+  setTypeParams?: (
+    text: string,
+    doc: GraphDocument,
+    symbol: ScriptSymbol,
+    params: string
+  ) => OpResult;
   /**
    * Edits that rename a symbol and its uses; backends resolve the uses with
    * their own scope rules.

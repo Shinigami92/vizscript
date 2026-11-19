@@ -1,6 +1,7 @@
 import type { DataType, DeclarationSyntax } from '@vizscript/core';
 import { typeCoversInput } from '@vizscript/core';
 import { addTypeScriptImport } from './add-import';
+import { setDecorator, setTypeParams } from './decorators';
 import { setModifier } from './modifiers';
 import { parseFile } from './parse-file';
 import { renameTypeScriptSymbol, typeScriptCallSites } from './rename';
@@ -63,6 +64,8 @@ export function declarations(
         symbol
       ),
     setModifier,
+    setDecorator,
+    setTypeParams,
     identifier: /^[A-Za-z_$][\w$]*$/,
     keywords: KEYWORDS,
     defaultIndent: '  ',

@@ -273,6 +273,22 @@ export type GraphOp =
       enabled: boolean;
     }
   /**
+   * Adds (no `index`), replaces or, with `text` `null`, removes a decorator
+   * (`@Get()`) of a declaration, or of its parameter `param`.
+   */
+  | {
+      type: 'setDecorator';
+      symbol: string;
+      param?: number;
+      index?: number;
+      text: string | null;
+    }
+  /**
+   * Sets the type parameters of a generic as written between `<` and `>`
+   * (`T, K extends string`); `''` makes it not generic.
+   */
+  | { type: 'setTypeParams'; symbol: string; text: string }
+  /**
    * Adds an input to a function (UE: Inputs `+`). Same-file calls get
    * `argument` when one is given, else they stay as they are (the missing
    * argument shows as an empty pin).
@@ -507,6 +523,13 @@ export interface TypeSystemInfo {
    * switched with the `constructor` modifier.
    */
   exposeOnSpawn?: boolean;
+  /** Decorators can be edited (`setDecorator`) on these declarations. */
+  decorators?: {
+    /** Classes and their members (TypeScript), or functions too (Python). */
+    on: ReadonlyArray<'class' | 'member' | 'function' | 'parameter'>;
+  };
+  /** Generics' type parameters can be edited (`setTypeParams`). */
+  typeParams?: boolean;
   /** Variables can be put into categories (`ScriptSymbol.group`). */
   symbolGroups?: boolean;
   /**

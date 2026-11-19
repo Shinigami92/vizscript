@@ -3,6 +3,7 @@ import type {
   GraphDocument,
   ScriptSymbol,
   SymbolKind,
+  TypeSystemInfo,
 } from '@vizscript/core';
 import { callsOwnFunction, qualifiedName } from '@vizscript/core';
 
@@ -78,6 +79,56 @@ export function typeParamsText(symbol: ScriptSymbol): string {
   return symbol.typeParams && symbol.typeParams.length > 0
     ? `<${symbol.typeParams.join(', ')}>`
     : '';
+}
+
+/**
+ * Where Details edits decorators of `symbol`, as the language allows: on
+ * the declaration and / or its inputs (TypeScript: classes, their members
+ * and the inputs of their methods).
+ */
+export function decoratable(
+  types: TypeSystemInfo | null | undefined,
+  doc: GraphDocument | null | undefined,
+  symbol: ScriptSymbol
+): { declaration: boolean; params: boolean } {
+  const on = types?.decorators?.on ?? [];
+  const member =
+    symbol.scope !== '' &&
+    (doc?.symbols ?? []).some(
+      (s) => s.kind === 'class' && s.scope === '' && s.name === symbol.scope
+    );
+  const callable = symbol.kind === 'function' || symbol.kind === 'method';
+  return {
+    declaration:
+      (symbol.kind === 'class' && on.includes('class')) ||
+      (member && on.includes('member')) ||
+      (symbol.kind === 'function' && on.includes('function')),
+    params:
+      on.includes('parameter') &&
+      callable &&
+      (member || on.includes('function')),
+  };
+}
+
+/**
+ * Whether Details edits the type parameters of `symbol`: functions written
+ * as a declaration, methods, classes and types.
+ */
+export function hasEditableTypeParams(
+  types: TypeSystemInfo | null | undefined,
+  symbol: ScriptSymbol
+): boolean {
+  const arrow = symbol.modifiers.some(
+    (m) => m === 'const' || m === 'let' || m === 'var'
+  );
+  return (
+    types?.typeParams === true &&
+    !symbol.modifiers.includes('callback') &&
+    (symbol.kind === 'class' ||
+      symbol.kind === 'type' ||
+      symbol.kind === 'method' ||
+      (symbol.kind === 'function' && !arrow))
+  );
 }
 
 /** The names of a generic's type parameters: `<T, K>`, else `''`. */

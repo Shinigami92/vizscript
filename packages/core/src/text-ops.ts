@@ -216,7 +216,9 @@ function applySymbolOp(
         | 'renameParameter'
         | 'setParameterType'
         | 'setParameterValue'
-        | 'setReturnType';
+        | 'setReturnType'
+        | 'setDecorator'
+        | 'setTypeParams';
     }
   >,
   syntax: StatementSyntax
@@ -357,6 +359,28 @@ function applySymbolOp(
         setReturnType(text, doc, op.symbol, op.typeText, declarations),
         syntax
       );
+    }
+
+    case 'setDecorator': {
+      const symbol = doc.symbols?.find((s) => s.id === op.symbol);
+      if (!symbol) {
+        return failed('Cannot find this declaration.');
+      }
+
+      return declarations.setDecorator
+        ? declarations.setDecorator(text, doc, symbol, op)
+        : failed('Decorators of this language are edited in the code.');
+    }
+
+    case 'setTypeParams': {
+      const symbol = doc.symbols?.find((s) => s.id === op.symbol);
+      if (!symbol) {
+        return failed('Cannot find this declaration.');
+      }
+
+      return declarations.setTypeParams
+        ? declarations.setTypeParams(text, doc, symbol, op.text)
+        : failed('Type parameters of this language are edited in the code.');
     }
 
     case 'setModifier': {
