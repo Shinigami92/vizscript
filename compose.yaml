@@ -25,6 +25,7 @@ services:
       DATABASE_URL: postgres://vizscript:vizscript@db:5432/vizscript
       APP_SECRET: ${APP_SECRET:?Set APP_SECRET in .env (at least 32 chars)}
       PORT: 3333
+      TYPE_CACHE_MAX_BYTES: ${TYPE_CACHE_MAX_BYTES:-1GB}
     depends_on:
       db:
         condition: service_healthy

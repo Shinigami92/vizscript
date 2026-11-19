@@ -1,0 +1,173 @@
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import type { TypeCacheStats } from '@vizscript/api-contract';
+import { sql } from 'kysely';
+import { createServer } from 'node:http';
+import type { AddressInfo, Server } from 'node:net';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createApp } from '../src/app';
+import type { AppConfig } from '../src/config/config';
+import { createDatabase } from '../src/database/database.module';
+import { TypeCacheService } from '../src/types/type-cache.service';
+
+const databaseUrl = process.env.DATABASE_URL;
+const runId = Math.random().toString(36).slice(2, 8);
+const pkg = `vz-types-${runId}`;
+
+/** jsDelivr in small: the files it has, and how often each was asked for. */
+const upstreamFiles: Record<string, string> = {
+  [`/npm/${pkg}@1.0.0/index.d.ts`]: 'export declare const one: 1;',
+  [`/npm/${pkg}@1.0.0/a.d.ts`]: 'export declare const a: 1;',
+  [`/npm/${pkg}@1.0.0/b.d.ts`]: 'export declare const b: 1;',
+  [`/npm/${pkg}@latest/package.json`]: '{"version":"1.0.0"}',
+  [`/v1/packages/npm/${pkg}@1.0.0?structure=flat`]:
+    '{"files":[{"name":"/index.d.ts"}]}',
+};
+const upstreamRequests = new Map<string, number>();
+
+function get(app: NestFastifyApplication, url: string) {
+  return app.inject({ method: 'GET', url });
+}
+
+describe.skipIf(!databaseUrl)('type registry (e2e)', () => {
+  let app: NestFastifyApplication;
+  let upstream: Server;
+  let config: AppConfig;
+
+  beforeAll(async () => {
+    upstream = createServer((request, response) => {
+      const url = request.url ?? '';
+      upstreamRequests.set(url, (upstreamRequests.get(url) ?? 0) + 1);
+      const body = upstreamFiles[url];
+      response.statusCode = body === undefined ? 404 : 200;
+      response.end(body ?? 'Not found');
+    });
+    await new Promise<void>((resolve) => {
+      upstream.listen(0, '127.0.0.1', resolve);
+    });
+    const base = `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`;
+    config = {
+      port: 0,
+      host: '127.0.0.1',
+      databaseUrl: databaseUrl ?? '',
+      appSecret: 'test-secret-test-secret-test-secret!',
+      secureCookies: false,
+      sessionTtlDays: 1,
+      runMigrations: true,
+      githubApiUrl: 'https://api.github.com',
+      githubRawUrl: 'https://raw.githubusercontent.com',
+      githubWebUrl: 'https://github.com',
+      typeCacheMaxBytes: 1024 * 1024 * 1024,
+      typeUpstream: { cdn: `${base}/`, listing: `${base}/v1/packages/` },
+    };
+    app = await createApp(config, { logger: false });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(async () => {
+    const db = createDatabase(databaseUrl ?? '');
+    await db
+      .deleteFrom('type_cache')
+      .where('key', 'like', `%${pkg}%`)
+      .execute();
+    await db.destroy();
+    await app?.close();
+    upstream?.close();
+  });
+
+  it('fetches a file once and serves it from the cache after', async () => {
+    const url = `/api/types?path=npm/${pkg}@1.0.0/index.d.ts`;
+    const first = await get(app, url);
+    expect(first.statusCode).toBe(200);
+    expect(first.body).toBe('export declare const one: 1;');
+    expect(first.headers['cache-control']).toContain('immutable');
+    const second = await get(app, url);
+    expect(second.body).toBe(first.body);
+    expect(upstreamRequests.get(`/npm/${pkg}@1.0.0/index.d.ts`)).toBe(1);
+  });
+
+  it('remembers files that are missing', async () => {
+    const url = `/api/types?path=npm/${pkg}@1.0.0/missing.d.ts`;
+    expect((await get(app, url)).statusCode).toBe(404);
+    expect((await get(app, url)).statusCode).toBe(404);
+    expect(upstreamRequests.get(`/npm/${pkg}@1.0.0/missing.d.ts`)).toBe(1);
+  });
+
+  it('keeps a version range for a day only', async () => {
+    const response = await get(
+      app,
+      `/api/types?path=npm/${pkg}@latest/package.json`
+    );
+    expect(response.json()).toEqual({ version: '1.0.0' });
+    expect(response.headers['cache-control']).toBe('public, max-age=3600');
+  });
+
+  it('serves listings of exact versions', async () => {
+    const response = await get(app, `/api/types/listing?path=npm/${pkg}@1.0.0`);
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('application/json');
+    expect(response.json()).toEqual({ files: [{ name: '/index.d.ts' }] });
+    expect(
+      (await get(app, `/api/types/listing?path=npm/${pkg}@latest`)).statusCode
+    ).toBe(400);
+  });
+
+  it('refuses anything but declaration files of the allowed sources', async () => {
+    for (const path of [
+      `npm/${pkg}@1.0.0/index.js`,
+      'https://example.test/x.d.ts',
+      `npm/${pkg}@1.0.0/../../x.d.ts`,
+      '',
+    ]) {
+      const response = await get(
+        app,
+        `/api/types?path=${encodeURIComponent(path)}`
+      );
+      expect(response.statusCode).toBe(400);
+    }
+  });
+
+  it('reports how full the cache is', async () => {
+    const stats = (await get(app, '/api/types/stats')).json<TypeCacheStats>();
+    expect(stats.maxBytes).toBe(1024 * 1024 * 1024);
+    expect(stats.entries).toBeGreaterThanOrEqual(4);
+    expect(stats.hits).toBeGreaterThanOrEqual(2);
+    expect(stats.hitRate).toBeGreaterThan(0);
+  });
+
+  it('drops the least recently used files over the limit', async () => {
+    for (const name of ['a', 'b']) {
+      await get(app, `/api/types?path=npm/${pkg}@1.0.0/${name}.d.ts`);
+    }
+
+    // Ours are the newest rows: `b`, then `a`, then the other files.
+    const db = createDatabase(databaseUrl ?? '');
+    const key = (name: string): string => `file:npm/${pkg}@1.0.0/${name}.d.ts`;
+    await db
+      .updateTable('type_cache')
+      .set({ last_used_at: sql`now() + interval '1 day'` })
+      .where('key', '=', key('a'))
+      .execute();
+    await db
+      .updateTable('type_cache')
+      .set({ last_used_at: sql`now() + interval '2 days'` })
+      .where('key', '=', key('b'))
+      .execute();
+
+    // Room for `b` only.
+    const limited = new TypeCacheService(db, {
+      ...config,
+      typeCacheMaxBytes: Buffer.byteLength(
+        upstreamFiles[`/npm/${pkg}@1.0.0/b.d.ts`] ?? ''
+      ),
+    });
+    await limited.evict(true);
+    const left = await db
+      .selectFrom('type_cache')
+      .select('key')
+      .where('key', 'in', [key('a'), key('b')])
+      .execute();
+    await db.destroy();
+    expect(left.map((row) => row.key)).toEqual([key('b')]);
+  });
+});

@@ -16,6 +16,7 @@ export class ConfigController {
         rawUrl: this.config.githubRawUrl,
         webUrl: this.config.githubWebUrl,
       },
+      typeRegistry: true,
     };
   }
 }

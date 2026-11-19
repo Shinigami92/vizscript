@@ -5,5 +5,6 @@ export default defineProject({
     name: '@vizscript/api',
     environment: 'node',
     setupFiles: ['reflect-metadata'],
+    globalSetup: ['test/global-setup.ts'],
   },
 });

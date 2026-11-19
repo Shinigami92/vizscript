@@ -1,13 +1,11 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { RepoSummary } from '@vizscript/api-contract';
-import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import { SecretBox } from '../src/common/crypto';
 import type { AppConfig } from '../src/config/config';
-import { loadConfig } from '../src/config/config';
+import { DEFAULT_TYPE_CACHE_BYTES, loadConfig } from '../src/config/config';
 import { createDatabase } from '../src/database/database.module';
-import { runMigrations } from '../src/database/migrate';
 import type { ScmProvider } from '../src/scm/scm-provider';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -141,11 +139,12 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
       githubApiUrl: 'https://api.github.com',
       githubRawUrl: 'https://raw.githubusercontent.com',
       githubWebUrl: 'https://github.com',
+      typeCacheMaxBytes: DEFAULT_TYPE_CACHE_BYTES,
+      typeUpstream: {
+        cdn: 'http://127.0.0.1:9/',
+        listing: 'http://127.0.0.1:9/',
+      },
     };
-    await runMigrations(
-      config.databaseUrl,
-      join(import.meta.dirname, '..', 'migrations')
-    );
     app = await createApp(config, {
       scmProviders: [fakeProvider],
       logger: false,
@@ -339,6 +338,7 @@ describe.skipIf(!databaseUrl)('api (e2e)', () => {
         rawUrl: 'https://raw.githubusercontent.com',
         webUrl: 'https://github.com',
       },
+      typeRegistry: true,
     });
   });
 

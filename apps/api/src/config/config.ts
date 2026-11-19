@@ -19,7 +19,14 @@ export interface AppConfig {
    * repositories (a higher hourly limit than without one).
    */
   githubServerToken?: string;
+  /** Size the type registry's cache may grow to, in bytes (1 GB default). */
+  typeCacheMaxBytes: number;
+  /** Where library types come from (jsDelivr; tests use a local server). */
+  typeUpstream: { cdn: string; listing: string };
 }
+
+/** 1 GB. */
+export const DEFAULT_TYPE_CACHE_BYTES = 1024 * 1024 * 1024;
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
 
@@ -55,6 +62,23 @@ function webUrlOf(apiUrl: string): string {
     : apiUrl.replace(/\/api\/v3$/, '');
 }
 
+/** `1073741824`, `512MB`, `2GB` → bytes; the default when unset. */
+export function byteSize(value: string | undefined): number {
+  if (!value) {
+    return DEFAULT_TYPE_CACHE_BYTES;
+  }
+
+  const match = value.trim().match(/^(\d+(?:\.\d+)?)\s*([kmg]?)b?$/i);
+  if (!match?.[1]) {
+    throw new Error(`TYPE_CACHE_MAX_BYTES is no size: ${value}`);
+  }
+
+  const unit = { '': 1, k: 1024, m: 1024 ** 2, g: 1024 ** 3 }[
+    (match[2] ?? '').toLowerCase() as '' | 'k' | 'm' | 'g'
+  ];
+  return Math.round(Number(match[1]) * unit);
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const appSecret = required(env, 'APP_SECRET');
   if (appSecret.length < 32) {
@@ -78,5 +102,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...(env.GITHUB_SERVER_TOKEN
       ? { githubServerToken: env.GITHUB_SERVER_TOKEN }
       : {}),
+    typeCacheMaxBytes: byteSize(env.TYPE_CACHE_MAX_BYTES),
+    typeUpstream: {
+      cdn: `${withoutSlash(env.TYPE_CDN_URL ?? 'https://cdn.jsdelivr.net')}/`,
+      listing: `${withoutSlash(
+        env.TYPE_LISTING_URL ?? 'https://data.jsdelivr.com/v1/packages'
+      )}/`,
+    },
   };
 }

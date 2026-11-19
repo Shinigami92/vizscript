@@ -123,6 +123,26 @@ export interface ClientConfig {
     /** Web pages of GitHub (`https://github.com`, or the Enterprise host). */
     webUrl: string;
   };
+  /**
+   * The server serves library types (`GET /api/types?path=…`, the paths
+   * of jsDelivr) from its cache, so browsers don't fetch them one by one.
+   */
+  typeRegistry: boolean;
+}
+
+/** How full the type registry's cache is (`GET /api/types/stats`). */
+export interface TypeCacheStats {
+  entries: number;
+  /** Size of all cached files. */
+  bytes: number;
+  /** `TYPE_CACHE_MAX_BYTES`. */
+  maxBytes: number;
+  /** Answers from the cache since the server started. */
+  hits: number;
+  /** Files fetched from upstream since the server started. */
+  fetches: number;
+  /** `hits / (hits + fetches)`; `null` before the first request. */
+  hitRate: number | null;
 }
 
 /**

@@ -20,6 +20,8 @@ import type { ScmProvider } from './scm/scm-provider';
 import { SCM_PROVIDERS } from './scm/scm-provider';
 import { ScmController } from './scm/scm.controller';
 import { ScmRegistry } from './scm/scm.registry';
+import { TypeCacheService } from './types/type-cache.service';
+import { TypesController } from './types/types.controller';
 
 @Module({})
 export class AppModule {
@@ -45,6 +47,7 @@ export class AppModule {
         RecentController,
         HealthController,
         ConfigController,
+        TypesController,
       ],
       providers: [
         GitHubProvider,
@@ -62,6 +65,7 @@ export class AppModule {
         LayoutService,
         PreferencesService,
         RecentService,
+        TypeCacheService,
       ],
     };
   }

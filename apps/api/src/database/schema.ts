@@ -71,6 +71,18 @@ export interface RecentProjectsTable {
   opened_at: Generated<Date>;
 }
 
+export interface TypeCacheTable {
+  key: string;
+  status: number;
+  body: string;
+  size: number;
+  immutable: boolean;
+  expires_at: Date | null;
+  fetched_at: Generated<Date>;
+  last_used_at: Generated<Date>;
+  hits: Generated<number>;
+}
+
 export interface Database {
   users: UsersTable;
   identities: IdentitiesTable;
@@ -80,6 +92,7 @@ export interface Database {
   file_layouts: FileLayoutsTable;
   user_preferences: UserPreferencesTable;
   recent_projects: RecentProjectsTable;
+  type_cache: TypeCacheTable;
 }
 
 export type Identity = Selectable<IdentitiesTable>;
