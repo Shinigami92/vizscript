@@ -11,7 +11,6 @@ import {
   applyOverlay,
   boxColorEntries,
   diffEdits,
-  findDefinition,
   findNode,
   layoutDocument,
   reconcileLayout,
@@ -34,11 +33,9 @@ import {
 } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useToasts } from '../composables/use-toasts';
-import { ecosystemOf } from '../graph/add-package';
 import { GraphClient } from '../graph/graph-client';
 import { isPreviewable, isVisualizable } from '../graph/languages';
 import { countedUses, symbolNodes } from '../graph/symbols';
-import { typeRegistryAvailable } from '../graph/type-registry';
 import { isCancelled } from '../graph/worker-connection';
 import { useWorkbenchStore } from '../stores/workbench';
 import LayoutMenu from '../workbench/LayoutMenu.vue';
@@ -64,8 +61,6 @@ import {
 } from './script-workspace/placement';
 import {
   currentFunctionOf,
-  describeTarget,
-  findDefinitionTarget,
   functionOfNode,
   parentGraphs,
   variableOfNode,
@@ -77,13 +72,14 @@ import type {
 } from './script-workspace/types';
 import { useCheckerTypes } from './script-workspace/use-checker-types';
 import { useCodeGraphSync } from './script-workspace/use-code-graph-sync';
+import { useDefinitions } from './script-workspace/use-definitions';
 import { useFocusMode } from './script-workspace/use-focus-mode';
 import { useGraphOverlay } from './script-workspace/use-graph-overlay';
 import { useImports } from './script-workspace/use-imports';
 import { useKeptNodes } from './script-workspace/use-kept-nodes';
 import { useLanguageVersion } from './script-workspace/use-language-version';
 import { useLayoutHistory } from './script-workspace/use-layout-history';
-import { useModuleInfo } from './script-workspace/use-module-info';
+import { useLibraryAdditions } from './script-workspace/use-library-additions';
 import { useOpRunner } from './script-workspace/use-op-runner';
 import { provideParseValue } from './script-workspace/use-parse-value';
 import { usePinnedLayout } from './script-workspace/use-pinned-layout';
@@ -169,34 +165,8 @@ const { version: languageVersion, versionFiles } = useLanguageVersion({
   files: () => props.files,
   readFile: () => props.readFile,
 });
-/** Versions and dependency kinds of the imported modules (My Script). */
-const { infos: moduleInfos, refresh: refreshModuleInfos } = useModuleInfo({
-  props,
-  doc,
-  version: languageVersion,
-});
-
-/** Changes another file; the imports' library info follows (a manifest). */
-async function editOtherFile(
-  path: string,
-  edit: (text: string) => string
-): Promise<void> {
-  await props.editFile?.(path, edit);
-  refreshModuleInfos();
-}
-
-/** "+" in Imports: where its menu opens, while it is open. */
-const addingPackage = ref<{ x: number; y: number; library?: string } | null>(
-  null
-);
-const registryReady = ref(false);
-void typeRegistryAvailable().then((ready) => (registryReady.value = ready));
-const canAddPackage = computed(
-  () =>
-    registryReady.value &&
-    props.editFile !== undefined &&
-    ecosystemOf(props.path) !== undefined
-);
+const { moduleInfos, addingPackage, canAddPackage, editOtherFile } =
+  useLibraryAdditions({ props, doc, version: languageVersion });
 
 const {
   resolveReference,
@@ -465,140 +435,31 @@ const noticesInset = computed(() =>
 
 // ---------------------------------------------------- go to definition
 
-function describeDefinition(nodeId: string): string | undefined {
-  return describeTarget(
-    findDefinitionTarget(
-      doc.value,
-      docText.value,
-      references.value,
-      resolveReference,
-      nodeId
-    )
-  );
-}
-
-async function goToDefinition(nodeId: string): Promise<void> {
-  const target = findDefinitionTarget(
-    doc.value,
-    docText.value,
-    references.value,
-    resolveReference,
-    nodeId
-  );
-  if (!target) {
-    show('No definition found for this node.');
-    return;
-  }
-
-  if (target.kind === 'file') {
-    emit('open', target.path, target.symbol);
-    return;
-  }
-
-  // UE opens the graph of a function or collapsed graph.
-  await focusFunction(target.fnId);
-  await selectNodes([target.nodeId]);
-  await onActivate(target.nodeId);
-}
-
-/**
- * Where the graph of an entry node is used: the nodes whose Go to
- * definition leads to it (a callback's node, the calls of a function).
- */
-function usagesOf(entryId: string): Array<{ nodeId: string; label: string }> {
-  const d = doc.value;
-  const fn = d?.functions.find((f) => f.nodes.some((n) => n.id === entryId));
-  if (!d || !fn) {
-    return [];
-  }
-
-  return d.functions.flatMap((other) =>
-    other.nodes
-      .filter((node) => {
-        if (node.kind !== 'call' && node.kind !== 'functionRef') {
-          return false;
-        }
-
-        const target = findDefinitionTarget(
-          d,
-          docText.value,
-          references.value,
-          resolveReference,
-          node.id
-        );
-        return target?.kind === 'node' && target.fnId === fn.id;
-      })
-      .map((node) => ({
-        nodeId: node.id,
-        label: `${other.name} · line ${docText.value.slice(0, node.range.start).split('\n').length}`,
-      }))
-  );
-}
-
-/** Shows a node of any function, switching the focused graph if needed. */
-async function jumpTo(nodeId: string): Promise<void> {
-  await selectNodes([nodeId]);
-}
-
-/**
- * Double-click on a node: a call or callback opens the graph it leads to
- * (UE's double-click on a function or collapsed graph node); other nodes
- * show their code.
- */
-async function onNodeActivate(nodeId: string): Promise<void> {
-  const node = doc.value ? findNode(doc.value, nodeId) : undefined;
-  if (
-    (node?.kind === 'call' || node?.kind === 'functionRef') &&
-    describeDefinition(nodeId) !== undefined
-  ) {
-    await goToDefinition(nodeId);
-    return;
-  }
-
-  await onActivate(nodeId);
-}
-
-/** Definition to show once the file is parsed (`?symbol=` from a link). */
-let pendingSymbol =
-  typeof route.query.symbol === 'string' ? route.query.symbol : null;
-
-async function revealPendingSymbol(): Promise<void> {
-  const symbol = pendingSymbol;
-  if (!symbol || (visualizable.value && !doc.value)) {
-    return;
-  }
-
-  if (codeVisible.value && !editor.value) {
-    // The editor loads lazily; it calls again when it is ready.
-    return;
-  }
-
-  pendingSymbol = null;
-  const { symbol: _, ...query } = route.query;
-  void router.replace({ query });
-  const range = findDefinition(doc.value, docText.value, symbol);
-  if (!range) {
-    show(`${symbol} was not found in this file.`);
-    return;
-  }
-
-  const fn = doc.value?.functions.find(
-    (f) => f.range.start === range.start && f.range.end === range.end
-  );
-  const entry = fn?.nodes.find((n) => n.kind === 'entry');
-  if (entry && graphVisible.value) {
-    await nextTick();
-    canvas.value?.selectNodes([entry.id]);
-  }
-
-  // Once a freshly mounted editor has its size, show the definition near
-  // the top (this also ends the scroll started by the node selection).
-  await new Promise(requestAnimationFrame);
-  const line = docText.value.slice(0, range.start).split('\n').length;
-  editor.value?.revealLine(line, true);
-}
-
-watch(editor, () => void revealPendingSymbol());
+const {
+  describeDefinition,
+  goToDefinition,
+  usagesOf,
+  jumpTo,
+  onNodeActivate,
+  revealPendingSymbol,
+} = useDefinitions({
+  doc,
+  docText: () => docText.value,
+  references,
+  resolveReference,
+  editor,
+  canvas,
+  visualizable,
+  codeVisible,
+  graphVisible,
+  route,
+  router,
+  focusFunction,
+  selectNodes,
+  onActivate,
+  open: (path, symbol) => emit('open', path, symbol),
+  show,
+});
 
 const {
   diagnostics,
