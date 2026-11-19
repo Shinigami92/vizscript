@@ -34,7 +34,7 @@ const title = computed(() => {
 
 <template>
   <!-- After the file items, like VS Code's language mode. -->
-  <Teleport v-if="name" defer to="#workbench-status">
+  <Teleport v-if="name" defer to="#workbench-status-right">
     <button
       v-if="version"
       data-ui="status-language"

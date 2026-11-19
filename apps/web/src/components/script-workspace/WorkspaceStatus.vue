@@ -45,8 +45,8 @@ const workbench = useWorkbenchStore();
       <span class="i-mdi-sync-alert" />
       Graph not in sync
     </span>
-    <!-- Pushes the layout state and the language to the right. -->
-    <span class="flex-1" aria-hidden="true" />
+  </Teleport>
+  <Teleport defer to="#workbench-status-right">
     <span
       v-if="saving && saving !== 'idle'"
       data-ui="status-layout"

@@ -304,7 +304,10 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
 
     <!--
       Status bar like VS Code's; views teleport their items into it: file
-      items to #workbench-status, page items to #workbench-status-end.
+      items to #workbench-status (left: branch, problems) and
+      #workbench-status-right (layout state, language), page items to
+      #workbench-status-end. Background progress follows the left items,
+      like VS Code's window progress.
     -->
     <footer
       data-ui="status-bar"
@@ -313,9 +316,14 @@ const mobileTitle = computed(() => VIEW_TITLES[store.mobileMainView]);
     >
       <div
         id="workbench-status"
-        class="flex h-full min-w-0 flex-1 items-center gap-1"
+        class="flex h-full min-w-0 shrink items-center gap-1"
       />
       <BackgroundStatus />
+      <span class="flex-1" aria-hidden="true" />
+      <div
+        id="workbench-status-right"
+        class="flex h-full shrink-0 items-center gap-1"
+      />
       <div
         id="workbench-status-end"
         class="flex h-full shrink-0 items-center gap-1"
