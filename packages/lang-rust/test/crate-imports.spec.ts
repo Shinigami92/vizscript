@@ -140,9 +140,10 @@ describe('types of crate imports', () => {
     expect(
       pointer?.pins
         .filter((p) => p.direction === 'in' && p.kind === 'data')
-        .map((p) => [p.id, p.name, p.id === 'target' ? '' : p.type])
+        .map((p) => [p.id, p.name, p.type])
     ).toEqual([
-      ['target', 'self', ''],
+      // UE's Target: the type the method is called on.
+      ['target', 'self', 'Value'],
       ['arg0', 'pointer', 'string'],
     ]);
   });

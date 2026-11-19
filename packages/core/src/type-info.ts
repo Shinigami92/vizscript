@@ -134,8 +134,26 @@ function useful(info: TypeInfo | undefined): info is TypeInfo {
   return info !== undefined && info.dataType !== 'any';
 }
 
+/**
+ * The target of a method call (UE's Target pin): an untyped one takes the
+ * type of the value the method is called on (`builder` of
+ * `builder.require_git(false)` is a `WalkBuilder`).
+ */
+function isUntypedTarget(pin: Pin): pin is Pin & { range: SourceRange } {
+  return (
+    pin.id === 'target' &&
+    pin.kind === 'data' &&
+    pin.direction === 'in' &&
+    (pin.type === 'object' || pin.type === 'any') &&
+    !!pin.range
+  );
+}
+
 function typedPin(pin: Pin, types: TypeMap): Pin {
-  const info = isQueryPin(pin) ? types.get(rangeKey(pin.range)) : undefined;
+  const info =
+    isQueryPin(pin) || isUntypedTarget(pin)
+      ? types.get(rangeKey(pin.range))
+      : undefined;
   if (!useful(info)) {
     return pin;
   }
@@ -286,7 +304,8 @@ function typedSymbol(symbol: ScriptSymbol, types: TypeMap): ScriptSymbol {
 
 /**
  * The document with the checker's types: data outputs get the exact type
- * (and `Pin.typeText`), unwired `void` results lose their pin, untyped
+ * (and `Pin.typeText`), so do untyped Targets of calls and members (the
+ * type of the value they are used on), unwired `void` results lose their pin, untyped
  * variables and parameters get their inferred type, and `typeMembers` the
  * members of every type seen, by its text. Untyped operator inputs follow
  * their wires (`typeWildcardPins`). Answers of `any` keep what the

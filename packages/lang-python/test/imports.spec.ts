@@ -95,7 +95,7 @@ describe('declarations of imported files', () => {
         #0 entry "Module" (main.py) [>then:▶]
         #1 call "greet" [<exec:▶ >then:▶ <target:object <arg0:string="a" <param:punctuation:string= >return:string]
         #2 getVar "util" [>value:module]
-        #3 call "greet" [<exec:▶ >then:▶ <target:object <arg0:string="b" <param:punctuation:string= >return:string]
+        #3 call "greet" [<exec:▶ >then:▶ <target:module <arg0:string="b" <param:punctuation:string= >return:string]
         ==> #0.then -> #1.exec
         --> #2.value -> #3.target
         ==> #1.then -> #3.exec"
@@ -203,7 +203,7 @@ describe('standard library', () => {
       imports: [{ name: 'math', members: exports }],
     });
     expect(summarizeGraph(doc)).toContain(
-      'call "log" [<exec:▶ >then:▶ <target:object <arg0:number=8 <param:base:number= >return:number]'
+      'call "log" [<exec:▶ >then:▶ <target:module <arg0:number=8 <param:base:number= >return:number]'
     );
   });
 });

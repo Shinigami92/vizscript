@@ -70,12 +70,13 @@ describe('Godot classes', () => {
     ].join('\n');
     const doc = parseGDScriptDocument(text, 'x.gd');
     expect(pins(call(doc, 'is_in_group'))).toEqual([
-      'in self:object',
+      // UE's Target: the type of the value it is called on.
+      'in self:Area2D',
       'in group:StringName',
       'out :bool',
     ]);
     expect(pins(call(doc, 'look_at'))).toEqual([
-      'in self:object',
+      'in self:Sprite2D',
       'in point:Vector2',
     ]);
     expect(pins(call(doc, 'is_action_pressed'))).toEqual([
