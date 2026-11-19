@@ -1,7 +1,7 @@
 import type { GraphOp } from '@vizscript/core';
 import { applyTextEdits } from '@vizscript/core';
 import { describe, expect, it } from 'vitest';
-import { applyTypeScriptOp } from '../src';
+import { applyTypeScriptOp, parseTypeScript } from '../src';
 
 function apply(text: string, op: GraphOp): string {
   const result = applyTypeScriptOp(text, op, 'test.ts');
@@ -277,5 +277,71 @@ describe('adding types', () => {
     expect(apply('const x = 1;\n', { type: 'addType', name: 'C' })).toBe(
       'interface C {\n}\n\nconst x = 1;\n'
     );
+  });
+
+  it('adds a class when asked for one', () => {
+    expect(
+      apply('const x = 1;\n', { type: 'addType', name: 'Repo', kind: 'class' })
+    ).toBe('class Repo {\n}\n\nconst x = 1;\n');
+  });
+});
+
+/** Turns `optional` of field `name` (of `scope`) on or off. */
+function optional(
+  text: string,
+  scope: string,
+  name: string,
+  enabled: boolean
+): string {
+  const field = parseTypeScript(text, 'test.ts').symbols?.find(
+    (s) => s.scope === scope && s.name === name
+  );
+  return apply(text, {
+    type: 'setModifier',
+    symbol: field?.id ?? '',
+    modifier: 'optional',
+    enabled,
+  });
+}
+
+describe('optional fields', () => {
+  it('marks interface and class fields with `?`', () => {
+    expect(
+      optional('interface R {\n  branch: string;\n}\n', 'R', 'branch', true)
+    ).toBe('interface R {\n  branch?: string;\n}\n');
+    expect(
+      optional('interface R {\n  branch?: string;\n}\n', 'R', 'branch', false)
+    ).toBe('interface R {\n  branch: string;\n}\n');
+    expect(
+      optional('class C {\n  token!: string;\n}\n', 'C', 'token', true)
+    ).toBe('class C {\n  token?: string;\n}\n');
+  });
+
+  it('knows optional fields', () => {
+    const symbols =
+      parseTypeScript(
+        'interface R {\n  a?: string;\n}\nclass C {\n  b?: number;\n  c = 1;\n}\n',
+        'test.ts'
+      ).symbols ?? [];
+    const of = (name: string): string[] =>
+      symbols.find((s) => s.name === name)?.modifiers ?? [];
+    expect(of('a')).toContain('optional');
+    expect(of('b')).toContain('optional');
+    expect(of('c')).not.toContain('optional');
+  });
+
+  it('refuses variables', () => {
+    const text = 'let x = 1;\n';
+    const x = parseTypeScript(text, 'test.ts').symbols?.find(
+      (s) => s.name === 'x'
+    );
+    expect(
+      error(text, {
+        type: 'setModifier',
+        symbol: x?.id ?? '',
+        modifier: 'optional',
+        enabled: true,
+      })
+    ).toBe('Only fields can be optional.');
   });
 });

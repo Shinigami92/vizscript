@@ -124,6 +124,35 @@ function paramEnd(text: string, param: SymbolParam): number {
   );
 }
 /**
+ * A field that may be missing (`name?: string`): the `?` after its name.
+ * Only fields of classes, interfaces and object types; not variables.
+ */
+function setOptional(
+  text: string,
+  symbol: ScriptSymbol,
+  enabled: boolean
+): OpResult {
+  if (symbol.scope === '' || symbol.kind !== 'variable') {
+    return { ok: false, error: 'Only fields can be optional.' };
+  }
+
+  const at = symbol.nameRange.end;
+  const marked = text[at] === '?';
+  if (enabled === marked) {
+    return { ok: true, edits: [] };
+  }
+
+  // `name!: T` (assigned elsewhere) can't be optional too.
+  const edit =
+    enabled && text[at] === '!'
+      ? { start: at, end: at + 1, text: '?' }
+      : enabled
+        ? { start: at, end: at, text: '?' }
+        : { start: at, end: at + 1, text: '' };
+  return { ok: true, edits: [edit] };
+}
+
+/**
  * Sets or clears a modifier of a declaration (`const`, access levels,
  * `async`, `export`, `static`, `readonly`, constructor parameters).
  */
@@ -147,6 +176,10 @@ export function setModifier(
 
   if (modifier === 'constructor') {
     return setConstructorParameter(text, doc, symbol, enabled);
+  }
+
+  if (modifier === 'optional') {
+    return setOptional(text, symbol, enabled);
   }
 
   if (ACCESS.includes(modifier)) {

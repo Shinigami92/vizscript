@@ -230,7 +230,8 @@ export type GraphOp =
   /** Adds a signal (GDScript). */
   | { type: 'addSignal'; name: string }
   /** Adds an empty type to the file (interface, class). */
-  | { type: 'addType'; name: string }
+  /** Adds a type; `kind` picks one of `TypeSystemInfo.typeKinds`. */
+  | { type: 'addType'; name: string; kind?: string }
   /** Renames a symbol and its uses in the file. */
   | { type: 'renameSymbol'; symbol: string; name: string }
   /**
@@ -530,6 +531,11 @@ export interface TypeSystemInfo {
   };
   /** Generics' type parameters can be edited (`setTypeParams`). */
   typeParams?: boolean;
+  /**
+   * Kinds of new types My Script's "+" offers (`interface`, `class`), the
+   * first by default; none: one kind.
+   */
+  typeKinds?: ReadonlyArray<{ kind: string; label: string }>;
   /** Variables can be put into categories (`ScriptSymbol.group`). */
   symbolGroups?: boolean;
   /**

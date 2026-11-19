@@ -477,6 +477,9 @@ class SymbolCollector {
           ? [member.accessibility]
           : []),
         ...('readonly' in member && member.readonly ? ['readonly'] : []),
+        ...(member.type === 'ClassProperty' && member.optional
+          ? ['optional']
+          : []),
       ];
       if (
         (member.type === 'ClassMethod' ||

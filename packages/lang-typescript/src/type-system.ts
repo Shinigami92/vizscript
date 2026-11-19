@@ -320,6 +320,10 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
   exposeOnSpawn: true,
   decorators: { on: ['class', 'member', 'parameter'] },
   typeParams: true,
+  typeKinds: [
+    { kind: 'interface', label: 'Interface' },
+    { kind: 'class', label: 'Class' },
+  ],
   flow: [
     'forEach',
     'forRange',
@@ -334,8 +338,8 @@ export const TYPESCRIPT_TYPES: TypeSystemInfo = {
     variable: { keywords: [...KINDS], flags: ['export'] },
     constant: { keywords: [...KINDS], flags: ['export'] },
     local: { keywords: [...KINDS] },
-    member: { access: [...ACCESS], flags: ['static', 'readonly'] },
-    field: { flags: ['readonly'] },
+    member: { access: [...ACCESS], flags: ['static', 'readonly', 'optional'] },
+    field: { flags: ['readonly', 'optional'] },
     function: { flags: ['export', 'async'] },
     method: { access: [...ACCESS], flags: ['static', 'async'] },
   },

@@ -498,7 +498,30 @@ watch(
   }
 );
 
-function add(kind: AddKind, owner: string): void {
+/** Types "+": the kind of the new type, when the language has several. */
+const kindMenu = ref<{ x: number; y: number } | null>(null);
+const kindEntries = computed<MenuEntry[]>(() => [
+  { type: 'header', label: 'Add type' },
+  ...(props.types?.typeKinds ?? []).map((option) => ({
+    label: option.label,
+    icon:
+      option.kind === 'class' ? 'i-mdi-cube-outline' : 'i-mdi-shape-outline',
+    action: () => add('type', '', option.kind),
+  })),
+]);
+
+/** A "+" was clicked: adds right away, or asks for the kind of type. */
+function onAdd(event: MouseEvent, kind: AddKind, owner: string): void {
+  if (kind === 'type' && (props.types?.typeKinds?.length ?? 0) > 1) {
+    const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    kindMenu.value = { x: box.left, y: box.bottom + 4 };
+    return;
+  }
+
+  add(kind, owner);
+}
+
+function add(kind: AddKind, owner: string, typeKind?: string): void {
   const doc = props.doc;
   if (!doc || !props.editable) {
     return;
@@ -541,7 +564,11 @@ function add(kind: AddKind, owner: string): void {
     }
 
     case 'type': {
-      emit('op', { type: 'addType', name });
+      emit('op', {
+        type: 'addType',
+        name,
+        ...(typeKind ? { kind: typeKind } : {}),
+      });
       break;
     }
   }
@@ -798,7 +825,7 @@ function addLabel(kind: AddKind, owner: string): string {
             class="add"
             :title="addLabel(section.add, '')"
             :aria-label="addLabel(section.add, '')"
-            @click="add(section.add, '')"
+            @click="onAdd($event, section.add, '')"
           >
             <span class="i-mdi-plus" />
           </button>
@@ -870,7 +897,7 @@ function addLabel(kind: AddKind, owner: string): string {
                   class="add"
                   :title="addLabel(section.add, group.owner)"
                   :aria-label="addLabel(section.add, group.owner)"
-                  @click="add(section.add, group.owner)"
+                  @click="onAdd($event, section.add, group.owner)"
                 >
                   <span class="i-mdi-plus" />
                 </button>
@@ -1043,6 +1070,15 @@ function addLabel(kind: AddKind, owner: string): string {
       :entries="menuEntries"
       label="Symbol actions"
       @close="menu = null"
+    />
+    <ContextMenu
+      v-if="kindMenu"
+      data-ui="add-type-menu"
+      :x="kindMenu.x"
+      :y="kindMenu.y"
+      :entries="kindEntries"
+      label="Kind of type"
+      @close="kindMenu = null"
     />
   </div>
 </template>

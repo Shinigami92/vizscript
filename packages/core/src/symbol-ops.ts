@@ -513,7 +513,8 @@ export function addType(
   doc: GraphDocument,
   name: string,
   unit: string,
-  syntax: DeclarationSyntax
+  syntax: DeclarationSyntax,
+  kind?: string
 ): OpResult {
   const declare = syntax.typeDeclaration;
   if (!declare) {
@@ -525,7 +526,7 @@ export function addType(
     return failed(error);
   }
 
-  const block = declare(name, unit);
+  const block = declare(name, unit, kind);
   const blank = Math.max(1, syntax.blankLines);
   const topLevel = (doc.symbols ?? []).filter(
     (s) =>

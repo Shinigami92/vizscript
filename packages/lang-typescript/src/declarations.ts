@@ -73,7 +73,8 @@ export function declarations(
     blankLines: 1,
     bracedClasses: true,
     header: /^(?:import\b|['"]use strict['"]|#!)/,
-    typeDeclaration: (name) => `interface ${name} {\n}`,
+    typeDeclaration: (name, _unit, kind) =>
+      kind === 'class' ? `class ${name} {\n}` : `interface ${name} {\n}`,
     fn: (name, _unit, method) =>
       method ? `${name}() {\n}` : `function ${name}() {\n}`,
     field: (name) => `${name}: string;`,

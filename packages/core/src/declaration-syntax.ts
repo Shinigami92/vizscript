@@ -52,8 +52,11 @@ export interface DeclarationSyntax {
   field?: (name: string) => string;
   /** A new signal (GDScript). */
   signal?: (name: string) => string;
-  /** A new empty type (`interface X {}`, `class X:`); none: no `+`. */
-  typeDeclaration?: (name: string, unit: string) => string;
+  /**
+   * A new empty type (`interface X {}`, `class X:`), of one of
+   * `TypeSystemInfo.typeKinds` when the language has several; none: no `+`.
+   */
+  typeDeclaration?: (name: string, unit: string, kind?: string) => string;
   /** Types and modifiers offered by the Details panel. */
   typeSystem: TypeSystemInfo;
   /** Error message for an invalid type annotation. */

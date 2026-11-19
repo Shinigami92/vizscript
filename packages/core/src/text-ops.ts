@@ -266,7 +266,7 @@ function applySymbolOp(
     }
 
     case 'addType': {
-      return addType(text, doc, op.name, unit, declarations);
+      return addType(text, doc, op.name, unit, declarations, op.kind);
     }
 
     case 'renameSymbol': {
